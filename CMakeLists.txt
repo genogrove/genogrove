@@ -3,8 +3,8 @@ project(genogrove VERSION 0.0.1)
 
 # genogrove requires at least C++17
 if(NOT DEFINED CMAKE_CXX_STANDARD)
-    message(STATUS "CMAKE_CXX_STANDARD not set - defaulting to C++17")
-    set(CMAKE_CXX_STANDARD 17)
+    message(STATUS "CMAKE_CXX_STANDARD not set - defaulting to C++20")
+    set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 elseif (CMAKE_CXX_STANDARD LESS 17)
     message(FATAL_ERROR "genogrove requires at least C++17")
