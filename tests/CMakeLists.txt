@@ -21,9 +21,9 @@ target_link_libraries(genogrove_config_tests GTest::gtest GTest::gtest_main)
 target_compile_definitions(
         genogrove_config_tests
         PRIVATE
-        EXPECTED_VERSION_MAJOR=${GENOGROVE_VERSION_MAJOR}
-        EXPECTED_VERSION_MINOR=${GENOGROVE_VERSION_MINOR}
-        EXPECTED_VERSION_PATCH=${GENOGROVE_VERSION_PATCH}
+        EXPECTED_VERSION_MAJOR=${genogrove_VERSION_MAJOR}
+        EXPECTED_VERSION_MINOR=${genogrove_VERSION_MINOR}
+        EXPECTED_VERSION_PATCH=${genogrove_VERSION_PATCH}
 )
 gtest_discover_tests(genogrove_config_tests)
 

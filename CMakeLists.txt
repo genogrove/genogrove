@@ -31,6 +31,11 @@ if(CMAKE_CXX_STANDARD EQUAL 17)
     target_link_libraries(genogrove INTERFACE range-v3::range-v3)
 endif()
 
+# configure version of the library
+configure_file(
+        include/genogrove/config/version.hpp.in
+        ${CMAKE_CURRENT_BINARY_DIR}/include/genogrove/config/version.hpp
+)
 
 #target_link_libraries(genogrove_data_type genogrove_config)
 #target_link_libraries(genogrove_data_type genogrove_utility)
