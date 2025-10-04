@@ -75,5 +75,4 @@ jobs:
 
       - name: run tests
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        run: cd ${{ steps.strings.outputs.build-output-dir }} && ctest -C ${{ matrix.build_type }} --output-on-failure
-
+        run: ctest -C ${{ matrix.build_type }} --test-dir ${{ steps.strings.outputs.build-output-dir }}  --output-on-failure
