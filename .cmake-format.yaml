@@ -1,0 +1,46 @@
+# .cmake-format.yaml - CMake formatting configuration
+
+# Line width for wrapping
+line_width: 100
+tab_size: 2
+
+# Use spaces instead of tabs
+use_tabchars: false
+
+# Formatting options
+format:
+  # Don't add extra newlines
+  max_lines_hwrap: 2
+
+  # Disable autosort of argument lists
+  autosort: false
+
+  # Enable command case (lowercase)
+  command_case: "lower"
+
+  # Keyword case (uppercase for keywords like PUBLIC, PRIVATE)
+  keyword_case: "upper"
+
+# Parsing options
+parse:
+  # Additional commands to recognize
+  additional_commands:
+    foo:
+      flags:
+        - BAR
+        - BAZ
+      kwargs:
+        HEADERS: "*"
+        SOURCES: "*"
+        DEPENDS: "*"
+
+# Encoding
+encoding: "utf-8"
+
+# Line endings
+line_ending: "unix"
+
+# Markup
+markup:
+  # Enable comment reflowing
+  enable_markup: false

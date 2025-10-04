@@ -41,7 +41,7 @@ CMakeCache.txt
 CMakeFiles
 CMakeScripts
 Testing
-Makefile
+#Makefile
 cmake_install.cmake
 install_manifest.txt
 compile_commands.json
@@ -88,5 +88,6 @@ Temporary Items
 *.icloud
 
 build
+.cache
 
 # End of https://www.toptal.com/developers/gitignore/api/cmake,macos,c++
