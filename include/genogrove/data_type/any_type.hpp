@@ -47,17 +47,13 @@ template <typename T> class any_type : public any_base {
     any_type(const T& data)
         : data(data), type_name(typeid(T).name()) {} // Constructor for lvalue references
     any_type(T&& data)
-        : data(std::forward(data)), type_name(typeid(T).name()) {
+        : data(std::forward<T>(data)), type_name(typeid(T).name()) {
     } // Constructor for rvalue references
 
     // descructor
     ~any_type() override = default; // needs to be defined explicitly (otherwise
                                     // delete due to use of std::optional)
 
-    // accessors
-    const T& get_data() const {
-        return *data;
-    }
     T& get_data() {
         return data;
     }
@@ -79,7 +75,7 @@ template <typename T> class any_type : public any_base {
         os.write(type_name.c_str(), type_name_len);
 
         os.write(reinterpret_cast<const char*>(&data),
-                 sizeof(T)); // write the data
+        sizeof(T)); // write the data
     }
 
     std::shared_ptr<any_base> deserialize(std::istream& is) {
