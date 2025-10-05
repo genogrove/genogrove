@@ -10,10 +10,12 @@
 #define STRUCTURE_GROVE_HPP
 
 // standard
+#include <string_view>
 #include <unordered_map>
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
+
 #include <genogrove/data_type/query_result.hpp>
 #include <genogrove/structure/grove/node.hpp>
 
@@ -28,7 +30,7 @@ class grove {
     grove() : order(3), root_nodes(), rightmost_nodes() {}
     ~grove() {
         // Delete all root nodes (which will recursively delete their children)
-        for (auto& [key, root] : root_nodes) {
+        for(auto& [key, root] : root_nodes) {
             delete root;
         }
     }
@@ -65,8 +67,8 @@ class grove {
      * @brief returns the rightmost node in the grove (for easy access)
      * @param The chromosome the grove is associated with
      */
-    node<key_type>* get_rightmost_node(std::string key) {
-        return this->rightmost_nodes[key];
+    node<key_type>* get_rightmost_node(std::string_view key) {
+        return this->rightmost_nodes[std::string(key)];
     }
 
     /*
@@ -74,30 +76,31 @@ class grove {
      * @param The key the grove is associated with
      * @param The rightmost node in the grove
      */
-    void set_rightmost_node(std::string key, node<key_type>* node) {
-        this->rightmost_nodes[key] = node;
+    void set_rightmost_node(std::string_view key, node<key_type>* node) {
+        this->rightmost_nodes[std::string(key)] = node;
     }
 
     /*
      * @brief get the root node of the grove for a given key
      * @param The key associated with the root node (of the grove)
      */
-    node<key_type>* get_root(std::string key) {
-        return ggu::value_lookup(this->root_nodes, key).value_or(nullptr);
+    node<key_type>* get_root(std::string_view key) {
+        return ggu::value_lookup(this->root_nodes, std::string(key)).value_or(nullptr);
     }
 
     /*
      * @brief inserts a new root node into the grove
      */
-    node<key_type>* insert_root(std::string key) {
+    node<key_type>* insert_root(std::string_view key) {
         // check if the root node is already in the map (error)
-        if(ggu::value_lookup(this->root_nodes, key)) {
-            throw std::runtime_error("Root node already exists for key: " + key);
+        std::string key_str(key);
+        if(ggu::value_lookup(this->root_nodes, key_str)) {
+            throw std::runtime_error("Root node already exists for key: " + key_str);
         }
         node<key_type>* root = new node<key_type>(this->order);
-        this->root_nodes.insert({key, root});
+        this->root_nodes.insert({key_str, root});
         root->set_is_leaf(true);
-        this->rightmost_nodes.insert({key, root});
+        this->rightmost_nodes.insert({key_str, root});
         return root;
     }
 
@@ -108,7 +111,7 @@ class grove {
      * @param The data point
      */
     template <typename data_type>
-    void insert_data(std::string index, key_type ktype, data_type dtype) {
+    void insert_data(std::string_view index, key_type ktype, data_type dtype) {
         gdt::key<key_type> key(ktype, dtype);
         insert(index, key);
     }
@@ -116,7 +119,7 @@ class grove {
     /*
      * @brief inserts a new key elements into the grove
      */
-    void insert(std::string index, gdt::key<key_type>& key) {
+    void insert(std::string_view index, gdt::key<key_type>& key) {
         // get the root node for the given chromosome (or create a new one if it doesn't exist)
         node<key_type>* root = this->get_root(index);
         if(root == nullptr) {
@@ -129,7 +132,7 @@ class grove {
             new_root->set_is_leaf(false);
             split_node(new_root, 0);
             root = new_root;
-            this->root_nodes[index] = root; // update the root node in the map
+            this->root_nodes[std::string(index)] = root; // update the root node in the map
         }
     }
 
@@ -194,7 +197,7 @@ class grove {
         }
     }
 
-    void insert_sorted(gdt::key<key_type>* key, std::string index) {
+    void insert_sorted(gdt::key<key_type>* key, std::string_view index) {
         // get the root node for the given index (or create a new one if it doesn't exist)
         node<key_type>* root = this->get_root(index);
         if(root == nullptr) {
@@ -238,7 +241,8 @@ class grove {
         }
     }
 
-    template <typename query_type> gdt::query_result<key_type> intersect(query_type& query) {
+    template <typename query_type>
+    gdt::query_result<key_type> intersect(query_type& query) {
         gdt::query_result<key_type> result{query};
         // if index is not specified, all root nodes need to be checked
         for(const auto& [index, root] : this->get_root_nodes()) {
