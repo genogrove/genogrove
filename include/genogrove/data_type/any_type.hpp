@@ -23,12 +23,12 @@ namespace genogrove::data_type {
  */
 class any_base {
   public:
-    /**
- * @brief Ensures derived objects are destroyed correctly when deleted through a base pointer.
- *
- * Provides a virtual destructor so that deleting an instance of a derived type via
- * a pointer to any_base invokes the derived type's destructor. */
-virtual ~any_base() = default;
+    /*
+     * @brief Ensures derived objects are destroyed correctly when deleted through a base pointer.
+     * Provides a virtual destructor so that deleting an instance of a derived type via a pointer to
+     * any_base invokes the derived type's destructor.
+     */
+    virtual ~any_base() = default;
     virtual std::string get_type_name() const = 0;
     //        virtual std::type_index getDataTypeIndex() const = 0; // return type
     //        of stored data
@@ -47,80 +47,72 @@ template <typename T> class any_type : public any_base {
     std::string type_name;
 
   public:
-    /**
- * @brief Default-constructs an any_type instance.
- *
- * Initializes the stored type name to the runtime name of T and leaves the
- * contained value default-initialized.
- */
+    /*
+     * @brief Default-constructs an any_type instance. Initializes the stored type name
+     * to the runtime name of T and leaves then contained value default-initialized.
+     */
     any_type() : type_name(typeid(T).name()) {}
-    /**
-         * @brief Constructs an any_type by copying the provided value and recording its type name.
-         *
-         * Stores a copy of `data` in the object and initializes `type_name` with `typeid(T).name()`.
-         *
-         * @param data The value to store (copied).
-         */
-        any_type(const T& data)
-        : data(data), type_name(typeid(T).name()) {} /**
+
+    /*
+     * @brief Constructs an any_type by copying the provided value and recording its type name.
+     * Stores a copy of `data` in the object and initializes `type_name` with `typeid(T).name()`.
+     * @param data The value to store (copied).
+     */
+    any_type(const T& data) : data(data), type_name(typeid(T).name()) {}
+
+    /*
      * @brief Constructs an any_type by initializing the stored value and capturing its type name.
-     *
      * Initializes the contained value from the provided argument and sets the internal type_name
      * to the mangled name returned by typeid(T).name().
-     *
      * @param data Value used to initialize the stored data (moved when possible).
      */
     any_type(T&& data)
-        : data(std::forward(data)), type_name(typeid(T).name()) {
+        : data(std::forward<T>(data)), type_name(typeid(T).name()) {
     } // Constructor for rvalue references
 
-    /**
- * @brief Destroys the any_type instance.
- *
- * Defaulted destructor; releases member resources through their own destructors.
- */
+    /*
+     * @brief Destroys the any_type instance.
+     * Defaulted destructor; releases member resources through their own destructors.
+     */
     ~any_type() override = default; // needs to be defined explicitly (otherwise
                                     // delete due to use of std::optional)
 
-    /**
+    /*
      * @brief Access the stored value as a const reference.
-     *
      * @return const T& Reference to the internally stored value.
      */
     const T& get_data() const {
         return *data;
     }
-    /**
+
+    /*
      * @brief Accesses the contained value for modification.
-     *
      * Provides a mutable reference to the stored value so callers can read or modify it in-place.
-     *
      * @return T& Reference to the contained value; remains valid while the object exists and is not moved from or destroyed.
      */
     T& get_data() {
         return data;
     }
 
-    /**
+    /*
      * @brief Return the stored type name for the contained value.
-     *
-     * @return std::string The type name string associated with this instance (originally captured from `typeid(T).name()` or updated via `set_type_name`).
+     * @return std::string The type name string associated with this instance
+     * (originally captured from `typeid(T).name()` or updated via `set_type_name`).
      */
     std::string get_type_name() const override {
         return type_name;
     }
-    /**
+
+    /*
      * @brief Sets the stored type name used for identification and serialization.
-     *
      * @param typeName New type name to assign; replaces the object's current stored type name.
      */
     void set_type_name(std::string typeName) {
         this->type_name = typeName;
     }
 
-    /**
+    /*
      * @brief Serialize the stored type name and value into a binary stream.
-     *
      * The serialized format written to the stream is:
      * 1) size_t containing the length of the type name,
      * 2) raw bytes of the type name (no terminating null),
@@ -137,7 +129,7 @@ template <typename T> class any_type : public any_base {
                  sizeof(T)); // write the data
     }
 
-    /**
+    /*
      * @brief Deserialize an any_type<T> from a binary stream.
      *
      * Reads a serialized representation from the provided stream: first a
