@@ -80,7 +80,8 @@ template <typename T> class any_type : public any_base {
     /*
      * @brief Accesses the contained value for modification.
      * Provides a mutable reference to the stored value so callers can read or modify it in-place.
-     * @return T& Reference to the contained value; remains valid while the object exists and is not moved from or destroyed.
+     * @return T& Reference to the contained value; remains valid while the object exists and is not
+     * moved from or destroyed.
      */
     T& get_data() {
         return data;
@@ -118,7 +119,7 @@ template <typename T> class any_type : public any_base {
         os.write(type_name.c_str(), type_name_len);
 
         os.write(reinterpret_cast<const char*>(&data),
-        sizeof(T)); // write the data
+                 sizeof(T)); // write the data
     }
 
     /*
@@ -136,7 +137,7 @@ template <typename T> class any_type : public any_base {
      * @return std::shared_ptr<any_base> Shared pointer to an any_type<T> holding
      *         the deserialized value.
      */
-    std::shared_ptr<any_base> deserialize(std::istream& is) {
+    std::shared_ptr<any_base> deserialize(std::istream& is) override {
         size_t type_name_len;
         is.read(reinterpret_cast<char*>(&type_name_len), sizeof(type_name_len));
         std::string typeName(type_name_len, '\0');
