@@ -118,7 +118,7 @@ template <typename T> class any_type : public any_base {
         os.write(type_name.c_str(), type_name_len);
 
         os.write(reinterpret_cast<const char*>(&data),
-                 sizeof(T)); // write the data
+        sizeof(T)); // write the data
     }
 
     /*

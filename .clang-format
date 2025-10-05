@@ -1,6 +1,7 @@
 ---
-Language: Cpp
 BasedOnStyle: LLVM
+Language: Cpp
+Standard: Cpp17
 
 # Indentation
 IndentWidth: 4
@@ -16,7 +17,7 @@ AllowShortLoopsOnASingleLine: false
 
 # Spacing
 SpaceAfterCStyleCast: false
-SpaceBeforeParens: ControlStatements
+SpaceBeforeParens: Never
 SpaceInEmptyParentheses: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
