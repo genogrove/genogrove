@@ -1,4 +1,8 @@
 message(STATUS "Building tests")
+
+# enable ctest
+enable_testing()
+
 include(FetchContent)
 
 # Prevent GoogleTest from using system-installed gtest
@@ -21,7 +25,9 @@ include_directories(BEFORE SYSTEM
 
 include(GoogleTest)
 
-# config
+# ----------------------------
+# CONFIG TESTS
+# ----------------------------
 FILE(GLOB TEST_SOURCES_CONFIG "./config/*.cpp")
 add_executable(genogrove_config_tests ${TEST_SOURCES_CONFIG})
 target_include_directories(
@@ -40,33 +46,43 @@ target_compile_definitions(
 )
 gtest_discover_tests(genogrove_config_tests)
 
-# data_type
+# ----------------------------
+# DATA_TYPE TESTS
+# ----------------------------
 FILE(GLOB TEST_SOURCES_DATA_TYPE "./data_type/*.cpp")
 add_executable(genogrove_data_type_tests ${TEST_SOURCES_DATA_TYPE})
-target_link_libraries(genogrove_data_type_tests
-        genogrove
-        gtest
-        gtest_main
+target_include_directories(
+        genogrove_data_type_tests
+        PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
+target_link_libraries(genogrove_data_type_tests genogrove gtest gtest_main)
 gtest_discover_tests(genogrove_data_type_tests)
 
-# utility
+# ----------------------------
+# UTILITY TESTS
+# ----------------------------
 FILE(GLOB TEST_SOURCES_UTILITY "./utility/*.cpp")
 add_executable(genogrove_utility_tests ${TEST_SOURCES_UTILITY})
-target_link_libraries(genogrove_utility_tests
-        genogrove
-        gtest
-        gtest_main
+target_include_directories(
+        genogrove_utility_tests
+        PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
+target_link_libraries(genogrove_utility_tests genogrove gtest gtest_main)
 gtest_discover_tests(genogrove_utility_tests)
 
-# structure
+# ----------------------------
+# STRUCTURE TESTS
+# ----------------------------
 FILE(GLOB TEST_SOURCES_STRUCTURE "./structure/*.cpp")
 add_executable(genogrove_structure_tests ${TEST_SOURCES_STRUCTURE})
-target_link_libraries(genogrove_structure_tests
-        genogrove
-        gtest
-        gtest_main
+target_include_directories(
+        genogrove_structure_tests
+        PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
+target_link_libraries(genogrove_structure_tests genogrove gtest gtest_main)
+gtest_discover_tests(genogrove_structure_tests)
 
 
