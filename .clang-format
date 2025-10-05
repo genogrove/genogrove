@@ -1,7 +1,7 @@
 ---
 BasedOnStyle: LLVM
 Language: Cpp
-Standard: Cpp17
+Standard: c++17
 
 # Indentation
 IndentWidth: 4
@@ -23,9 +23,9 @@ SpacesInParentheses: false
 SpacesInSquareBrackets: false
 
 # Alignment
-AlignConsecutiveAssignments: false
-AlignConsecutiveDeclarations: false
-AlignOperands: true
+AlignConsecutiveAssignments: None
+AlignConsecutiveDeclarations: None
+AlignOperands: Align
 AlignTrailingComments: true
 
 # Pointers and References
@@ -33,7 +33,7 @@ PointerAlignment: Left
 DerivePointerAlignment: false
 
 # Include sorting
-SortIncludes: true
+SortIncludes: CaseSensitive
 IncludeBlocks: Regroup
 
 # Other
