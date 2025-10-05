@@ -3,44 +3,48 @@
 # Line width for wrapping
 line_width: 100
 tab_size: 2
-
-# Use spaces instead of tabs
-use_tabchars: false
+use_tabchars: false  # Use spaces instead of tabs
 
 # Formatting options
 format:
-  # Don't add extra newlines
-  max_lines_hwrap: 2
+  # Maximum lines for horizontal wrapping (0 = unlimited)
+  max_lines_hwrap: 0
 
-  # Disable autosort of argument lists
+  # Do not automatically sort argument lists
   autosort: false
 
-  # Enable command case (lowercase)
+  # Command names in lowercase
   command_case: "lower"
 
-  # Keyword case (uppercase for keywords like PUBLIC, PRIVATE)
+  # Keywords like PUBLIC, PRIVATE, INTERFACE in uppercase
   keyword_case: "upper"
+
+  # Multi-line formatting for readability
+  wrap:
+    long_list: ALWAYS     # Wrap long argument lists (e.g., target_link_libraries)
+    call: MULTILINE       # Wrap multi-line calls consistently
+  continuation_indent: 4  # Indent continuation lines by 4 spaces
+  separate_ctrl_name_with_space: true  # Add space after commands like if(), foreach()
 
 # Parsing options
 parse:
-  # Additional commands to recognize
-  additional_commands:
-    foo:
-      flags:
-        - BAR
-        - BAZ
-      kwargs:
-        HEADERS: "*"
-        SOURCES: "*"
-        DEPENDS: "*"
+# Placeholder for custom commands (currently disabled)
+# additional_commands:
+#   foo:
+#     flags:
+#       - BAR
+#       - BAZ
+#     kwargs:
+#       HEADERS: "*"
+#       SOURCES: "*"
+#       DEPENDS: "*"
 
-# Encoding
+# File encoding
 encoding: "utf-8"
 
 # Line endings
 line_ending: "unix"
 
-# Markup
+# Comment markup and reflowing
 markup:
-  # Enable comment reflowing
   enable_markup: false
