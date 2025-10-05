@@ -78,14 +78,6 @@ template <typename T> class any_type : public any_base {
                                     // delete due to use of std::optional)
 
     /*
-     * @brief Access the stored value as a const reference.
-     * @return const T& Reference to the internally stored value.
-     */
-    const T& get_data() const {
-        return *data;
-    }
-
-    /*
      * @brief Accesses the contained value for modification.
      * Provides a mutable reference to the stored value so callers can read or modify it in-place.
      * @return T& Reference to the contained value; remains valid while the object exists and is not moved from or destroyed.
