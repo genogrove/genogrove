@@ -73,23 +73,23 @@ jobs:
         run: |
           cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
-      - name: Debug - Check test configuration
-        working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        run: |
-          echo "=== Build directory contents ==="
-          ls -la
-          echo ""
-          echo "=== Looking for CTestTestfile.cmake ==="
-          find . -name "CTestTestfile.cmake" -exec cat {} \;
-          echo ""
-          echo "=== Looking for test executables ==="
-          find . -type f -executable -name "*test*" | head -20
-          echo ""
-          echo "=== CMakeCache.txt BUILD_TESTING ==="
-          grep BUILD_TESTING CMakeCache.txt || echo "BUILD_TESTING not found in cache"
-          echo ""
-          echo "=== Running ctest in debug mode ==="
-          ctest -N
+#      - name: Debug - Check test configuration
+#        working-directory: ${{ steps.strings.outputs.build-output-dir }}
+#        run: |
+#          echo "=== Build directory contents ==="
+#          ls -la
+#          echo ""
+#          echo "=== Looking for CTestTestfile.cmake ==="
+#          find . -name "CTestTestfile.cmake" -exec cat {} \;
+#          echo ""
+#          echo "=== Looking for test executables ==="
+#          find . -type f -executable -name "*test*" | head -20
+#          echo ""
+#          echo "=== CMakeCache.txt BUILD_TESTING ==="
+#          grep BUILD_TESTING CMakeCache.txt || echo "BUILD_TESTING not found in cache"
+#          echo ""
+#          echo "=== Running ctest in debug mode ==="
+#          ctest -N
 
       - name: run tests
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
