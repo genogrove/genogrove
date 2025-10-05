@@ -23,6 +23,7 @@ add_library(genogrove ${SOURCES})
 target_include_directories(genogrove
         PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
 )
 
 # if using C++17, we need to add range-v3 (utility dependency)
@@ -43,9 +44,6 @@ configure_file(
         include/genogrove/config/version.hpp.in
         ${CMAKE_CURRENT_BINARY_DIR}/include/genogrove/config/version.hpp
 )
-
-#target_link_libraries(genogrove_data_type genogrove_config)
-#target_link_libraries(genogrove_data_type genogrove_utility)
 
 # optionally include tests
 if(BUILD_TESTING)
