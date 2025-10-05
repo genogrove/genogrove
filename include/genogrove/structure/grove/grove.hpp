@@ -26,7 +26,12 @@ template <typename key_type> class grove {
   public:
     grove(int order) : order(order), root_nodes(), rightmost_nodes() {}
     grove() : order(3), root_nodes(), rightmost_nodes() {}
-    ~grove() {}
+    ~grove() {
+        // Delete all root nodes (which will recursively delete their children)
+        for (auto& [key, root] : root_nodes) {
+            delete root;
+        }
+    }
 
     /*
      * @brief returns the order of the grove

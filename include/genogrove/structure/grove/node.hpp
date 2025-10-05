@@ -23,7 +23,15 @@ template <typename key_type> class node {
   public:
     node(int order)
         : order(order), keys{}, children{}, parent{nullptr}, next{nullptr}, is_leaf{false} {}
-    ~node();
+    ~node() {
+        // Only delete children if this is an internal node
+        // Leaf nodes don't own their children
+        if (!is_leaf) {
+            for (auto* child : children) {
+                delete child;
+            }
+        }
+    }
 
     // getter & setter
     int get_order() const {
