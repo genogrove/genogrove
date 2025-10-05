@@ -5,6 +5,7 @@ CXX_STANDARD ?= 20
 BUILD_DIR ?= build
 SOURCE_DIR ?= .
 GENERATOR ?= Ninja
+ENABLE_SANITIZER ?= OFF
 
 .PHONY: all build rebuild test clean help
 
@@ -19,6 +20,7 @@ build:  ## Build the project
 		-DCMAKE_CXX_STANDARD=$(CXX_STANDARD) \
 		-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
 		-DBUILD_TESTING=ON \
+		-DENABLE_SANITIZER=$(ENABLE_SANITIZER) \
 		-S $(SOURCE_DIR)
 	@echo "Building project..."
 	@cmake --build $(BUILD_DIR) --config $(BUILD_TYPE)
@@ -50,3 +52,4 @@ help:  ## Show this help message
 	@echo "  make build                        # Just build"
 	@echo "  make BUILD_TYPE=Release           # Release build"
 	@echo "  make GENERATOR=Ninja        # Use Ninja instead"
+	@echo "  make ENABLE_SANITIZER=ON        # Use Ninja instead"

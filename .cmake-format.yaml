@@ -3,7 +3,7 @@
 # Line width for wrapping
 line_width: 100
 tab_size: 2
-use_tabchars: false  # Use spaces instead of tabs
+use_tabchars: false # Use spaces instead of tabs
 
 # Formatting options
 format:
@@ -21,10 +21,10 @@ format:
 
   # Multi-line formatting for readability
   wrap:
-    long_list: ALWAYS     # Wrap long argument lists (e.g., target_link_libraries)
-    call: MULTILINE       # Wrap multi-line calls consistently
-  continuation_indent: 4  # Indent continuation lines by 4 spaces
-  separate_ctrl_name_with_space: true  # Add space after commands like if(), foreach()
+    long_list: ALWAYS # Wrap long argument lists (e.g., target_link_libraries)
+    call: MULTILINE # Wrap multi-line calls consistently
+  continuation_indent: 4 # Indent continuation lines by 4 spaces
+  separate_ctrl_name_with_space: true # Add space after commands like if(), foreach()
 
 # Parsing options
 parse:
