@@ -23,7 +23,11 @@ template <typename key_type>
 class node {
   public:
     node(int order)
-        : order(order), keys{}, children{}, parent{nullptr}, next{nullptr}, is_leaf{false} {}
+        : order(order), keys{}, children{}, parent{nullptr}, next{nullptr}, is_leaf{false} {
+        // Reserve capacity upfront to avoid reallocations
+        keys.reserve(order);
+        children.reserve(order + 1);
+    }
     ~node() {
         // Only delete children if this is an internal node
         // Leaf nodes don't own their children
@@ -84,8 +88,9 @@ class node {
     }
 
     key_type calc_parent_key() {
-        // create vector of reference intervals
-        std::vector<key_type> values = {};
+        // create vector of reference intervals with reserved capacity
+        std::vector<key_type> values;
+        values.reserve(this->keys.size());
         for(int i = 0; i < this->keys.size(); i++) {
             values.push_back(this->keys[i].get_value());
         }
