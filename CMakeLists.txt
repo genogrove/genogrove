@@ -45,6 +45,8 @@ configure_file(
         ${CMAKE_CURRENT_BINARY_DIR}/include/genogrove/config/version.hpp
 )
 
+include(CTest)
+
 # optionally include tests
 if(BUILD_TESTING)
   enable_testing()
