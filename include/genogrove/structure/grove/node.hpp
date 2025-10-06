@@ -10,6 +10,7 @@
 #define GENOGROVE_STRUCTURE_NODE_HPP
 
 // standard
+#include <string_view>
 #include <vector>
 
 // genogrove
@@ -23,7 +24,11 @@ template <typename key_type>
 class node {
   public:
     node(int order)
-        : order(order), keys{}, children{}, parent{nullptr}, next{nullptr}, is_leaf{false} {}
+        : order(order), keys{}, children{}, parent{nullptr}, next{nullptr}, is_leaf{false} {
+        // Reserve capacity upfront to avoid reallocations
+        keys.reserve(order-1);
+        children.reserve(order);
+    }
     ~node() {
         // Only delete children if this is an internal node
         // Leaf nodes don't own their children
@@ -84,8 +89,9 @@ class node {
     }
 
     key_type calc_parent_key() {
-        // create vector of reference intervals
-        std::vector<key_type> values = {};
+        // create vector of reference intervals with reserved capacity
+        std::vector<key_type> values;
+        values.reserve(this->keys.size());
         for(int i = 0; i < this->keys.size(); i++) {
             values.push_back(this->keys[i].get_value());
         }
@@ -108,7 +114,7 @@ class node {
     void serialize(std::ostream& os);
     static node* deserialize(std::istream& is, int order);
 
-    void print_keys(std::ostream& os, std::string sep = "\t") {
+    void print_keys(std::ostream& os, std::string_view sep = "\t") {
         for(int i = 0; i < this->keys.size(); ++i) {
             os << this->keys[i].get_value().toString() << sep;
         }
