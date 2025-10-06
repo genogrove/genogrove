@@ -22,6 +22,9 @@ SpaceInEmptyParentheses: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
 
+# Breaks
+AlwaysBreakTemplateDeclarations: Yes
+
 # Alignment
 AlignConsecutiveAssignments: None
 AlignConsecutiveDeclarations: None

@@ -14,15 +14,15 @@
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
-#include "node.hpp"
-
 #include <genogrove/data_type/query_result.hpp>
+#include <genogrove/structure/grove/node.hpp>
 
 namespace ggu = genogrove::utility;
 namespace gdt = genogrove::data_type;
 
 namespace genogrove::structure {
-template <typename key_type> class grove {
+template <typename key_type>
+class grove {
   public:
     grove(int order) : order(order), root_nodes(), rightmost_nodes() {}
     grove() : order(3), root_nodes(), rightmost_nodes() {}
@@ -75,7 +75,7 @@ template <typename key_type> class grove {
      * @param The rightmost node in the grove
      */
     void set_rightmost_node(std::string key, node<key_type>* node) {
-        return this->rightmost_nodes[key] = node;
+        this->rightmost_nodes[key] = node;
     }
 
     /*
@@ -199,7 +199,7 @@ template <typename key_type> class grove {
         node<key_type>* root = this->get_root(index);
         if(root == nullptr) {
             root = insert_root(index);
-            insert_iter(root, index);
+            insert_iter(root, key);
             return;
         }
 

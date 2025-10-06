@@ -19,7 +19,8 @@
 namespace gdt = genogrove::data_type;
 
 namespace genogrove::structure {
-template <typename key_type> class node {
+template <typename key_type>
+class node {
   public:
     node(int order)
         : order(order), keys{}, children{}, parent{nullptr}, next{nullptr}, is_leaf{false} {}
