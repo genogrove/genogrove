@@ -15,7 +15,6 @@
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
-
 #include <genogrove/data_type/query_result.hpp>
 #include <genogrove/structure/grove/node.hpp>
 
