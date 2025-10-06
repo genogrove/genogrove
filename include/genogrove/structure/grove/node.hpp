@@ -96,6 +96,9 @@ class node {
         this->children.insert(this->children.begin() + index, child);
     }
     node* get_child(int index) {
+        if(index < 0 || index >= this->children.size()) {
+            throw std::out_of_range("child index out of range");
+        }
         return this->children[index];
     }
 
