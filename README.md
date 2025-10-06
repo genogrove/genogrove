@@ -19,10 +19,10 @@ This repository contains the genogrove library.
 
 ## 🚀 Quick Start
 
-1. Clonse the repository:
+1. Clone the repository:
 
    ```
-   git clone https://github.com/genogrove/structure.git
+   git clone https://github.com/genogrove/genogrove.git
    cd structure
    ```
 
