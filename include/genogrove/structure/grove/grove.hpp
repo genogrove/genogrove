@@ -68,7 +68,7 @@ class grove {
      * @param The chromosome the grove is associated with
      */
     node<key_type>* get_rightmost_node(std::string_view key) {
-        return this->rightmost_nodes[std::string(key)];
+        return ggu::value_lookup(this->rightmost_nodes, std::string(key)).value_or(nullptr);
     }
 
     /*
