@@ -26,8 +26,8 @@ class node {
     node(int order)
         : order(order), keys{}, children{}, parent{nullptr}, next{nullptr}, is_leaf{false} {
         // Reserve capacity upfront to avoid reallocations
-        keys.reserve(order);
-        children.reserve(order + 1);
+        keys.reserve(order-1);
+        children.reserve(order);
     }
     ~node() {
         // Only delete children if this is an internal node
