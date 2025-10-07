@@ -49,13 +49,13 @@ class node {
     std::vector<gdt::key<key_type>>& get_keys() {
         return this->keys;
     }
-    void set_keys(std::vector<gdt::key<key_type>> keys) {
+    void set_keys(const std::vector<gdt::key<key_type>>& keys) {
         this->keys = keys;
     }
     std::vector<node*>& get_children() {
         return this->children;
     }
-    void set_children(std::vector<node*> children) {
+    void set_children(const std::vector<node*>& children) {
         this->children = children;
     }
     node* get_parent() const {
