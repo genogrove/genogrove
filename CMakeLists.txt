@@ -89,7 +89,7 @@ install(DIRECTORY include/genogrove
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/genogrove_export.h DESTINATION include/genogrove)
 
 export(EXPORT genogrove-targets
-        FILE "${CMAKE_CURRENT_BINARY_DIR}/genogrove-targets.cmake"
+        FILE "${CMAKE_CURRENT_BINARY_DIR}/genogrove_targets.cmake"
         NAMESPACE genogrove::
 )
 
