@@ -48,7 +48,7 @@ if(CMAKE_CXX_STANDARD EQUAL 17)
             GIT_TAG 0.12.0
     )
   FetchContent_MakeAvailable(range-v3)
-  target_link_libraries(genogrove INTERFACE range-v3::range-v3)
+  target_link_libraries(genogrove PUBLIC range-v3::range-v3)
 endif()
 
 ##########################################
