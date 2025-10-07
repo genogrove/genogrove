@@ -37,6 +37,11 @@ target_include_directories(genogrove
         $<INSTALL_INTERFACE:include>
 )
 
+# 
+#include(GenerateExportHeader)
+#generate_export_header(genogrove
+#    EXPORT_FILE_NAME ${CMAKE_CURRENT_BINARY_DIR}/genogrove_export.h
+#)
 
 # if using C++17, we need to add range-v3 (utility dependency)
 if(CMAKE_CXX_STANDARD EQUAL 17)
@@ -93,7 +98,6 @@ export(EXPORT genogrove_targets
         NAMESPACE genogrove::
 )
 
-include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
         "${CMAKE_CURRENT_BINARY_DIR}/genogrove_config_version.cmake"
         VERSION ${PROJECT_VERSION}
