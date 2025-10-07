@@ -88,27 +88,27 @@ install(DIRECTORY include/genogrove
 )
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/genogrove_export.h DESTINATION include/genogrove)
 
-export(EXPORT genogrove-targets
+export(EXPORT genogrove_targets
         FILE "${CMAKE_CURRENT_BINARY_DIR}/genogrove_targets.cmake"
         NAMESPACE genogrove::
 )
 
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
-        "${CMAKE_CURRENT_BINARY_DIR}/genogrove-config-version.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/genogrove_config_version.cmake"
         VERSION ${PROJECT_VERSION}
         COMPATIBILITY SameMajorVersion
 )
 
 # create Config.cmake file
 configure_package_config_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/genogrove-config.cmake.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/genogrove-config.cmake"
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/genogrove_config.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/genogrove_config.cmake"
         INSTALL_DESTINATION lib/cmake/genogrove
 )
 
 install(FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/genogrove-config.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/genogrove-config-version.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/genogrove_config.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/genogrove_config_version.cmake"
         DESTINATION lib/cmake/genogrove
 )
