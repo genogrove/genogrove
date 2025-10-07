@@ -37,7 +37,7 @@ target_include_directories(genogrove
         $<INSTALL_INTERFACE:include>
 )
 
-# 
+#
 #include(GenerateExportHeader)
 #generate_export_header(genogrove
 #    EXPORT_FILE_NAME ${CMAKE_CURRENT_BINARY_DIR}/genogrove_export.h
@@ -86,12 +86,12 @@ install(
         INCLUDES DESTINATION include
 )
 
-install(FILES include/genogrove/all.hpp DESTINATION include/genogrove)
 install(DIRECTORY include/genogrove
         DESTINATION include/genogrove
         FILES_MATCHING PATTERN "*.hpp"
 )
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/genogrove_export.h DESTINATION include/genogrove)
+# uncomment when install on windows
+#install(FILES ${CMAKE_CURRENT_BINARY_DIR}/genogrove_export.h DESTINATION include/genogrove)
 
 export(EXPORT genogrove_targets
         FILE "${CMAKE_CURRENT_BINARY_DIR}/genogrove_targets.cmake"
