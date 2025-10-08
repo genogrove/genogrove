@@ -50,14 +50,14 @@ jobs:
             c_compiler: clang-14
 
           # exclude gcc/clang on windows
-          - os: windows-2022
-            c_compiler: gcc-12
-          - os: windows-2022
-            c_compiler: gcc-13
-          - os: windows-2022
-            c_compiler: gcc-14
-          - os: windows-2022
-            c_compiler: clang-14
+#          - os: windows-2022
+#            c_compiler: gcc-12
+#          - os: windows-2022
+#            c_compiler: gcc-13
+#          - os: windows-2022
+#            c_compiler: gcc-14
+#          - os: windows-2022
+#            c_compiler: clang-14
 
     steps:
       - name: checkout code
