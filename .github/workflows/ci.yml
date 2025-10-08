@@ -33,6 +33,17 @@ jobs:
             c_compiler: clang
             cpp_compiler: clang++
 
+        exclude:
+          # exlcude gcc on macos
+          - os: macos-14
+            c_compiler: gcc-12
+          - os: macos-14
+            c_compiler: gcc-13
+          - os: macos-14
+            c_compiler: gcc-14
+          - os: macos-14
+            c_compiler: clang-14
+
 
           #          - os: windows-latest
           #            c_compiler: cl
