@@ -48,6 +48,21 @@ jobs:
       - name: checkout code
         uses: actions/checkout@v5
 
+      # ✅ Only install compilers on Ubuntu
+      - name: Install compilers (Ubuntu only)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-12 g++-12 gcc-13 g++-13 gcc-14 g++-14 clang-14
+
+      # ✅ Skip compiler installation on macOS — Clang is already available
+      - name: Confirm compiler versions
+        run: |
+          echo "C compiler: ${{ matrix.c_compiler }}"
+          echo "C++ compiler: ${{ matrix.cpp_compiler }}"
+          ${{ matrix.c_compiler }} --version
+          ${{ matrix.cpp_compiler }} --version
+
       - name: install gcc versions and clang versions
         run: |
           sudo apt-get update
