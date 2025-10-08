@@ -74,11 +74,6 @@ jobs:
           ${{ matrix.c_compiler }} --version
           ${{ matrix.cpp_compiler }} --version
 
-      - name: install gcc versions and clang versions
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-12 gcc-13 gcc-14 clang-14
-
       - name: set reusable variables
         id: strings
         shell: bash
