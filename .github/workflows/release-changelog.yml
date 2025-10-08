@@ -1,0 +1,28 @@
+name: promote unreleased to release
+on:
+  release:
+    types: [published]
+
+jobs:
+  release-changelog:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v5
+
+      - name: promote unreleased
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          DATE=$(date +%Y-%m-%d)
+          
+          # move unreleased section to new version
+          sed -i "/## \[Unreleased\]/## [$VERSION] - $DATE/" CHANGELOG.md
+          
+          # prepend a new empty unreleased section
+          echo -e "## [Unreleased]\n" | cat - CHANGELOG.md > temp && mv temp CHANGELOG.md
+
+      - name: commit and push changes
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GENOGROVE_TOKEN }}
+          branch: main
