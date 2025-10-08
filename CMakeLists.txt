@@ -96,6 +96,7 @@ install(DIRECTORY include/genogrove
 export(EXPORT genogrove_targets
         FILE "${CMAKE_CURRENT_BINARY_DIR}/genogrove_targets.cmake"
         NAMESPACE genogrove::
+        DESTINATION lib/cmake/genogrove
 )
 
 write_basic_package_version_file(
