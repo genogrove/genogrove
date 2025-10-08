@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Indentifier: MIT
+ * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
@@ -7,10 +7,10 @@
  * See the LICENSE file in the root of the repository for more information.
  */
 
-#ifndef GENOGROVE_ALL_HPP
-#define GENOGROVE_ALL_HPP
+#ifndef GENOGROVE_STRUCTURE_ALL_HPP
+#define GENOGROVE_STRUCTURE_ALL_HPP
 
 #include <genogrove/structure/grove/grove.hpp>
 #include <genogrove/structure/grove/node.hpp>
 
-#endif //GENOGROVE_ALL_HPP
+#endif //GENOGROVE_STRUCTURE_ALL_HPP

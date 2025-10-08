@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Indentifier: MIT
+ * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
@@ -8,8 +8,8 @@
  * information.
  */
 
-#ifndef GENOGROVE_ALL_HPP
-#define GENOGROVE_ALL_HPP
+#ifndef GENOGROVE_DATA_TYPE_ALL_HPP
+#define GENOGROVE_DATA_TYPE_ALL_HPP
 
 #include <genogrove/data_type/any_type.hpp>
 #include <genogrove/data_type/constants.hpp>
@@ -22,4 +22,4 @@
 #include <genogrove/data_type/query_result.hpp>
 #include <genogrove/data_type/type_registry.hpp>
 
-#endif //GENOGROVE_ALL_HPP
+#endif //GENOGROVE_DATA_TYPE_ALL_HPP
