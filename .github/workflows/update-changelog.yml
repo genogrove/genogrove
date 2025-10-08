@@ -8,6 +8,8 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-24.04
     steps:
+      - name: install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
       - name: checkout code
         uses: actions/checkout@v5
       - name: setup node.js
@@ -49,6 +51,7 @@ jobs:
             SECTION="Breaking Changes"
           elif [[ "$PR_LABELS" == *security* ]]; then
             SECTION="Security"
+          fi
           
           echo "SECTION=$SECTION" >> $GITHUB_ENV
           echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
@@ -64,7 +67,7 @@ jobs:
           
           # append PR to section
           sed -i "/### $SECTION/a - $PR_TITLE ([#$PR_NUMBER]($PR_URL))" CHANGELOG.md
-          
+
       - name: commit and push changes
         run: |
           git config --local user.email "actions@github"
