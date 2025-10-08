@@ -1,6 +1,5 @@
-
 /*
- * SPDX-License-Indentifier: MIT
+ * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
