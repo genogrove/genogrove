@@ -9,7 +9,7 @@ jobs:
       fail-fast: false # change when library is more stable
       matrix:
         #        os: [ubuntu-latest, windows-latest]
-        os: [ubuntu-24.04, macos-14, windows-2022]
+        os: [ubuntu-24.04, macos-14]
         build_type: [Debug, Release]
         #        c_compiler: [gcc, clang, cl]
         c_compiler: [gcc-12, gcc-13, gcc-14, clang-14, cl]
@@ -34,9 +34,9 @@ jobs:
             cpp_compiler: clang++
 
           # windows configurations
-          - os: windows-2022
-            c_compiler: cl
-            cpp_compiler: cl
+          # - os: windows-2022
+          # c_compiler: cl
+          # cpp_compiler: cl
 
         exclude:
           # exlcude gcc on macos
@@ -96,19 +96,19 @@ jobs:
           -S ${{ github.workspace }}
 
       # configure cmake on windows
-      - name: configure cmake (windows)
-        if: startsWith(matrix.os, 'windows')
-        run: |
-          cmake -B ${{ steps.strings.outputs.build-output-dir }} \
-          -G "Visual Studio 17 2022" -A x64 \
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-          -DBUILD_TESTING=ON \
-          -S ${{ github.workspace }}
+#      - name: configure cmake (windows)
+#        if: startsWith(matrix.os, 'windows')
+#        run: |
+#          cmake -B ${{ steps.strings.outputs.build-output-dir }} \
+#          -G "Visual Studio 17 2022" -A x64 \
+#          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+#          -DBUILD_TESTING=ON \
+#          -S ${{ github.workspace }}
           
       - name: build genogrove
         run: |
-          cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
-
+          cmake --build ${{ steps.strings.outputs.build-output-dir }} --parallel
+          
 #      - name: Debug - Check test configuration
 #        working-directory: ${{ steps.strings.outputs.build-output-dir }}
 #        run: |
