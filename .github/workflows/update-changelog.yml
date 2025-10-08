@@ -69,14 +69,7 @@ jobs:
           sed -i "/### $SECTION/a - $PR_TITLE ([#$PR_NUMBER]($PR_URL))" CHANGELOG.md
 
       - name: commit and push changes
-        run: |
-          git config --local user.email "actions@github"
-          git config --local user.name "GitHub Action"
-          git add CHANGELOG.md
-          git commit -m "chore: update changelog for PR #$PR_NUMBER" || echo "No changes to commit"
-          git push origin main
-            
-
-
-
-
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GENOGROVE_TOKEN }}
+          branch: main
