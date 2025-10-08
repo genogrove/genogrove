@@ -12,7 +12,7 @@ jobs:
         os: [ubuntu-24.04, macos-14]
         build_type: [Debug, Release]
         #        c_compiler: [gcc, clang, cl]
-        c_compiler: [gcc-12, gcc-13, gcc-14, clang-14, cl]
+        c_compiler: [gcc-12, gcc-13, gcc-14, clang-14]
         include:
           # ubuntu configurations
           - os: ubuntu-24.04
@@ -129,4 +129,4 @@ jobs:
 
       - name: run tests
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
-        run: ctest -C ${{ matrix.build_type }} --output-on-failure
+        run: ctest --output-on-failure
