@@ -32,7 +32,7 @@ static void BM_interval_insert(benchmark::State& state) {
         }
         benchmark::DoNotOptimize(grove);
     }
-    state.SetItemsProcessed(state.iterations());
+    state.SetItemsProcessed(state.iterations() * num_intervals);
 }
 
 BENCHMARK(BM_interval_insert)->Range(8, 8<<10);  // Added: BENCHMARK() call and Range
