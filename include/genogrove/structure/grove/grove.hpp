@@ -196,47 +196,39 @@ class grove {
         }
     }
 
-    void insert_sorted(gdt::key<key_type>* key, std::string_view index) {
-        // get the root node for the given index (or create a new one if it doesn't exist)
-        node<key_type>* root = this->get_root(index);
-        if(root == nullptr) {
-            root = insert_root(index);
-            insert_iter(root, key);
-            return;
-        }
-
-        // get the rightmost node and check if the key is sorted (greater than the rightmost key)
-        node<key_type>* rightmost = this->get_rightmost_node(index);
-        if(!rightmost->get_keys().empty() &&
-           key->get_value() <= rightmost->get_keys().back().get_value()) {
-            throw std::runtime_error("Key is not sorted: " + key->get_value());
-        }
-
-        // insert the key into the grove
-        rightmost_nodes->insert_key(key);
-        if(rightmost->get_keys().size() == this->order) {
-            split_node_sorted(rightmost, index);
-        }
+    /*
+     * @brief inserts a sorted data point into the grove. This means that kval is greater than
+     * the values of the keys in the tree
+     * @param the index associated to the grove this should be inserted
+     * @param the value of the key to be inserted
+     * @param the value of the data to be inserted
+     */
+    template <typename data_type>
+    void insert_data_sorted(std::string_view index, key_type key_value, data_type data_value) {
+        gdt::key<key_type> key(key_value, data_value); // create the key object
+        insert_sorted(index, key);
     }
 
-    void split_node_sorted(node<key_type>* node1, const std::string& index) {
-        if(node1 == root_nodes[index]) {
-            node<key_type>* new_root = new node<key_type>(this->order);
-            new_root->add_child(node1, 0);
-            split_node(new_root, 0);
-        }
-
-        int child_index = 0;
-        while(child_index < node1->get_parent()->get_children().size()) {
-            if(node1->get_parent()->get_children(child_index) == node1) {
-                break;
+    void insert_sorted(std::string_view index, gdt::key<key_type>* key) {
+        node<key_type>* root = ggu::value_lookup(this->root_nodes, index).value_or(nullptr);
+        if(root == nullptr) {
+            root = this->insert_root(index);
+            insert_iter(root, key);
+            return;
+        } else {
+            // tree has root (therefore we are looking for rightmost node to insert)
+            node<key_type>* rightmost_node = ggu::value_lookup(
+                this->rightmost_nodes, index).value_or(nullptr);
+            // check if the key is actually sorted - TODO: effect on insert speed
+            if(!rightmost_node->get_keys().empty() &&
+               key->get_value() <= rightmost_node->get_keys().back().get_value()) {
+                throw std::runtime_error("Key is not higher than already inserted "
+                                         "data (use regular insert): " + key->get_value());
+               }
+            insert_iter(rightmost_node, key);
+            if(rightmost_node->get_keys().size() == this->order) {
+                split_node_sorted(rightmost_node, index);
             }
-            child_index++;
-        }
-        // split the node
-        split_node(node1->get_parent(), child_index);
-        if(node1->get_parent()->get_children().size() == this->order) {
-            split_node_sorted(node1->get_parent(), index);
         }
     }
 
