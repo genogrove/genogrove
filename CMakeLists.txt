@@ -121,3 +121,16 @@ install(FILES
         "${CMAKE_CURRENT_BINARY_DIR}/genogrove_config_version.cmake"
         DESTINATION lib/cmake/genogrove
 )
+
+##########################################
+# Benchmarks
+##########################################
+option(BUILD_BENCHMARKS "Build benchmarks" OFF)
+if(BUILD_BENCHMARKS)
+    message(STATUS "Building benchmarks")
+    add_subdirectory(benchmarks)
+endif()
+
+
+
+
