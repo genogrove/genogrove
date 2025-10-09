@@ -21,8 +21,6 @@
 namespace ggu = genogrove::utility;
 namespace gdt = genogrove::data_type;
 
-enum class insert_mode { REGULAR, SORTEDx};
-
 namespace genogrove::structure {
 template <typename key_type>
 class grove {
@@ -208,7 +206,7 @@ class grove {
     template <typename data_type>
     void insert_data_sorted(std::string_view index, key_type key_value, data_type data_value) {
         gdt::key<key_type> key(key_value, data_value); // create the key object
-        insert_data_sorted(index, key);
+        insert_sorted(index, key);
     }
 
     void insert_sorted(std::string_view index, gdt::key<key_type>* key) {
