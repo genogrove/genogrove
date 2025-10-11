@@ -1,5 +1,5 @@
 /*
-* SPDX-License-Indentifier: MIT
+ * SPDX-License-Identifier: MIT
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
@@ -44,3 +44,4 @@ TEST(interval_grove_test, interval_creation) {
         std::cout << key->get_value().toString() << "\n";
     }
 }
+
