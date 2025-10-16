@@ -21,7 +21,7 @@ namespace gst = genogrove::structure;
 namespace ggu = genogrove::utility;
 
 TEST(interval_grove_test, interval_creation) {
-    gst::grove<gdt::interval> grove(3);
+    gst::grove<gdt::interval, int> grove(3);
     gdt::interval intvl1{5, 10};
     gdt::interval intvl2{15, 20};
     gdt::interval intvl3{25, 30};
@@ -32,12 +32,12 @@ TEST(interval_grove_test, interval_creation) {
     int val3 = 30;
     int val4 = 40;
 
-    grove.insert_data<int>("index1", intvl1, val1);
-    grove.insert_data<int>("index1", intvl2, val2);
-    grove.insert_data<int>("index1", intvl3, val3);
+    grove.insert_data("index1", intvl1, val1);
+    grove.insert_data("index1", intvl2, val2);
+    grove.insert_data("index1", intvl3, val3);
 
     gdt::interval query_interval{17, 27};
-    gdt::query_result<gdt::interval> result = grove.intersect(query_interval, "index1");
+    gdt::query_result<gdt::interval, int> result = grove.intersect(query_interval, "index1");
 
     std::cout << "number of overlapping intervals: " << result.get_keys().size() << "\n";
     for(const auto& key : result.get_keys()) {

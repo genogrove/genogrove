@@ -23,17 +23,15 @@ TEST(key_test, constructors) {
  gdt::key<gdt::interval> key1(intvl); // with value
  // check for type_index
  EXPECT_EQ(intvl, key1.get_value());
- // test that no data is stored initially
- EXPECT_EQ(key1.get_data(), nullptr);
+ // test that no data is stored
+ EXPECT_FALSE(key1.has_data());
 
  // test constructor with value and data
- gdt::type_registry::register_type<std::string>();
  std::string string_data = "hello world";
- gdt::key<gdt::interval> key2(intvl, string_data);
+ gdt::key<gdt::interval, std::string> key2(intvl, string_data);
  EXPECT_EQ(intvl, key2.get_value());
- EXPECT_NE(key2.get_data(), nullptr);
+ EXPECT_TRUE(key2.has_data());
 
- auto data = key2.get_data();
- auto data_string = gdt::type_registry::cast<std::string>(data);
- EXPECT_EQ(string_data, data_string);
+ // Direct access to data with new API
+ EXPECT_EQ(string_data, key2.get_data());
 }

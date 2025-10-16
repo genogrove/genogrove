@@ -16,22 +16,21 @@
 #include <unordered_map>
 
 // genogrove
-#include <genogrove/data_type/any_type.hpp>
 #include <genogrove/data_type/key.hpp>
 
 namespace genogrove::data_type {
-    template<typename query_type>
+    template<typename query_type, typename data_type = void>
     class query_result {
         public:
             query_result(query_type query) : query(query), keys{} {}
             query_type get_query() const { return this->query; }
-            std::vector<key<query_type>*> get_keys() const { return this->keys; }
+            std::vector<key<query_type, data_type>*> get_keys() const { return this->keys; }
 
-            void add_key(key<query_type>* key) { this->keys.push_back(key); }
+            void add_key(key<query_type, data_type>* key) { this->keys.push_back(key); }
 
         private:
             query_type query;
-            std::vector<key<query_type>*> keys;
+            std::vector<key<query_type, data_type>*> keys;
     };
 }
 
