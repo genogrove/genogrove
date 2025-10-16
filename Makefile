@@ -6,6 +6,7 @@ BUILD_DIR ?= build
 SOURCE_DIR ?= .
 GENERATOR ?= Ninja
 ENABLE_SANITIZER ?= OFF
+BUILD_BENCHMARKS ?= OFF
 
 .PHONY: all build rebuild test clean help
 
@@ -21,6 +22,7 @@ build:  ## Build the project
 		-DCMAKE_BUILD_TYPE=$(BUILD_TYPE) \
 		-DBUILD_TESTING=ON \
 		-DENABLE_SANITIZER=$(ENABLE_SANITIZER) \
+		-DBUILD_BENCHMARKS=$(BUILD_BENCHMARKS) \
 		-S $(SOURCE_DIR)
 	@echo "Building project..."
 	@cmake --build $(BUILD_DIR) --config $(BUILD_TYPE)
@@ -51,5 +53,6 @@ help:  ## Show this help message
 	@echo "  make all                          # Build and test with Ninja"
 	@echo "  make build                        # Just build"
 	@echo "  make BUILD_TYPE=Release           # Release build"
-	@echo "  make GENERATOR=Ninja        # Use Ninja instead"
-	@echo "  make ENABLE_SANITIZER=ON        # Use Ninja instead"
+	@echo "  make GENERATOR=Ninja              # Use Ninja instead"
+	@echo "  make ENABLE_SANITIZER=ON          # Use Sanitizers"
+	@echo "  make BUILD_BENCHMARKS=ON          # Build benchmarks"
