@@ -12,6 +12,7 @@
 #define GENOGROVE_ANYTYPE_HPP
 
 // Standard
+#include <iostream>
 #include <memory>
 #include <ostream>
 #include <string>
@@ -41,7 +42,8 @@ class any_base {
 /*
  * @brief This is a template class for storing any type of data
  */
-template <typename T> class any_type : public any_base {
+template <typename T>
+class any_type : public any_base {
   private:
     T data; // always store value (not reference)
     std::string type_name;
