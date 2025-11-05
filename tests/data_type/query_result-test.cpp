@@ -16,37 +16,50 @@
 // genogrove
 #include <genogrove/data_type/query_result.hpp>
 #include <genogrove/data_type/interval.hpp>
-#include <genogrove/data_type/type_registry.hpp>
 
 namespace gdt = genogrove::data_type;
 
 TEST(query_result_test, constructor) {
     // Create a query result object, lets assume the query in an interval
-    gdt::interval intvl(10, 20);
-    gdt::query_result<gdt::interval> qres(intvl); // initialize with query (aka interval)
+    const gdt::interval query_interval(10, 20);
+    const gdt::query_result<gdt::interval, int> query(query_interval); // initialize with query (aka interval)
 
-    // constructor
-    EXPECT_EQ(qres.get_query(), intvl); // check if query is set correctly
-    EXPECT_TRUE(qres.get_keys().empty()); // check if keys are empty
+    // verify initial state
+    EXPECT_EQ(query_interval, query.get_query());
+    EXPECT_TRUE(query.get_keys().empty());
+}
 
-    // add int to type registry
-    gdt::type_registry::register_type<int>();
+TEST(query_result_test, add_keys_with_data) {
+    gdt::interval query_interval(10, 20);
+    gdt::query_result<gdt::interval, int> results(query_interval);
 
-    // Add some element (ideally that would be keys - but lets use intervals here)
-    gdt::interval intvl0(15, 25);
-    gdt::interval intvl1(5, 12);
-    gdt::interval intvl2(30, 40);
+    // create test intervals
+    const gdt::interval intvl0(5,15);
+    const gdt::interval intvl1(12,22);
+    const gdt::interval intvl2(18,25);
+    const gdt::interval intvl3(30, 40);
 
-    gdt::key<gdt::interval> key0(intvl0, 15);
-    gdt::key<gdt::interval> key1(intvl1, 5);
-    gdt::key<gdt::interval> key2(intvl2, 30);
+    // create 'overlapping' keys (as query results)
+    gdt::key<gdt::interval, int> key0(intvl0, 5);
+    gdt::key<gdt::interval, int> key1(intvl1, 15);
+    gdt::key<gdt::interval, int> key2(intvl2, 18);
 
-    qres.add_key(&key0);
-    qres.add_key(&key1);
+    // add keys to query_results
+    results.add_key(&key0);
+    results.add_key(&key1);
+    results.add_key(&key2);
 
-    // check if keys are added correctly
-    auto keys = qres.get_keys();
-    ASSERT_EQ(keys.size(), 2);
-    EXPECT_EQ(keys[0]->get_value(), intvl0);
-    EXPECT_EQ(keys[1]->get_value(), intvl1);
+    // verify that keys were added correctly
+    const auto keys = results.get_keys();
+
+    // verify associated data
+    EXPECT_EQ(keys.size(), 3);
+    EXPECT_TRUE(keys[0]->has_data());
+    EXPECT_TRUE(keys[1]->has_data());
+    EXPECT_TRUE(keys[2]->has_data());
+
+    // retrieve associated data
+    EXPECT_EQ(keys[0]->get_data(), 5);
+    EXPECT_EQ(keys[1]->get_data(), 15);
+    EXPECT_EQ(keys[2]->get_data(), 18);
 }

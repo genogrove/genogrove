@@ -23,8 +23,8 @@ TEST(interval_test, interval_operators) {
     gdt::interval intvl1(20, 30);
     gdt::interval intvl2(20, 30);
 
-    std::cout << intvl1.toString() << "\n";
-    std::cout << intvl2.toString() << "\n";
+    std::cout << intvl1.to_string() << "\n";
+    std::cout << intvl2.to_string() << "\n";
 
     // test operator==
     EXPECT_TRUE(intvl1 == intvl2);

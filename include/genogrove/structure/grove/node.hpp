@@ -20,7 +20,7 @@
 namespace gdt = genogrove::data_type;
 
 namespace genogrove::structure {
-template <typename key_type>
+template <typename key_type, typename data_type = void>
 class node {
   public:
     node(int order)
@@ -46,25 +46,25 @@ class node {
     void set_order(int k) {
         this->order = k;
     }
-    std::vector<gdt::key<key_type>>& get_keys() {
+    std::vector<gdt::key<key_type, data_type>>& get_keys() {
         return this->keys;
     }
-    void set_keys(const std::vector<gdt::key<key_type>>& keys) {
+    void set_keys(const std::vector<gdt::key<key_type, data_type>>& keys) {
         this->keys = keys;
     }
-    std::vector<node*>& get_children() {
+    std::vector<node<key_type, data_type>*>& get_children() {
         return this->children;
     }
-    void set_children(const std::vector<node*>& children) {
+    void set_children(const std::vector<node<key_type, data_type>*>& children) {
         this->children = children;
     }
     node* get_parent() const {
         return this->parent;
     }
-    void set_parent(node* parent) {
+    void set_parent(node<key_type, data_type>* parent) {
         this->parent = parent;
     }
-    void set_next(node* next) {
+    void set_next(node<key_type, data_type>* next) {
         this->next = next;
     }
     node* get_next() const {
@@ -77,14 +77,14 @@ class node {
         return this->is_leaf;
     }
 
-    void insert_key(gdt::key<key_type>& key1) {
+    void insert_key(gdt::key<key_type, data_type>& key1) {
         int i = 0;
         while(i < this->keys.size() && key1.get_value() > this->keys[i].get_value()) {
             i++;
         }
         this->keys.insert(this->keys.begin() + i, key1);
     }
-    void insert_key(gdt::key<key_type>& key1, int index) {
+    void insert_key(gdt::key<key_type, data_type>& key1, int index) {
         this->keys.insert(this->keys.begin() + index, key1);
     }
 
@@ -98,7 +98,10 @@ class node {
         return key_type::aggregate(values);
     }
 
-    void add_child(node* child, int index) {
+    void add_child(node<key_type, data_type>* child, int index) {
+        if(index < 0 || index > static_cast<int>(this->children.size())) {
+            throw std::out_of_range("child index out of range");
+        }
         this->children.insert(this->children.begin() + index, child);
     }
     node* get_child(int index) {
@@ -112,7 +115,7 @@ class node {
      *
      */
     void serialize(std::ostream& os);
-    static node* deserialize(std::istream& is, int order);
+    static node<key_type, data_type>* deserialize(std::istream& is, int order);
 
     void print_keys(std::ostream& os, std::string_view sep = "\t") {
         for(int i = 0; i < this->keys.size(); ++i) {
@@ -123,10 +126,10 @@ class node {
 
   private:
     int order;
-    std::vector<gdt::key<key_type>> keys;
-    std::vector<node*> children;
-    node* parent;
-    node* next;
+    std::vector<gdt::key<key_type, data_type>> keys;
+    std::vector<node<key_type, data_type>*> children;
+    node<key_type, data_type>* parent;
+    node<key_type, data_type>* next;
     bool is_leaf;
 };
 } // namespace genogrove::structure
