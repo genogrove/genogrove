@@ -171,7 +171,7 @@ class grove {
     void split_node(node<key_type, data_type>* parent, int index) {
         node<key_type, data_type>* child = parent->get_child(index);
         node<key_type, data_type>* new_child = new node<key_type, data_type>(this->order);
-        int mid = ((this->order + 2 - 1) / 2);
+        int mid = (this->order + 2 - 1) / 2;
 
         // move overflowing keys to the new child node (and resize the original node)
         new_child->set_is_leaf(child->get_is_leaf());
@@ -197,8 +197,8 @@ class grove {
             }
         } else {
             new_child->get_children().assign(child->get_children().begin() + mid,
-                                             child->get_children().end());
-            child->get_children().resize(mid + 1); // resize the original node
+                child->get_children().end());
+            child->get_children().resize(mid); // resize the original node
         }
     }
 
