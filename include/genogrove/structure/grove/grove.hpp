@@ -234,7 +234,7 @@ class grove {
     }
 
     gdt::query_result<key_type, data_type> intersect(key_type& query) {
-        gdt::query_result<key_type> result{query};
+        gdt::query_result<key_type, data_type> result{query};
         // if index is not specified, all root nodes need to be checked
         for(const auto& [index, root] : this->get_root_nodes()) {
             search_iter(root, query, result);
