@@ -60,7 +60,12 @@ class grove {
      * @brief sets the map with root nodes in the grove
      */
     void set_root_nodes(std::unordered_map<std::string, node<key_type, data_type>*> root_nodes) {
-        this->root_nodes = root_nodes;
+        // this->root_nodes = root_nodes;
+        for(auto& [_, root] : root_nodes) {
+            delete root;
+        }
+        this->root_nodes = std::move(root_nodes);
+        this->rightmost_nodes.clear();
     }
 
     /*
