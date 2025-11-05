@@ -227,7 +227,5 @@ TEST(HeterogeneousGroveTest, VariantWithCustomStruct) {
     EXPECT_EQ(std::get<int>(results.get_keys()[1]->get_data()), 100);
 }
 
-}
-
 
 
