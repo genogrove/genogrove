@@ -16,6 +16,9 @@
 #include <genogrove/structure/grove/node.hpp>
 #include <genogrove/utility/ranges.hpp>
 
+// standard
+#include <variant>
+
 namespace gst = genogrove::structure;
 namespace gdt = genogrove::data_type;
 namespace ggu = genogrove::utility;
