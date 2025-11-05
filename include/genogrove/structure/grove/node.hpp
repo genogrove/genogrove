@@ -99,6 +99,9 @@ class node {
     }
 
     void add_child(node<key_type, data_type>* child, int index) {
+        if(index < 0 || index > static_cast<int>(this->children.size())) {
+            throw std::out_of_range("child index out of range");
+        }
         this->children.insert(this->children.begin() + index, child);
     }
     node* get_child(int index) {
