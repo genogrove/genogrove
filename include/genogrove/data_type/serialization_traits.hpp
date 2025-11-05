@@ -13,6 +13,8 @@
 #include <type_traits>
 #include <cassert>
 #include <istream>
+#include <ostream>
+#include <string>
 #include <concepts>
 
 namespace genogrove::data_type {
