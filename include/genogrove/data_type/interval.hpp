@@ -24,7 +24,8 @@ namespace genogrove::data_type {
             ~interval() = default;
 
             /*
-             * @brief compares two intervals. Note: We check if the left interval is less or overlapping the right
+             * @brief compares two intervals. Note: We check if the left interval
+             * is less or overlapping the right
              */
             bool operator<(const interval& other) const;
             bool operator>(const interval& other) const;
@@ -48,7 +49,7 @@ namespace genogrove::data_type {
             /*
              * @brief converts the interval to a string
              */
-            std::string toString() const;
+            std::string to_string() const;
 
             /*
              * @brief Check if the subjected interval is left of the class interval
@@ -60,21 +61,21 @@ namespace genogrove::data_type {
             /*
              * @brief Get the start of the interval
              */
-            size_t getStart() const;
+            size_t get_start() const;
             /*
              * @brief Get the end of the interval
              */
-            void setStart(size_t start);
+            void set_start(size_t start);
 
             /*
              * @brief Get the end of the interval
              */
-            size_t getEnd() const;
+            size_t get_end() const;
 
             /*
              * @brief Get the end of the interval
              */
-            void setEnd(size_t end);
+            void set_end(size_t end);
 
             /*
              * @brief Serialize the interval to a stream

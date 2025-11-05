@@ -12,6 +12,7 @@
 // standard
 #include <string_view>
 #include <unordered_map>
+#include <variant>
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
@@ -22,7 +23,7 @@ namespace ggu = genogrove::utility;
 namespace gdt = genogrove::data_type;
 
 namespace genogrove::structure {
-template <typename key_type>
+template <typename key_type, typename data_type = void>
 class grove {
   public:
     grove(int order) : order(order), root_nodes(), rightmost_nodes() {}
@@ -51,14 +52,14 @@ class grove {
     /*
      * @brief return map with root nodes in the grove
      */
-    std::unordered_map<std::string, node<key_type>*> get_root_nodes() const {
+    std::unordered_map<std::string, node<key_type, data_type>*> get_root_nodes() const {
         return this->root_nodes;
     }
 
     /*
      * @brief sets the map with root nodes in the grove
      */
-    void set_root_nodes(std::unordered_map<std::string, node<key_type>*> root_nodes) {
+    void set_root_nodes(std::unordered_map<std::string, node<key_type, data_type>*> root_nodes) {
         this->root_nodes = root_nodes;
     }
 
@@ -66,7 +67,7 @@ class grove {
      * @brief returns the rightmost node in the grove (for easy access)
      * @param The chromosome the grove is associated with
      */
-    node<key_type>* get_rightmost_node(std::string_view key) {
+    node<key_type, data_type>* get_rightmost_node(std::string_view key) {
         return ggu::value_lookup(this->rightmost_nodes, std::string(key)).value_or(nullptr);
     }
 
@@ -75,7 +76,7 @@ class grove {
      * @param The key the grove is associated with
      * @param The rightmost node in the grove
      */
-    void set_rightmost_node(std::string_view key, node<key_type>* node) {
+    void set_rightmost_node(std::string_view key, node<key_type, data_type>* node) {
         this->rightmost_nodes[std::string(key)] = node;
     }
 
@@ -83,20 +84,20 @@ class grove {
      * @brief get the root node of the grove for a given key
      * @param The key associated with the root node (of the grove)
      */
-    node<key_type>* get_root(std::string_view key) {
+    node<key_type, data_type>* get_root(std::string_view key) {
         return ggu::value_lookup(this->root_nodes, std::string(key)).value_or(nullptr);
     }
 
     /*
      * @brief inserts a new root node into the grove
      */
-    node<key_type>* insert_root(std::string_view key) {
+    node<key_type, data_type>* insert_root(std::string_view key) {
         // check if the root node is already in the map (error)
         std::string key_str(key);
         if(ggu::value_lookup(this->root_nodes, key_str)) {
             throw std::runtime_error("Root node already exists for key: " + key_str);
         }
-        node<key_type>* root = new node<key_type>(this->order);
+        node<key_type, data_type>* root = new node<key_type, data_type>(this->order);
         this->root_nodes.insert({key_str, root});
         root->set_is_leaf(true);
         this->rightmost_nodes.insert({key_str, root});
@@ -109,24 +110,24 @@ class grove {
      * @param The type of the key to be inserted
      * @param The data point
      */
-    template <typename data_type>
-    void insert_data(std::string_view index, key_type ktype, data_type dtype) {
-        gdt::key<key_type> key(ktype, dtype);
-        insert(index, key);
+    void insert_data(std::string_view index, key_type key_value, data_type data_value)
+        requires (!std::is_void_v<data_type>) {
+            gdt::key<key_type, data_type> key(key_value, data_value);
+            insert(index, key);
     }
 
     /*
      * @brief inserts a new key elements into the grove
      */
-    void insert(std::string_view index, gdt::key<key_type>& key) {
+    void insert(std::string_view index, gdt::key<key_type, data_type>& key) {
         // get the root node for the given chromosome (or create a new one if it doesn't exist)
-        node<key_type>* root = this->get_root(index);
+        node<key_type, data_type>* root = this->get_root(index);
         if(root == nullptr) {
             root = this->insert_root(index);
         }
         insert_iter(root, key);
         if(root->get_keys().size() == this->order) {
-            node<key_type>* new_root = new node<key_type>(this->order);
+            node<key_type, data_type>* new_root = new node<key_type, data_type>(this->order);
             new_root->add_child(root, 0);
             new_root->set_is_leaf(false);
             split_node(new_root, 0);
@@ -138,7 +139,7 @@ class grove {
     /*
      * @brief inserts a new key into the grove
      */
-    void insert_iter(node<key_type>* node, gdt::key<key_type>& key) {
+    void insert_iter(node<key_type, data_type>* node, gdt::key<key_type, data_type>& key) {
         if(!node) {
             throw std::runtime_error("Null node passed to insert_iter");
         }
@@ -162,9 +163,9 @@ class grove {
         }
     }
 
-    void split_node(node<key_type>* parent, int index) {
-        node<key_type>* child = parent->get_child(index);
-        node<key_type>* new_child = new node<key_type>(this->order);
+    void split_node(node<key_type, data_type>* parent, int index) {
+        node<key_type, data_type>* child = parent->get_child(index);
+        node<key_type, data_type>* new_child = new node<key_type, data_type>(this->order);
         int mid = ((this->order + 2 - 1) / 2);
 
         // move overflowing keys to the new child node (and resize the original node)
@@ -175,7 +176,7 @@ class grove {
 
         // update the parent (aka new child node)
         parent->get_children().insert(parent->get_children().begin() + index + 1, new_child);
-        gdt::key<key_type> parent_key{child->calc_parent_key()};
+        gdt::key<key_type, data_type> parent_key{child->calc_parent_key()};
         parent->get_keys().insert(parent->get_keys().begin() + index, parent_key);
 
         if(child->get_is_leaf()) {
@@ -203,21 +204,21 @@ class grove {
      * @param the value of the key to be inserted
      * @param the value of the data to be inserted
      */
-    template <typename data_type>
-    void insert_data_sorted(std::string_view index, key_type key_value, data_type data_value) {
-        gdt::key<key_type> key(key_value, data_value); // create the key object
-        insert_sorted(index, key);
+    void insert_data_sorted(std::string_view index, key_type key_value, data_type data_value)
+        requires (!std::is_void_v<data_type>) {
+            gdt::key<key_type, data_type> key(key_value, data_value); // create the key object
+            insert_sorted(index, key);
     }
 
-    void insert_sorted(std::string_view index, gdt::key<key_type>* key) {
-        node<key_type>* root = ggu::value_lookup(this->root_nodes, index).value_or(nullptr);
+    void insert_sorted(std::string_view index, gdt::key<key_type, data_type>* key) {
+        node<key_type, data_type>* root = ggu::value_lookup(this->root_nodes, index).value_or(nullptr);
         if(root == nullptr) {
             root = this->insert_root(index);
             insert_iter(root, key);
             return;
         } else {
             // tree has root (therefore we are looking for rightmost node to insert)
-            node<key_type>* rightmost_node = ggu::value_lookup(
+            node<key_type, data_type>* rightmost_node = ggu::value_lookup(
                 this->rightmost_nodes, index).value_or(nullptr);
             // check if the key is actually sorted - TODO: effect on insert speed
             if(!rightmost_node->get_keys().empty() &&
@@ -232,8 +233,7 @@ class grove {
         }
     }
 
-    template <typename query_type>
-    gdt::query_result<key_type> intersect(query_type& query) {
+    gdt::query_result<key_type, data_type> intersect(key_type& query) {
         gdt::query_result<key_type> result{query};
         // if index is not specified, all root nodes need to be checked
         for(const auto& [index, root] : this->get_root_nodes()) {
@@ -243,9 +243,9 @@ class grove {
     }
 
     // template <typename query_type>
-    gdt::query_result<key_type> intersect(key_type& query, const std::string& index) {
-        gdt::query_result<key_type> result{query};
-        node<key_type>* root = this->get_root(index);
+    gdt::query_result<key_type, data_type> intersect(key_type& query, const std::string& index) {
+        gdt::query_result<key_type, data_type> result{query};
+        node<key_type, data_type>* root = this->get_root(index);
 
         if(root == nullptr) {
             return result;
@@ -254,7 +254,8 @@ class grove {
         return result;
     }
 
-    void search_iter(node<key_type>* node, key_type& query, gdt::query_result<key_type>& result) {
+    void search_iter(node<key_type, data_type>* node, key_type& query,
+        gdt::query_result<key_type, data_type>& result) {
         if(node == nullptr) {
             return;
         }
@@ -282,6 +283,7 @@ class grove {
                     return;
                 }
             }
+
             int i = 0;
             while(i < node->get_keys().size() && (query > node->get_keys()[i].get_value()) &&
                   !key_type::overlap(node->get_keys()[i].get_value(), query)) {
@@ -293,10 +295,22 @@ class grove {
         }
     }
 
+    /*
+     * @brief write the grove to a stream (for debugging purposes)
+     */
+    void grove_to_sif(std::ostream& os, node<key_type, data_type>* node) {
+        std::vector<gdt::key<key_type, data_type>> keys = {};
+        for(int i = 0; i < node->get_keys().size(); ++i ) {
+            node->get_keys()[i].print_key(os);
+        }
+    }
+
+
+
   private:
     int order;
-    std::unordered_map<std::string, node<key_type>*> root_nodes;
-    std::unordered_map<std::string, node<key_type>*> rightmost_nodes;
+    std::unordered_map<std::string, node<key_type, data_type>*> root_nodes;
+    std::unordered_map<std::string, node<key_type, data_type>*> rightmost_nodes;
 };
 
 } // namespace genogrove::structure

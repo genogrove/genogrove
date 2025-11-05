@@ -23,12 +23,14 @@ static void BM_interval_insert(benchmark::State& state) {
     const int num_intervals = state.range(0);
     for(auto _ : state) {
         state.PauseTiming();
-        gst::grove<gdt::interval> grove(3);
+        gst::grove<gdt::interval, int> grove(3);
         state.ResumeTiming();
 
-        for(int i = 0; i < num_intervals; i++) {
+        for(int i = 1; i < num_intervals; i++) {
+            std::cout << i << "\n";
+            int val = i;
             gdt::interval intvl(i, i+1);
-            grove.insert_data<int>("index1", intvl, i);
+            grove.insert_data(std::string("index1"), intvl, val);
         }
         benchmark::DoNotOptimize(grove);
     }
