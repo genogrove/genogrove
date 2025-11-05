@@ -89,11 +89,17 @@ struct serialization_traits {
 
     static void serialize(std::ostream& os, const T& value) {
         os.write(reinterpret_cast<const char*>(&value), sizeof(T));
+        if(!os) {
+            throw std::runtime_error("Serialization failed!");
+        }
     }
 
     static T deserialize(std::istream& is) {
         T value;
         is.read(reinterpret_cast<char*>(&value), sizeof(T));
+        if(!is) {
+            throw std::runtime_error("Deserialization failed!");
+        }
         return value;
     }
 };
@@ -102,13 +108,13 @@ struct serialization_traits {
 template<>
 struct serialization_traits<std::string> {
     static void serialize(std::ostream& os, const std::string& value) {
-        size_t length = value.length();
+        uint64_t length = value.length();
         os.write(reinterpret_cast<const char*>(&length), sizeof(length));
         os.write(value.data(), length);
     }
 
     static std::string deserialize(std::istream& is) {
-        size_t length;
+        uint64_t length;
         is.read(reinterpret_cast<char*>(&length), sizeof(length));
         std::string value(length, '\0');
         is.read(&value[0], length);

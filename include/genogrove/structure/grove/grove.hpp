@@ -212,7 +212,7 @@ class grove {
     void insert_data_sorted(std::string_view index, key_type key_value, data_type data_value)
         requires (!std::is_void_v<data_type>) {
             gdt::key<key_type, data_type> key(key_value, data_value); // create the key object
-            insert_sorted(index, key);
+            insert_sorted(index, &key);
     }
 
     void insert_sorted(std::string_view index, gdt::key<key_type, data_type>* key) {

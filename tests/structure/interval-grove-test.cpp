@@ -197,6 +197,7 @@ struct serialization_traits<custom_data> {
         return data;
     }
 };
+}
 
 TEST(HeterogeneousGroveTest, VariantWithCustomStruct) {
     using CustomVariant = std::variant<std::monostate, int, custom_data>;
