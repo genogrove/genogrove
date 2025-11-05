@@ -10,12 +10,12 @@ This repository contains the genogrove library.
 
 ## 🔧 Build Matrix Status
 
-| Compiler | C++17 | C++20                                                                                                                                                          |
-| -------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GCC 12   | TBD   | ![gcc-12-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=gcc-12-Release&style=flat&event=push)     |
-| GCC 13   | TBD   | ![gcc-13-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=gcc-13-Release&style=flat&event=push)     |
-| GCC 14   | TBD   | ![gcc-14-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=gcc-14-Release&style=flat&event=push)     |
-| Clang 14 | TBD   | ![clang-14-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=clang-14-Release&style=flat&event=push) |
+| Compiler | C++20                                                                                                                                      |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| GCC 12   | ![gcc-12-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=gcc-12-Release&style=flat&event=push) |
+| GCC 13   | ![gcc-13-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=gcc-13-Release&style=flat&event=push) |
+| GCC 14   | ![gcc-14-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=gcc-14-Release&style=flat&event=push) |
+| Clang 14 | ![clang-14-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=clang-14-Release&style=flat&event=push) |
 
 ## 🚀 Quick Start
 
