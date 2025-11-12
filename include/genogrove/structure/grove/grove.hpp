@@ -177,7 +177,6 @@ class grove {
         new_child->set_is_leaf(child->get_is_leaf());
 
         new_child->get_keys().assign(child->get_keys().begin() + mid, child->get_keys().end());
-        child->get_keys().resize(mid-1); // resize the original node
 
         // update the parent (aka new child node)
         parent->get_children().insert(parent->get_children().begin() + index + 1, new_child);
@@ -185,6 +184,8 @@ class grove {
         parent->get_keys().insert(parent->get_keys().begin() + index, parent_key);
 
         if(child->get_is_leaf()) {
+            child->get_keys().resize(mid-1); // resize the original node
+
             new_child->set_next(child->get_next());
             child->set_next(new_child);
 
@@ -196,6 +197,8 @@ class grove {
                 }
             }
         } else {
+            child->get_keys().resize(mid); // resize the original node
+
             new_child->get_children().assign(child->get_children().begin() + mid,
                 child->get_children().end());
             child->get_children().resize(mid); // resize the original node
