@@ -25,6 +25,16 @@ namespace gdt = genogrove::data_type;
 namespace genogrove::structure {
 template <typename key_type, typename data_type = void>
 class grove {
+    // tag types for insert dispatch
+    struct unsorted_t {};
+    struct sorted_t {};
+    struct bulk_t {};
+
+    inline static constexpr unsorted_t unsorted{};
+    inline static constexpr sorted_t sorted{};
+    inline static constexpr bulk_t bulk{};
+
+
   public:
     grove(int order) : order(order), root_nodes(), rightmost_nodes() {}
     grove() : order(3), root_nodes(), rightmost_nodes() {}
@@ -121,6 +131,8 @@ class grove {
             insert(index, key);
     }
 
+
+
     /*
      * @brief inserts a new key elements into the grove
      */
@@ -171,7 +183,7 @@ class grove {
     void split_node(node<key_type, data_type>* parent, int index) {
         node<key_type, data_type>* child = parent->get_child(index);
         node<key_type, data_type>* new_child = new node<key_type, data_type>(this->order);
-        int mid = ((this->order + 2 - 1) / 2);
+        int mid = (this->order + 2 - 1) / 2;
 
         // move overflowing keys to the new child node (and resize the original node)
         new_child->set_is_leaf(child->get_is_leaf());
@@ -197,8 +209,8 @@ class grove {
             }
         } else {
             new_child->get_children().assign(child->get_children().begin() + mid,
-                                             child->get_children().end());
-            child->get_children().resize(mid + 1); // resize the original node
+                child->get_children().end());
+            child->get_children().resize(mid); // resize the original node
         }
     }
 
