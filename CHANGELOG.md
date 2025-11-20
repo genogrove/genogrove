@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-11-19
+
+### Added
+- Replace separate insert_data functions in grove with insert data dispatch
+
+### Bug Fixes
+- Corrected node-splitting so child and key counts are properly adjusted for both leaf and internal nodes, 
+improving tree stability and correctness during splits.
+
 ## [0.1.0] - 2025-11-04
 
 ### Added
