@@ -124,14 +124,38 @@ class grove {
      * @param The key associated with the data point
      * @param The type of the key to be inserted
      * @param The data point
+     * @param Tag to dispatch the unsorted insert
      */
-    void insert_data(std::string_view index, key_type key_value, data_type data_value)
+    void insert_data(std::string_view index, key_type key_value, data_type data_value,
+                    unsorted_t)
         requires (!std::is_void_v<data_type>) {
             gdt::key<key_type, data_type> key(key_value, data_value);
             insert(index, key);
     }
 
+    /*
+     * @brief inserts a sorted data point into the grove
+     * @param The key associated with the data point
+     * @param The type of the key to be inserted
+     * @param The data point
+     * @param Tag to dispatch to sorted insert
+     * @note This assumes key_value is greater than all existing keys in the tree
+     */
+    void insert_data(std::string_view index, key_type key_value, data_type data_value,
+                    sorted_t)
+        requires(!std::is_void_v<data_type>) {
+    }
 
+    /*
+     * @brief inserts a data point into the grove (defaults to unsorted)
+     * @param The key associated with the data point
+     * @param The type of the key to be inserted
+     * @param The data point
+     */
+    void insert_data(std::string_view index, key_type key_value, data_type data_value)
+        requires (!std::is_void_v<data_type>) {
+            insert_data(index, key_value, data_value, unsorted);
+        }
 
     /*
      * @brief inserts a new key elements into the grove
