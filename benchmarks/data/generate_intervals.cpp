@@ -48,7 +48,20 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    int num_intervals = std::stoi(argv[1]);
+    // validate and error handle intervals
+    int num_intervals;
+    try {
+        num_intervals = std::stoi(argv[1]);
+    } catch (const std::exception& e) {
+        std::cerr << "Error: Invalid number of intervals: " << argv[1] << std::endl;
+        return 1;
+    }
+
+    if(num_intervals < 1) {
+        std::cerr << "Error: Number of intervals must be positive" << std::endl;
+        return 1;
+    }
+
     std::string output_prefix = argv[2];
 
     // Generate intervals in sorted order
