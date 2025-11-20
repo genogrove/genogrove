@@ -76,7 +76,8 @@ const std::vector<IntervalWithData>& load_intervals(const std::string& filename)
         throw std::runtime_error("No intervals loaded from " + filename);
     }
 
-    std::cout << "Loaded " << intervals.size() << " intervals from " << filename << std::endl;
+    // Output needs to be ommitted as this taints the benchmark JSON output
+    // std::cout << "Loaded " << intervals.size() << " intervals from " << filename << std::endl;
 
     // Cache the loaded intervals
     g_interval_cache[filename] = std::move(intervals);
