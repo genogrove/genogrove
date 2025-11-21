@@ -59,6 +59,7 @@ jobs:
           comment-on-alert: true
           fail-on-alert: false
           alert-comment-cc-users: '@riasc'
+          gh-repository: 'github.com/genogrove/genogrove'
 
 
 
