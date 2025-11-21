@@ -1,0 +1,75 @@
+name: update changelog
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  changelog:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-24.04
+    steps:
+      - name: install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: checkout code
+        uses: actions/checkout@v5
+      - name: setup node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 18
+
+      - name: install auto-changelog
+        run: npm install -g auto-changelog
+
+      - name: generate changelog for unreleased
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_LABELS=$({jq -r '.pull_request.labels[].name' $GITHUB_EVENT_PATH || echo "")
+          
+          # determine section based on labels or title prefix
+          SECTION="Changed" # default section
+          if [[ "$PR_LABELS" == *feat* ]] || [[ "$PR_TITLE" == feat:* ]]; then
+            SECTION="Added"
+          elif [[ "$PR_LABELS" == *fix* ]] || [[ "$PR_TITLE" == fix:* ]]; then
+            SECTION="Fixed"
+          elif [[ "$PR_LABELS" == *docs* ]] || [[ "$PR_TITLE" == docs:* ]]; then
+            SECTION="Documentation"
+          elif [[ "$PR_LABELS" == *chore* ]] || [[ "$PR_TITLE" == chore:* ]]; then
+            SECTION="Chores"
+          elif [[ "$PR_LABELS" == *refactor* ]] || [[ "$PR_TITLE" == refactor:* ]]; then
+            SECTION="Changed"
+          elif [[ "$PR_LABELS" == *perf* ]] || [[ "$PR_TITLE" == perf:* ]]; then
+            SECTION="Performance"
+          elif [[ "$PR_LABELS" == *test* ]] || [[ "$PR_TITLE" == test:* ]]; then
+            SECTION="Tests"
+          elif [[ "$PR_LABELS" == *style* ]] || [[ "$PR_TITLE" == style:* ]]; then
+            SECTION="Style"
+          elif [[ "$PR_LABELS" == *ci* ]] || [[ "$PR_TITLE" == ci:* ]]; then
+            SECTION="CI/CD"
+          elif [[ "$PR_LABELS" == *breaking* ]]; then
+            SECTION="Breaking Changes"
+          elif [[ "$PR_LABELS" == *security* ]]; then
+            SECTION="Security"
+          fi
+          
+          echo "SECTION=$SECTION" >> $GITHUB_ENV
+          echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
+          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+          echo "PR_URL=$PR_URL" >> $GITHUB_ENV
+
+      - name: update CHANGELOG.md
+        run: |
+          # ensure that the unreleased section exists
+          if ! grep -q "## \[Unreleased\]" CHANGELOG.md; then
+            echo -e "## [Unreleased]" >> CHANGELOG.md
+          fi 
+          
+          # append PR to section
+          sed -i "/### $SECTION/a - $PR_TITLE ([#$PR_NUMBER]($PR_URL))" CHANGELOG.md
+
+      - name: commit and push changes
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
