@@ -43,6 +43,30 @@ jobs:
           ./genogrove_benchmarks --benchmark_format=json | tee benchmark_result.json
           cd ../..
 
+      - name: Set up Python for visualizations
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install matplotlib seaborn
+
+      - name: Generate visualization plots
+        run: |
+          mkdir -p build/benchmarks/plots
+          python benchmarks/visualize.py \
+            build/benchmarks/benchmark_result.json \
+            build/benchmarks/plots
+
+      - name: Deploy custom benchmarks to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/benchmarks/plots
+          destination_dir: benchmarks
+          keep_files: true
+
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
