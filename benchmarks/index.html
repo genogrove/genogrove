@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genogrove Benchmark Visualizations</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 5px;
+        }
+        .plot-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 30px;
+            margin: 30px 0;
+        }
+        .plot-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .plot-container img {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+        .plot-container h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+        .description {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #3498db;
+        }
+        footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧬 Genogrove Benchmark Visualizations</h1>
+
+    <div class="description">
+        <p><strong>Overview:</strong> These visualizations compare the performance of the genogrove B+ tree
+        implementation across different <em>order</em> values (node capacity parameter). Each plot provides
+        a different perspective on how the order affects performance.</p>
+
+        <p><strong>Tested configurations:</strong></p>
+        <ul>
+            <li><strong>Orders:</strong> 2, 5, 10, 15, 20, 25, 30</li>
+            <li><strong>Dataset sizes:</strong> 100, 500, 1000, 5000 intervals</li>
+            <li><strong>Insertion modes:</strong> Sorted and unsorted</li>
+        </ul>
+
+        <p><strong>Plot types:</strong></p>
+        <ul>
+            <li><strong>Time vs Order:</strong> Shows how execution time changes with different order values
+            for each dataset size. Lower is better.</li>
+            <li><strong>Time vs Size:</strong> Shows how execution time scales with dataset size, with
+            separate lines for each order value. Helps identify optimal order for different scales.</li>
+            <li><strong>Throughput:</strong> Measures items processed per second. Higher is better.</li>
+            <li><strong>Speedup Factor:</strong> Shows relative performance compared to baseline order (order=2).
+            Values > 1 indicate improvement.</li>
+        </ul>
+
+        <p style="margin-top: 20px;">
+            📊 <a href="../dev/bench/">View historical benchmark trends</a> (time-series data)
+        </p>
+    </div>
+
+    <h2>Sorted Insertion</h2>
+    <div class="plot-grid">
+        <div class="plot-container">
+            <h3>Time vs Order</h3>
+            <img src="BM_grove_creation_sorted_time_vs_order.png" alt="Time vs Order">
+        </div>
+        <div class="plot-container">
+            <h3>Time vs Size</h3>
+            <img src="BM_grove_creation_sorted_time_vs_size.png" alt="Time vs Size">
+        </div>
+        <div class="plot-container">
+            <h3>Throughput Comparison</h3>
+            <img src="BM_grove_creation_sorted_throughput.png" alt="Throughput Comparison">
+        </div>
+        <div class="plot-container">
+            <h3>Speedup Factor</h3>
+            <img src="BM_grove_creation_sorted_speedup.png" alt="Speedup Factor">
+        </div>
+    </div>
+
+    <h2>Unsorted Insertion</h2>
+    <div class="plot-grid">
+        <div class="plot-container">
+            <h3>Time vs Order</h3>
+            <img src="BM_grove_creation_unsorted_time_vs_order.png" alt="Time vs Order">
+        </div>
+        <div class="plot-container">
+            <h3>Time vs Size</h3>
+            <img src="BM_grove_creation_unsorted_time_vs_size.png" alt="Time vs Size">
+        </div>
+        <div class="plot-container">
+            <h3>Throughput Comparison</h3>
+            <img src="BM_grove_creation_unsorted_throughput.png" alt="Throughput Comparison">
+        </div>
+        <div class="plot-container">
+            <h3>Speedup Factor</h3>
+            <img src="BM_grove_creation_unsorted_speedup.png" alt="Speedup Factor">
+        </div>
+    </div>
+
+    <h2>Sorted vs Unsorted Comparison</h2>
+    <div class="plot-grid">
+        <div class="plot-container">
+            <h3>Sorted Insertion Speedup</h3>
+            <img src="sorted_insertion_speedup.png" alt="Sorted Insertion Speedup">
+        </div>
+        <div class="plot-container">
+            <h3>Direct Comparison - 100 intervals</h3>
+            <img src="sorted_vs_unsorted_size_100.png" alt="Sorted vs Unsorted - 100 intervals">
+        </div>
+        <div class="plot-container">
+            <h3>Direct Comparison - 500 intervals</h3>
+            <img src="sorted_vs_unsorted_size_500.png" alt="Sorted vs Unsorted - 500 intervals">
+        </div>
+        <div class="plot-container">
+            <h3>Direct Comparison - 1000 intervals</h3>
+            <img src="sorted_vs_unsorted_size_1000.png" alt="Sorted vs Unsorted - 1000 intervals">
+        </div>
+        <div class="plot-container">
+            <h3>Direct Comparison - 5000 intervals</h3>
+            <img src="sorted_vs_unsorted_size_5000.png" alt="Sorted vs Unsorted - 5000 intervals">
+        </div>
+    </div>
+
+    <footer>
+        <p>Generated by genogrove continuous benchmarking •
+        <a href="https://github.com/genogrove/genogrove">GitHub Repository</a></p>
+    </footer>
+</body>
+</html>
