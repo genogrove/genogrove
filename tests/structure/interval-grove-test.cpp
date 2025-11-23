@@ -27,7 +27,7 @@ namespace ggu = genogrove::utility;
 // Basic Interval Grove Tests
 // =============================================================================
 
-TEST(IntervalGroveTest, IntervalCreation) {
+TEST(IntervalGroveTest, CreationAndQueryUnsorted) {
     gst::grove<gdt::interval, int> grove(3);
     gdt::interval intvl1{5, 10};
     gdt::interval intvl2{15, 20};
@@ -60,6 +60,42 @@ TEST(IntervalGroveTest, IntervalCreation) {
     EXPECT_EQ(keys[1]->get_value().get_start(), 25);
     EXPECT_EQ(keys[1]->get_value().get_end(), 30);
     EXPECT_EQ(keys[1]->get_data(), 30);
+}
+
+TEST(IntervalGroveTest, CreationAndQuerySorted) {
+    gst::grove<gdt::interval, int> grove(3);
+    gdt::interval intvl1{5, 10};
+    gdt::interval intvl2{10,15};
+    gdt::interval intvl3{20,30};
+    gdt::interval intvl4{40,50};
+
+    int val1 = 10;
+    int val2 = 20;
+    int val3 = 30;
+    int val4 = 40;
+
+    grove.insert_data("index1", intvl1, val1, gst::sorted);
+    grove.insert_data("index1", intvl2, val2, gst::sorted);
+    grove.insert_data("index1", intvl3, val3, gst::sorted);
+    grove.insert_data("index1", intvl4, val4, gst::sorted);
+
+    gdt::interval query_interval{18, 42};
+    gdt::query_result<gdt::interval, int> result = grove.intersect(query_interval, "index1");
+
+    // should find two overlapping intervals (e.g., intvl3 and intvl4)
+    ASSERT_EQ(result.get_keys().size(), 2);
+
+    auto keys = result.get_keys();
+
+    // verify first overlapping interval
+    EXPECT_EQ(keys[0]->get_value().get_start(), 20);
+    EXPECT_EQ(keys[0]->get_value().get_end(), 30);
+    EXPECT_EQ(keys[0]->get_data(), 30);
+
+    EXPECT_EQ(keys[1]->get_value().get_start(), 40);
+    EXPECT_EQ(keys[1]->get_value().get_end(), 50);
+    EXPECT_EQ(keys[1]->get_data(), 40);
+
 }
 
 // =============================================================================

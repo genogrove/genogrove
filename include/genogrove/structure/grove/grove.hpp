@@ -23,8 +23,6 @@ namespace ggu = genogrove::utility;
 namespace gdt = genogrove::data_type;
 
 namespace genogrove::structure {
-template <typename key_type, typename data_type = void>
-class grove {
     // tag types for insert dispatch
     struct unsorted_t {};
     struct sorted_t {};
@@ -34,6 +32,8 @@ class grove {
     inline static constexpr sorted_t sorted{};
     inline static constexpr bulk_t bulk{};
 
+template <typename key_type, typename data_type = void>
+class grove {
 
   public:
     grove(int order) : order(order), root_nodes(), rightmost_nodes() {}
@@ -144,6 +144,7 @@ class grove {
     void insert_data(std::string_view index, key_type key_value, data_type data_value,
                     sorted_t)
         requires(!std::is_void_v<data_type>) {
+        insert_data_sorted(index, key_value, data_value);
     }
 
     /*
@@ -171,6 +172,7 @@ class grove {
             node<key_type, data_type>* new_root = new node<key_type, data_type>(this->order);
             new_root->add_child(root, 0);
             new_root->set_is_leaf(false);
+            root->set_parent(new_root);
             split_node(new_root, 0);
             root = new_root;
             this->root_nodes[std::string(index)] = root; // update the root node in the map
@@ -207,6 +209,7 @@ class grove {
     void split_node(node<key_type, data_type>* parent, int index) {
         node<key_type, data_type>* child = parent->get_child(index);
         node<key_type, data_type>* new_child = new node<key_type, data_type>(this->order);
+        new_child->set_parent(parent);
         int mid = (this->order + 2 - 1) / 2;
 
         // move overflowing keys to the new child node (and resize the original node)
@@ -248,28 +251,35 @@ class grove {
     void insert_data_sorted(std::string_view index, key_type key_value, data_type data_value)
         requires (!std::is_void_v<data_type>) {
             gdt::key<key_type, data_type> key(key_value, data_value); // create the key object
-            insert_sorted(index, &key);
+            insert_sorted(index, key);
     }
 
-    void insert_sorted(std::string_view index, gdt::key<key_type, data_type>* key) {
-        node<key_type, data_type>* root = ggu::value_lookup(this->root_nodes, index).value_or(nullptr);
+    void insert_sorted(std::string_view index, gdt::key<key_type, data_type>& key) {
+        node<key_type, data_type>* root = this->get_root(index);
         if(root == nullptr) {
             root = this->insert_root(index);
             insert_iter(root, key);
             return;
         } else {
-            // tree has root (therefore we are looking for rightmost node to insert)
-            node<key_type, data_type>* rightmost_node = ggu::value_lookup(
-                this->rightmost_nodes, index).value_or(nullptr);
-            // check if the key is actually sorted - TODO: effect on insert speed
-            if(!rightmost_node->get_keys().empty() &&
-               key->get_value() <= rightmost_node->get_keys().back().get_value()) {
-                throw std::runtime_error("Key is not higher than already inserted "
-                                         "data (use regular insert): " + key->get_value());
-               }
+            // get rightmost node and insert
+            node<key_type, data_type>* rightmost_node = this->get_rightmost_node(index);
             insert_iter(rightmost_node, key);
+
+            // handle key overflow in node
             if(rightmost_node->get_keys().size() == this->order) {
-                split_node_sorted(rightmost_node, index);
+                // check if the rightmost node is the root
+                if(rightmost_node->get_parent() == nullptr) {
+                    node<key_type, data_type>* new_root = new node<key_type, data_type>(this->order);
+                    new_root->add_child(rightmost_node, 0);
+                    new_root->set_is_leaf(false);
+                    rightmost_node->set_parent(new_root);
+                    split_node(new_root, 0);
+                    this->root_nodes[std::string(index)] = new_root;
+                } else {
+                    // regular split - rightmost child is at last index
+                    int child_index = rightmost_node->get_parent()->get_children().size() - 1;
+                    split_node(rightmost_node->get_parent(), child_index);
+                }
             }
         }
     }
