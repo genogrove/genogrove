@@ -14,6 +14,7 @@
 #include <istream>
 #include <typeindex>
 #include <type_traits>
+#include <variant>
 
 // genogrove
 #include <genogrove/data_type/any_type.hpp>
