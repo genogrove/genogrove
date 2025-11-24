@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-11-24
+
+### Added 
+- Benchmark performance is now visualized with plots comparing results across different parameters 
+(order, size, and insertion modes) ([#31](https://github.com/genogrove/genogrove/pull/31))
+- Enhanced sorted interval insertion and query functionality with improved internal parent-child 
+relationship management. ([#32](https://github.com/genogrove/genogrove/pull/32))
+- Added test coverage for sorted interval insertion and overlapping interval 
+queries. ([#32](https://github.com/genogrove/genogrove/pull/32))
+
+### Chores
+- Added a CI workflow to run continuous performance benchmarks and flag 
+regressions ([#29](https://github.com/genogrove/genogrove/pull/29))
+- Included multiple benchmark datasets in sorted and unsorted forms 
+(various sizes). ([#29](https://github.com/genogrove/genogrove/pull/29))
+- Added a data generator to produce reproducible benchmark 
+inputs.  ([#29](https://github.com/genogrove/genogrove/pull/29))
+- Added build/run utilities to execute benchmarks and collect JSON 
+results.  ([#29](https://github.com/genogrove/genogrove/pull/29))
+- Converted benchmarks to a data-driven, cached-loading approach and added dedicated 
+grove-creation benchmarks.  ([#29](https://github.com/genogrove/genogrove/pull/29))
+- Updated continuous benchmarking workflow configuration to run only on pushes to the main branch, 
+removing pull request event triggers. This streamlines CI/CD processes by consolidating benchmark runs to 
+main branch deployments. ([#30](https://github.com/genogrove/genogrove/pull/30))
+- When inserting data into a grove on sorted data (e.g., `insert_data(..., sorted)) use direct insert rather than
+insert_iter to speed up insertion. ([#34](https://github.com/genogrove/genogrove/pull/34))
+- Added missing std::variant required for monostate in key class ([#35](https://github.com/genogrove/genogrove/pull/35))
+
+
 ## [0.2.0] - 2025-11-19
 
 ### Added
