@@ -258,12 +258,12 @@ class grove {
         node<key_type, data_type>* root = this->get_root(index);
         if(root == nullptr) {
             root = this->insert_root(index);
-            insert_iter(root, key);
+            root->insert_key(key);
             return;
         } else {
             // get rightmost node and insert
             node<key_type, data_type>* rightmost_node = this->get_rightmost_node(index);
-            insert_iter(rightmost_node, key);
+            rightmost_node->insert_key(key);
 
             // handle key overflow in node
             if(rightmost_node->get_keys().size() == this->order) {
