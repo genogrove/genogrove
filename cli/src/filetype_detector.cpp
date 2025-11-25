@@ -17,12 +17,20 @@ std::tuple<filetype, bool> filetype_detector::detect_filetype(const std::filesys
     // checks if the file is gzipped
     char buffer[2];
     file.read(buffer, 2);
-    bool is_gzipped = (file.gcount() == 2 && buffer[0] == 0x1f && buffer[1] == 0x8b);
+    bool is_gzipped = (file.gcount() == 2 &&
+        static_cast<unsigned char>(buffer[0]) == 0x1f &&
+        static_cast<unsigned char>(buffer[1]) == 0x8b);
 
     // checks the file extension
     std::string extension = filepath.extension().string();
-    if(is_gzipped && extension == ".gz") {
+    if(!extension.empty() && extension[0] == '.') {
+        extension = extension.substr(1);
+    }
+    if(is_gzipped && extension == "gz") {
         extension = filepath.stem().extension().string();
+        if(!extension.empty() && extension[0] == '.') {
+            extension = extension.substr(1);
+        }
     }
 
     // look up the file type
