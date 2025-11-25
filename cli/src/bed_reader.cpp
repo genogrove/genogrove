@@ -27,9 +27,9 @@ bool bed_reader::read_next(file_entry& entry) {
     line_num++;
 
     // skip empty or commented lines
-    if (line.empty() || line[0] == '#') {
-        return read_next(entry);
-    }
+    // if (line.empty() || line[0] == '#') {
+    //     return read_next(entry);
+    // }
 
     // parse the line
     std::stringstream ss(line);
@@ -41,11 +41,13 @@ bool bed_reader::read_next(file_entry& entry) {
         }
 
         // validate integers
-        if (!std::all_of(start.begin(), start.end(), ::isdigit) ||
+        if(start.empty() ||
+            end.empty() ||
+            !std::all_of(start.begin(), start.end(), ::isdigit) ||
             !std::all_of(end.begin(), end.end(), ::isdigit)) {
             error_message = "Invalid coordinate format at line " + std::to_string(line_num);
             return false;
-            }
+        }
 
         // validate and create interval object
         size_t startNum = std::stoul(start);

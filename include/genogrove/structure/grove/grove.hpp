@@ -356,8 +356,6 @@ class grove {
         }
     }
 
-
-
   private:
     int order;
     std::unordered_map<std::string, node<key_type, data_type>*> root_nodes;

@@ -7,15 +7,15 @@ cxxopts::Options index::parse_args(int argc, char** argv) {
     options.add_options()
             ("inputfile", "The input file to be indexed",
                     cxxopts::value<std::string>())
-            ("o, outputfile", "Write the index to the specified file",
+            ("o,outputfile", "Write the index to the specified file",
                     cxxopts::value<std::string>())
-            ("k, order", "The order of the tree",
+            ("k,order", "The order of the tree",
                     cxxopts::value<int>()->default_value("3"))
-            ("s, sorted", "Interval in the input file are sorted",
+            ("s,sorted", "Interval in the input file are sorted",
                     cxxopts::value<bool>()->default_value("false"))
-            ("t, timed", "Measure the time taken for indexing",
+            ("t,timed", "Measure the time taken for indexing",
                     cxxopts::value<bool>()->default_value("false"))
-            ("h, help", "Print help")
+            ("h,help", "Print help")
             ;
     options.parse_positional({"inputfile"});
     options.positional_help("inputfile");
@@ -24,6 +24,10 @@ cxxopts::Options index::parse_args(int argc, char** argv) {
 }
 
 void index::validate(const cxxopts::ParseResult& args) {
+    if(!args.count("inputfile")) {
+        std::cerr << "Error: inputfile is required\n";
+        exit(1);
+    }
     if(args.count("inputfile")) {
         std::string inputfile = args["inputfile"].as<std::string>();
         // check if the file exists
@@ -42,6 +46,9 @@ void index::execute(const cxxopts::ParseResult& args) {
     // detect the file type
     auto [filetype, is_gzipped] = filetype_detector().detect_filetype(inputfile);
     std::unique_ptr<file_reader> reader = file_reader_factory::create(inputfile, filetype, is_gzipped);
+    if(!reader) {
+        std::cerr << util::get_log("index") << " Unsupported file type for: " << inputfile << "\n";
+    }
 
     // create the grove
     ggs::grove<ggt::interval, int> grove(args["order"].as<int>());

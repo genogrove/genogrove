@@ -2,7 +2,7 @@
 
 namespace subcalls {
 cxxopts::Options intersect::parse_args(int argc, char** argv) {
-    cxxopts::Options options("index", "Index an Interval File");
+    cxxopts::Options options("intersect", "Search for interval overlaps in the index");
     options.add_options()
             ("-q, queryfile", "The query file to be indexed",
              cxxopts::value<std::string>())
