@@ -27,9 +27,17 @@ bool bed_reader::read_next(file_entry& entry) {
     line_num++;
 
     // skip empty or commented lines
-    // if (line.empty() || line[0] == '#') {
-    //     return read_next(entry);
-    // }
+    while(line.empty() || line[0] == '#') {
+        kstring_t str2 = {0, 0, nullptr};
+        ret = bgzf_getline(bgzf_file, '\n', &str2);
+        if(ret < 0) {
+            if (str2.s) free(str2.s);
+            return false;
+        }
+        line = std::string(str2.s);
+        free(str2.s);
+        line_num++;
+    }
 
     // parse the line
     std::stringstream ss(line);

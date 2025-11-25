@@ -75,5 +75,6 @@ int main(int argc, char** argv) {
 
     command->validate(subcallArgs);
     command->execute(subcallArgs);
+    return 0;
 
 }

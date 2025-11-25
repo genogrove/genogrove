@@ -21,7 +21,7 @@ std::tuple<filetype, bool> filetype_detector::detect_filetype(const std::filesys
 
     // checks the file extension
     std::string extension = filepath.extension().string();
-    if(is_gzipped == std::bitset<1>(1) && extension == ".gz") {
+    if(is_gzipped && extension == ".gz") {
         extension = filepath.stem().extension().string();
     }
 
