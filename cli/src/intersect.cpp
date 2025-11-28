@@ -85,6 +85,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
                 break; // this is just an EOF
             }
             std::cerr << target_reader->get_error_message() << std::endl;
+            continue;
         }
         grove.insert_data(target_entry.chrom, target_entry.interval, target_entry);
     }
@@ -97,6 +98,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
                 break; // this is just an EOF
             }
             std::cerr << query_reader->get_error_message() << std::endl;
+            continue;
         }
         auto results = grove.intersect(query_entry.interval, query_entry.chrom);
         for(auto* result : results.get_keys()) {
