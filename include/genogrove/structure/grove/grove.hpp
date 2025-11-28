@@ -356,6 +356,34 @@ class grove {
         }
     }
 
+    void serialize(std::ostream& os) {
+        // write the order of the tree
+        os.write(reinterpret_cast<const char*>(&this->order), sizeof(this->order));
+
+        // write the root nodes
+        size_t number_root_nodes = this->root_nodes.size();
+        os.write(reinterpret_cast<const char*>(&number_root_nodes), sizeof(number_root_nodes));
+
+        // serialize the root nodes
+        for(auto& [key, root] : this->root_nodes) {
+            size_t index_name_length = key.size();
+            os.write(reinterpret_cast<const char*>(&index_name_length), sizeof(index_name_length));
+            os.write(key.c_str(), index_name_length);
+            root->serialize(os);
+        }
+        // note: we don't serialize rightmost node - and rather calculate them quickly when deserializing
+    }
+
+    grove deserialize(std::istream& is) {
+        int order;
+        is.read(reinterpret_cast<char*>(&order), sizeof(order));
+        grove grove(order);
+
+        size_t number_root_nodes;
+        is.read(reinterpret_cast<char*>(&number_root_nodes), sizeof(number_root_nodes));
+
+    }
+
   private:
     int order;
     std::unordered_map<std::string, node<key_type, data_type>*> root_nodes;
