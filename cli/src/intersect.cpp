@@ -4,14 +4,15 @@ namespace subcalls {
 cxxopts::Options intersect::parse_args(int argc, char** argv) {
     cxxopts::Options options("intersect", "Search for interval overlaps in the index");
     options.add_options()
-            ("-q,queryfile", "The query file to be indexed",
+            ("q,queryfile", "The query file to be indexed",
              cxxopts::value<std::string>())
-            ("-t,targetfile", "The target file to be index/searched against",
+            ("t,targetfile", "The target file to be index/searched against",
                     cxxopts::value<std::string>())
-            ("-o,outputfile", "Write the index to the specified file",
-             cxxopts::value<std::string>()->default_value(""))
+            ("o,outputfile", "Write the index to the specified file",
+             cxxopts::value<std::string>()->default_value("stdout"))
             ("order", "The order of the tree (default: 3)",
              cxxopts::value<int>()->default_value("3"))
+            ("h,help", "Print the help")
             ;
     options.parse_positional({"inputfile"});
     return options;
@@ -25,6 +26,8 @@ void intersect::validate(const cxxopts::ParseResult& args) {
             std::cerr << "File does not exist: " << queryFilePath << std::endl;
             exit(1);
         }
+    } else {
+        std::cerr << "Error: queryfile is required\n";
     }
     if(args.count("targetfile")) {
         // check if path to file exists
