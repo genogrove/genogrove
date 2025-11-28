@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Optional command-line interface (configurable toggle) providing "index" and 
+"intersect" subcommands ([#37](https://github.com/genogrove/genogrove/pull/37))
+- Enhanced BED file parsing with support for optional fields including name, score, strand, and block 
+coordinates ([#42](https://github.com/genogrove/genogrove/pull/42))
+
+### Chores
+- Removed an unused C++17 dependency block from the build 
+configuration ([#37](https://github.com/genogrove/genogrove/pull/37))
+
 ## [0.3.0] - 2025-11-24
 
 ### Added 
