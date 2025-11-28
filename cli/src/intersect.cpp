@@ -4,14 +4,15 @@ namespace subcalls {
 cxxopts::Options intersect::parse_args(int argc, char** argv) {
     cxxopts::Options options("intersect", "Search for interval overlaps in the index");
     options.add_options()
-            ("-q,queryfile", "The query file to be indexed",
+            ("q,queryfile", "The query file to be indexed",
              cxxopts::value<std::string>())
-            ("-t,targetfile", "The target file to be index/searched against",
+            ("t,targetfile", "The target file to be index/searched against",
                     cxxopts::value<std::string>())
-            ("-o,outputfile", "Write the index to the specified file",
-             cxxopts::value<std::string>()->default_value(""))
-            ("order", "The order of the tree (default: 3)",
+            ("o,outputfile", "Write the index to the specified file",
+             cxxopts::value<std::string>()->default_value("stdout"))
+            ("k,order", "The order of the tree (default: 3)",
              cxxopts::value<int>()->default_value("3"))
+            ("h,help", "Print the help")
             ;
     options.parse_positional({"inputfile"});
     return options;
@@ -25,6 +26,8 @@ void intersect::validate(const cxxopts::ParseResult& args) {
             std::cerr << "File does not exist: " << queryFilePath << std::endl;
             exit(1);
         }
+    } else {
+        std::cerr << "Error: queryfile is required\n";
     }
     if(args.count("targetfile")) {
         // check if path to file exists
@@ -38,10 +41,13 @@ void intersect::validate(const cxxopts::ParseResult& args) {
     if(args.count("outputfile")) {
         // check if path to file exists
         std::string outputfile = args["outputfile"].as<std::string>();
-        std::filesystem::path outputfilePath(outputfile);
-        if(!std::filesystem::exists(outputfilePath.parent_path())) {
-            std::cerr << "Parent directory does not exist: " << outputfilePath.parent_path() << std::endl;
-            exit(1);
+        // Only validate real file paths; "stdout" is treated as a sentinel.
+        if(outputfile != "stdout") {
+            std::filesystem::path outputfile_path(outputfile);
+            if(!std::filesystem::exists(outputfile_path.parent_path())) {
+                std::cerr << "Parent directory does not exist: " << outputfile_path.parent_path() << std::endl;
+                exit(1);
+            }
         }
     }
     if(args.count("k")) {
