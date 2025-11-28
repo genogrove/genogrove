@@ -10,7 +10,7 @@ cxxopts::Options intersect::parse_args(int argc, char** argv) {
                     cxxopts::value<std::string>())
             ("o,outputfile", "Write the index to the specified file",
              cxxopts::value<std::string>()->default_value("stdout"))
-            ("order", "The order of the tree (default: 3)",
+            ("k,order", "The order of the tree (default: 3)",
              cxxopts::value<int>()->default_value("3"))
             ("h,help", "Print the help")
             ;
@@ -41,10 +41,13 @@ void intersect::validate(const cxxopts::ParseResult& args) {
     if(args.count("outputfile")) {
         // check if path to file exists
         std::string outputfile = args["outputfile"].as<std::string>();
-        std::filesystem::path outputfilePath(outputfile);
-        if(!std::filesystem::exists(outputfilePath.parent_path())) {
-            std::cerr << "Parent directory does not exist: " << outputfilePath.parent_path() << std::endl;
-            exit(1);
+        // Only validate real file paths; "stdout" is treated as a sentinel.
+        if(outputfile != "stdout") {
+            std::filesystem::path outputfile_path(outputfile);
+            if(!std::filesystem::exists(outputfile_path.parent_path())) {
+                std::cerr << "Parent directory does not exist: " << outputfile_path.parent_path() << std::endl;
+                exit(1);
+            }
         }
     }
     if(args.count("k")) {
