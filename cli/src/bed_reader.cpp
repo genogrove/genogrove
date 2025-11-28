@@ -15,7 +15,7 @@ bed_reader::~bed_reader() {
     }
 }
 
-bool bed_reader::read_next(file_entry& entry) {
+bool bed_reader::read_next(bed_entry& entry) {
     kstring_t str = {0, 0, nullptr};
     int ret = bgzf_getline(bgzf_file, '\n', &str);
     if(ret < 0) {
@@ -66,7 +66,51 @@ bool bed_reader::read_next(file_entry& entry) {
         }
         entry.chrom = chrom;
         entry.interval = ggt::interval(startNum, endNum);
-        entry.strand = '.';
+
+        // Parse optional BED fields (BED4+)
+        std::string name_str, score_str, strand_str;
+        std::string thick_start_str, thick_end_str, item_rgb_str;
+        std::string block_count_str, block_sizes_str, block_starts_str;
+
+        // BED4: name
+        if (ss >> name_str) {
+            entry.name = name_str;
+
+            // BED5: score
+            if (ss >> score_str) {
+                if (std::all_of(score_str.begin(), score_str.end(), ::isdigit)) {
+                    int score = std::stoi(score_str);
+                    if (score >= 0 && score <= 1000) {
+                        entry.score = score;
+                    }
+                }
+
+                // BED6: strand
+                if (ss >> strand_str) {
+                    if (!strand_str.empty() && (strand_str[0] == '+' || strand_str[0] == '-' || strand_str[0] == '.')) {
+                        entry.strand = strand_str[0];
+                    }
+
+                    // BED12: additional fields
+                    if (ss >> thick_start_str >> thick_end_str >> item_rgb_str) {
+                        if (std::all_of(thick_start_str.begin(), thick_start_str.end(), ::isdigit)) {
+                            entry.thick_start = std::stoi(thick_start_str);
+                        }
+                        if (std::all_of(thick_end_str.begin(), thick_end_str.end(), ::isdigit)) {
+                            entry.thick_end = std::stoi(thick_end_str);
+                        }
+                        entry.item_rgb = item_rgb_str;
+
+                        if (ss >> block_count_str >> block_sizes_str >> block_starts_str) {
+                            entry.block_count = block_count_str;
+                            entry.block_sizes = block_sizes_str;
+                            entry.block_starts = block_starts_str;
+                        }
+                    }
+                }
+            }
+        }
+
         return true;
     } catch (std::exception &e) {
         error_message = "Failed to parse line at " + std::to_string(line_num) + ": " + line;

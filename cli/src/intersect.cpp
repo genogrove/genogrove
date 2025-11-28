@@ -69,13 +69,40 @@ void intersect::execute(const cxxopts::ParseResult& args) {
         outputStream = new std::ofstream(outputfile);
     }
 
-    ggs::grove<gdt::interval, int> grove(k);
+    ggs::grove<gdt::interval, bed_entry> grove(k);
     auto [query_filetype, query_gzipped] = filetype_detector().detect_filetype(queryfile); // detect the file type
     auto [target_filetype, target_gzipped] = filetype_detector().detect_filetype(targetfile);
 
-    std::unique_ptr<file_reader> query_reader = file_reader_factory::create(queryfile, query_filetype, query_gzipped);
-    std::unique_ptr<file_reader> target_reader = file_reader_factory::create(targetfile, target_filetype, target_gzipped);
+    auto query_reader = file_reader_factory::create(queryfile, query_filetype, query_gzipped);
+    auto target_reader = file_reader_factory::create(targetfile, target_filetype, target_gzipped);
 
+    bed_entry target_entry;
+
+    // store the target in the grove
+    while(target_reader->has_next()) {
+        if(!target_reader->read_next(target_entry)) {
+            if(target_reader->get_error_message().empty()) {
+                break; // this is just an EOF
+            }
+            std::cerr << target_reader->get_error_message() << std::endl;
+        }
+        grove.insert_data(target_entry.chrom, target_entry.interval, target_entry);
+    }
+
+    // intersect the query with the grove
+    while(query_reader->has_next()) {
+        bed_entry query_entry;
+        if(!query_reader->read_next(query_entry)) {
+            if(query_reader->get_error_message().empty()) {
+                break; // this is just an EOF
+            }
+            std::cerr << query_reader->get_error_message() << std::endl;
+        }
+        auto results = grove.intersect(query_entry.interval, query_entry.chrom);
+        for(auto* result : results.get_keys()) {
+            *outputStream << result->get_data().chrom << "\t" << result->get_data().interval.get_start() << "\t" << result->get_data().interval.get_end() << "\n";
+        }
+    }
 }
 
 }
