@@ -22,9 +22,24 @@ target_link_libraries(genogrove_benchmarks
         benchmark::benchmark_main
 )
 
+# CLI benchmarks (tests the actual CLI binary via subprocess)
+add_executable(genogrove_cli_benchmarks
+        cli_benchmark.cpp)
+
+target_link_libraries(genogrove_cli_benchmarks
+        PRIVATE
+        benchmark::benchmark
+        benchmark::benchmark_main
+)
+
 # enable optimization for benchmarks
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(genogrove_benchmarks PRIVATE
+            -O3
+            -march=native
+            -DNDEBUG
+    )
+    target_compile_options(genogrove_cli_benchmarks PRIVATE
             -O3
             -march=native
             -DNDEBUG
