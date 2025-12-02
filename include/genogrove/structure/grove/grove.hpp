@@ -172,6 +172,11 @@ class grove {
             root = this->insert_root(index);
         }
         auto* key_ptr = insert_iter(root, key);
+        if(key_ptr == nullptr) {
+            // insertion failed
+            throw std::runtime_error("Failed to insert key into tree");
+            return nullptr;
+        }
         if(root->get_keys().size() == this->order) {
             node<key_type, data_type>* new_root = new node<key_type, data_type>(this->order);
             new_root->add_child(root, 0);
