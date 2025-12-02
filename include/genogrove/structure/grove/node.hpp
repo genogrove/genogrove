@@ -30,6 +30,10 @@ class node {
         children.reserve(order);
     }
     ~node() {
+        // Delete all keys (stored on heap)
+        for (auto* key : keys) {
+            delete key;
+        }
         // Only delete children if this is an internal node
         // Leaf nodes don't own their children
         if (!is_leaf) {
@@ -46,10 +50,14 @@ class node {
     void set_order(int k) {
         this->order = k;
     }
-    std::vector<gdt::key<key_type, data_type>>& get_keys() {
+    std::vector<gdt::key<key_type, data_type>*>& get_keys() {
         return this->keys;
     }
-    void set_keys(const std::vector<gdt::key<key_type, data_type>>& keys) {
+    void set_keys(const std::vector<gdt::key<key_type, data_type>*>& keys) {
+        // Delete existing keys first
+        for (auto* key : this->keys) {
+            delete key;
+        }
         this->keys = keys;
     }
     std::vector<node<key_type, data_type>*>& get_children() {
@@ -77,15 +85,21 @@ class node {
         return this->is_leaf;
     }
 
-    void insert_key(gdt::key<key_type, data_type>& key1) {
+    gdt::key<key_type, data_type>* insert_key(gdt::key<key_type, data_type>& key1) {
         int i = 0;
-        while(i < this->keys.size() && key1.get_value() > this->keys[i].get_value()) {
+        while(i < this->keys.size() && key1.get_value() > this->keys[i]->get_value()) {
             i++;
         }
-        this->keys.insert(this->keys.begin() + i, key1);
+        // Allocate key on heap
+        auto* key_ptr = new gdt::key<key_type, data_type>(key1);
+        this->keys.insert(this->keys.begin() + i, key_ptr);
+        return key_ptr;
     }
-    void insert_key(gdt::key<key_type, data_type>& key1, int index) {
-        this->keys.insert(this->keys.begin() + index, key1);
+    gdt::key<key_type, data_type>* insert_key(gdt::key<key_type, data_type>& key1, int index) {
+        // Allocate key on heap
+        auto* key_ptr = new gdt::key<key_type, data_type>(key1);
+        this->keys.insert(this->keys.begin() + index, key_ptr);
+        return key_ptr;
     }
 
     key_type calc_parent_key() {
@@ -93,7 +107,7 @@ class node {
         std::vector<key_type> values;
         values.reserve(this->keys.size());
         for(int i = 0; i < this->keys.size(); i++) {
-            values.push_back(this->keys[i].get_value());
+            values.push_back(this->keys[i]->get_value());
         }
         return key_type::aggregate(values);
     }
@@ -119,14 +133,14 @@ class node {
 
     void print_keys(std::ostream& os, std::string_view sep = "\t") {
         for(int i = 0; i < this->keys.size(); ++i) {
-            os << this->keys[i].get_value().toString() << sep;
+            os << this->keys[i]->get_value().toString() << sep;
         }
         os << std::endl;
     }
 
   private:
     int order;
-    std::vector<gdt::key<key_type, data_type>> keys;
+    std::vector<gdt::key<key_type, data_type>*> keys;
     std::vector<node<key_type, data_type>*> children;
     node<key_type, data_type>* parent;
     node<key_type, data_type>* next;

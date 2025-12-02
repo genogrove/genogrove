@@ -131,11 +131,30 @@ class graph_overlay {
     }
 
     /*
-     * @brief Get all outgoing edges with metadata
+     * @brief Get edge metadata for all outgoing edges
+     * @param source Pointer to source key
+     * @return Vector of edge metadata (only available when edge_data_type != void)
+     */
+    template<typename M = edge_data_type>
+    std::vector<M> get_edges(gdt::key<key_type, data_type>* source) const
+        requires (!std::is_void_v<edge_data_type>) {
+        std::vector<M> metadata_list;
+        auto it = adjacency.find(source);
+        if (it != adjacency.end()) {
+            metadata_list.reserve(it->second.size());
+            for (const auto& e : it->second) {
+                metadata_list.push_back(e.metadata);
+            }
+        }
+        return metadata_list;
+    }
+
+    /*
+     * @brief Get all outgoing edge structures (with targets and metadata)
      * @param source Pointer to source key
      * @return Const reference to vector of edges (empty if no edges)
      */
-    const std::vector<edge>& get_edges(gdt::key<key_type, data_type>* source) const {
+    const std::vector<edge>& get_edge_list(gdt::key<key_type, data_type>* source) const {
         static const std::vector<edge> empty_edges;
         auto it = adjacency.find(source);
         return (it != adjacency.end()) ? it->second : empty_edges;
