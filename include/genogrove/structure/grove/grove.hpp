@@ -125,12 +125,13 @@ class grove {
      * @param The type of the key to be inserted
      * @param The data point
      * @param Tag to dispatch the unsorted insert
+     * @return Pointer to the inserted key in the tree
      */
-    void insert_data(std::string_view index, key_type key_value, data_type data_value,
+    gdt::key<key_type, data_type>* insert_data(std::string_view index, key_type key_value, data_type data_value,
                     unsorted_t)
         requires (!std::is_void_v<data_type>) {
             gdt::key<key_type, data_type> key(key_value, data_value);
-            insert(index, key);
+            return insert(index, key);
     }
 
     /*
@@ -140,11 +141,12 @@ class grove {
      * @param The data point
      * @param Tag to dispatch to sorted insert
      * @note This assumes key_value is greater than all existing keys in the tree
+     * @return Pointer to the inserted key in the tree
      */
-    void insert_data(std::string_view index, key_type key_value, data_type data_value,
+    gdt::key<key_type, data_type>* insert_data(std::string_view index, key_type key_value, data_type data_value,
                     sorted_t)
         requires(!std::is_void_v<data_type>) {
-        insert_data_sorted(index, key_value, data_value);
+        return insert_data_sorted(index, key_value, data_value);
     }
 
     /*
@@ -152,22 +154,29 @@ class grove {
      * @param The key associated with the data point
      * @param The type of the key to be inserted
      * @param The data point
+     * @return Pointer to the inserted key in the tree
      */
-    void insert_data(std::string_view index, key_type key_value, data_type data_value)
+    gdt::key<key_type, data_type>* insert_data(std::string_view index, key_type key_value, data_type data_value)
         requires (!std::is_void_v<data_type>) {
-            insert_data(index, key_value, data_value, unsorted);
+            return insert_data(index, key_value, data_value, unsorted);
         }
 
     /*
      * @brief inserts a new key elements into the grove
+     * @return Pointer to the inserted key in the tree
      */
-    void insert(std::string_view index, gdt::key<key_type, data_type>& key) {
+    gdt::key<key_type, data_type>* insert(std::string_view index, gdt::key<key_type, data_type>& key) {
         // get the root node for the given chromosome (or create a new one if it doesn't exist)
         node<key_type, data_type>* root = this->get_root(index);
         if(root == nullptr) {
             root = this->insert_root(index);
         }
-        insert_iter(root, key);
+        auto* key_ptr = insert_iter(root, key);
+        if(key_ptr == nullptr) {
+            // insertion failed
+            throw std::runtime_error("Failed to insert key into tree");
+            return nullptr;
+        }
         if(root->get_keys().size() == this->order) {
             node<key_type, data_type>* new_root = new node<key_type, data_type>(this->order);
             new_root->add_child(root, 0);
@@ -177,32 +186,36 @@ class grove {
             root = new_root;
             this->root_nodes[std::string(index)] = root; // update the root node in the map
         }
+        return key_ptr;
     }
 
     /*
      * @brief inserts a new key into the grove
+     * @return Pointer to the inserted key in the tree
      */
-    void insert_iter(node<key_type, data_type>* node, gdt::key<key_type, data_type>& key) {
+    gdt::key<key_type, data_type>* insert_iter(node<key_type, data_type>* node, gdt::key<key_type, data_type>& key) {
         if(!node) {
             throw std::runtime_error("Null node passed to insert_iter");
         }
         if(node->get_is_leaf()) {
             try {
-                node->insert_key(key);
+                return node->insert_key(key);
 
             } catch(const std::exception& e) {
                 std::cerr << "Failed to insert key into leaf node: " << e.what() << std::endl;
+                return nullptr;
             }
         } else {
             int child_index = 0;
             while(child_index < node->get_keys().size() &&
-                  key.get_value() > node->get_keys()[child_index].get_value()) {
+                  key.get_value() > node->get_keys()[child_index]->get_value()) {
                 child_index++;
             }
-            insert_iter(node->get_child(child_index), key);
+            auto* key_ptr = insert_iter(node->get_child(child_index), key);
             if(node->get_child(child_index)->get_keys().size() == this->order) {
                 split_node(node, child_index);
             }
+            return key_ptr;
         }
     }
 
@@ -221,7 +234,8 @@ class grove {
         // update the parent (aka new child node)
         parent->get_children().insert(parent->get_children().begin() + index + 1, new_child);
         gdt::key<key_type, data_type> parent_key{child->calc_parent_key()};
-        parent->get_keys().insert(parent->get_keys().begin() + index, parent_key);
+        auto* parent_key_ptr = new gdt::key<key_type, data_type>(parent_key);
+        parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
 
         if(child->get_is_leaf()) {
             new_child->set_next(child->get_next());
@@ -247,23 +261,23 @@ class grove {
      * @param the index associated to the grove this should be inserted
      * @param the value of the key to be inserted
      * @param the value of the data to be inserted
+     * @return Pointer to the inserted key in the tree
      */
-    void insert_data_sorted(std::string_view index, key_type key_value, data_type data_value)
+    gdt::key<key_type, data_type>* insert_data_sorted(std::string_view index, key_type key_value, data_type data_value)
         requires (!std::is_void_v<data_type>) {
             gdt::key<key_type, data_type> key(key_value, data_value); // create the key object
-            insert_sorted(index, key);
+            return insert_sorted(index, key);
     }
 
-    void insert_sorted(std::string_view index, gdt::key<key_type, data_type>& key) {
+    gdt::key<key_type, data_type>* insert_sorted(std::string_view index, gdt::key<key_type, data_type>& key) {
         node<key_type, data_type>* root = this->get_root(index);
         if(root == nullptr) {
             root = this->insert_root(index);
-            root->insert_key(key);
-            return;
+            return root->insert_key(key);
         } else {
             // get rightmost node and insert
             node<key_type, data_type>* rightmost_node = this->get_rightmost_node(index);
-            rightmost_node->insert_key(key);
+            auto* key_ptr = rightmost_node->insert_key(key);
 
             // handle key overflow in node
             if(rightmost_node->get_keys().size() == this->order) {
@@ -281,6 +295,7 @@ class grove {
                     split_node(rightmost_node->get_parent(), child_index);
                 }
             }
+            return key_ptr;
         }
     }
 
@@ -313,31 +328,31 @@ class grove {
         if(node->get_is_leaf()) {
             int last_match = -1;
             for(int i = 0; i < node->get_keys().size(); ++i) {
-                if(key_type::overlap(node->get_keys()[i].get_value(), query)) {
+                if(key_type::overlap(node->get_keys()[i]->get_value(), query)) {
                     last_match = i;
-                    result.add_key(&node->get_keys()[i]);
+                    result.add_key(node->get_keys()[i]);
                 }
             }
             // check if there is an overlap within the next node (if so we have to traverse it)
             if(node->get_next() != nullptr) {
                 int last_key =
                     node->get_keys().size() - 1; // index of the last key in the current node
-                if(key_type::overlap(node->get_keys()[last_key].get_value(), query)) {
+                if(key_type::overlap(node->get_keys()[last_key]->get_value(), query)) {
                     search_iter(node->get_next(), query, result);
                 }
             }
         } else {
             // abort if left of key (not overlapping) - only neded for intervals
             if constexpr(key_type::is_interval) {
-                if(query < node->get_keys()[0].get_value() &&
-                   !key_type::overlap(node->get_keys()[0].get_value(), query)) {
+                if(query < node->get_keys()[0]->get_value() &&
+                   !key_type::overlap(node->get_keys()[0]->get_value(), query)) {
                     return;
                 }
             }
 
             int i = 0;
-            while(i < node->get_keys().size() && (query > node->get_keys()[i].get_value()) &&
-                  !key_type::overlap(node->get_keys()[i].get_value(), query)) {
+            while(i < node->get_keys().size() && (query > node->get_keys()[i]->get_value()) &&
+                  !key_type::overlap(node->get_keys()[i]->get_value(), query)) {
                 i++;
             }
             if(node->get_children()[i] != nullptr) {
