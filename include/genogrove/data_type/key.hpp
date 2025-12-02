@@ -186,6 +186,9 @@ namespace genogrove::data_type {
                     return !(*this == other);
                 }
 
+
+
+
         private:
             key_type value;
             [[no_unique_address]]
@@ -194,47 +197,7 @@ namespace genogrove::data_type {
                 std::monostate,
                 data_type
             > data;
-
-            // std::shared_ptr<any_base> data;
-            // create a derived class for linked keys
-            // key<key_type, data_type>* single_link;
-            // std::vector<key*> multi_link;
-
     };
 
-// ============================================================================
-// Serialization Traits - Specialization for custom types
-// ============================================================================
-
-/*
- * @brief Default serialization traits for POD types
- * @details Uses raw memory copy - only safe for trivially copyable types
- */
-// template<typename T>
-// struct serialization_traits {
-//     static_assert(std::is_trivially_copyable_v<T>,
-//         "Default serialization only works for trivially copyable types. "
-//         "Specialize serialization_traits for complex types.");
-//
-//     static void serialize(std::ostream& os, const T& data_value) {
-//         os.write(reinterpret_cast<const char*>(&data_value), sizeof(data_value));
-//     }
-//
-//     static T deserialize(std::istream& is) {
-//         T data_value;
-//         is.read(reinterpret_cast<char*>(&data_value), sizeof(T));
-//         return data_value;
-//     }
-// };
-//
-// template<>
-
-
-
-
-
 }
-
-
-
 #endif //GENOGROVE_DATA_TYPE_KEY_HPP

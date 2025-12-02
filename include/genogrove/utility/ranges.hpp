@@ -9,26 +9,16 @@
 #ifndef UTILITY_RANGES_HPP
 #define UTILITY_RANGES_HPP
 
-#if __cplusplus >= 202002L
-    #include <ranges>
-    #include <algorithm>
-    namespace genogrove::utility {
-        namespace ranges = std::ranges;
-        namespace views = std::ranges::views;
-        using ranges::find;
-        using ranges::find_if;
-    }
-#else // C++17
-    #include <range/v3/all.hpp>
-    namespace genogrove::utility {
-        namespace ranges = ::ranges;
-        namespace views = ::ranges::views;
-        using ranges::find;
-        using ranges::find_if;
-    }
-#endif
+#include <ranges>
+#include <algorithm>
+#include <optional>
 
 namespace genogrove::utility {
+    namespace ranges = std::ranges;
+    namespace views = std::ranges::views;
+    using ranges::find;
+    using ranges::find_if;
+
     /*
      * @brief Lookup a key in an associative container by its value.
      * @param The associative container.
@@ -65,5 +55,4 @@ namespace genogrove::utility {
         return std::nullopt;
     }
 }
-
-#endif //UTILITY_RANGES_HPP
+#endif
