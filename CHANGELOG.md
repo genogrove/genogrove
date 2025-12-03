@@ -7,7 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<<<<<<< HEAD
 ### Chores
 - Optimized internal key storage and ownership management for improved memory 
 efficiency ([#49](https://github.com/genogrove/genogrove/pull/49))
@@ -34,30 +33,6 @@ efficiency ([#49](https://github.com/genogrove/genogrove/pull/49))
 ### Chores
 - Removed an unused C++17 dependency block from the build
   configuration ([#37](https://github.com/genogrove/genogrove/pull/37))
-=======
-## [0.4.0] - 2025-12-02
-
-### Added
-- Optional command-line interface (configurable toggle) providing "index" and 
-"intersect" subcommands ([#37](https://github.com/genogrove/genogrove/pull/37))
-- Enhanced BED file parsing with support for optional fields including name, score, strand, and block 
-coordinates ([#42](https://github.com/genogrove/genogrove/pull/42))
-- Enhanced error handling with explicit feedback when required query 
-file is missing ([#44](https://github.com/genogrove/genogrove/pull/44))
-- Added CLI benchmarking infrastructure to measure performance characteristics of 
-the intersect subcommand under various 
-parameter configurations ([#45](https://github.com/genogrove/genogrove/pull/45))
-- Graph overlay for directed-edge management with optional per-edge metadata and traversal 
-utilities ([#46](https://github.com/genogrove/genogrove/pull/46))
-- Insert operations now return a direct handle to the newly inserted key for 
-immediate use ([#47](https://github.com/genogrove/genogrove/pull/47)).
-- Added comprehensive tests covering edge insertion, metadata handling, degree/outgoing 
-counts, removals, clearing, filtering, and traversal scenarios ([#47](https://github.com/genogrove/genogrove/pull/47))
-
-### Chores
-- Removed an unused C++17 dependency block from the build 
-configuration ([#37](https://github.com/genogrove/genogrove/pull/37))
->>>>>>> 7928d196eb0c9d97f4b303452295dd4004027cd1
 - Build configuration now requires C++20 by default ([#46](https://github.com/genogrove/genogrove/pull/46))
 
 ## [0.3.0] - 2025-11-24
