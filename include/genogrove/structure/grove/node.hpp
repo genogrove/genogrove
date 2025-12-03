@@ -30,10 +30,7 @@ class node {
         children.reserve(order);
     }
     ~node() {
-        // Delete all keys (stored on heap)
-        for (auto* key : keys) {
-            delete key;
-        }
+        // Keys are owned by grove's deque, not by node - don't delete them
         // Only delete children if this is an internal node
         // Leaf nodes don't own their children
         if (!is_leaf) {
@@ -54,10 +51,7 @@ class node {
         return this->keys;
     }
     void set_keys(const std::vector<gdt::key<key_type, data_type>*>& keys) {
-        // Delete existing keys first
-        for (auto* key : this->keys) {
-            delete key;
-        }
+        // Keys are owned by grove's deque, not by node - don't delete them
         this->keys = keys;
     }
     std::vector<node<key_type, data_type>*>& get_children() {
@@ -85,21 +79,27 @@ class node {
         return this->is_leaf;
     }
 
-    gdt::key<key_type, data_type>* insert_key(gdt::key<key_type, data_type>& key1) {
+    /*
+     * @brief Insert a pre-allocated key pointer into the node at sorted position
+     * @param key_ptr Pointer to key (already allocated by grove's deque)
+     * @note Key must be allocated by grove before calling this
+     */
+    void insert_key_ptr(gdt::key<key_type, data_type>* key_ptr) {
         int i = 0;
-        while(i < this->keys.size() && key1.get_value() > this->keys[i]->get_value()) {
+        while(i < this->keys.size() && key_ptr->get_value() > this->keys[i]->get_value()) {
             i++;
         }
-        // Allocate key on heap
-        auto* key_ptr = new gdt::key<key_type, data_type>(key1);
         this->keys.insert(this->keys.begin() + i, key_ptr);
-        return key_ptr;
     }
-    gdt::key<key_type, data_type>* insert_key(gdt::key<key_type, data_type>& key1, int index) {
-        // Allocate key on heap
-        auto* key_ptr = new gdt::key<key_type, data_type>(key1);
+
+    /*
+     * @brief Insert a pre-allocated key pointer at specific index
+     * @param key_ptr Pointer to key (already allocated by grove's deque)
+     * @param index Position to insert at
+     * @note Key must be allocated by grove before calling this
+     */
+    void insert_key_ptr(gdt::key<key_type, data_type>* key_ptr, int index) {
         this->keys.insert(this->keys.begin() + index, key_ptr);
-        return key_ptr;
     }
 
     key_type calc_parent_key() {
