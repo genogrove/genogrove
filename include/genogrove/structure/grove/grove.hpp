@@ -13,6 +13,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <variant>
+#include <deque>
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
@@ -199,7 +200,10 @@ class grove {
         }
         if(node->get_is_leaf()) {
             try {
-                return node->insert_key(key);
+                // Allocate key from grove's deque storage
+                auto* key_ptr = allocate_key(key);
+                node->insert_key_ptr(key_ptr);
+                return key_ptr;
 
             } catch(const std::exception& e) {
                 std::cerr << "Failed to insert key into leaf node: " << e.what() << std::endl;
@@ -234,7 +238,8 @@ class grove {
         // update the parent (aka new child node)
         parent->get_children().insert(parent->get_children().begin() + index + 1, new_child);
         gdt::key<key_type, data_type> parent_key{child->calc_parent_key()};
-        auto* parent_key_ptr = new gdt::key<key_type, data_type>(parent_key);
+        // Allocate parent key from grove's deque storage
+        auto* parent_key_ptr = allocate_key(parent_key);
         parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
 
         if(child->get_is_leaf()) {
@@ -273,11 +278,16 @@ class grove {
         node<key_type, data_type>* root = this->get_root(index);
         if(root == nullptr) {
             root = this->insert_root(index);
-            return root->insert_key(key);
+            // Allocate key from grove's deque storage
+            auto* key_ptr = allocate_key(key);
+            root->insert_key_ptr(key_ptr);
+            return key_ptr;
         } else {
             // get rightmost node and insert
             node<key_type, data_type>* rightmost_node = this->get_rightmost_node(index);
-            auto* key_ptr = rightmost_node->insert_key(key);
+            // Allocate key from grove's deque storage
+            auto* key_ptr = allocate_key(key);
+            rightmost_node->insert_key_ptr(key_ptr);
 
             // handle key overflow in node
             if(rightmost_node->get_keys().size() == this->order) {
@@ -400,9 +410,19 @@ class grove {
     }
 
   private:
+    /*
+     * @brief Allocate a key in the grove's storage and return a pointer to it
+     * @note Keys are stored in a deque for stable addresses and better cache locality
+     */
+    gdt::key<key_type, data_type>* allocate_key(const gdt::key<key_type, data_type>& key) {
+        key_storage.push_back(key);
+        return &key_storage.back();
+    }
+
     int order;
     std::unordered_map<std::string, node<key_type, data_type>*> root_nodes;
     std::unordered_map<std::string, node<key_type, data_type>*> rightmost_nodes;
+    std::deque<gdt::key<key_type, data_type>> key_storage; // Contiguous storage for keys
 };
 
 } // namespace genogrove::structure
