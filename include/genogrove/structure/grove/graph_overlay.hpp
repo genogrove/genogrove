@@ -60,6 +60,11 @@ class graph_overlay {
     };
 
     /*
+     * @brief Default constructor
+     */
+    graph_overlay() = default;
+
+    /*
      * @brief Add edge without metadata
      * @param source Pointer to source key
      * @param target Pointer to target key

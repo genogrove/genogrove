@@ -19,6 +19,7 @@
 #include "genogrove/utility/ranges.hpp"
 #include <genogrove/data_type/query_result.hpp>
 #include <genogrove/structure/grove/node.hpp>
+#include <genogrove/structure/grove/graph_overlay.hpp>
 
 namespace ggu = genogrove::utility;
 namespace gdt = genogrove::data_type;
@@ -33,7 +34,7 @@ namespace genogrove::structure {
     inline static constexpr sorted_t sorted{};
     inline static constexpr bulk_t bulk{};
 
-template <typename key_type, typename data_type = void>
+template <typename key_type, typename data_type = void, typename edge_data_type = void>
 class grove {
 
   public:
@@ -44,6 +45,154 @@ class grove {
         for(auto& [key, root] : root_nodes) {
             delete root;
         }
+    }
+
+    /*
+     * @brief Get reference to the graph overlay
+     * @return Reference to the single graph for this grove
+     * @note The graph can store edges between keys from any index (chr1, chr2, etc.)
+     */
+    graph_overlay<key_type, data_type, edge_data_type>& graph() {
+        return graph_data;
+    }
+
+    /*
+     * @brief Get const reference to the graph overlay
+     * @return Const reference to the graph overlay
+     */
+    const graph_overlay<key_type, data_type, edge_data_type>& graph() const {
+        return graph_data;
+    }
+
+    /*
+     * @brief Add edge between two keys (convenience forwarding to graph)
+     * @param source Pointer to source key
+     * @param target Pointer to target key
+     */
+    void add_edge(gdt::key<key_type, data_type>* source,
+                  gdt::key<key_type, data_type>* target) {
+        graph_data.add_edge(source, target);
+    }
+
+    /*
+     * @brief Add edge with metadata (convenience forwarding to graph)
+     * @param source Pointer to source key
+     * @param target Pointer to target key
+     * @param metadata Edge metadata
+     */
+    template<typename M = edge_data_type>
+    void add_edge(gdt::key<key_type, data_type>* source,
+                  gdt::key<key_type, data_type>* target,
+                  M&& metadata)
+        requires (!std::is_void_v<edge_data_type>) {
+        graph_data.add_edge(source, target, std::forward<M>(metadata));
+    }
+
+    /*
+     * @brief Get neighbors of a key (convenience forwarding to graph)
+     * @param source Pointer to source key
+     * @return Vector of neighbor keys
+     */
+    std::vector<gdt::key<key_type, data_type>*> get_neighbors(
+        gdt::key<key_type, data_type>* source) const {
+        return graph_data.get_neighbors(source);
+    }
+
+    /*
+     * @brief Remove edge between two keys (convenience forwarding to graph)
+     * @param source Pointer to source key
+     * @param target Pointer to target key
+     * @return true if edge was removed, false otherwise
+     */
+    bool remove_edge(gdt::key<key_type, data_type>* source,
+                     gdt::key<key_type, data_type>* target) {
+        return graph_data.remove_edge(source, target);
+    }
+
+    /*
+     * @brief Get edge metadata for all outgoing edges (convenience forwarding to graph)
+     * @param source Pointer to source key
+     * @return Vector of edge metadata
+     */
+    template<typename M = edge_data_type>
+    std::vector<M> get_edges(gdt::key<key_type, data_type>* source) const
+        requires (!std::is_void_v<edge_data_type>) {
+        return graph_data.get_edges(source);
+    }
+
+    /*
+     * @brief Get all outgoing edge structures (convenience forwarding to graph)
+     * @param source Pointer to source key
+     * @return Const reference to vector of edges
+     */
+    const std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>&
+    get_edge_list(gdt::key<key_type, data_type>* source) const {
+        return graph_data.get_edge_list(source);
+    }
+
+    /*
+     * @brief Get neighbors filtered by predicate (convenience forwarding to graph)
+     * @param source Pointer to source key
+     * @param predicate Function to filter edges by metadata
+     * @return Vector of neighbor keys where predicate returns true
+     */
+    template<typename Predicate>
+    std::vector<gdt::key<key_type, data_type>*> get_neighbors_if(
+        gdt::key<key_type, data_type>* source,
+        Predicate predicate) const
+        requires (!std::is_void_v<edge_data_type>) {
+        return graph_data.get_neighbors_if(source, predicate);
+    }
+
+    /*
+     * @brief Check if edge exists (convenience forwarding to graph)
+     * @param source Pointer to source key
+     * @param target Pointer to target key
+     * @return true if edge exists, false otherwise
+     */
+    bool has_edge(gdt::key<key_type, data_type>* source,
+                  gdt::key<key_type, data_type>* target) const {
+        return graph_data.has_edge(source, target);
+    }
+
+    /*
+     * @brief Get number of outgoing edges from a key (convenience forwarding to graph)
+     * @param source Pointer to source key
+     * @return Number of outgoing edges
+     */
+    [[nodiscard]] size_t out_degree(gdt::key<key_type, data_type>* source) const {
+        return graph_data.out_degree(source);
+    }
+
+    /*
+     * @brief Get total number of edges in graph (convenience forwarding to graph)
+     * @return Total edge count
+     */
+    [[nodiscard]] size_t edge_count() const {
+        return graph_data.edge_count();
+    }
+
+    /*
+     * @brief Get number of keys with outgoing edges (convenience forwarding to graph)
+     * @return Number of source keys
+     */
+    [[nodiscard]] size_t vertex_count() const {
+        return graph_data.vertex_count();
+    }
+
+    /*
+     * @brief Clear all edges in the graph (convenience forwarding to graph)
+     */
+    void clear_graph() {
+        graph_data.clear();
+    }
+
+    /*
+     * @brief Check if graph is empty (convenience forwarding to graph)
+     * @return true if no edges exist
+     */
+    [[nodiscard]] bool graph_empty() const {
+        return graph_data.empty();
     }
 
     /*
@@ -423,6 +572,9 @@ class grove {
     std::unordered_map<std::string, node<key_type, data_type>*> root_nodes;
     std::unordered_map<std::string, node<key_type, data_type>*> rightmost_nodes;
     std::deque<gdt::key<key_type, data_type>> key_storage; // Contiguous storage for keys
+
+    // Single graph overlay for this grove
+    graph_overlay<key_type, data_type, edge_data_type> graph_data;
 };
 
 } // namespace genogrove::structure
