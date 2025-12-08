@@ -42,7 +42,6 @@ struct TranscriptEdge {
 
 TEST(GraphOverlayTest, BasicEdgeAddition) {
     gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string> graph;
 
     auto* k1 = grove.insert_data(
         "chr1",
@@ -55,16 +54,15 @@ TEST(GraphOverlayTest, BasicEdgeAddition) {
         "exon2",
         gst::sorted);
 
-    graph.add_edge(k1, k2);
+    grove.add_edge(k1, k2);
 
-    auto neighbors = graph.get_neighbors(k1);
+    auto neighbors = grove.get_neighbors(k1);
     ASSERT_EQ(neighbors.size(), 1);
     EXPECT_EQ(neighbors[0], k2);
 }
 
 TEST(GraphOverlayTest, EdgeAdditionWithMetadata) {
-    gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string, TranscriptEdge> graph;
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
 
     auto* k1 = grove.insert_data(
         "chr1",
@@ -82,19 +80,18 @@ TEST(GraphOverlayTest, EdgeAdditionWithMetadata) {
         "canonical",
         0.95,
         150};
-    graph.add_edge(k1, k2, edge);
+    grove.add_edge(k1, k2, edge);
 
-    auto neighbors = graph.get_neighbors(k1);
+    auto neighbors = grove.get_neighbors(k1);
     ASSERT_EQ(neighbors.size(), 1);
     EXPECT_EQ(neighbors[0], k2);
-    auto edges = graph.get_edges(k1);
+    auto edges = grove.graph().get_edges(k1);
     ASSERT_EQ(edges.size(), 1);
     EXPECT_EQ(edges[0], edge);
 }
 
 TEST(GraphOverlayTest, OutDegree) {
     gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string> graph;
 
     auto* k1 = grove.insert_data(
         "chr1",
@@ -112,20 +109,19 @@ TEST(GraphOverlayTest, OutDegree) {
         "exon3",
         gst::sorted);
 
-    EXPECT_EQ(graph.out_degree(k1), 0);
+    EXPECT_EQ(grove.graph().out_degree(k1), 0);
 
-    graph.add_edge(k1, k2);
-    EXPECT_EQ(graph.out_degree(k1), 1);
+    grove.add_edge(k1, k2);
+    EXPECT_EQ(grove.graph().out_degree(k1), 1);
 
-    graph.add_edge(k1, k3);
-    EXPECT_EQ(graph.out_degree(k1), 2);
+    grove.add_edge(k1, k3);
+    EXPECT_EQ(grove.graph().out_degree(k1), 2);
 
-    EXPECT_EQ(graph.out_degree(k2), 0);
+    EXPECT_EQ(grove.graph().out_degree(k2), 0);
 }
 
 TEST(GraphOverlayTest, EdgeCount) {
     gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string> graph;
 
     auto* k1 = grove.insert_data(
         "chr1",
@@ -143,21 +139,20 @@ TEST(GraphOverlayTest, EdgeCount) {
         "exon3",
         gst::sorted);
 
-    EXPECT_EQ(graph.edge_count(), 0);
+    EXPECT_EQ(grove.graph().edge_count(), 0);
 
-    graph.add_edge(k1, k2);
-    EXPECT_EQ(graph.edge_count(), 1);
+    grove.add_edge(k1, k2);
+    EXPECT_EQ(grove.graph().edge_count(), 1);
 
-    graph.add_edge(k1, k3);
-    EXPECT_EQ(graph.edge_count(), 2);
+    grove.add_edge(k1, k3);
+    EXPECT_EQ(grove.graph().edge_count(), 2);
 
-    graph.add_edge(k2, k3);
-    EXPECT_EQ(graph.edge_count(), 3);
+    grove.add_edge(k2, k3);
+    EXPECT_EQ(grove.graph().edge_count(), 3);
 }
 
 TEST(GraphOverlayTest, EdgeRemoval) {
     gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string> graph;
 
     auto* k1 = grove.insert_data(
         "chr1",
@@ -175,21 +170,20 @@ TEST(GraphOverlayTest, EdgeRemoval) {
         "exon3",
         gst::sorted);
 
-    graph.add_edge(k1, k2);
-    graph.add_edge(k1, k3);
-    ASSERT_EQ(graph.out_degree(k1), 2);
+    grove.add_edge(k1, k2);
+    grove.add_edge(k1, k3);
+    ASSERT_EQ(grove.graph().out_degree(k1), 2);
 
-    graph.remove_edge(k1, k2);
-    EXPECT_EQ(graph.out_degree(k1), 1);
+    grove.remove_edge(k1, k2);
+    EXPECT_EQ(grove.graph().out_degree(k1), 1);
 
-    auto neighbors = graph.get_neighbors(k1);
+    auto neighbors = grove.get_neighbors(k1);
     ASSERT_EQ(neighbors.size(), 1);
     EXPECT_EQ(neighbors[0], k3);
 }
 
 TEST(GraphOverlayTest, ClearEdges) {
     gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string> graph;
 
     auto* k1 = grove.insert_data(
         "chr1",
@@ -202,19 +196,18 @@ TEST(GraphOverlayTest, ClearEdges) {
         "exon2",
         gst::sorted);
 
-    graph.add_edge(k1, k2);
-    ASSERT_EQ(graph.edge_count(), 1);
+    grove.add_edge(k1, k2);
+    ASSERT_EQ(grove.graph().edge_count(), 1);
 
-    graph.clear();
-    EXPECT_EQ(graph.edge_count(), 0);
-    EXPECT_EQ(graph.out_degree(k1), 0);
+    grove.graph().clear();
+    EXPECT_EQ(grove.graph().edge_count(), 0);
+    EXPECT_EQ(grove.graph().out_degree(k1), 0);
 }
 
 TEST(GraphOverlayTest, IsEmpty) {
     gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string> graph;
 
-    EXPECT_TRUE(graph.empty());
+    EXPECT_TRUE(grove.graph().empty());
 
     auto* k1 = grove.insert_data(
         "chr1",
@@ -227,16 +220,15 @@ TEST(GraphOverlayTest, IsEmpty) {
         "exon2",
         gst::sorted);
 
-    graph.add_edge(k1, k2);
-    EXPECT_FALSE(graph.empty());
+    grove.add_edge(k1, k2);
+    EXPECT_FALSE(grove.graph().empty());
 
-    graph.clear();
-    EXPECT_TRUE(graph.empty());
+    grove.graph().clear();
+    EXPECT_TRUE(grove.graph().empty());
 }
 
 TEST(GraphOverlayTest, MultiplePathsWithMetadata) {
-    gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string, TranscriptEdge> graph;
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
 
     auto* exon1 = grove.insert_data(
         "chr1",
@@ -260,7 +252,7 @@ TEST(GraphOverlayTest, MultiplePathsWithMetadata) {
         gst::sorted);
 
     // Transcript 1: exon1 -> exon2 -> exon3
-    graph.add_edge(
+    grove.add_edge(
         exon1,
         exon2,
         TranscriptEdge{
@@ -268,7 +260,7 @@ TEST(GraphOverlayTest, MultiplePathsWithMetadata) {
             "canonical",
             0.95,
             150});
-    graph.add_edge(
+    grove.add_edge(
         exon2,
         exon3,
         TranscriptEdge{
@@ -278,13 +270,13 @@ TEST(GraphOverlayTest, MultiplePathsWithMetadata) {
             140});
 
     // Transcript 2: exon1 -> exon4 -> exon3 (alternative path)
-    graph.add_edge(
+    grove.add_edge(
         exon1,
         exon4, TranscriptEdge{
             "transcript_2",
             "non-canonical",
             0.75, 45});
-    graph.add_edge(
+    grove.add_edge(
         exon4,
         exon3,
         TranscriptEdge{
@@ -294,16 +286,15 @@ TEST(GraphOverlayTest, MultiplePathsWithMetadata) {
             52});
 
     // Check exon1 has 2 outgoing edges
-    EXPECT_EQ(graph.out_degree(exon1), 2);
+    EXPECT_EQ(grove.graph().out_degree(exon1), 2);
 
     // Get all neighbors
-    auto all_neighbors = graph.get_neighbors(exon1);
+    auto all_neighbors = grove.get_neighbors(exon1);
     ASSERT_EQ(all_neighbors.size(), 2);
 }
 
 TEST(GraphOverlayTest, FilteredNeighborsByTranscriptId) {
-    gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string, TranscriptEdge> graph;
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
 
     auto* exon1 = grove.insert_data(
         "chr1",
@@ -321,7 +312,7 @@ TEST(GraphOverlayTest, FilteredNeighborsByTranscriptId) {
         "exon4",
         gst::sorted);
 
-    graph.add_edge(
+    grove.add_edge(
         exon1,
         exon2,
         TranscriptEdge{
@@ -329,7 +320,7 @@ TEST(GraphOverlayTest, FilteredNeighborsByTranscriptId) {
             "canonical",
             0.95,
             150});
-    graph.add_edge(
+    grove.add_edge(
         exon1,
         exon4,
         TranscriptEdge{
@@ -339,7 +330,7 @@ TEST(GraphOverlayTest, FilteredNeighborsByTranscriptId) {
             45});
 
     // Filter by transcript_id
-    auto transcript1_neighbors = graph.get_neighbors_if(exon1,
+    auto transcript1_neighbors = grove.graph().get_neighbors_if(exon1,
         [](const auto& edge) {
             return edge.transcript_id == "transcript_1";
         });
@@ -347,7 +338,7 @@ TEST(GraphOverlayTest, FilteredNeighborsByTranscriptId) {
     ASSERT_EQ(transcript1_neighbors.size(), 1);
     EXPECT_EQ(transcript1_neighbors[0], exon2);
 
-    auto transcript2_neighbors = graph.get_neighbors_if(exon1,
+    auto transcript2_neighbors = grove.graph().get_neighbors_if(exon1,
         [](const auto& edge) {
             return edge.transcript_id == "transcript_2";
         });
@@ -357,8 +348,7 @@ TEST(GraphOverlayTest, FilteredNeighborsByTranscriptId) {
 }
 
 TEST(GraphOverlayTest, FilteredNeighborsByConfidence) {
-    gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string, TranscriptEdge> graph;
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
 
     auto* exon1 = grove.insert_data(
         "chr1",
@@ -376,7 +366,7 @@ TEST(GraphOverlayTest, FilteredNeighborsByConfidence) {
         "exon4",
         gst::sorted);
 
-    graph.add_edge(
+    grove.add_edge(
         exon1,
         exon2,
         TranscriptEdge{
@@ -384,7 +374,7 @@ TEST(GraphOverlayTest, FilteredNeighborsByConfidence) {
             "canonical",
             0.95,
             150});
-    graph.add_edge(
+    grove.add_edge(
         exon1,
         exon4,
         TranscriptEdge{
@@ -394,7 +384,7 @@ TEST(GraphOverlayTest, FilteredNeighborsByConfidence) {
             45});
 
     // Filter by high confidence (> 0.90)
-    auto high_conf_neighbors = graph.get_neighbors_if(exon1,
+    auto high_conf_neighbors = grove.graph().get_neighbors_if(exon1,
         [](const auto& edge) {
             return edge.confidence > 0.90;
         });
@@ -403,7 +393,7 @@ TEST(GraphOverlayTest, FilteredNeighborsByConfidence) {
     EXPECT_EQ(high_conf_neighbors[0], exon2);
 
     // Filter by low confidence (<= 0.80)
-    auto low_conf_neighbors = graph.get_neighbors_if(exon1,
+    auto low_conf_neighbors = grove.graph().get_neighbors_if(exon1,
         [](const auto& edge) {
             return edge.confidence <= 0.80;
         });
@@ -414,7 +404,6 @@ TEST(GraphOverlayTest, FilteredNeighborsByConfidence) {
 
 TEST(GraphOverlayTest, LinearPathTraversal) {
     gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string> graph;
 
     auto* k1 = grove.insert_data(
         "chr1",
@@ -432,25 +421,24 @@ TEST(GraphOverlayTest, LinearPathTraversal) {
         "exon3",
         gst::sorted);
 
-    graph.add_edge(k1, k2);
-    graph.add_edge(k2, k3);
+    grove.add_edge(k1, k2);
+    grove.add_edge(k2, k3);
 
     // Traverse linear path: k1 -> k2 -> k3
-    auto neighbors1 = graph.get_neighbors(k1);
+    auto neighbors1 = grove.get_neighbors(k1);
     ASSERT_EQ(neighbors1.size(), 1);
     EXPECT_EQ(neighbors1[0], k2);
 
-    auto neighbors2 = graph.get_neighbors(k2);
+    auto neighbors2 = grove.get_neighbors(k2);
     ASSERT_EQ(neighbors2.size(), 1);
     EXPECT_EQ(neighbors2[0], k3);
 
-    auto neighbors3 = graph.get_neighbors(k3);
+    auto neighbors3 = grove.get_neighbors(k3);
     EXPECT_EQ(neighbors3.size(), 0);
 }
 
 TEST(GraphOverlayTest, BranchingPathTraversal) {
     gst::grove<gdt::interval, std::string> grove(5);
-    gst::graph_overlay<gdt::interval, std::string> graph;
 
     auto* k1 = grove.insert_data(
         "chr1",
@@ -474,11 +462,11 @@ TEST(GraphOverlayTest, BranchingPathTraversal) {
         gst::sorted);
 
     // Create branching: k1 -> {k2, k3, k4}
-    graph.add_edge(k1, k2);
-    graph.add_edge(k1, k3);
-    graph.add_edge(k1, k4);
+    grove.add_edge(k1, k2);
+    grove.add_edge(k1, k3);
+    grove.add_edge(k1, k4);
 
-    auto neighbors = graph.get_neighbors(k1);
+    auto neighbors = grove.get_neighbors(k1);
     ASSERT_EQ(neighbors.size(), 3);
 
     // Check all three branches exist
