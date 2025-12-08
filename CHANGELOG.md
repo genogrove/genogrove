@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-12-07
+
+### Added
+- Grove instances now support integrated graph operations, including adding/removing edges, 
+querying neighbors, and analyzing graph metrics ([#51](https://github.com/genogrove/genogrove/pull/51)).
+- Added convenient graph accessor methods for direct access to underlying graph 
+functionality ([#51](https://github.com/genogrove/genogrove/pull/51)).
+
 ### Chores
-- Optimized internal key storage and ownership management for improved memory 
-efficiency ([#49](https://github.com/genogrove/genogrove/pull/49))
+- Optimized internal key storage and ownership management for improved memory
+  efficiency ([#49](https://github.com/genogrove/genogrove/pull/49))
 
 ## [0.4.0] - 2025-12-02
 
