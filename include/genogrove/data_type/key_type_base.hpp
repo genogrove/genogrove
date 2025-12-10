@@ -24,7 +24,7 @@ namespace genogrove::data_type {
         { a == b } -> std::convertible_to<bool>;
         { T::overlap(a,b) } -> std::convertible_to<bool>;
         { T::aggregate(std::vector<T>{}) } -> std::convertible_to<T>;
-        { a.to_string() } ->std::convertible_to<std::string>;
+        { a.to_string() } -> std::convertible_to<std::string>;
     };
 
     // helper function for c++20 (with concept constraints)
