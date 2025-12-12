@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2025-12-12
+
+### Refactor
+-Minor code formatting improvements with no observable impact to 
+functionality ([#52](https://github.com/genogrove/genogrove/pull/52))
+
+### Added
+- Expanded test coverage for data type indexing and registry functionality with additional
+  test cases for key/value semantics, registry operations, data persistence, lookups,
+  and edge cases ([#53](https://github.com/genogrove/genogrove/pull/53))
+
 ## [0.5.0] - 2025-12-07
 
 ### Added
