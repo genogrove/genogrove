@@ -94,6 +94,8 @@ jobs:
         shell: bash
         run: |
           echo "build-output-dir=${{ github.workspace }}/build" >> $GITHUB_OUTPUT
+          
+      
 
       # configure cmake on linux
       - name: configure cmake (Linux)
@@ -137,6 +139,11 @@ jobs:
 #          echo ""
 #          echo "=== Running ctest in debug mode ==="
 #          ctest -N
+
+      - name: Copy test data files for IO tests
+        run: |
+          mkdir -p build/tests/io/data
+          cp tests/io/data/* build/tests/io/data/
 
       - name: run tests
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
