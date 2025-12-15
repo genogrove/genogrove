@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
 project(genogrove VERSION 0.0.1)
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(HTSLIB REQUIRED htslib)
+
 # export compile commands for IDEs
 # check if debug mode then export compile commands
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -30,12 +33,23 @@ endif()
 
 # create the genogrove library
 FILE(GLOB SOURCES "src/*.cpp")
-add_library(genogrove ${SOURCES})
+FILE(GLOB SOURCES_IO "src/io/*.cpp")
+message(STATUS "SOURCES_IO: ${SOURCES_IO}")
+add_library(genogrove ${SOURCES} ${SOURCES_IO})
 target_include_directories(genogrove
         PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
+        ${HTSLIB_INCLUDE_DIRS}
+)
+target_link_libraries(genogrove PUBLIC ${HTSLIB_LIBRARIES})
+target_link_directories(genogrove PUBLIC ${HTSLIB_LIBRARY_DIRS})
+
+# Set RPATH for runtime library discovery
+set_target_properties(genogrove PROPERTIES
+    BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
+    INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
 )
 
 #
@@ -58,7 +72,7 @@ configure_file(
 include(CTest)
 if(BUILD_TESTING)
   enable_testing()
-  add_subdirectory(tests)
+  add_subdirectory(tests ${CMAKE_BINARY_DIR}/tests)
 endif()
 
 ##########################################

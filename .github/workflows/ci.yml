@@ -78,11 +78,24 @@ jobs:
 #          ${{ matrix.c_compiler }} --version
 #          ${{ matrix.cpp_compiler }} --version
 
+      - name: install htslib on ubuntu
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libhts-dev
+
+      - name: install htslib on macos
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install htslib
+          
       - name: set reusable variables
         id: strings
         shell: bash
         run: |
           echo "build-output-dir=${{ github.workspace }}/build" >> $GITHUB_OUTPUT
+          
+      
 
       # configure cmake on linux
       - name: configure cmake (Linux)
@@ -126,6 +139,11 @@ jobs:
 #          echo ""
 #          echo "=== Running ctest in debug mode ==="
 #          ctest -N
+
+      - name: Copy test data files for IO tests
+        run: |
+          mkdir -p build/tests/io/data
+          cp tests/io/data/* build/tests/io/data/
 
       - name: run tests
         working-directory: ${{ steps.strings.outputs.build-output-dir }}

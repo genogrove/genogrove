@@ -44,7 +44,11 @@ target_compile_definitions(
         EXPECTED_VERSION_MINOR=${genogrove_VERSION_MINOR}
         EXPECTED_VERSION_PATCH=${genogrove_VERSION_PATCH}
 )
-gtest_discover_tests(genogrove_config_tests)
+set_target_properties(genogrove_config_tests PROPERTIES
+    BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
+    INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
+)
+gtest_discover_tests(genogrove_config_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ----------------------------
 # DATA_TYPE TESTS
@@ -57,7 +61,11 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 target_link_libraries(genogrove_data_type_tests genogrove gtest gtest_main)
-gtest_discover_tests(genogrove_data_type_tests)
+set_target_properties(genogrove_data_type_tests PROPERTIES
+        BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
+        INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
+)
+gtest_discover_tests(genogrove_data_type_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ----------------------------
 # UTILITY TESTS
@@ -70,7 +78,11 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 target_link_libraries(genogrove_utility_tests genogrove gtest gtest_main)
-gtest_discover_tests(genogrove_utility_tests)
+set_target_properties(genogrove_utility_tests PROPERTIES
+        BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
+        INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
+)
+gtest_discover_tests(genogrove_utility_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ----------------------------
 # STRUCTURE TESTS
@@ -83,6 +95,27 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 target_link_libraries(genogrove_structure_tests genogrove gtest gtest_main)
-gtest_discover_tests(genogrove_structure_tests)
+set_target_properties(genogrove_structure_tests PROPERTIES
+        BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
+        INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
+)
+gtest_discover_tests(genogrove_structure_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ----------------------------
+# IO TESTS
+# ----------------------------
+FILE(GLOB TEST_SOURCES_IO "./io/*.cpp")
+add_executable(genogrove_io_tests ${TEST_SOURCES_IO})
+target_include_directories(
+        genogrove_io_tests
+        PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+target_link_libraries(genogrove_io_tests genogrove gtest gtest_main)
+set_target_properties(genogrove_io_tests PROPERTIES
+    BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
+    INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
+)
+gtest_discover_tests(genogrove_io_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 
