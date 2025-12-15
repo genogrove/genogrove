@@ -1,4 +1,4 @@
-#include "genogrove/io/bed_reader.hpp"
+#include <genogrove/io/bed_reader.hpp>
 
 // standard
 #include <sstream>
