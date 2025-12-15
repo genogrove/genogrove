@@ -78,6 +78,17 @@ jobs:
 #          ${{ matrix.c_compiler }} --version
 #          ${{ matrix.cpp_compiler }} --version
 
+      - name: install htslib on ubuntu
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libhts-dev
+
+      - name: install htslib on macos
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install htslib
+          
       - name: set reusable variables
         id: strings
         shell: bash
