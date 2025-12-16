@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2025-12-15
+
+### Added
+- Added a BED reader (supports BED3/6/12 with optional fields, validation, sequential reading), 
+a generic file-reader interface, factory utilities, 
+and filetype detection with gzip handling ([#55](https://github.com/genogrove/genogrove/pull/55))
+- Added comprehensive IO tests and sample BED datasets; new IO test target and adjusted 
+test discovery/runtime paths ([#55](https://github.com/genogrove/genogrove/pull/55))
+
 ## [0.5.1] - 2025-12-12
 
 ### Refactor
