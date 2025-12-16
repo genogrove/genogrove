@@ -136,7 +136,10 @@ bool bed_reader::has_next() {
     int peek_result = bgzf_read(bgzf_file, &peek_char, 1);
 
     // Restore position
-    bgzf_seek(bgzf_file, current_pos, SEEK_SET);
+    int64_t seek_result = bgzf_seek(bgzf_file, current_pos, SEEK_SET);
+    if (seek_result < 0) {
+        return false;  // Seek failed, assume EOF
+    }
 
     // If we couldn't read anything, we're at EOF
     return peek_result > 0;
