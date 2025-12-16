@@ -15,11 +15,11 @@
 
 // genogrove
 #include <genogrove/structure/all.hpp>
+#include <genogrove/io/file_reader_factory.hpp>
+#include <genogrove/io/filetype_detector.hpp>
 
 // cli
 #include "subcall.hpp"
-#include "file_reader_factory.hpp"
-#include "filetype_detector.hpp"
 
 // cxxopts
 #include "cxxopts.hpp"
