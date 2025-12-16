@@ -1,4 +1,5 @@
 #include <subcalls/intersect.hpp>
+#include <fstream>
 
 namespace subcalls {
 cxxopts::Options intersect::parse_args(int argc, char** argv) {

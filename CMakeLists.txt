@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(genogrove VERSION 0.0.1)
+project(genogrove VERSION 0.6.0)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(HTSLIB REQUIRED htslib)
@@ -34,7 +34,6 @@ endif()
 # create the genogrove library
 FILE(GLOB SOURCES "src/*.cpp")
 FILE(GLOB SOURCES_IO "src/io/*.cpp")
-message(STATUS "SOURCES_IO: ${SOURCES_IO}")
 add_library(genogrove ${SOURCES} ${SOURCES_IO})
 target_include_directories(genogrove
         PUBLIC

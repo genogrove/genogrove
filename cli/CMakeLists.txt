@@ -34,21 +34,16 @@ CPMAddPackage(
 #        GIT_TAG v0.3.0
 #)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(HTSLIB REQUIRED htslib)
-
 # sources
-file(GLOB LIB_SOURCES ../src/*.cpp)
 file(GLOB CLI_SOURCES src/*.cpp)
 
-add_executable(genogrove-cli ${LIB_SOURCES} ${CLI_SOURCES})
+add_executable(genogrove-cli ${CLI_SOURCES})
 target_include_directories(genogrove-cli PUBLIC ${cxxopts_SOURCE_DIR}/include) # include cxxopts headers
 target_include_directories(genogrove-cli PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../include/") # genogrove header files
-target_include_directories(genogrove-cli PUBLIC ${HTSLIB_INCLUDE_DIRS}) # htslib header files
 target_include_directories(genogrove-cli PUBLIC include) # include genogrove_cli headers
 
-target_link_libraries(genogrove-cli cxxopts zlibstatic)
-target_link_libraries(genogrove-cli ${HTSLIB_LIBRARIES})
+# Link to genogrove library (brings in htslib transitively)
+target_link_libraries(genogrove-cli genogrove cxxopts zlibstatic)
 
 # set the output directory for the executable
 set_target_properties(genogrove-cli PROPERTIES
