@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++
+          sudo apt-get install -y cmake ninja-build g++ libhts-dev
 
       - name: Configure CMake with benchmarks
         run: |
