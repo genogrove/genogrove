@@ -1,4 +1,5 @@
 #include <subcalls/intersect.hpp>
+#include <handlers/bed.hpp>
 #include <fstream>
 
 namespace subcalls {
@@ -76,42 +77,33 @@ void intersect::execute(const cxxopts::ParseResult& args) {
         outputStream = new std::ofstream(outputfile);
     }
 
-    ggs::grove<gdt::interval, bed_entry> grove(k);
-    auto [query_filetype, query_gzipped] = filetype_detector().detect_filetype(queryfile); // detect the file type
+    // Detect file types
+    auto [query_filetype, query_gzipped] = filetype_detector().detect_filetype(queryfile);
     auto [target_filetype, target_gzipped] = filetype_detector().detect_filetype(targetfile);
 
-    auto query_reader = file_reader_factory::create(queryfile, query_filetype, query_gzipped);
-    auto target_reader = file_reader_factory::create(targetfile, target_filetype, target_gzipped);
-
-    bed_entry target_entry;
-
-    // store the target in the grove
-    while(target_reader->has_next()) {
-        if(!target_reader->read_next(target_entry)) {
-            if(target_reader->get_error_message().empty()) {
-                break; // this is just an EOF
-            }
-            std::cerr << target_reader->get_error_message() << std::endl;
-            continue;
-        }
-        grove.insert_data(target_entry.chrom, target_entry.interval, target_entry);
+    // Only support BED files for now
+    switch(target_filetype) {
+        case filetype::BED:
+            break;
+        default:
+            std::cerr << "Error: Only BED format is currently supported for target files\n";
+            exit(1);
     }
 
-    // intersect the query with the grove
-    while(query_reader->has_next()) {
-        bed_entry query_entry;
-        if(!query_reader->read_next(query_entry)) {
-            if(query_reader->get_error_message().empty()) {
-                break; // this is just an EOF
-            }
-            std::cerr << query_reader->get_error_message() << std::endl;
-            continue;
-        }
-        auto results = grove.intersect(query_entry.interval, query_entry.chrom);
-        for(auto* result : results.get_keys()) {
-            *outputStream << result->get_data().chrom << "\t" << result->get_data().interval.get_start() << "\t" << result->get_data().interval.get_end() << "\n";
-        }
+    switch(query_filetype) {
+        case filetype::BED:
+            break;
+        default:
+            std::cerr << "Error: Only BED format is currently supported for query files\n";
+            exit(1);
     }
+
+    // Create grove and populate with target file
+    ggs::grove<gdt::interval, bed_entry> grove(k);
+    handlers::bed::grove_insert(grove, targetfile);
+
+    // Intersect query file with the populated grove
+    handlers::bed::grove_intersect(grove, queryfile, *outputStream);
 }
 
 }

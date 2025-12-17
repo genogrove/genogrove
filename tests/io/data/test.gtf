@@ -1,0 +1,4 @@
+chr1	HAVANA	gene	1000	2000	.	+	.	gene_id "ENSG00000001"; gene_name "TEST1"; gene_biotype "protein_coding";
+chr1	HAVANA	exon	1000	1500	.	+	.	gene_id "ENSG00000001"; transcript_id "ENST00000001"; exon_number "1";
+chr2	ENSEMBL	gene	5000	8000	100	-	.	gene_id "ENSG00000002"; gene_name "TEST2"; gene_biotype "lncRNA";
+chrX	HAVANA	CDS	100	500	.	+	0	gene_id "ENSG00000003"; transcript_id "ENST00000002"; protein_id "ENSP00000001";
