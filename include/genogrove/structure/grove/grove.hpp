@@ -502,7 +502,7 @@ class grove {
             }
         } else {
             // abort if left of key (not overlapping) - only neded for intervals
-            if constexpr(key_type::is_interval) {
+            if constexpr (requires { key_type::is_interval; }) {
                 if(query < node->get_keys()[0]->get_value() &&
                    !key_type::overlap(node->get_keys()[0]->get_value(), query)) {
                     return;
@@ -526,7 +526,7 @@ class grove {
     void grove_to_sif(std::ostream& os, node<key_type, data_type>* node) {
         std::vector<gdt::key<key_type, data_type>> keys = {};
         for(int i = 0; i < node->get_keys().size(); ++i ) {
-            node->get_keys()[i].print_key(os);
+            os << node->get_keys()[i]->to_string();
         }
     }
 
