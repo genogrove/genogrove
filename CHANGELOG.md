@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added support for GFF/GTF file formats alongside existing 
+BED format ([#61](https://github.com/genogrove/genogrove/pull/61))
+- Enabled querying and intersecting GFF/GTF genomic annotations 
+with target files ([#61](https://github.com/genogrove/genogrove/pull/61))
+- Introduced unified file handling API for streamlined genomic 
+data processing ([#61](https://github.com/genogrove/genogrove/pull/61))
+- Added comprehensive test suite for GFF/GTF file parsing and operations, 
+including support for gzipped files and error scenarios ([#61](https://github.com/genogrove/genogrove/pull/61))
+
+
+### Chores
+- Internal reorganization of file handling components for improved code 
+structure and maintainability ([#59](https://github.com/genogrove/genogrove/pull/59))
+- Enhanced file reading robustness by implementing explicit error handling for file 
+seek operations. The file reader now properly detects and gracefully handles seek 
+failures by treating them as end-of-file conditions, significantly improving reliability, 
+stability, and error recovery when 
+processing large or complex genomic data files ([#60](https://github.com/genogrove/genogrove/pull/60))
+- Enhanced compile-time type detection for interval key types using 
+improved validation mechanisms ([#63](https://github.com/genogrove/genogrove/pull/63))
+- Updated grove data printing output format to use string conversion for 
+improved consistency ([#63](https://github.com/genogrove/genogrove/pull/63))
+
 ## [0.6.0] - 2025-12-15
 
 ### Added
