@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2025-12-21
+
 ### Added
 - Added support for GFF/GTF file formats alongside existing 
 BED format ([#61](https://github.com/genogrove/genogrove/pull/61))

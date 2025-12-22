@@ -2,7 +2,7 @@
 
 <!-- [![.github/workflows/ci.yml](https://github.com/genogrove/genogrove/actions/workflows/ci.yml/badge.svg)](https://github.com/genogrove/structure/actions/workflows/ci.yml) -->
 
-[![Downloads](https://img.shields.io/github/downloads/genogrove/structure/total.svg)](https://img.shields.io/github/downloads/genogrove/structure/total.svg)
+[![Downloads](https://img.shields.io/github/downloads/genogrove/genogrove/total.svg)](https://img.shields.io/github/downloads/genogrove/structure/total.svg)
 [![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](http://www.gnu.org/licenses/gpl-3.0)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/genogrove/genogrove?utm_source=oss&utm_medium=github&utm_campaign=genogrove%2Fgenogrove&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
