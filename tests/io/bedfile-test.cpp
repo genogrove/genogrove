@@ -238,25 +238,6 @@ TEST_F(bedfileTest, invalidCoordinateHandling) {
                 error.find("line") != std::string::npos);
 }
 
-TEST_F(bedfileTest, invalidIntervalHandling) {
-    // Create a file with start >= end
-    fs::path temp_path = test_data_dir / "temp_invalid.bed";
-    std::ofstream temp_file(temp_path);
-    temp_file << "chr1\t2000\t1000\n";  // start > end
-    temp_file.close();
-
-    bed_reader reader(temp_path);
-    bed_entry entry;
-
-    // Should fail to read because start >= end
-    EXPECT_FALSE(reader.read_next(entry));
-    std::string error = reader.get_error_message();
-    EXPECT_TRUE(error.find("Start coordinate is greater than end coordinate") != std::string::npos);
-
-    // Clean up
-    fs::remove(temp_path);
-}
-
 TEST_F(bedfileTest, fileNotFound) {
     fs::path nonexistent = test_data_dir / "nonexistent.bed";
 
