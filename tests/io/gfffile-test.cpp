@@ -51,18 +51,18 @@ protected:
 
 TEST_F(gfffileTest, detectGFFFileType) {
     filetype_detector detector;
-    auto [detected_filetype, is_gzipped] = detector.detect_filetype(gff3_path);
+    auto [detected_filetype, compression] = detector.detect_filetype(gff3_path);
 
     EXPECT_EQ(detected_filetype, filetype::GFF);
-    EXPECT_FALSE(is_gzipped);
+    EXPECT_EQ(compression, compression_type::NONE);
 }
 
 TEST_F(gfffileTest, detectGTFFileType) {
     filetype_detector detector;
-    auto [detected_filetype, is_gzipped] = detector.detect_filetype(gtf_path);
+    auto [detected_filetype, compression] = detector.detect_filetype(gtf_path);
 
     EXPECT_EQ(detected_filetype, filetype::GTF);
-    EXPECT_FALSE(is_gzipped);
+    EXPECT_EQ(compression, compression_type::NONE);
 }
 
 // ==========================================
@@ -136,12 +136,31 @@ TEST_F(gfffileTest, readGTFFormat) {
     EXPECT_EQ(entry.attributes["gene_name"], "TEST1");
     EXPECT_EQ(entry.attributes["gene_biotype"], "protein_coding");
 
+    // Verify format detection
+    EXPECT_TRUE(entry.is_gtf());
+    EXPECT_FALSE(entry.is_gff3());
+    EXPECT_EQ(entry.format, gff_format::GTF);
+
+    // Test helper methods
+    ASSERT_TRUE(entry.get_gene_id().has_value());
+    EXPECT_EQ(entry.get_gene_id().value(), "ENSG00000001");
+    ASSERT_TRUE(entry.get_gene_name().has_value());
+    EXPECT_EQ(entry.get_gene_name().value(), "TEST1");
+    ASSERT_TRUE(entry.get_gene_biotype().has_value());
+    EXPECT_EQ(entry.get_gene_biotype().value(), "protein_coding");
+
     // Second entry - exon in GTF format
     ASSERT_TRUE(reader.read_next(entry));
     EXPECT_EQ(entry.type, "exon");
     EXPECT_EQ(entry.attributes["gene_id"], "ENSG00000001");
     EXPECT_EQ(entry.attributes["transcript_id"], "ENST00000001");
     EXPECT_EQ(entry.attributes["exon_number"], "1");
+
+    // Test transcript_id and exon_number helpers
+    ASSERT_TRUE(entry.get_transcript_id().has_value());
+    EXPECT_EQ(entry.get_transcript_id().value(), "ENST00000001");
+    ASSERT_TRUE(entry.get_exon_number().has_value());
+    EXPECT_EQ(entry.get_exon_number().value(), 1);
 
     // Third entry - gene with score
     ASSERT_TRUE(reader.read_next(entry));
@@ -253,10 +272,10 @@ TEST_F(gfffileTest, intervalObjectCreation) {
 
 TEST_F(gfffileTest, detectGzippedGFFFileType) {
     filetype_detector detector;
-    auto [detected_filetype, is_gzipped] = detector.detect_filetype(gff3_path_gz);
+    auto [detected_filetype, compression] = detector.detect_filetype(gff3_path_gz);
 
     EXPECT_EQ(detected_filetype, filetype::GFF);
-    EXPECT_TRUE(is_gzipped);
+    EXPECT_EQ(compression, compression_type::GZIP);
 }
 
 TEST_F(gfffileTest, readGzippedGFF3Format) {
@@ -325,4 +344,200 @@ TEST_F(gfffileTest, gzippedHasNextFunctionality) {
     reader.read_next(entry);
     // After reading all 4 entries, has_next should return false
     EXPECT_FALSE(reader.has_next());
+}
+
+// ==========================================
+// Format Detection Tests
+// ==========================================
+
+TEST_F(gfffileTest, gff3FormatDetection) {
+    gff_reader reader(gff3_path);
+    gff_entry entry;
+
+    ASSERT_TRUE(reader.read_next(entry));
+
+    // Verify GFF3 format is detected
+    EXPECT_TRUE(entry.is_gff3());
+    EXPECT_FALSE(entry.is_gtf());
+    EXPECT_EQ(entry.format, gff_format::GFF3);
+}
+
+TEST_F(gfffileTest, gtfFormatDetection) {
+    gff_reader reader(gtf_path);
+    gff_entry entry;
+
+    ASSERT_TRUE(reader.read_next(entry));
+
+    // Verify GTF format is detected
+    EXPECT_TRUE(entry.is_gtf());
+    EXPECT_FALSE(entry.is_gff3());
+    EXPECT_EQ(entry.format, gff_format::GTF);
+}
+
+// ==========================================
+// Validation Mode Tests
+// ==========================================
+
+TEST_F(gfffileTest, relaxedValidationMode) {
+    // Default mode is RELAXED - should accept both formats
+    gff_reader gff_reader_relaxed(gff3_path);
+    gff_reader gtf_reader_relaxed(gtf_path);
+
+    EXPECT_EQ(gff_reader_relaxed.get_validation_mode(), validation_mode::RELAXED);
+    EXPECT_EQ(gtf_reader_relaxed.get_validation_mode(), validation_mode::RELAXED);
+
+    gff_entry entry;
+    EXPECT_TRUE(gff_reader_relaxed.read_next(entry));
+    EXPECT_TRUE(gtf_reader_relaxed.read_next(entry));
+}
+
+TEST_F(gfffileTest, strictGFF3ValidationMode) {
+    // STRICT_GFF3 mode should accept GFF3
+    gff_reader reader(gff3_path, validation_mode::STRICT_GFF3);
+    EXPECT_EQ(reader.get_validation_mode(), validation_mode::STRICT_GFF3);
+
+    gff_entry entry;
+    EXPECT_TRUE(reader.read_next(entry));
+    EXPECT_TRUE(entry.is_gff3());
+}
+
+TEST_F(gfffileTest, strictGFF3RejectsGTF) {
+    // STRICT_GFF3 mode should reject GTF
+    gff_reader reader(gtf_path, validation_mode::STRICT_GFF3);
+
+    gff_entry entry;
+    EXPECT_FALSE(reader.read_next(entry));
+
+    // Check error message
+    std::string error = reader.get_error_message();
+    EXPECT_TRUE(error.find("expected GFF3 format") != std::string::npos ||
+                error.find("detected GTF format") != std::string::npos);
+}
+
+TEST_F(gfffileTest, strictGTFValidationMode) {
+    // STRICT_GTF mode should accept valid GTF
+    gff_reader reader(gtf_path, validation_mode::STRICT_GTF);
+    EXPECT_EQ(reader.get_validation_mode(), validation_mode::STRICT_GTF);
+
+    gff_entry entry;
+    EXPECT_TRUE(reader.read_next(entry));
+    EXPECT_TRUE(entry.is_gtf());
+}
+
+TEST_F(gfffileTest, strictGTFRejectsGFF3) {
+    // STRICT_GTF mode should reject GFF3
+    gff_reader reader(gff3_path, validation_mode::STRICT_GTF);
+
+    gff_entry entry;
+    EXPECT_FALSE(reader.read_next(entry));
+
+    // Check error message
+    std::string error = reader.get_error_message();
+    EXPECT_TRUE(error.find("expected GTF format") != std::string::npos ||
+                error.find("detected GFF3 format") != std::string::npos);
+}
+
+TEST_F(gfffileTest, changeValidationMode) {
+    // Test changing validation mode during reading
+    gff_reader reader(gtf_path);
+
+    // Start with relaxed mode
+    EXPECT_EQ(reader.get_validation_mode(), validation_mode::RELAXED);
+
+    gff_entry entry;
+    EXPECT_TRUE(reader.read_next(entry));
+
+    // Change to strict GTF
+    reader.set_validation_mode(validation_mode::STRICT_GTF);
+    EXPECT_EQ(reader.get_validation_mode(), validation_mode::STRICT_GTF);
+
+    // Should still work with GTF file
+    EXPECT_TRUE(reader.read_next(entry));
+}
+
+// ==========================================
+// GTF Helper Methods Tests
+// ==========================================
+
+TEST_F(gfffileTest, gtfHelperMethods) {
+    gff_reader reader(gtf_path);
+    gff_entry entry;
+
+    // Read gene entry
+    ASSERT_TRUE(reader.read_next(entry));
+
+    // Test get_gene_id
+    auto gene_id = entry.get_gene_id();
+    ASSERT_TRUE(gene_id.has_value());
+    EXPECT_EQ(gene_id.value(), "ENSG00000001");
+
+    // Test get_gene_name
+    auto gene_name = entry.get_gene_name();
+    ASSERT_TRUE(gene_name.has_value());
+    EXPECT_EQ(gene_name.value(), "TEST1");
+
+    // Test get_gene_biotype
+    auto biotype = entry.get_gene_biotype();
+    ASSERT_TRUE(biotype.has_value());
+    EXPECT_EQ(biotype.value(), "protein_coding");
+
+    // Gene should not have transcript_id
+    EXPECT_FALSE(entry.get_transcript_id().has_value());
+
+    // Read exon entry
+    ASSERT_TRUE(reader.read_next(entry));
+
+    // Exon should have both gene_id and transcript_id
+    ASSERT_TRUE(entry.get_gene_id().has_value());
+    EXPECT_EQ(entry.get_gene_id().value(), "ENSG00000001");
+
+    ASSERT_TRUE(entry.get_transcript_id().has_value());
+    EXPECT_EQ(entry.get_transcript_id().value(), "ENST00000001");
+
+    // Test get_exon_number
+    auto exon_num = entry.get_exon_number();
+    ASSERT_TRUE(exon_num.has_value());
+    EXPECT_EQ(exon_num.value(), 1);
+}
+
+TEST_F(gfffileTest, gff3HelperMethods) {
+    gff_reader reader(gff3_path);
+    gff_entry entry;
+
+    ASSERT_TRUE(reader.read_next(entry));
+
+    // GFF3 uses different attribute names
+    // get_gene_id looks for "gene_id" which doesn't exist in GFF3
+    EXPECT_FALSE(entry.get_gene_id().has_value());
+
+    // But get_gene_name should work with "Name" attribute
+    auto name = entry.get_gene_name();
+    ASSERT_TRUE(name.has_value());
+    EXPECT_EQ(name.value(), "TEST1");
+
+    // get_gene_biotype should work with "biotype" attribute
+    auto biotype = entry.get_gene_biotype();
+    ASSERT_TRUE(biotype.has_value());
+    EXPECT_EQ(biotype.value(), "protein_coding");
+
+    // Generic get_attribute should work
+    auto id = entry.get_attribute("ID");
+    ASSERT_TRUE(id.has_value());
+    EXPECT_EQ(id.value(), "gene1");
+}
+
+TEST_F(gfffileTest, genericAttributeGetter) {
+    gff_reader reader(gtf_path);
+    gff_entry entry;
+
+    ASSERT_TRUE(reader.read_next(entry));
+
+    // Test generic get_attribute
+    auto gene_id = entry.get_attribute("gene_id");
+    ASSERT_TRUE(gene_id.has_value());
+    EXPECT_EQ(gene_id.value(), "ENSG00000001");
+
+    // Test non-existent attribute
+    auto missing = entry.get_attribute("nonexistent");
+    EXPECT_FALSE(missing.has_value());
 }

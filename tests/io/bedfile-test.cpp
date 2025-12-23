@@ -55,10 +55,10 @@ protected:
 
 TEST_F(bedfileTest, detectFileType) {
     filetype_detector detector;
-    auto [detected_filetype, is_gzipped] = detector.detect_filetype(bed3_path);
+    auto [detected_filetype, compression] = detector.detect_filetype(bed3_path);
 
     EXPECT_EQ(detected_filetype, filetype::BED);
-    EXPECT_FALSE(is_gzipped);
+    EXPECT_EQ(compression, compression_type::NONE);
 }
 
 // ==========================================
@@ -288,10 +288,10 @@ TEST_F(bedfileTest, intervalObjectCreation) {
 
 TEST_F(bedfileTest, detectGzippedFileType) {
     filetype_detector detector;
-    auto [detected_filetype, is_gzipped] = detector.detect_filetype(bed3_path_gz);
+    auto [detected_filetype, compression] = detector.detect_filetype(bed3_path_gz);
 
     EXPECT_EQ(detected_filetype, filetype::BED);
-    EXPECT_TRUE(is_gzipped);
+    EXPECT_EQ(compression, compression_type::GZIP);
 }
 
 TEST_F(bedfileTest, readGzippedBED3Format) {
