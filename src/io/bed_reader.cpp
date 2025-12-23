@@ -50,16 +50,29 @@ bed_reader::bed_reader(const std::filesystem::path& fpath)
         if (start.empty() || end.empty() ||
             !std::all_of(start.begin(), start.end(), ::isdigit) ||
             !std::all_of(end.begin(), end.end(), ::isdigit)) {
-            if (str.s) free(str.s);
+                if(str.s) free(str.s);
+                bgzf_close(bgzf_file);
+                throw std::runtime_error("Invalid BED coordinates (non-integer) in " + fpath.string());
+        }
+        // validate start < end
+        size_t start_num = std::stoul(start);
+        size_t end_num = std::stoul(end);
+        if(start_num >= end_num) {
+            if(str.s) free(str.s);
             bgzf_close(bgzf_file);
-            throw std::runtime_error("Invalid BED coordinates (non-integer) in " + fpath.string());
-            }
-
+            throw std::runtime_error("Invalid BED coordinates (start > end) in " + fpath.string());
+        }
         found_data = true;
         break; // Valid line found, stop scanning
     }
 
     if (str.s) free(str.s);
+
+    // ensure that we found at least one valid BED line
+    if (!found_data) {
+        bgzf_close(bgzf_file);
+        throw std::runtime_error("No valid BED data found in " + fpath.string());
+    }
 
     // reset file pointer to the beginning for standard reading
     if (bgzf_seek(bgzf_file, start_pos, SEEK_SET) < 0) {
