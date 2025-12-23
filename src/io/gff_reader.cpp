@@ -10,8 +10,61 @@
 
 namespace gdt = genogrove::data_type;
 
-gff_reader::gff_reader(const std::filesystem::path& fpath)
-    : line_num(0), bgzf_file(nullptr) {
+// ==========================================
+// gff_entry helper methods
+// ==========================================
+
+std::optional<std::string> gff_entry::get_gene_id() const {
+    return get_attribute("gene_id");
+}
+
+std::optional<std::string> gff_entry::get_transcript_id() const {
+    return get_attribute("transcript_id");
+}
+
+std::optional<int> gff_entry::get_exon_number() const {
+    auto exon_num_str = get_attribute("exon_number");
+    if (!exon_num_str) return std::nullopt;
+
+    try {
+        return std::stoi(*exon_num_str);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+std::optional<std::string> gff_entry::get_gene_name() const {
+    // Try both gene_name and Name (GFF3 standard)
+    auto name = get_attribute("gene_name");
+    if (name) return name;
+    return get_attribute("Name");
+}
+
+std::optional<std::string> gff_entry::get_gene_biotype() const {
+    // Try multiple common attribute names
+    auto biotype = get_attribute("gene_biotype");
+    if (biotype) return biotype;
+
+    biotype = get_attribute("gene_type");
+    if (biotype) return biotype;
+
+    return get_attribute("biotype");
+}
+
+std::optional<std::string> gff_entry::get_attribute(const std::string& key) const {
+    auto it = attributes.find(key);
+    if (it != attributes.end()) {
+        return it->second;
+    }
+    return std::nullopt;
+}
+
+// ==========================================
+// gff_reader implementation
+// ==========================================
+
+gff_reader::gff_reader(const std::filesystem::path& fpath, validation_mode mode)
+    : bgzf_file(nullptr), line_num(0), validation_mode_(mode) {
     // note this handles both raw and gzipped files
     bgzf_file = bgzf_open(fpath.c_str(), "r");
     if(!bgzf_file) {
@@ -25,13 +78,12 @@ gff_reader::~gff_reader() {
     }
 }
 
-void gff_reader::parse_attributes(const std::string& attr_string, std::map<std::string, std::string>& attributes) {
+gff_format gff_reader::parse_attributes(const std::string& attr_string,
+    std::map<std::string, std::string>& attributes) {
     attributes.clear();
 
     // Detect format: GFF3 uses '=' and ';', GTF uses ' "' and '";'
-    bool is_gtf = attr_string.find(" \"") != std::string::npos;
-
-    if (is_gtf) {
+    if (attr_string.find(" \"") != std::string::npos) {
         // GTF format: key "value"; key "value";
         std::istringstream stream(attr_string);
         std::string token;
@@ -57,6 +109,7 @@ void gff_reader::parse_attributes(const std::string& attr_string, std::map<std::
 
             attributes[key] = value;
         }
+        return gff_format::GTF;
     } else {
         // GFF3 format: key=value;key=value
         std::istringstream stream(attr_string);
@@ -78,7 +131,34 @@ void gff_reader::parse_attributes(const std::string& attr_string, std::map<std::
 
             attributes[key] = value;
         }
+        return gff_format::GFF3;
     }
+}
+
+bool gff_reader::validate_gtf_attributes(const gff_entry& entry) {
+    // GTF2 specification requires gene_id for all features
+    // transcript_id is required for transcript-level and below (exon, CDS, etc.)
+    // gene and transcript features may not have transcript_id
+
+    if (!entry.get_gene_id().has_value()) {
+        error_message = "GTF validation failed at line " + std::to_string(line_num) +
+                       ": missing required 'gene_id' attribute";
+        return false;
+    }
+
+    // Transcript-level features (exon, CDS, start_codon, stop_codon, UTR) require transcript_id
+    if (entry.type == "exon" || entry.type == "CDS" ||
+        entry.type == "start_codon" || entry.type == "stop_codon" ||
+        entry.type == "UTR" || entry.type == "5UTR" || entry.type == "3UTR") {
+
+        if (!entry.get_transcript_id().has_value()) {
+            error_message = "GTF validation failed at line " + std::to_string(line_num) +
+                           ": feature '" + entry.type + "' requires 'transcript_id' attribute";
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool gff_reader::read_next(gff_entry& entry) {
@@ -107,7 +187,7 @@ bool gff_reader::read_next(gff_entry& entry) {
 
     // parse the line
     std::stringstream ss(line);
-    std::string seqid, source, type, start_str, end_str, score_str, strand_str, phase_str, attributes_str;
+    std::string seqid,source, type, start_str, end_str, score_str, strand_str, phase_str, attributes_str;
 
     try {
         if (!(ss >> seqid >> source >> type >> start_str >> end_str >> score_str >> strand_str >> phase_str)) {
@@ -175,15 +255,35 @@ bool gff_reader::read_next(gff_entry& entry) {
             entry.phase = std::nullopt;
         }
 
-        // Parse attributes
+        // Parse attributes and detect format
         if (!attributes_str.empty()) {
-            parse_attributes(attributes_str, entry.attributes);
+            entry.format = parse_attributes(attributes_str, entry.attributes);
         } else {
             entry.attributes.clear();
+            entry.format = gff_format::UNKNOWN;
+        }
+
+        // Validate based on mode
+        if (validation_mode_ == validation_mode::STRICT_GFF3) {
+            if (entry.format != gff_format::GFF3) {
+                error_message = "Validation failed at line " + std::to_string(line_num) +
+                               ": expected GFF3 format (key=value) but detected GTF format (key \"value\")";
+                return false;
+            }
+        } else if (validation_mode_ == validation_mode::STRICT_GTF) {
+            if (entry.format != gff_format::GTF) {
+                error_message = "Validation failed at line " + std::to_string(line_num) +
+                               ": expected GTF format (key \"value\") but detected GFF3 format (key=value)";
+                return false;
+            }
+            // Validate GTF-specific requirements
+            if (!validate_gtf_attributes(entry)) {
+                return false;
+            }
         }
 
         return true;
-    } catch (std::exception &e) {
+    } catch (const std::exception&) {
         error_message = "Failed to parse line at " + std::to_string(line_num) + ": " + line;
         return false;
     }

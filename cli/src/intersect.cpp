@@ -78,8 +78,8 @@ void intersect::execute(const cxxopts::ParseResult& args) {
     }
 
     // Detect file types
-    auto [query_filetype, query_gzipped] = filetype_detector().detect_filetype(queryfile);
-    auto [target_filetype, target_gzipped] = filetype_detector().detect_filetype(targetfile);
+    auto [query_filetype, query_compression] = filetype_detector().detect_filetype(queryfile);
+    auto [target_filetype, target_compression] = filetype_detector().detect_filetype(targetfile);
 
     // Only support BED files for now
     switch(target_filetype) {

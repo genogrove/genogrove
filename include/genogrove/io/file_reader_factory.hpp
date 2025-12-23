@@ -33,7 +33,7 @@ public:
     }
 
     // Create appropriate reader based on filetype (returns variant)
-    static FileReaderVariant create(const filepath& fpath, filetype ftype, bool is_gzipped) {
+    static FileReaderVariant create(const filepath& fpath, filetype ftype, compression_type comp) {
         switch(ftype) {
             case filetype::BED:
                 return std::make_unique<bed_reader>(fpath);
@@ -48,8 +48,8 @@ public:
     // Convenience method: auto-detect filetype and create reader
     static FileReaderVariant create_auto(const filepath& fpath) {
         filetype_detector detector;
-        auto [ftype, is_gzipped] = detector.detect_filetype(fpath);
-        return create(fpath, ftype, is_gzipped);
+        auto [ftype, comp] = detector.detect_filetype(fpath);
+        return create(fpath, ftype, comp);
     }
 };
 
