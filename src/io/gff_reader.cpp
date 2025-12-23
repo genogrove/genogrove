@@ -63,8 +63,8 @@ std::optional<std::string> gff_entry::get_attribute(const std::string& key) cons
 // gff_reader implementation
 // ==========================================
 
-gff_reader::gff_reader(const std::filesystem::path& fpath, validation_mode mode)
-    : bgzf_file(nullptr), line_num(0), validation_mode_(mode) {
+gff_reader::gff_reader(const std::filesystem::path& fpath)
+    : bgzf_file(nullptr), line_num(0) {
     // note this handles both raw and gzipped files
     bgzf_file = bgzf_open(fpath.c_str(), "r");
     if(!bgzf_file) {
@@ -261,25 +261,6 @@ bool gff_reader::read_next(gff_entry& entry) {
         } else {
             entry.attributes.clear();
             entry.format = gff_format::UNKNOWN;
-        }
-
-        // Validate based on mode
-        if (validation_mode_ == validation_mode::STRICT_GFF3) {
-            if (entry.format != gff_format::GFF3) {
-                error_message = "Validation failed at line " + std::to_string(line_num) +
-                               ": expected GFF3 format (key=value) but detected GTF format (key \"value\")";
-                return false;
-            }
-        } else if (validation_mode_ == validation_mode::STRICT_GTF) {
-            if (entry.format != gff_format::GTF) {
-                error_message = "Validation failed at line " + std::to_string(line_num) +
-                               ": expected GTF format (key \"value\") but detected GFF3 format (key=value)";
-                return false;
-            }
-            // Validate GTF-specific requirements
-            if (!validate_gtf_attributes(entry)) {
-                return false;
-            }
         }
 
         return true;

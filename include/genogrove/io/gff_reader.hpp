@@ -1,9 +1,9 @@
 /*
-* SPDX-License-Identifier: MIT
+* SPDX-License-Identifier: GPLv3
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
- * This file is part of genogrove and is licensed under the terms of the MIT license.
+ * This file is part of genogrove and is licensed under the terms of the GPLv3 license.
  * See the LICENSE file in the root of the repository for more information.
  */
 #ifndef GENOGROVE_IO_GFFREADER_HPP
@@ -29,13 +29,6 @@ enum class gff_format {
     GFF3,       // GFF3 format (key=value attributes)
     GTF,        // GTF/GTF2 format (key "value" attributes)
     UNKNOWN     // Format not yet determined
-};
-
-// Validation mode for attribute parsing
-enum class validation_mode {
-    RELAXED,    // Accept both GFF3 and GTF formats
-    STRICT_GFF3,// Require GFF3 format (key=value)
-    STRICT_GTF  // Require GTF format and mandatory fields
 };
 
 struct gff_entry {
@@ -82,7 +75,7 @@ struct gff_entry {
 class gff_reader : public file_reader<gff_entry> {
 public:
     // Constructor with optional validation mode (default: RELAXED)
-    gff_reader(const std::filesystem::path& path, validation_mode mode = validation_mode::RELAXED);
+    gff_reader(const std::filesystem::path& path);
 
     bool read_next(gff_entry& entry) override;
     bool has_next() override;
@@ -90,17 +83,10 @@ public:
     size_t get_current_line() override;
     ~gff_reader() override;
 
-    // Get the validation mode being used
-    validation_mode get_validation_mode() const { return validation_mode_; }
-
-    // Set validation mode (can be changed during reading)
-    void set_validation_mode(validation_mode mode) { validation_mode_ = mode; }
-
 private:
     BGZF* bgzf_file;
     size_t line_num;
     std::string error_message;
-    validation_mode validation_mode_;
 
     // Helper to parse attributes (handles both GFF3 and GTF formats)
     // Returns the detected format

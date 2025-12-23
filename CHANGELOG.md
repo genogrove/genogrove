@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Extended compression support in file detection: now handles BZIP2, XZ, ZSTD, and 
+LZ4 formats in addition to GZIP ([#64](https://github.com/genogrove/genogrove/pull/64))
+- Enhanced GFF/GTF file handling with automatic format 
+detection ([#64](https://github.com/genogrove/genogrove/pull/64))
+- Added comprehensive test coverage for compression detection and 
+format validation ([#64](https://github.com/genogrove/genogrove/pull/64))
+
 ## [0.7.0] - 2025-12-21
 
 ### Added

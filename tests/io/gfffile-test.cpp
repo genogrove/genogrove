@@ -46,23 +46,19 @@ protected:
 };
 
 // ==========================================
-// File Type Detection Tests
+// File Type Detection Tests for GTF and GFF
 // ==========================================
 
-TEST_F(gfffileTest, detectGFFFileType) {
+TEST_F(gfffileTest, detectFileType) {
     filetype_detector detector;
     auto [detected_filetype, compression] = detector.detect_filetype(gff3_path);
 
     EXPECT_EQ(detected_filetype, filetype::GFF);
     EXPECT_EQ(compression, compression_type::NONE);
-}
 
-TEST_F(gfffileTest, detectGTFFileType) {
-    filetype_detector detector;
-    auto [detected_filetype, compression] = detector.detect_filetype(gtf_path);
-
-    EXPECT_EQ(detected_filetype, filetype::GTF);
-    EXPECT_EQ(compression, compression_type::NONE);
+    auto [detected_filetype2, compression2] = detector.detect_filetype(gtf_path);
+    EXPECT_EQ(detected_filetype2, filetype::GTF);
+    EXPECT_EQ(compression2, compression_type::NONE);
 }
 
 // ==========================================
@@ -372,87 +368,6 @@ TEST_F(gfffileTest, gtfFormatDetection) {
     EXPECT_TRUE(entry.is_gtf());
     EXPECT_FALSE(entry.is_gff3());
     EXPECT_EQ(entry.format, gff_format::GTF);
-}
-
-// ==========================================
-// Validation Mode Tests
-// ==========================================
-
-TEST_F(gfffileTest, relaxedValidationMode) {
-    // Default mode is RELAXED - should accept both formats
-    gff_reader gff_reader_relaxed(gff3_path);
-    gff_reader gtf_reader_relaxed(gtf_path);
-
-    EXPECT_EQ(gff_reader_relaxed.get_validation_mode(), validation_mode::RELAXED);
-    EXPECT_EQ(gtf_reader_relaxed.get_validation_mode(), validation_mode::RELAXED);
-
-    gff_entry entry;
-    EXPECT_TRUE(gff_reader_relaxed.read_next(entry));
-    EXPECT_TRUE(gtf_reader_relaxed.read_next(entry));
-}
-
-TEST_F(gfffileTest, strictGFF3ValidationMode) {
-    // STRICT_GFF3 mode should accept GFF3
-    gff_reader reader(gff3_path, validation_mode::STRICT_GFF3);
-    EXPECT_EQ(reader.get_validation_mode(), validation_mode::STRICT_GFF3);
-
-    gff_entry entry;
-    EXPECT_TRUE(reader.read_next(entry));
-    EXPECT_TRUE(entry.is_gff3());
-}
-
-TEST_F(gfffileTest, strictGFF3RejectsGTF) {
-    // STRICT_GFF3 mode should reject GTF
-    gff_reader reader(gtf_path, validation_mode::STRICT_GFF3);
-
-    gff_entry entry;
-    EXPECT_FALSE(reader.read_next(entry));
-
-    // Check error message
-    std::string error = reader.get_error_message();
-    EXPECT_TRUE(error.find("expected GFF3 format") != std::string::npos ||
-                error.find("detected GTF format") != std::string::npos);
-}
-
-TEST_F(gfffileTest, strictGTFValidationMode) {
-    // STRICT_GTF mode should accept valid GTF
-    gff_reader reader(gtf_path, validation_mode::STRICT_GTF);
-    EXPECT_EQ(reader.get_validation_mode(), validation_mode::STRICT_GTF);
-
-    gff_entry entry;
-    EXPECT_TRUE(reader.read_next(entry));
-    EXPECT_TRUE(entry.is_gtf());
-}
-
-TEST_F(gfffileTest, strictGTFRejectsGFF3) {
-    // STRICT_GTF mode should reject GFF3
-    gff_reader reader(gff3_path, validation_mode::STRICT_GTF);
-
-    gff_entry entry;
-    EXPECT_FALSE(reader.read_next(entry));
-
-    // Check error message
-    std::string error = reader.get_error_message();
-    EXPECT_TRUE(error.find("expected GTF format") != std::string::npos ||
-                error.find("detected GFF3 format") != std::string::npos);
-}
-
-TEST_F(gfffileTest, changeValidationMode) {
-    // Test changing validation mode during reading
-    gff_reader reader(gtf_path);
-
-    // Start with relaxed mode
-    EXPECT_EQ(reader.get_validation_mode(), validation_mode::RELAXED);
-
-    gff_entry entry;
-    EXPECT_TRUE(reader.read_next(entry));
-
-    // Change to strict GTF
-    reader.set_validation_mode(validation_mode::STRICT_GTF);
-    EXPECT_EQ(reader.get_validation_mode(), validation_mode::STRICT_GTF);
-
-    // Should still work with GTF file
-    EXPECT_TRUE(reader.read_next(entry));
 }
 
 // ==========================================
