@@ -9,12 +9,75 @@
 
 namespace gdt = genogrove::data_type;
 
+#include <cstdint>
+
 bed_reader::bed_reader(const std::filesystem::path& fpath)
     : line_num(0), bgzf_file(nullptr) {
     // note this handles both raw and gzipped files
     bgzf_file = bgzf_open(fpath.c_str(), "r"); // open file
     if(!bgzf_file) {
         throw std::runtime_error("Failed to open file: " + fpath.string());
+    }
+
+    // check for valid bed file
+    // store start of file
+    int64_t start_pos = bgzf_tell(bgzf_file);
+    kstring_t str = {0, 0, nullptr};
+    int ret;
+    bool found_data = false;
+
+    // 2. Iterate until we find a data line or EOF
+    while ((ret = bgzf_getline(bgzf_file, '\n', &str)) >= 0) {
+        std::string line(str.s);
+
+        // Skip empty or commented lines (matches read_next logic)
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+
+        // 3. Attempt to parse the first data line found
+        std::stringstream ss(line);
+        std::string chrom, start, end;
+
+        // Check for minimal BED3 columns
+        if (!(ss >> chrom >> start >> end)) {
+            if (str.s) free(str.s);
+            bgzf_close(bgzf_file); // Clean up before throw
+            throw std::runtime_error("Invalid BED header/format in " + fpath.string());
+        }
+
+        // Validate coordinates are integers
+        if (start.empty() || end.empty() ||
+            !std::all_of(start.begin(), start.end(), ::isdigit) ||
+            !std::all_of(end.begin(), end.end(), ::isdigit)) {
+                if(str.s) free(str.s);
+                bgzf_close(bgzf_file);
+                throw std::runtime_error("Invalid BED coordinates (non-integer) in " + fpath.string());
+        }
+        // validate start < end
+        size_t start_num = std::stoul(start);
+        size_t end_num = std::stoul(end);
+        if(start_num >= end_num) {
+            if(str.s) free(str.s);
+            bgzf_close(bgzf_file);
+            throw std::runtime_error("Invalid BED coordinates (start > end) in " + fpath.string());
+        }
+        found_data = true;
+        break; // Valid line found, stop scanning
+    }
+
+    if (str.s) free(str.s);
+
+    // ensure that we found at least one valid BED line
+    if (!found_data) {
+        bgzf_close(bgzf_file);
+        throw std::runtime_error("No valid BED data found in " + fpath.string());
+    }
+
+    // reset file pointer to the beginning for standard reading
+    if (bgzf_seek(bgzf_file, start_pos, SEEK_SET) < 0) {
+        bgzf_close(bgzf_file);
+        throw std::runtime_error("Failed to seek back to start of file: " + fpath.string());
     }
 }
 

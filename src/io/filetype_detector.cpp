@@ -89,6 +89,7 @@ std::tuple<filetype, compression_type> filetype_detector::detect_filetype(const 
         }
     }
 
+
     // Look up the file type
     auto it = extensions.find(extension);
     filetype ft = (it != extensions.end()) ? it->second : filetype::UNKNOWN;
