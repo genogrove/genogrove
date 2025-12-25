@@ -19,8 +19,9 @@ bed_reader::bed_reader(const std::filesystem::path& fpath)
         throw std::runtime_error("Failed to open file: " + fpath.string());
     }
 
-    // check for valid bed file
-    // store start of file
+    /* Check for valid bed file
+     * Note: This only checks first (data) line
+     * Subsequent lines (if they are invalid are caught by read_next) */
     int64_t start_pos = bgzf_tell(bgzf_file);
     kstring_t str = {0, 0, nullptr};
     int ret;

@@ -245,6 +245,103 @@ TEST_F(gfffileTest, fileNotFound) {
 }
 
 // ==========================================
+// Constructor Validation Tests
+// ==========================================
+
+TEST_F(gfffileTest, validationInvalidFormat) {
+    // Create a temporary file with invalid format (not enough columns)
+    fs::path temp_file = test_data_dir / "temp_invalid_format.gff";
+    std::ofstream out(temp_file);
+    out << "# Comment line\n";
+    out << "chr1\tHAVANA\tgene\n";  // Only 3 columns instead of 9
+    out.close();
+
+    // Constructor should throw because first data line is invalid
+    EXPECT_THROW({
+        gff_reader reader(temp_file);
+    }, std::runtime_error);
+
+    // Clean up
+    fs::remove(temp_file);
+}
+
+TEST_F(gfffileTest, validationInvalidCoordinates) {
+    // Create a temporary file with non-integer coordinates
+    fs::path temp_file = test_data_dir / "temp_invalid_coords.gff";
+    std::ofstream out(temp_file);
+    out << "# Comment line\n";
+    out << "chr1\tHAVANA\tgene\tINVALID\t2000\t.\t+\t.\tID=gene1\n";
+    out.close();
+
+    // Constructor should throw because coordinates are non-integer
+    EXPECT_THROW({
+        gff_reader reader(temp_file);
+    }, std::runtime_error);
+
+    // Clean up
+    fs::remove(temp_file);
+}
+
+TEST_F(gfffileTest, validationInvalidCoordinateRange) {
+    // Create a temporary file with start >= end
+    fs::path temp_file = test_data_dir / "temp_invalid_range.gff";
+    std::ofstream out(temp_file);
+    out << "# Comment line\n";
+    out << "chr1\tHAVANA\tgene\t2000\t1000\t.\t+\t.\tID=gene1\n";  // start > end
+    out.close();
+
+    // Constructor should throw because start >= end
+    EXPECT_THROW({
+        gff_reader reader(temp_file);
+    }, std::runtime_error);
+
+    // Clean up
+    fs::remove(temp_file);
+}
+
+TEST_F(gfffileTest, validationEmptyFile) {
+    // Create a temporary empty file
+    fs::path temp_file = test_data_dir / "temp_empty.gff";
+    std::ofstream out(temp_file);
+    out.close();
+
+    // Constructor should throw because no valid data found
+    EXPECT_THROW({
+        gff_reader reader(temp_file);
+    }, std::runtime_error);
+
+    // Clean up
+    fs::remove(temp_file);
+}
+
+TEST_F(gfffileTest, validationOnlyComments) {
+    // Create a temporary file with only comments
+    fs::path temp_file = test_data_dir / "temp_only_comments.gff";
+    std::ofstream out(temp_file);
+    out << "# Comment 1\n";
+    out << "# Comment 2\n";
+    out << "## Directive\n";
+    out.close();
+
+    // Constructor should throw because no valid data found
+    EXPECT_THROW({
+        gff_reader reader(temp_file);
+    }, std::runtime_error);
+
+    // Clean up
+    fs::remove(temp_file);
+}
+
+TEST_F(gfffileTest, validationValidFirstLineInvalidSecond) {
+    // Test that validation passes when first line is valid
+    // (even if subsequent lines are invalid - those are caught during read_next)
+    // This is the existing test_invalid.gff file behavior
+    EXPECT_NO_THROW({
+        gff_reader reader(invalid_gff_path);
+    });
+}
+
+// ==========================================
 // Interval Object Tests
 // ==========================================
 

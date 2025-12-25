@@ -247,6 +247,103 @@ TEST_F(bedfileTest, fileNotFound) {
 }
 
 // ==========================================
+// Constructor Validation Tests
+// ==========================================
+
+TEST_F(bedfileTest, validationInvalidFormat) {
+    // Create a temporary file with invalid format (not enough columns)
+    fs::path temp_file = test_data_dir / "temp_invalid_format.bed";
+    std::ofstream out(temp_file);
+    out << "# Comment line\n";
+    out << "chr1\t1000\n";  // Only 2 columns instead of 3
+    out.close();
+
+    // Constructor should throw because first data line is invalid
+    EXPECT_THROW({
+        bed_reader reader(temp_file);
+    }, std::runtime_error);
+
+    // Clean up
+    fs::remove(temp_file);
+}
+
+TEST_F(bedfileTest, validationInvalidCoordinates) {
+    // Create a temporary file with non-integer coordinates
+    fs::path temp_file = test_data_dir / "temp_invalid_coords.bed";
+    std::ofstream out(temp_file);
+    out << "# Comment line\n";
+    out << "chr1\tINVALID\t2000\n";
+    out.close();
+
+    // Constructor should throw because coordinates are non-integer
+    EXPECT_THROW({
+        bed_reader reader(temp_file);
+    }, std::runtime_error);
+
+    // Clean up
+    fs::remove(temp_file);
+}
+
+TEST_F(bedfileTest, validationInvalidCoordinateRange) {
+    // Create a temporary file with start >= end
+    fs::path temp_file = test_data_dir / "temp_invalid_range.bed";
+    std::ofstream out(temp_file);
+    out << "# Comment line\n";
+    out << "chr1\t2000\t1000\n";  // start > end
+    out.close();
+
+    // Constructor should throw because start >= end
+    EXPECT_THROW({
+        bed_reader reader(temp_file);
+    }, std::runtime_error);
+
+    // Clean up
+    fs::remove(temp_file);
+}
+
+TEST_F(bedfileTest, validationEmptyFile) {
+    // Create a temporary empty file
+    fs::path temp_file = test_data_dir / "temp_empty.bed";
+    std::ofstream out(temp_file);
+    out.close();
+
+    // Constructor should throw because no valid data found
+    EXPECT_THROW({
+        bed_reader reader(temp_file);
+    }, std::runtime_error);
+
+    // Clean up
+    fs::remove(temp_file);
+}
+
+TEST_F(bedfileTest, validationOnlyComments) {
+    // Create a temporary file with only comments
+    fs::path temp_file = test_data_dir / "temp_only_comments.bed";
+    std::ofstream out(temp_file);
+    out << "# Comment 1\n";
+    out << "# Comment 2\n";
+    out << "# Comment 3\n";
+    out.close();
+
+    // Constructor should throw because no valid data found
+    EXPECT_THROW({
+        bed_reader reader(temp_file);
+    }, std::runtime_error);
+
+    // Clean up
+    fs::remove(temp_file);
+}
+
+TEST_F(bedfileTest, validationValidFirstLineInvalidSecond) {
+    // Test that validation passes when first line is valid
+    // (even if subsequent lines are invalid - those are caught during read_next)
+    // This is the existing test_invalid.bed file behavior
+    EXPECT_NO_THROW({
+        bed_reader reader(invalid_bed_path);
+    });
+}
+
+// ==========================================
 // Interval Object Tests
 // ==========================================
 
