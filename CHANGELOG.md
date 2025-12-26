@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2025-12-25
+
 ### Added
 - Extended compression support in file detection: now handles BZIP2, XZ, ZSTD, and 
 LZ4 formats in addition to GZIP ([#64](https://github.com/genogrove/genogrove/pull/64))
@@ -14,6 +16,14 @@ LZ4 formats in addition to GZIP ([#64](https://github.com/genogrove/genogrove/pu
 detection ([#64](https://github.com/genogrove/genogrove/pull/64))
 - Added comprehensive test coverage for compression detection and 
 format validation ([#64](https://github.com/genogrove/genogrove/pull/64))
+
+### Chores
+- Enhanced BED file validation to verify proper column structure and data 
+integrity upon file loading ([#65](https://github.com/genogrove/genogrove/pull/65))
+- Improved error handling with clearer messages for malformed or 
+improperly formatted BED files ([#65](https://github.com/genogrove/genogrove/pull/65))
+- Stronger BED file validation on load to detect malformed or incomplete BED 
+records and fail early with clearer errors ([#65](https://github.com/genogrove/genogrove/pull/65))
 
 ## [0.7.0] - 2025-12-21
 
