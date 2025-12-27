@@ -18,6 +18,7 @@
 #include <genogrove/io/filetype_detector.hpp>
 
 namespace fs = std::filesystem;
+namespace gio = genogrove::io;
 
 // ==========================================
 // Test Fixture for filetype_detector tests
@@ -49,51 +50,51 @@ protected:
 // ==========================================
 
 TEST_F(filetypeDetectorTest, detectNoCompression) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(plain_bed);
 
-    EXPECT_EQ(ftype, filetype::BED);
-    EXPECT_EQ(comp, compression_type::NONE);
+    EXPECT_EQ(ftype, gio::filetype::BED);
+    EXPECT_EQ(comp, gio::compression_type::NONE);
 }
 
 TEST_F(filetypeDetectorTest, detectGzipCompression) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(gzip_bed);
 
-    EXPECT_EQ(ftype, filetype::BED);
-    EXPECT_EQ(comp, compression_type::GZIP);
+    EXPECT_EQ(ftype, gio::filetype::BED);
+    EXPECT_EQ(comp, gio::compression_type::GZIP);
 }
 
 TEST_F(filetypeDetectorTest, detectBzip2Compression) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(bzip2_bed);
 
-    EXPECT_EQ(ftype, filetype::BED);
-    EXPECT_EQ(comp, compression_type::BZIP2);
+    EXPECT_EQ(ftype, gio::filetype::BED);
+    EXPECT_EQ(comp, gio::compression_type::BZIP2);
 }
 
 TEST_F(filetypeDetectorTest, detectXzCompression) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(xz_bed);
 
-    EXPECT_EQ(ftype, filetype::BED);
-    EXPECT_EQ(comp, compression_type::XZ);
+    EXPECT_EQ(ftype, gio::filetype::BED);
+    EXPECT_EQ(comp, gio::compression_type::XZ);
 }
 
 TEST_F(filetypeDetectorTest, detectZstdCompression) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(zstd_bed);
 
-    EXPECT_EQ(ftype, filetype::BED);
-    EXPECT_EQ(comp, compression_type::ZSTD);
+    EXPECT_EQ(ftype, gio::filetype::BED);
+    EXPECT_EQ(comp, gio::compression_type::ZSTD);
 }
 
 TEST_F(filetypeDetectorTest, detectLz4Compression) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(lz4_bed);
 
-    EXPECT_EQ(ftype, filetype::BED);
-    EXPECT_EQ(comp, compression_type::LZ4);
+    EXPECT_EQ(ftype, gio::filetype::BED);
+    EXPECT_EQ(comp, gio::compression_type::LZ4);
 }
 
 // ==========================================
@@ -102,43 +103,43 @@ TEST_F(filetypeDetectorTest, detectLz4Compression) {
 
 TEST_F(filetypeDetectorTest, correctFileTypeFromDoubleExtension) {
     // Files like test.bed.gz should detect both BED and GZIP
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(gzip_bed);
 
-    EXPECT_EQ(comp, compression_type::GZIP);
-    EXPECT_EQ(ftype, filetype::BED);
+    EXPECT_EQ(comp, gio::compression_type::GZIP);
+    EXPECT_EQ(ftype, gio::filetype::BED);
 }
 
 TEST_F(filetypeDetectorTest, bzip2DoubleExtension) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(bzip2_bed);
 
-    EXPECT_EQ(comp, compression_type::BZIP2);
-    EXPECT_EQ(ftype, filetype::BED);
+    EXPECT_EQ(comp, gio::compression_type::BZIP2);
+    EXPECT_EQ(ftype, gio::filetype::BED);
 }
 
 TEST_F(filetypeDetectorTest, xzDoubleExtension) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(xz_bed);
 
-    EXPECT_EQ(comp, compression_type::XZ);
-    EXPECT_EQ(ftype, filetype::BED);
+    EXPECT_EQ(comp, gio::compression_type::XZ);
+    EXPECT_EQ(ftype, gio::filetype::BED);
 }
 
 TEST_F(filetypeDetectorTest, zstdDoubleExtension) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(zstd_bed);
 
-    EXPECT_EQ(comp, compression_type::ZSTD);
-    EXPECT_EQ(ftype, filetype::BED);
+    EXPECT_EQ(comp, gio::compression_type::ZSTD);
+    EXPECT_EQ(ftype, gio::filetype::BED);
 }
 
 TEST_F(filetypeDetectorTest, lz4DoubleExtension) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(lz4_bed);
 
-    EXPECT_EQ(comp, compression_type::LZ4);
-    EXPECT_EQ(ftype, filetype::BED);
+    EXPECT_EQ(comp, gio::compression_type::LZ4);
+    EXPECT_EQ(ftype, gio::filetype::BED);
 }
 
 // ==========================================
@@ -148,21 +149,21 @@ TEST_F(filetypeDetectorTest, lz4DoubleExtension) {
 TEST_F(filetypeDetectorTest, compressedGffFile) {
     fs::path gff_gz = test_data_dir / "test_gff3.gff.gz";
 
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(gff_gz);
 
-    EXPECT_EQ(ftype, filetype::GFF);
-    EXPECT_EQ(comp, compression_type::GZIP);
+    EXPECT_EQ(ftype, gio::filetype::GFF);
+    EXPECT_EQ(comp, gio::compression_type::GZIP);
 }
 
 TEST_F(filetypeDetectorTest, compressedGtfFile) {
     fs::path gtf_gz = test_data_dir / "test.gtf.gz";
 
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(gtf_gz);
 
-    EXPECT_EQ(ftype, filetype::GTF);
-    EXPECT_EQ(comp, compression_type::GZIP);
+    EXPECT_EQ(ftype, gio::filetype::GTF);
+    EXPECT_EQ(comp, gio::compression_type::GZIP);
 }
 
 // ==========================================
@@ -175,10 +176,10 @@ TEST_F(filetypeDetectorTest, emptyFileShouldReturnNone) {
     // Create an empty file
     std::ofstream(empty_file).close();
 
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(empty_file);
 
-    EXPECT_EQ(comp, compression_type::NONE);
+    EXPECT_EQ(comp, gio::compression_type::NONE);
 
     // Clean up
     fs::remove(empty_file);
@@ -194,10 +195,10 @@ TEST_F(filetypeDetectorTest, singleByteFileShouldReturnNone) {
         file.write(&byte, 1);
     }
 
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(single_byte_file);
 
-    EXPECT_EQ(comp, compression_type::NONE);
+    EXPECT_EQ(comp, gio::compression_type::NONE);
 
     // Clean up
     fs::remove(single_byte_file);
@@ -214,11 +215,11 @@ TEST_F(filetypeDetectorTest, fileWithWrongExtensionButCorrectMagicBytes) {
     src.close();
     dst.close();
 
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(misnamed_file);
 
     // Should detect GZIP from magic bytes, but filetype will be UNKNOWN
-    EXPECT_EQ(comp, compression_type::GZIP);
+    EXPECT_EQ(comp, gio::compression_type::GZIP);
 
     // Clean up
     fs::remove(misnamed_file);

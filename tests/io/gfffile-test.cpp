@@ -21,6 +21,7 @@
 
 namespace fs = std::filesystem;
 namespace gdt = genogrove::data_type;
+namespace gio = genogrove::io;
 
 // ==========================================
 // Test Fixture for GFF file tests
@@ -50,15 +51,15 @@ protected:
 // ==========================================
 
 TEST_F(gfffileTest, detectFileType) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [detected_filetype, compression] = detector.detect_filetype(gff3_path);
 
-    EXPECT_EQ(detected_filetype, filetype::GFF);
-    EXPECT_EQ(compression, compression_type::NONE);
+    EXPECT_EQ(detected_filetype, gio::filetype::GFF);
+    EXPECT_EQ(compression, gio::compression_type::NONE);
 
     auto [detected_filetype2, compression2] = detector.detect_filetype(gtf_path);
-    EXPECT_EQ(detected_filetype2, filetype::GTF);
-    EXPECT_EQ(compression2, compression_type::NONE);
+    EXPECT_EQ(detected_filetype2, gio::filetype::GTF);
+    EXPECT_EQ(compression2, gio::compression_type::NONE);
 }
 
 // ==========================================
@@ -66,8 +67,8 @@ TEST_F(gfffileTest, detectFileType) {
 // ==========================================
 
 TEST_F(gfffileTest, readGFF3Format) {
-    gff_reader reader(gff3_path);
-    gff_entry entry;
+    gio::gff_reader reader(gff3_path);
+    gio::gff_entry entry;
 
     // First entry - gene
     ASSERT_TRUE(reader.read_next(entry));
@@ -118,8 +119,8 @@ TEST_F(gfffileTest, readGFF3Format) {
 // ==========================================
 
 TEST_F(gfffileTest, readGTFFormat) {
-    gff_reader reader(gtf_path);
-    gff_entry entry;
+    gio::gff_reader reader(gtf_path);
+    gio::gff_entry entry;
 
     // First entry - gene in GTF format
     ASSERT_TRUE(reader.read_next(entry));
@@ -135,7 +136,7 @@ TEST_F(gfffileTest, readGTFFormat) {
     // Verify format detection
     EXPECT_TRUE(entry.is_gtf());
     EXPECT_FALSE(entry.is_gff3());
-    EXPECT_EQ(entry.format, gff_format::GTF);
+    EXPECT_EQ(entry.format, gio::gff_format::GTF);
 
     // Test helper methods
     ASSERT_TRUE(entry.get_gene_id().has_value());
@@ -179,11 +180,11 @@ TEST_F(gfffileTest, readGTFFormat) {
 // ==========================================
 
 TEST_F(gfffileTest, hasNextFunctionality) {
-    gff_reader reader(gff3_path);
+    gio::gff_reader reader(gff3_path);
 
     EXPECT_TRUE(reader.has_next());
 
-    gff_entry entry;
+    gio::gff_entry entry;
     reader.read_next(entry);
     EXPECT_TRUE(reader.has_next());
 
@@ -199,8 +200,8 @@ TEST_F(gfffileTest, hasNextFunctionality) {
 }
 
 TEST_F(gfffileTest, lineCounter) {
-    gff_reader reader(gff3_path);
-    gff_entry entry;
+    gio::gff_reader reader(gff3_path);
+    gio::gff_entry entry;
 
     EXPECT_EQ(reader.get_current_line(), 0);
 
@@ -219,8 +220,8 @@ TEST_F(gfffileTest, lineCounter) {
 // ==========================================
 
 TEST_F(gfffileTest, invalidCoordinateHandling) {
-    gff_reader reader(invalid_gff_path);
-    gff_entry entry;
+    gio::gff_reader reader(invalid_gff_path);
+    gio::gff_entry entry;
 
     // First line should succeed
     ASSERT_TRUE(reader.read_next(entry));
@@ -240,7 +241,7 @@ TEST_F(gfffileTest, fileNotFound) {
     fs::path nonexistent = test_data_dir / "nonexistent.gff";
 
     EXPECT_THROW({
-        gff_reader reader(nonexistent);
+        gio::gff_reader reader(nonexistent);
     }, std::runtime_error);
 }
 
@@ -258,7 +259,7 @@ TEST_F(gfffileTest, validationInvalidFormat) {
 
     // Constructor should throw because first data line is invalid
     EXPECT_THROW({
-        gff_reader reader(temp_file);
+        gio::gff_reader reader(temp_file);
     }, std::runtime_error);
 
     // Clean up
@@ -275,7 +276,7 @@ TEST_F(gfffileTest, validationInvalidCoordinates) {
 
     // Constructor should throw because coordinates are non-integer
     EXPECT_THROW({
-        gff_reader reader(temp_file);
+        gio::gff_reader reader(temp_file);
     }, std::runtime_error);
 
     // Clean up
@@ -292,7 +293,7 @@ TEST_F(gfffileTest, validationInvalidCoordinateRange) {
 
     // Constructor should throw because start >= end
     EXPECT_THROW({
-        gff_reader reader(temp_file);
+        gio::gff_reader reader(temp_file);
     }, std::runtime_error);
 
     // Clean up
@@ -307,7 +308,7 @@ TEST_F(gfffileTest, validationEmptyFile) {
 
     // Constructor should throw because no valid data found
     EXPECT_THROW({
-        gff_reader reader(temp_file);
+        gio::gff_reader reader(temp_file);
     }, std::runtime_error);
 
     // Clean up
@@ -325,7 +326,7 @@ TEST_F(gfffileTest, validationOnlyComments) {
 
     // Constructor should throw because no valid data found
     EXPECT_THROW({
-        gff_reader reader(temp_file);
+        gio::gff_reader reader(temp_file);
     }, std::runtime_error);
 
     // Clean up
@@ -337,7 +338,7 @@ TEST_F(gfffileTest, validationValidFirstLineInvalidSecond) {
     // (even if subsequent lines are invalid - those are caught during read_next)
     // This is the existing test_invalid.gff file behavior
     EXPECT_NO_THROW({
-        gff_reader reader(invalid_gff_path);
+        gio::gff_reader reader(invalid_gff_path);
     });
 }
 
@@ -346,8 +347,8 @@ TEST_F(gfffileTest, validationValidFirstLineInvalidSecond) {
 // ==========================================
 
 TEST_F(gfffileTest, intervalObjectCreation) {
-    gff_reader reader(gff3_path);
-    gff_entry entry;
+    gio::gff_reader reader(gff3_path);
+    gio::gff_entry entry;
 
     ASSERT_TRUE(reader.read_next(entry));
 
@@ -364,16 +365,16 @@ TEST_F(gfffileTest, intervalObjectCreation) {
 // ==========================================
 
 TEST_F(gfffileTest, detectGzippedGFFFileType) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [detected_filetype, compression] = detector.detect_filetype(gff3_path_gz);
 
-    EXPECT_EQ(detected_filetype, filetype::GFF);
-    EXPECT_EQ(compression, compression_type::GZIP);
+    EXPECT_EQ(detected_filetype, gio::filetype::GFF);
+    EXPECT_EQ(compression, gio::compression_type::GZIP);
 }
 
 TEST_F(gfffileTest, readGzippedGFF3Format) {
-    gff_reader reader(gff3_path_gz);
-    gff_entry entry;
+    gio::gff_reader reader(gff3_path_gz);
+    gio::gff_entry entry;
 
     // First entry
     ASSERT_TRUE(reader.read_next(entry));
@@ -400,8 +401,8 @@ TEST_F(gfffileTest, readGzippedGFF3Format) {
 }
 
 TEST_F(gfffileTest, readGzippedGTFFormat) {
-    gff_reader reader(gtf_path_gz);
-    gff_entry entry;
+    gio::gff_reader reader(gtf_path_gz);
+    gio::gff_entry entry;
 
     // First entry - gene
     ASSERT_TRUE(reader.read_next(entry));
@@ -420,11 +421,11 @@ TEST_F(gfffileTest, readGzippedGTFFormat) {
 }
 
 TEST_F(gfffileTest, gzippedHasNextFunctionality) {
-    gff_reader reader(gff3_path_gz);
+    gio::gff_reader reader(gff3_path_gz);
 
     EXPECT_TRUE(reader.has_next());
 
-    gff_entry entry;
+    gio::gff_entry entry;
     reader.read_next(entry);
     EXPECT_TRUE(reader.has_next());
 
@@ -444,27 +445,27 @@ TEST_F(gfffileTest, gzippedHasNextFunctionality) {
 // ==========================================
 
 TEST_F(gfffileTest, gff3FormatDetection) {
-    gff_reader reader(gff3_path);
-    gff_entry entry;
+    gio::gff_reader reader(gff3_path);
+    gio::gff_entry entry;
 
     ASSERT_TRUE(reader.read_next(entry));
 
     // Verify GFF3 format is detected
     EXPECT_TRUE(entry.is_gff3());
     EXPECT_FALSE(entry.is_gtf());
-    EXPECT_EQ(entry.format, gff_format::GFF3);
+    EXPECT_EQ(entry.format, gio::gff_format::GFF3);
 }
 
 TEST_F(gfffileTest, gtfFormatDetection) {
-    gff_reader reader(gtf_path);
-    gff_entry entry;
+    gio::gff_reader reader(gtf_path);
+    gio::gff_entry entry;
 
     ASSERT_TRUE(reader.read_next(entry));
 
     // Verify GTF format is detected
     EXPECT_TRUE(entry.is_gtf());
     EXPECT_FALSE(entry.is_gff3());
-    EXPECT_EQ(entry.format, gff_format::GTF);
+    EXPECT_EQ(entry.format, gio::gff_format::GTF);
 }
 
 // ==========================================
@@ -472,8 +473,8 @@ TEST_F(gfffileTest, gtfFormatDetection) {
 // ==========================================
 
 TEST_F(gfffileTest, gtfHelperMethods) {
-    gff_reader reader(gtf_path);
-    gff_entry entry;
+    gio::gff_reader reader(gtf_path);
+    gio::gff_entry entry;
 
     // Read gene entry
     ASSERT_TRUE(reader.read_next(entry));
@@ -513,8 +514,8 @@ TEST_F(gfffileTest, gtfHelperMethods) {
 }
 
 TEST_F(gfffileTest, gff3HelperMethods) {
-    gff_reader reader(gff3_path);
-    gff_entry entry;
+    gio::gff_reader reader(gff3_path);
+    gio::gff_entry entry;
 
     ASSERT_TRUE(reader.read_next(entry));
 
@@ -539,8 +540,8 @@ TEST_F(gfffileTest, gff3HelperMethods) {
 }
 
 TEST_F(gfffileTest, genericAttributeGetter) {
-    gff_reader reader(gtf_path);
-    gff_entry entry;
+    gio::gff_reader reader(gtf_path);
+    gio::gff_entry entry;
 
     ASSERT_TRUE(reader.read_next(entry));
 
