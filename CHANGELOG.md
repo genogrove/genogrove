@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2025-12-26
+
+### Added
+- File I/O classes and types reorganized into the genogrove::io 
+namespace—update code references accordingly ([#66](https://github.com/genogrove/genogrove/pull/66))
+- Added error message and current line tracking accessors for improved 
+debugging and diagnostics ([#66](https://github.com/genogrove/genogrove/pull/66))
+- Enhanced input validation with more robust error handling in file readers ([#66](https://github.com/genogrove/genogrove/pull/66))
+
 ## [0.8.0] - 2025-12-25
 
 ### Added
