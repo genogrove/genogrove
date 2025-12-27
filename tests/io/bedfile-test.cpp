@@ -21,6 +21,7 @@
 
 namespace fs = std::filesystem;
 namespace gdt = genogrove::data_type;
+namespace gio = genogrove::io;
 
 // ==========================================
 // Test Fixture for BED file tests
@@ -54,11 +55,11 @@ protected:
 // ==========================================
 
 TEST_F(bedfileTest, detectFileType) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [detected_filetype, compression] = detector.detect_filetype(bed3_path);
 
-    EXPECT_EQ(detected_filetype, filetype::BED);
-    EXPECT_EQ(compression, compression_type::NONE);
+    EXPECT_EQ(detected_filetype, gio::filetype::BED);
+    EXPECT_EQ(compression, gio::compression_type::NONE);
 }
 
 // ==========================================
@@ -66,8 +67,8 @@ TEST_F(bedfileTest, detectFileType) {
 // ==========================================
 
 TEST_F(bedfileTest, readBED3Format) {
-    bed_reader reader(bed3_path);
-    bed_entry entry;
+    gio::bed_reader reader(bed3_path);
+    gio::bed_entry entry;
 
     // First entry
     ASSERT_TRUE(reader.read_next(entry));
@@ -99,8 +100,8 @@ TEST_F(bedfileTest, readBED3Format) {
 // ==========================================
 
 TEST_F(bedfileTest, readBED6Format) {
-    bed_reader reader(bed6_path);
-    bed_entry entry;
+    gio::bed_reader reader(bed6_path);
+    gio::bed_entry entry;
 
     // First entry with optional fields
     ASSERT_TRUE(reader.read_next(entry));
@@ -134,8 +135,8 @@ TEST_F(bedfileTest, readBED6Format) {
 // ==========================================
 
 TEST_F(bedfileTest, readBED12Format) {
-    bed_reader reader(bed12_path);
-    bed_entry entry;
+    gio::bed_reader reader(bed12_path);
+    gio::bed_entry entry;
 
     // First entry - full BED12
     ASSERT_TRUE(reader.read_next(entry));
@@ -184,11 +185,11 @@ TEST_F(bedfileTest, readBED12Format) {
 // ==========================================
 
 TEST_F(bedfileTest, hasNextFunctionality) {
-    bed_reader reader(bed3_path);
+    gio::bed_reader reader(bed3_path);
 
     EXPECT_TRUE(reader.has_next());
 
-    bed_entry entry;
+    gio::bed_entry entry;
     reader.read_next(entry);
     EXPECT_TRUE(reader.has_next());
 
@@ -201,8 +202,8 @@ TEST_F(bedfileTest, hasNextFunctionality) {
 }
 
 TEST_F(bedfileTest, lineCounter) {
-    bed_reader reader(bed3_path);
-    bed_entry entry;
+    gio::bed_reader reader(bed3_path);
+    gio::bed_entry entry;
 
     EXPECT_EQ(reader.get_current_line(), 0);
 
@@ -221,8 +222,8 @@ TEST_F(bedfileTest, lineCounter) {
 // ==========================================
 
 TEST_F(bedfileTest, invalidCoordinateHandling) {
-    bed_reader reader(invalid_bed_path);
-    bed_entry entry;
+    gio::bed_reader reader(invalid_bed_path);
+    gio::bed_entry entry;
 
     // First line should succeed
     ASSERT_TRUE(reader.read_next(entry));
@@ -242,7 +243,7 @@ TEST_F(bedfileTest, fileNotFound) {
     fs::path nonexistent = test_data_dir / "nonexistent.bed";
 
     EXPECT_THROW({
-        bed_reader reader(nonexistent);
+        gio::bed_reader reader(nonexistent);
     }, std::runtime_error);
 }
 
@@ -260,7 +261,7 @@ TEST_F(bedfileTest, validationInvalidFormat) {
 
     // Constructor should throw because first data line is invalid
     EXPECT_THROW({
-        bed_reader reader(temp_file);
+        gio::bed_reader reader(temp_file);
     }, std::runtime_error);
 
     // Clean up
@@ -277,7 +278,7 @@ TEST_F(bedfileTest, validationInvalidCoordinates) {
 
     // Constructor should throw because coordinates are non-integer
     EXPECT_THROW({
-        bed_reader reader(temp_file);
+        gio::bed_reader reader(temp_file);
     }, std::runtime_error);
 
     // Clean up
@@ -294,7 +295,7 @@ TEST_F(bedfileTest, validationInvalidCoordinateRange) {
 
     // Constructor should throw because start >= end
     EXPECT_THROW({
-        bed_reader reader(temp_file);
+        gio::bed_reader reader(temp_file);
     }, std::runtime_error);
 
     // Clean up
@@ -309,7 +310,7 @@ TEST_F(bedfileTest, validationEmptyFile) {
 
     // Constructor should throw because no valid data found
     EXPECT_THROW({
-        bed_reader reader(temp_file);
+        gio::bed_reader reader(temp_file);
     }, std::runtime_error);
 
     // Clean up
@@ -327,7 +328,7 @@ TEST_F(bedfileTest, validationOnlyComments) {
 
     // Constructor should throw because no valid data found
     EXPECT_THROW({
-        bed_reader reader(temp_file);
+        gio::bed_reader reader(temp_file);
     }, std::runtime_error);
 
     // Clean up
@@ -339,7 +340,7 @@ TEST_F(bedfileTest, validationValidFirstLineInvalidSecond) {
     // (even if subsequent lines are invalid - those are caught during read_next)
     // This is the existing test_invalid.bed file behavior
     EXPECT_NO_THROW({
-        bed_reader reader(invalid_bed_path);
+        gio::bed_reader reader(invalid_bed_path);
     });
 }
 
@@ -348,8 +349,8 @@ TEST_F(bedfileTest, validationValidFirstLineInvalidSecond) {
 // ==========================================
 
 TEST_F(bedfileTest, intervalObjectCreation) {
-    bed_reader reader(bed3_path);
-    bed_entry entry;
+    gio::bed_reader reader(bed3_path);
+    gio::bed_entry entry;
 
     ASSERT_TRUE(reader.read_next(entry));
 
@@ -365,16 +366,16 @@ TEST_F(bedfileTest, intervalObjectCreation) {
 // ==========================================
 
 TEST_F(bedfileTest, detectGzippedFileType) {
-    filetype_detector detector;
+    gio::filetype_detector detector;
     auto [detected_filetype, compression] = detector.detect_filetype(bed3_path_gz);
 
-    EXPECT_EQ(detected_filetype, filetype::BED);
-    EXPECT_EQ(compression, compression_type::GZIP);
+    EXPECT_EQ(detected_filetype, gio::filetype::BED);
+    EXPECT_EQ(compression, gio::compression_type::GZIP);
 }
 
 TEST_F(bedfileTest, readGzippedBED3Format) {
-    bed_reader reader(bed3_path_gz);
-    bed_entry entry;
+    gio::bed_reader reader(bed3_path_gz);
+    gio::bed_entry entry;
 
     // First entry
     ASSERT_TRUE(reader.read_next(entry));
@@ -402,8 +403,8 @@ TEST_F(bedfileTest, readGzippedBED3Format) {
 }
 
 TEST_F(bedfileTest, readGzippedBED6Format) {
-    bed_reader reader(bed6_path_gz);
-    bed_entry entry;
+    gio::bed_reader reader(bed6_path_gz);
+    gio::bed_entry entry;
 
     // First entry with optional fields
     ASSERT_TRUE(reader.read_next(entry));
@@ -433,8 +434,8 @@ TEST_F(bedfileTest, readGzippedBED6Format) {
 }
 
 TEST_F(bedfileTest, readGzippedBED12Format) {
-    bed_reader reader(bed12_path_gz);
-    bed_entry entry;
+    gio::bed_reader reader(bed12_path_gz);
+    gio::bed_entry entry;
 
     // First entry - full BED12 from gzipped file
     ASSERT_TRUE(reader.read_next(entry));
@@ -464,11 +465,11 @@ TEST_F(bedfileTest, readGzippedBED12Format) {
 }
 
 TEST_F(bedfileTest, gzippedHasNextFunctionality) {
-    bed_reader reader(bed3_path_gz);
+    gio::bed_reader reader(bed3_path_gz);
 
     EXPECT_TRUE(reader.has_next());
 
-    bed_entry entry;
+    gio::bed_entry entry;
     reader.read_next(entry);
     EXPECT_TRUE(reader.has_next());
 
