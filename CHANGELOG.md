@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2025-12-27
+
+### Added
+- Added range-based iterator support for file readers, enabling standard 
+C++ iteration patterns for BED and GFF file entries ([#67](https://github.com/genogrove/genogrove/pull/67))
+- Expanded test coverage with comprehensive iterator-based test cases, 
+including gzipped file handling and edge cases ([#67](https://github.com/genogrove/genogrove/pull/67))
+
 ## [0.8.1] - 2025-12-26
 
 ### Added
