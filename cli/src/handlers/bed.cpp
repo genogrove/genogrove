@@ -9,18 +9,9 @@ void grove_insert(
     const std::string& filepath
 ) {
     bed_reader reader(filepath);
-    bed_entry entry;
 
-    while(reader.has_next()) {
-        if(!reader.read_next(entry)) {
-            if(reader.get_error_message().empty()) {
-                break; // EOF
-            }
-            std::cerr << "Error reading BED file at line " << reader.get_current_line()
-                      << ": " << reader.get_error_message() << std::endl;
-            continue;
-        }
-
+    // Use iterator-based approach - no need to initialize entry separately
+    for (const auto& entry : reader) {
         // Insert using chrom as index, interval as key, and bed_entry as data
         grove.insert_data(entry.chrom, entry.interval, entry);
     }
@@ -32,18 +23,9 @@ void grove_intersect(
     std::ostream& output
 ) {
     bed_reader reader(queryfile);
-    bed_entry query_entry;
 
-    while(reader.has_next()) {
-        if(!reader.read_next(query_entry)) {
-            if(reader.get_error_message().empty()) {
-                break; // EOF
-            }
-            std::cerr << "Error reading BED query file at line " << reader.get_current_line()
-                      << ": " << reader.get_error_message() << std::endl;
-            continue;
-        }
-
+    // Use iterator-based approach for cleaner code
+    for (const auto& query_entry : reader) {
         // Intersect query with grove
         auto results = grove.intersect(query_entry.interval, query_entry.chrom);
 

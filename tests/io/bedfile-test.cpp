@@ -1,9 +1,9 @@
 /*
-* SPDX-License-Identifier: MIT
+* SPDX-License-Identifier: GPLv3
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
- * This file is part of genogrove and is licensed under the terms of the MIT license.
+ * This file is part of genogrove and is licensed under the terms of the GPLv3 license.
  * See the LICENSE file in the root of the repository for more information.
  */
 
@@ -60,6 +60,11 @@ TEST_F(bedfileTest, detectFileType) {
 
     EXPECT_EQ(detected_filetype, gio::filetype::BED);
     EXPECT_EQ(compression, gio::compression_type::NONE);
+
+    auto [detected_filetype_gz, compression_gz] = detector.detect_filetype(bed3_path_gz);
+
+    EXPECT_EQ(detected_filetype_gz, gio::filetype::BED);
+    EXPECT_EQ(compression_gz, gio::compression_type::GZIP);
 }
 
 // ==========================================
@@ -68,31 +73,31 @@ TEST_F(bedfileTest, detectFileType) {
 
 TEST_F(bedfileTest, readBED3Format) {
     gio::bed_reader reader(bed3_path);
-    gio::bed_entry entry;
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 3);
 
     // First entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr1");
-    EXPECT_EQ(entry.interval.get_start(), 1000);
-    EXPECT_EQ(entry.interval.get_end(), 2000);
-    EXPECT_FALSE(entry.name.has_value());
-    EXPECT_FALSE(entry.score.has_value());
-    EXPECT_FALSE(entry.strand.has_value());
+    EXPECT_EQ(entries[0].chrom, "chr1");
+    EXPECT_EQ(entries[0].interval.get_start(), 1000);
+    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_FALSE(entries[0].name.has_value());
+    EXPECT_FALSE(entries[0].score.has_value());
+    EXPECT_FALSE(entries[0].strand.has_value());
 
     // Second entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr2");
-    EXPECT_EQ(entry.interval.get_start(), 5000);
-    EXPECT_EQ(entry.interval.get_end(), 6000);
+    EXPECT_EQ(entries[1].chrom, "chr2");
+    EXPECT_EQ(entries[1].interval.get_start(), 5000);
+    EXPECT_EQ(entries[1].interval.get_end(), 6000);
 
     // Third entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chrX");
-    EXPECT_EQ(entry.interval.get_start(), 100);
-    EXPECT_EQ(entry.interval.get_end(), 500);
-
-    // No more entries
-    EXPECT_FALSE(reader.read_next(entry));
+    EXPECT_EQ(entries[2].chrom, "chrX");
+    EXPECT_EQ(entries[2].interval.get_start(), 100);
+    EXPECT_EQ(entries[2].interval.get_end(), 500);
 }
 
 // ==========================================
@@ -101,33 +106,36 @@ TEST_F(bedfileTest, readBED3Format) {
 
 TEST_F(bedfileTest, readBED6Format) {
     gio::bed_reader reader(bed6_path);
-    gio::bed_entry entry;
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 3);
 
     // First entry with optional fields
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr1");
-    EXPECT_EQ(entry.interval.get_start(), 1000);
-    EXPECT_EQ(entry.interval.get_end(), 2000);
-    ASSERT_TRUE(entry.name.has_value());
-    EXPECT_EQ(entry.name.value(), "feature1");
-    ASSERT_TRUE(entry.score.has_value());
-    EXPECT_EQ(entry.score.value(), 500);
-    ASSERT_TRUE(entry.strand.has_value());
-    EXPECT_EQ(entry.strand.value(), '+');
+    EXPECT_EQ(entries[0].chrom, "chr1");
+    EXPECT_EQ(entries[0].interval.get_start(), 1000);
+    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    ASSERT_TRUE(entries[0].name.has_value());
+    EXPECT_EQ(entries[0].name.value(), "feature1");
+    ASSERT_TRUE(entries[0].score.has_value());
+    EXPECT_EQ(entries[0].score.value(), 500);
+    ASSERT_TRUE(entries[0].strand.has_value());
+    EXPECT_EQ(entries[0].strand.value(), '+');
 
     // Second entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr2");
-    ASSERT_TRUE(entry.name.has_value());
-    EXPECT_EQ(entry.name.value(), "feature2");
-    ASSERT_TRUE(entry.strand.has_value());
-    EXPECT_EQ(entry.strand.value(), '-');
+    EXPECT_EQ(entries[1].chrom, "chr2");
+    ASSERT_TRUE(entries[1].name.has_value());
+    EXPECT_EQ(entries[1].name.value(), "feature2");
+    ASSERT_TRUE(entries[1].strand.has_value());
+    EXPECT_EQ(entries[1].strand.value(), '-');
 
     // Third entry with '.' strand
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chrX");
-    ASSERT_TRUE(entry.strand.has_value());
-    EXPECT_EQ(entry.strand.value(), '.');
+    EXPECT_EQ(entries[2].chrom, "chrX");
+    ASSERT_TRUE(entries[2].strand.has_value());
+    EXPECT_EQ(entries[2].strand.value(), '.');
 }
 
 // ==========================================
@@ -136,48 +144,48 @@ TEST_F(bedfileTest, readBED6Format) {
 
 TEST_F(bedfileTest, readBED12Format) {
     gio::bed_reader reader(bed12_path);
-    gio::bed_entry entry;
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 3);
 
     // First entry - full BED12
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr1");
-    EXPECT_EQ(entry.interval.get_start(), 1000);
-    EXPECT_EQ(entry.interval.get_end(), 2000);
-    ASSERT_TRUE(entry.name.has_value());
-    EXPECT_EQ(entry.name.value(), "item1");
-    ASSERT_TRUE(entry.score.has_value());
-    EXPECT_EQ(entry.score.value(), 100);
-    ASSERT_TRUE(entry.strand.has_value());
-    EXPECT_EQ(entry.strand.value(), '+');
-    ASSERT_TRUE(entry.thick_start.has_value());
-    EXPECT_EQ(entry.thick_start.value(), 1200);
-    ASSERT_TRUE(entry.thick_end.has_value());
-    EXPECT_EQ(entry.thick_end.value(), 1800);
-    ASSERT_TRUE(entry.item_rgb.has_value());
-    EXPECT_EQ(entry.item_rgb.value(), "255,0,0");
-    ASSERT_TRUE(entry.block_count.has_value());
-    EXPECT_EQ(entry.block_count.value(), "2");
-    ASSERT_TRUE(entry.block_sizes.has_value());
-    EXPECT_EQ(entry.block_sizes.value(), "400,400");
-    ASSERT_TRUE(entry.block_starts.has_value());
-    EXPECT_EQ(entry.block_starts.value(), "0,600");
+    EXPECT_EQ(entries[0].chrom, "chr1");
+    EXPECT_EQ(entries[0].interval.get_start(), 1000);
+    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    ASSERT_TRUE(entries[0].name.has_value());
+    EXPECT_EQ(entries[0].name.value(), "item1");
+    ASSERT_TRUE(entries[0].score.has_value());
+    EXPECT_EQ(entries[0].score.value(), 100);
+    ASSERT_TRUE(entries[0].strand.has_value());
+    EXPECT_EQ(entries[0].strand.value(), '+');
+    ASSERT_TRUE(entries[0].thick_start.has_value());
+    EXPECT_EQ(entries[0].thick_start.value(), 1200);
+    ASSERT_TRUE(entries[0].thick_end.has_value());
+    EXPECT_EQ(entries[0].thick_end.value(), 1800);
+    ASSERT_TRUE(entries[0].item_rgb.has_value());
+    EXPECT_EQ(entries[0].item_rgb.value(), "255,0,0");
+    ASSERT_TRUE(entries[0].block_count.has_value());
+    EXPECT_EQ(entries[0].block_count.value(), "2");
+    ASSERT_TRUE(entries[0].block_sizes.has_value());
+    EXPECT_EQ(entries[0].block_sizes.value(), "400,400");
+    ASSERT_TRUE(entries[0].block_starts.has_value());
+    EXPECT_EQ(entries[0].block_starts.value(), "0,600");
 
     // Second entry - with 3 blocks
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr2");
-    EXPECT_EQ(entry.interval.get_start(), 5000);
-    EXPECT_EQ(entry.interval.get_end(), 8000);
-    ASSERT_TRUE(entry.block_count.has_value());
-    EXPECT_EQ(entry.block_count.value(), "3");
+    EXPECT_EQ(entries[1].chrom, "chr2");
+    EXPECT_EQ(entries[1].interval.get_start(), 5000);
+    EXPECT_EQ(entries[1].interval.get_end(), 8000);
+    ASSERT_TRUE(entries[1].block_count.has_value());
+    EXPECT_EQ(entries[1].block_count.value(), "3");
 
     // Third entry - single block
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chrX");
-    ASSERT_TRUE(entry.block_count.has_value());
-    EXPECT_EQ(entry.block_count.value(), "1");
-
-    // No more entries
-    EXPECT_FALSE(reader.read_next(entry));
+    EXPECT_EQ(entries[2].chrom, "chrX");
+    ASSERT_TRUE(entries[2].block_count.has_value());
+    EXPECT_EQ(entries[2].block_count.value(), "1");
 }
 
 // ==========================================
@@ -375,93 +383,95 @@ TEST_F(bedfileTest, detectGzippedFileType) {
 
 TEST_F(bedfileTest, readGzippedBED3Format) {
     gio::bed_reader reader(bed3_path_gz);
-    gio::bed_entry entry;
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 3);
 
     // First entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr1");
-    EXPECT_EQ(entry.interval.get_start(), 1000);
-    EXPECT_EQ(entry.interval.get_end(), 2000);
-    EXPECT_FALSE(entry.name.has_value());
-    EXPECT_FALSE(entry.score.has_value());
-    EXPECT_FALSE(entry.strand.has_value());
+    EXPECT_EQ(entries[0].chrom, "chr1");
+    EXPECT_EQ(entries[0].interval.get_start(), 1000);
+    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_FALSE(entries[0].name.has_value());
+    EXPECT_FALSE(entries[0].score.has_value());
+    EXPECT_FALSE(entries[0].strand.has_value());
 
     // Second entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr2");
-    EXPECT_EQ(entry.interval.get_start(), 5000);
-    EXPECT_EQ(entry.interval.get_end(), 6000);
+    EXPECT_EQ(entries[1].chrom, "chr2");
+    EXPECT_EQ(entries[1].interval.get_start(), 5000);
+    EXPECT_EQ(entries[1].interval.get_end(), 6000);
 
     // Third entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chrX");
-    EXPECT_EQ(entry.interval.get_start(), 100);
-    EXPECT_EQ(entry.interval.get_end(), 500);
-
-    // No more entries
-    EXPECT_FALSE(reader.read_next(entry));
+    EXPECT_EQ(entries[2].chrom, "chrX");
+    EXPECT_EQ(entries[2].interval.get_start(), 100);
+    EXPECT_EQ(entries[2].interval.get_end(), 500);
 }
 
 TEST_F(bedfileTest, readGzippedBED6Format) {
     gio::bed_reader reader(bed6_path_gz);
-    gio::bed_entry entry;
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 3);
 
     // First entry with optional fields
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr1");
-    EXPECT_EQ(entry.interval.get_start(), 1000);
-    EXPECT_EQ(entry.interval.get_end(), 2000);
-    ASSERT_TRUE(entry.name.has_value());
-    EXPECT_EQ(entry.name.value(), "feature1");
-    ASSERT_TRUE(entry.score.has_value());
-    EXPECT_EQ(entry.score.value(), 500);
-    ASSERT_TRUE(entry.strand.has_value());
-    EXPECT_EQ(entry.strand.value(), '+');
+    EXPECT_EQ(entries[0].chrom, "chr1");
+    EXPECT_EQ(entries[0].interval.get_start(), 1000);
+    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    ASSERT_TRUE(entries[0].name.has_value());
+    EXPECT_EQ(entries[0].name.value(), "feature1");
+    ASSERT_TRUE(entries[0].score.has_value());
+    EXPECT_EQ(entries[0].score.value(), 500);
+    ASSERT_TRUE(entries[0].strand.has_value());
+    EXPECT_EQ(entries[0].strand.value(), '+');
 
     // Second entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr2");
-    ASSERT_TRUE(entry.name.has_value());
-    EXPECT_EQ(entry.name.value(), "feature2");
-    ASSERT_TRUE(entry.strand.has_value());
-    EXPECT_EQ(entry.strand.value(), '-');
+    EXPECT_EQ(entries[1].chrom, "chr2");
+    ASSERT_TRUE(entries[1].name.has_value());
+    EXPECT_EQ(entries[1].name.value(), "feature2");
+    ASSERT_TRUE(entries[1].strand.has_value());
+    EXPECT_EQ(entries[1].strand.value(), '-');
 
     // Third entry with '.' strand
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chrX");
-    ASSERT_TRUE(entry.strand.has_value());
-    EXPECT_EQ(entry.strand.value(), '.');
+    EXPECT_EQ(entries[2].chrom, "chrX");
+    ASSERT_TRUE(entries[2].strand.has_value());
+    EXPECT_EQ(entries[2].strand.value(), '.');
 }
 
 TEST_F(bedfileTest, readGzippedBED12Format) {
     gio::bed_reader reader(bed12_path_gz);
-    gio::bed_entry entry;
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 3);
 
     // First entry - full BED12 from gzipped file
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr1");
-    EXPECT_EQ(entry.interval.get_start(), 1000);
-    EXPECT_EQ(entry.interval.get_end(), 2000);
-    ASSERT_TRUE(entry.name.has_value());
-    EXPECT_EQ(entry.name.value(), "item1");
-    ASSERT_TRUE(entry.thick_start.has_value());
-    EXPECT_EQ(entry.thick_start.value(), 1200);
-    ASSERT_TRUE(entry.thick_end.has_value());
-    EXPECT_EQ(entry.thick_end.value(), 1800);
-    ASSERT_TRUE(entry.item_rgb.has_value());
-    EXPECT_EQ(entry.item_rgb.value(), "255,0,0");
-    ASSERT_TRUE(entry.block_count.has_value());
-    EXPECT_EQ(entry.block_count.value(), "2");
+    EXPECT_EQ(entries[0].chrom, "chr1");
+    EXPECT_EQ(entries[0].interval.get_start(), 1000);
+    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    ASSERT_TRUE(entries[0].name.has_value());
+    EXPECT_EQ(entries[0].name.value(), "item1");
+    ASSERT_TRUE(entries[0].thick_start.has_value());
+    EXPECT_EQ(entries[0].thick_start.value(), 1200);
+    ASSERT_TRUE(entries[0].thick_end.has_value());
+    EXPECT_EQ(entries[0].thick_end.value(), 1800);
+    ASSERT_TRUE(entries[0].item_rgb.has_value());
+    EXPECT_EQ(entries[0].item_rgb.value(), "255,0,0");
+    ASSERT_TRUE(entries[0].block_count.has_value());
+    EXPECT_EQ(entries[0].block_count.value(), "2");
 
-    // Read remaining entries
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chr2");
-
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.chrom, "chrX");
-
-    // No more entries
-    EXPECT_FALSE(reader.read_next(entry));
+    // Remaining entries
+    EXPECT_EQ(entries[1].chrom, "chr2");
+    EXPECT_EQ(entries[2].chrom, "chrX");
 }
 
 TEST_F(bedfileTest, gzippedHasNextFunctionality) {
@@ -479,4 +489,117 @@ TEST_F(bedfileTest, gzippedHasNextFunctionality) {
     reader.read_next(entry);
     // After reading all 3 entries, has_next should return false
     EXPECT_FALSE(reader.has_next());
+}
+
+// ==========================================
+// Iterator Tests
+// ==========================================
+
+TEST_F(bedfileTest, iteratorBasicIteration) {
+    gio::bed_reader reader(bed3_path);
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 3);
+
+    // Verify first entry
+    EXPECT_EQ(entries[0].chrom, "chr1");
+    EXPECT_EQ(entries[0].interval.get_start(), 1000);
+    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+
+    // Verify second entry
+    EXPECT_EQ(entries[1].chrom, "chr2");
+    EXPECT_EQ(entries[1].interval.get_start(), 5000);
+    EXPECT_EQ(entries[1].interval.get_end(), 6000);
+
+    // Verify third entry
+    EXPECT_EQ(entries[2].chrom, "chrX");
+    EXPECT_EQ(entries[2].interval.get_start(), 100);
+    EXPECT_EQ(entries[2].interval.get_end(), 500);
+}
+
+TEST_F(bedfileTest, iteratorWithOptionalFields) {
+    gio::bed_reader reader(bed6_path);
+
+    int count = 0;
+    for (const auto& entry : reader) {
+        EXPECT_FALSE(entry.chrom.empty());
+        count++;
+
+        // Check that optional fields are present
+        if (count == 1) {
+            ASSERT_TRUE(entry.name.has_value());
+            EXPECT_EQ(entry.name.value(), "feature1");
+            ASSERT_TRUE(entry.score.has_value());
+            EXPECT_EQ(entry.score.value(), 500);
+            ASSERT_TRUE(entry.strand.has_value());
+            EXPECT_EQ(entry.strand.value(), '+');
+        }
+    }
+
+    EXPECT_EQ(count, 3);
+}
+
+TEST_F(bedfileTest, iteratorEmptyFile) {
+    // Create temporary file with only a comment (no valid data)
+    fs::path empty_bed = test_data_dir / "temp_iter_empty.bed";
+    std::ofstream out(empty_bed);
+    out << "# Just a comment\n";
+    out.close();
+
+    // Constructor should throw because no valid data found
+    EXPECT_THROW({
+        gio::bed_reader reader(empty_bed);
+    }, std::runtime_error);
+
+    // Cleanup
+    fs::remove(empty_bed);
+}
+
+TEST_F(bedfileTest, iteratorManualIncrement) {
+    gio::bed_reader reader(bed3_path);
+
+    auto it = reader.begin();
+    auto end = reader.end();
+
+    ASSERT_NE(it, end);
+    EXPECT_EQ(it->chrom, "chr1");
+
+    ++it;
+    ASSERT_NE(it, end);
+    EXPECT_EQ(it->chrom, "chr2");
+
+    ++it;
+    ASSERT_NE(it, end);
+    EXPECT_EQ(it->chrom, "chrX");
+
+    ++it;
+    EXPECT_EQ(it, end);
+}
+
+TEST_F(bedfileTest, iteratorPostIncrement) {
+    gio::bed_reader reader(bed3_path);
+
+    auto it = reader.begin();
+    auto old_it = it++;
+
+    EXPECT_EQ(old_it->chrom, "chr1");
+    EXPECT_EQ(it->chrom, "chr2");
+}
+
+TEST_F(bedfileTest, iteratorGzippedFile) {
+    gio::bed_reader reader(bed3_path_gz);
+
+    std::vector<std::string> chroms;
+    for (const auto& entry : reader) {
+        chroms.push_back(entry.chrom);
+    }
+
+    ASSERT_EQ(chroms.size(), 3);
+    EXPECT_EQ(chroms[0], "chr1");
+    EXPECT_EQ(chroms[1], "chr2");
+    EXPECT_EQ(chroms[2], "chrX");
 }
