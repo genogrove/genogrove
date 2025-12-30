@@ -68,50 +68,49 @@ TEST_F(gfffileTest, detectFileType) {
 
 TEST_F(gfffileTest, readGFF3Format) {
     gio::gff_reader reader(gff3_path);
-    gio::gff_entry entry;
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 4);
 
     // First entry - gene
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.seqid, "chr1");
-    EXPECT_EQ(entry.source, "HAVANA");
-    EXPECT_EQ(entry.type, "gene");
-    EXPECT_EQ(entry.interval.get_start(), 999);  // 1000 in GFF is 999 in 0-based
-    EXPECT_EQ(entry.interval.get_end(), 2000);
-    EXPECT_FALSE(entry.score.has_value());
-    ASSERT_TRUE(entry.strand.has_value());
-    EXPECT_EQ(entry.strand.value(), '+');
-    EXPECT_FALSE(entry.phase.has_value());
-    EXPECT_EQ(entry.attributes["ID"], "gene1");
-    EXPECT_EQ(entry.attributes["Name"], "TEST1");
-    EXPECT_EQ(entry.attributes["biotype"], "protein_coding");
+    EXPECT_EQ(entries[0].seqid, "chr1");
+    EXPECT_EQ(entries[0].source, "HAVANA");
+    EXPECT_EQ(entries[0].type, "gene");
+    EXPECT_EQ(entries[0].interval.get_start(), 999);  // 1000 in GFF is 999 in 0-based
+    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_FALSE(entries[0].score.has_value());
+    ASSERT_TRUE(entries[0].strand.has_value());
+    EXPECT_EQ(entries[0].strand.value(), '+');
+    EXPECT_FALSE(entries[0].phase.has_value());
+    EXPECT_EQ(entries[0].attributes.at("ID"), "gene1");
+    EXPECT_EQ(entries[0].attributes.at("Name"), "TEST1");
+    EXPECT_EQ(entries[0].attributes.at("biotype"), "protein_coding");
 
     // Second entry - exon
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.seqid, "chr1");
-    EXPECT_EQ(entry.type, "exon");
-    EXPECT_EQ(entry.interval.get_start(), 999);
-    EXPECT_EQ(entry.interval.get_end(), 1500);
-    EXPECT_EQ(entry.attributes["ID"], "exon1");
-    EXPECT_EQ(entry.attributes["Parent"], "gene1");
+    EXPECT_EQ(entries[1].seqid, "chr1");
+    EXPECT_EQ(entries[1].type, "exon");
+    EXPECT_EQ(entries[1].interval.get_start(), 999);
+    EXPECT_EQ(entries[1].interval.get_end(), 1500);
+    EXPECT_EQ(entries[1].attributes.at("ID"), "exon1");
+    EXPECT_EQ(entries[1].attributes.at("Parent"), "gene1");
 
     // Third entry - gene with score
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.seqid, "chr2");
-    EXPECT_EQ(entry.type, "gene");
-    ASSERT_TRUE(entry.score.has_value());
-    EXPECT_EQ(entry.score.value(), 100);
-    ASSERT_TRUE(entry.strand.has_value());
-    EXPECT_EQ(entry.strand.value(), '-');
+    EXPECT_EQ(entries[2].seqid, "chr2");
+    EXPECT_EQ(entries[2].type, "gene");
+    ASSERT_TRUE(entries[2].score.has_value());
+    EXPECT_EQ(entries[2].score.value(), 100);
+    ASSERT_TRUE(entries[2].strand.has_value());
+    EXPECT_EQ(entries[2].strand.value(), '-');
 
     // Fourth entry - CDS with phase
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.seqid, "chrX");
-    EXPECT_EQ(entry.type, "CDS");
-    ASSERT_TRUE(entry.phase.has_value());
-    EXPECT_EQ(entry.phase.value(), 0);
-
-    // No more entries
-    EXPECT_FALSE(reader.read_next(entry));
+    EXPECT_EQ(entries[3].seqid, "chrX");
+    EXPECT_EQ(entries[3].type, "CDS");
+    ASSERT_TRUE(entries[3].phase.has_value());
+    EXPECT_EQ(entries[3].phase.value(), 0);
 }
 
 // ==========================================
@@ -120,59 +119,58 @@ TEST_F(gfffileTest, readGFF3Format) {
 
 TEST_F(gfffileTest, readGTFFormat) {
     gio::gff_reader reader(gtf_path);
-    gio::gff_entry entry;
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 4);
 
     // First entry - gene in GTF format
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.seqid, "chr1");
-    EXPECT_EQ(entry.source, "HAVANA");
-    EXPECT_EQ(entry.type, "gene");
-    EXPECT_EQ(entry.interval.get_start(), 999);
-    EXPECT_EQ(entry.interval.get_end(), 2000);
-    EXPECT_EQ(entry.attributes["gene_id"], "ENSG00000001");
-    EXPECT_EQ(entry.attributes["gene_name"], "TEST1");
-    EXPECT_EQ(entry.attributes["gene_biotype"], "protein_coding");
+    EXPECT_EQ(entries[0].seqid, "chr1");
+    EXPECT_EQ(entries[0].source, "HAVANA");
+    EXPECT_EQ(entries[0].type, "gene");
+    EXPECT_EQ(entries[0].interval.get_start(), 999);
+    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].attributes.at("gene_id"), "ENSG00000001");
+    EXPECT_EQ(entries[0].attributes.at("gene_name"), "TEST1");
+    EXPECT_EQ(entries[0].attributes.at("gene_biotype"), "protein_coding");
 
     // Verify format detection
-    EXPECT_TRUE(entry.is_gtf());
-    EXPECT_FALSE(entry.is_gff3());
-    EXPECT_EQ(entry.format, gio::gff_format::GTF);
+    EXPECT_TRUE(entries[0].is_gtf());
+    EXPECT_FALSE(entries[0].is_gff3());
+    EXPECT_EQ(entries[0].format, gio::gff_format::GTF);
 
     // Test helper methods
-    ASSERT_TRUE(entry.get_gene_id().has_value());
-    EXPECT_EQ(entry.get_gene_id().value(), "ENSG00000001");
-    ASSERT_TRUE(entry.get_gene_name().has_value());
-    EXPECT_EQ(entry.get_gene_name().value(), "TEST1");
-    ASSERT_TRUE(entry.get_gene_biotype().has_value());
-    EXPECT_EQ(entry.get_gene_biotype().value(), "protein_coding");
+    ASSERT_TRUE(entries[0].get_gene_id().has_value());
+    EXPECT_EQ(entries[0].get_gene_id().value(), "ENSG00000001");
+    ASSERT_TRUE(entries[0].get_gene_name().has_value());
+    EXPECT_EQ(entries[0].get_gene_name().value(), "TEST1");
+    ASSERT_TRUE(entries[0].get_gene_biotype().has_value());
+    EXPECT_EQ(entries[0].get_gene_biotype().value(), "protein_coding");
 
     // Second entry - exon in GTF format
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.type, "exon");
-    EXPECT_EQ(entry.attributes["gene_id"], "ENSG00000001");
-    EXPECT_EQ(entry.attributes["transcript_id"], "ENST00000001");
-    EXPECT_EQ(entry.attributes["exon_number"], "1");
+    EXPECT_EQ(entries[1].type, "exon");
+    EXPECT_EQ(entries[1].attributes.at("gene_id"), "ENSG00000001");
+    EXPECT_EQ(entries[1].attributes.at("transcript_id"), "ENST00000001");
+    EXPECT_EQ(entries[1].attributes.at("exon_number"), "1");
 
     // Test transcript_id and exon_number helpers
-    ASSERT_TRUE(entry.get_transcript_id().has_value());
-    EXPECT_EQ(entry.get_transcript_id().value(), "ENST00000001");
-    ASSERT_TRUE(entry.get_exon_number().has_value());
-    EXPECT_EQ(entry.get_exon_number().value(), 1);
+    ASSERT_TRUE(entries[1].get_transcript_id().has_value());
+    EXPECT_EQ(entries[1].get_transcript_id().value(), "ENST00000001");
+    ASSERT_TRUE(entries[1].get_exon_number().has_value());
+    EXPECT_EQ(entries[1].get_exon_number().value(), 1);
 
     // Third entry - gene with score
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.seqid, "chr2");
-    ASSERT_TRUE(entry.score.has_value());
-    EXPECT_EQ(entry.score.value(), 100);
+    EXPECT_EQ(entries[2].seqid, "chr2");
+    ASSERT_TRUE(entries[2].score.has_value());
+    EXPECT_EQ(entries[2].score.value(), 100);
 
     // Fourth entry - CDS
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.type, "CDS");
-    ASSERT_TRUE(entry.phase.has_value());
-    EXPECT_EQ(entry.phase.value(), 0);
-
-    // No more entries
-    EXPECT_FALSE(reader.read_next(entry));
+    EXPECT_EQ(entries[3].type, "CDS");
+    ASSERT_TRUE(entries[3].phase.has_value());
+    EXPECT_EQ(entries[3].phase.value(), 0);
 }
 
 // ==========================================
@@ -374,50 +372,51 @@ TEST_F(gfffileTest, detectGzippedGFFFileType) {
 
 TEST_F(gfffileTest, readGzippedGFF3Format) {
     gio::gff_reader reader(gff3_path_gz);
-    gio::gff_entry entry;
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 4);
 
     // First entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.seqid, "chr1");
-    EXPECT_EQ(entry.type, "gene");
-    EXPECT_EQ(entry.interval.get_start(), 999);
-    EXPECT_EQ(entry.interval.get_end(), 2000);
-    EXPECT_EQ(entry.attributes["ID"], "gene1");
+    EXPECT_EQ(entries[0].seqid, "chr1");
+    EXPECT_EQ(entries[0].type, "gene");
+    EXPECT_EQ(entries[0].interval.get_start(), 999);
+    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].attributes.at("ID"), "gene1");
 
     // Second entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.type, "exon");
+    EXPECT_EQ(entries[1].type, "exon");
 
     // Third entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.seqid, "chr2");
+    EXPECT_EQ(entries[2].seqid, "chr2");
 
     // Fourth entry
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.seqid, "chrX");
-
-    // No more entries
-    EXPECT_FALSE(reader.read_next(entry));
+    EXPECT_EQ(entries[3].seqid, "chrX");
 }
 
 TEST_F(gfffileTest, readGzippedGTFFormat) {
     gio::gff_reader reader(gtf_path_gz);
-    gio::gff_entry entry;
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 4);
 
     // First entry - gene
-    ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.seqid, "chr1");
-    EXPECT_EQ(entry.type, "gene");
-    EXPECT_EQ(entry.attributes["gene_id"], "ENSG00000001");
-    EXPECT_EQ(entry.attributes["gene_name"], "TEST1");
+    EXPECT_EQ(entries[0].seqid, "chr1");
+    EXPECT_EQ(entries[0].type, "gene");
+    EXPECT_EQ(entries[0].attributes.at("gene_id"), "ENSG00000001");
+    EXPECT_EQ(entries[0].attributes.at("gene_name"), "TEST1");
 
-    // Read remaining entries
-    ASSERT_TRUE(reader.read_next(entry));
-    ASSERT_TRUE(reader.read_next(entry));
-    ASSERT_TRUE(reader.read_next(entry));
-
-    // No more entries
-    EXPECT_FALSE(reader.read_next(entry));
+    // Remaining entries exist
+    EXPECT_FALSE(entries[1].seqid.empty());
+    EXPECT_FALSE(entries[2].seqid.empty());
+    EXPECT_FALSE(entries[3].seqid.empty());
 }
 
 TEST_F(gfffileTest, gzippedHasNextFunctionality) {
@@ -553,4 +552,121 @@ TEST_F(gfffileTest, genericAttributeGetter) {
     // Test non-existent attribute
     auto missing = entry.get_attribute("nonexistent");
     EXPECT_FALSE(missing.has_value());
+}
+
+// ==========================================
+// Iterator Tests
+// ==========================================
+
+TEST_F(gfffileTest, iteratorBasicIteration) {
+    gio::gff_reader reader(gff3_path);
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 4);
+
+    // Verify first entry (gene)
+    EXPECT_EQ(entries[0].seqid, "chr1");
+    EXPECT_EQ(entries[0].type, "gene");
+    EXPECT_TRUE(entries[0].is_gff3());
+
+    // Verify second entry (exon)
+    EXPECT_EQ(entries[1].seqid, "chr1");
+    EXPECT_EQ(entries[1].type, "exon");
+
+    // Verify third entry (exon)
+    EXPECT_EQ(entries[2].seqid, "chr2");
+    EXPECT_EQ(entries[2].type, "gene");
+
+    // Verify fourth entry (CDS)
+    EXPECT_EQ(entries[3].seqid, "chrX");
+    EXPECT_EQ(entries[3].type, "CDS");
+}
+
+TEST_F(gfffileTest, iteratorGTFFormat) {
+    gio::gff_reader reader(gtf_path);
+
+    int count = 0;
+    for (const auto& entry : reader) {
+        EXPECT_TRUE(entry.is_gtf());
+        EXPECT_FALSE(entry.seqid.empty());
+        count++;
+
+        // Check first entry has GTF-specific attributes
+        if (count == 1) {
+            auto gene_id = entry.get_gene_id();
+            ASSERT_TRUE(gene_id.has_value());
+            EXPECT_EQ(gene_id.value(), "ENSG00000001");
+        }
+    }
+
+    EXPECT_EQ(count, 4);
+}
+
+TEST_F(gfffileTest, iteratorManualIncrement) {
+    gio::gff_reader reader(gff3_path);
+
+    auto it = reader.begin();
+    auto end = reader.end();
+
+    ASSERT_NE(it, end);
+    EXPECT_EQ(it->type, "gene");
+
+    ++it;
+    ASSERT_NE(it, end);
+    EXPECT_EQ(it->type, "exon");
+
+    ++it;
+    ASSERT_NE(it, end);
+    EXPECT_EQ(it->type, "gene");
+
+    ++it;
+    ASSERT_NE(it, end);
+    EXPECT_EQ(it->type, "CDS");
+
+    ++it;
+    EXPECT_EQ(it, end);
+}
+
+TEST_F(gfffileTest, iteratorPostIncrement) {
+    gio::gff_reader reader(gtf_path);
+
+    auto it = reader.begin();
+    auto old_it = it++;
+
+    EXPECT_EQ(old_it->type, "gene");
+    EXPECT_EQ(it->type, "exon");
+}
+
+TEST_F(gfffileTest, iteratorGzippedFile) {
+    gio::gff_reader reader(gff3_path_gz);
+
+    std::vector<std::string> types;
+    for (const auto& entry : reader) {
+        types.push_back(entry.type);
+    }
+
+    ASSERT_EQ(types.size(), 4);
+    EXPECT_EQ(types[0], "gene");
+    EXPECT_EQ(types[1], "exon");
+    EXPECT_EQ(types[2], "gene");
+    EXPECT_EQ(types[3], "CDS");
+}
+
+TEST_F(gfffileTest, iteratorAccessAttributes) {
+    gio::gff_reader reader(gff3_path);
+
+    for (const auto& entry : reader) {
+        // All entries should have attributes
+        EXPECT_FALSE(entry.attributes.empty());
+
+        // Use arrow operator to access members
+        if (entry.type == "gene") {
+            auto id = entry.get_attribute("ID");
+            ASSERT_TRUE(id.has_value());
+        }
+    }
 }
