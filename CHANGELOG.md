@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-01-03
+
+### Added
+- Redesigned genomic coordinate API with enhanced comparison and 
+utility operations for interval queries ([#69](https://github.com/genogrove/genogrove/pull/69))
+- Optimized search traversal in Grove data structure for improved performance on 
+interval-based lookups ([#69](https://github.com/genogrove/genogrove/pull/69))
+- Added comprehensive test suite covering genomic coordinate 
+functionality and operations ([#69](https://github.com/genogrove/genogrove/pull/69))
+- Added extensive test coverage for Grove data structure with genomic coordinates, 
+including strand-specific queries and complex data types ([#69](https://github.com/genogrove/genogrove/pull/69))
+
 ## [0.9.0] - 2025-12-27
 
 ### Added
