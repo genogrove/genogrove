@@ -133,9 +133,9 @@ class node {
 
     void print_keys(std::ostream& os, std::string_view sep = "\t") {
         for(int i = 0; i < this->keys.size(); ++i) {
-            os << this->keys[i]->get_value().toString() << sep;
+            os << this->keys[i]->get_value().to_string() << sep;
         }
-        os << std::endl;
+        // os << std::endl;
     }
 
   private:

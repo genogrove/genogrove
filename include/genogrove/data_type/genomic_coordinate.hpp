@@ -10,19 +10,49 @@
 #ifndef DATATYPE_GENOMICCOORDINATE_HPP
 #define DATATYPE_GENOMICCOORDINATE_HPP
 
-// Class
-#include <genogrove/data_type/index.hpp>
+// Standard
+#include <cstddef>
+#include <string>
+#include <vector>
 
 namespace genogrove::data_type {
     class genomic_coordinate {
         public:
-            genomic_coordinate(std::string chrom, char strand, std::pair<std::size_t, std::size_t> range);
+            // Constructors
+            genomic_coordinate();
+            genomic_coordinate(char strand, std::size_t start, std::size_t end);
+            ~genomic_coordinate() = default;
+
+            // Comparison operators (required by key_type_base concept)
+            bool operator<(const genomic_coordinate& other) const;
+            bool operator>(const genomic_coordinate& other) const;
+            bool operator==(const genomic_coordinate& other) const;
+
+            // @brief indicates that this is an interval type (constexpr C++20)
+            static constexpr bool is_interval = true;
+
+            // Static methods (required by key_type_base concept)
+            static bool overlap(const genomic_coordinate& a, const genomic_coordinate& b);
+            static genomic_coordinate aggregate(const std::vector<genomic_coordinate>& coords);
+
+            // String conversion (required by key_type_base concept)
+            std::string to_string() const;
+
+            // Getters
+            char get_strand() const;
+            std::size_t get_start() const;
+            std::size_t get_end() const;
+
+            // Setters
+            void set_strand(char strand);
+            void set_start(std::size_t start);
+            void set_end(std::size_t end);
 
         private:
-            index chrom;
             char strand;
-            std::pair<std::size_t, std::size_t> range;
-        };
+            std::size_t start;
+            std::size_t end;
+    };
 }
 
 #endif //DATATYPE_GENOMICCOORDINATE_HPP
