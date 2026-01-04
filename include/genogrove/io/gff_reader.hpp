@@ -44,6 +44,7 @@ namespace genogrove::io {
         std::map<std::string, std::string> attributes;  // key-value pairs from column 9
         gff_format format;              // detected format (GFF3 or GTF)
 
+
         gff_entry() : format(gff_format::UNKNOWN) {}
         gff_entry(std::string seqid, gdt::interval interval, std::string type)
             : seqid(seqid), interval(interval), type(type), format(gff_format::UNKNOWN) {}

@@ -494,11 +494,21 @@ class grove {
                 }
             }
             // check if there is an overlap within the next node (if so we have to traverse it)
-            if(node->get_next() != nullptr) {
-                int last_key =
-                    node->get_keys().size() - 1; // index of the last key in the current node
-                if(key_type::overlap(node->get_keys()[last_key]->get_value(), query)) {
-                    search_iter(node->get_next(), query, result);
+            // Check first key of next node to avoid unnecessary traversal
+            if(node->get_next() != nullptr && node->get_next()->get_keys().size() > 0) {
+                auto& first_key_next = node->get_next()->get_keys()[0]->get_value();
+
+                // For interval types: check coordinate overlap only
+                if constexpr (requires { key_type::is_interval; }) {
+                    if (!(first_key_next.get_start() > query.get_end() ||
+                          query.get_start() > first_key_next.get_end())) {
+                        search_iter(node->get_next(), query, result);
+                    }
+                } else {
+                    // For non-interval types, use regular overlap
+                    if(key_type::overlap(first_key_next, query)) {
+                        search_iter(node->get_next(), query, result);
+                    }
                 }
             }
         } else {
