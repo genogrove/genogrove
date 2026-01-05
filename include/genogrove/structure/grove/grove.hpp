@@ -39,8 +39,21 @@ template <typename key_type, typename data_type = void, typename edge_data_type 
 class grove {
 
   public:
+    /**
+     * @brief Construct a grove with specified order
+     * @param order The maximum number of keys per node in the B+ tree
+     */
     grove(int order) : order(order), root_nodes(), rightmost_nodes() {}
+
+    /**
+     * @brief Construct a grove with default order of 3
+     */
     grove() : order(3), root_nodes(), rightmost_nodes() {}
+
+    /**
+     * @brief Destructor that cleans up all tree nodes
+     * @note Recursively deletes all root nodes and their children; keys in deque are automatically freed
+     */
     ~grove() {
         // Delete all root nodes (which will recursively delete their children)
         for(auto& [key, root] : root_nodes) {
@@ -48,7 +61,7 @@ class grove {
         }
     }
 
-    /*
+    /**
      * @brief Get reference to the graph overlay
      * @return Reference to the single graph for this grove
      * @note The graph can store edges between keys from any index (chr1, chr2, etc.)
@@ -57,7 +70,7 @@ class grove {
         return graph_data;
     }
 
-    /*
+    /**
      * @brief Get const reference to the graph overlay
      * @return Const reference to the graph overlay
      */
@@ -65,7 +78,7 @@ class grove {
         return graph_data;
     }
 
-    /*
+    /**
      * @brief Add edge between two keys (convenience forwarding to graph)
      * @param source Pointer to source key
      * @param target Pointer to target key
@@ -75,7 +88,7 @@ class grove {
         graph_data.add_edge(source, target);
     }
 
-    /*
+    /**
      * @brief Add edge with metadata (convenience forwarding to graph)
      * @param source Pointer to source key
      * @param target Pointer to target key
@@ -89,31 +102,31 @@ class grove {
         graph_data.add_edge(source, target, std::forward<M>(metadata));
     }
 
-    /*
-     * @brief Get neighbors of a key (convenience forwarding to graph)
+    /**
+     * @brief Get all neighbors of a key (convenience forwarding to graph)
      * @param source Pointer to source key
-     * @return Vector of neighbor keys
+     * @return Vector of pointers to neighbor keys (targets of outgoing edges)
      */
     std::vector<gdt::key<key_type, data_type>*> get_neighbors(
         gdt::key<key_type, data_type>* source) const {
         return graph_data.get_neighbors(source);
     }
 
-    /*
+    /**
      * @brief Remove edge between two keys (convenience forwarding to graph)
      * @param source Pointer to source key
      * @param target Pointer to target key
-     * @return true if edge was removed, false otherwise
+     * @return true if edge was removed, false if edge did not exist
      */
     bool remove_edge(gdt::key<key_type, data_type>* source,
                      gdt::key<key_type, data_type>* target) {
         return graph_data.remove_edge(source, target);
     }
 
-    /*
+    /**
      * @brief Get edge metadata for all outgoing edges (convenience forwarding to graph)
      * @param source Pointer to source key
-     * @return Vector of edge metadata
+     * @return Vector of edge metadata for all outgoing edges from source
      */
     template<typename M = edge_data_type>
     std::vector<M> get_edges(gdt::key<key_type, data_type>* source) const
@@ -121,17 +134,17 @@ class grove {
         return graph_data.get_edges(source);
     }
 
-    /*
+    /**
      * @brief Get all outgoing edge structures (convenience forwarding to graph)
      * @param source Pointer to source key
-     * @return Const reference to vector of edges
+     * @return Const reference to vector of edge structures containing target and metadata
      */
     const std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>&
     get_edge_list(gdt::key<key_type, data_type>* source) const {
         return graph_data.get_edge_list(source);
     }
 
-    /*
+    /**
      * @brief Get neighbors filtered by predicate (convenience forwarding to graph)
      * @param source Pointer to source key
      * @param predicate Function to filter edges by metadata
@@ -145,8 +158,8 @@ class grove {
         return graph_data.get_neighbors_if(source, predicate);
     }
 
-    /*
-     * @brief Check if edge exists (convenience forwarding to graph)
+    /**
+     * @brief Check if edge exists between two keys (convenience forwarding to graph)
      * @param source Pointer to source key
      * @param target Pointer to target key
      * @return true if edge exists, false otherwise
@@ -156,69 +169,76 @@ class grove {
         return graph_data.has_edge(source, target);
     }
 
-    /*
+    /**
      * @brief Get number of outgoing edges from a key (convenience forwarding to graph)
      * @param source Pointer to source key
-     * @return Number of outgoing edges
+     * @return Number of outgoing edges from source key
      */
     [[nodiscard]] size_t out_degree(gdt::key<key_type, data_type>* source) const {
         return graph_data.out_degree(source);
     }
 
-    /*
+    /**
      * @brief Get total number of edges in graph (convenience forwarding to graph)
-     * @return Total edge count
+     * @return Total edge count across all vertices in the graph
      */
     [[nodiscard]] size_t edge_count() const {
         return graph_data.edge_count();
     }
 
-    /*
-     * @brief Get number of keys with outgoing edges (convenience forwarding to graph)
-     * @return Number of source keys
+    /**
+     * @brief Get number of vertices with outgoing edges (convenience forwarding to graph)
+     * @return Number of keys that have at least one outgoing edge
      */
     [[nodiscard]] size_t vertex_count() const {
         return graph_data.vertex_count();
     }
 
-    /*
+    /**
      * @brief Clear all edges in the graph (convenience forwarding to graph)
+     * @note This does not delete the keys themselves, only the edge relationships
      */
     void clear_graph() {
         graph_data.clear();
     }
 
-    /*
-     * @brief Check if graph is empty (convenience forwarding to graph)
-     * @return true if no edges exist
+    /**
+     * @brief Check if graph has no edges (convenience forwarding to graph)
+     * @return true if no edges exist in the graph, false otherwise
      */
     [[nodiscard]] bool graph_empty() const {
         return graph_data.empty();
     }
 
-    /*
-     * @brief returns the order of the grove
+    /**
+     * @brief Get the order (maximum capacity) of the grove
+     * @return The order of the B+ tree (maximum number of keys per node)
      */
     int get_order() const {
         return this->order;
     }
 
-    /*
-     * @brief sets the order of the grove
+    /**
+     * @brief Set the order (maximum capacity) of the grove
+     * @param order The new order value for the B+ tree
+     * @warning Changing order on an existing grove with data may cause undefined behavior
      */
     void set_order(int order) {
         this->order = order;
     }
 
-    /*
-     * @brief return map with root nodes in the grove
+    /**
+     * @brief Get map of all root nodes indexed by their string keys
+     * @return Unordered map from index names (e.g., chromosome names) to root node pointers
      */
     std::unordered_map<std::string, node<key_type, data_type>*> get_root_nodes() const {
         return this->root_nodes;
     }
 
-    /*
-     * @brief sets the map with root nodes in the grove
+    /**
+     * @brief Replace the grove's root nodes with a new set
+     * @param root_nodes New map of root nodes to use
+     * @note This deletes all existing root nodes and clears rightmost node cache
      */
     void set_root_nodes(std::unordered_map<std::string, node<key_type, data_type>*> root_nodes) {
         // this->root_nodes = root_nodes;
@@ -229,33 +249,40 @@ class grove {
         this->rightmost_nodes.clear();
     }
 
-    /*
-     * @brief returns the rightmost node in the grove (for easy access)
-     * @param The chromosome the grove is associated with
+    /**
+     * @brief Get the rightmost leaf node for a given index
+     * @param key The index name (e.g., chromosome name)
+     * @return Pointer to rightmost leaf node, or nullptr if index doesn't exist
+     * @note Used for optimized sorted insertion
      */
     node<key_type, data_type>* get_rightmost_node(std::string_view key) {
         return ggu::value_lookup(this->rightmost_nodes, std::string(key)).value_or(nullptr);
     }
 
-    /*
-     * @brief sets the rightmode node in the grove (for easy access)
-     * @param The key the grove is associated with
-     * @param The rightmost node in the grove
+    /**
+     * @brief Set the rightmost leaf node for a given index
+     * @param key The index name (e.g., chromosome name)
+     * @param node Pointer to the new rightmost leaf node
+     * @note Updated automatically during node splits and insertions
      */
     void set_rightmost_node(std::string_view key, node<key_type, data_type>* node) {
         this->rightmost_nodes[std::string(key)] = node;
     }
 
-    /*
-     * @brief get the root node of the grove for a given key
-     * @param The key associated with the root node (of the grove)
+    /**
+     * @brief Get the root node for a specific index
+     * @param key The index name (e.g., chromosome name) to look up
+     * @return Pointer to root node, or nullptr if index doesn't exist
      */
     node<key_type, data_type>* get_root(std::string_view key) {
         return ggu::value_lookup(this->root_nodes, std::string(key)).value_or(nullptr);
     }
 
-    /*
-     * @brief inserts a new root node into the grove
+    /**
+     * @brief Create and insert a new root node for a given index
+     * @param key The index name (e.g., chromosome name) for the new root
+     * @return Pointer to the newly created root node
+     * @throws std::runtime_error if a root already exists for this key
      */
     node<key_type, data_type>* insert_root(std::string_view key) {
         // check if the root node is already in the map (error)
@@ -270,12 +297,12 @@ class grove {
         return root;
     }
 
-    /*
-     * @brief inserts a data point into the grove
-     * @param The key associated with the data point
-     * @param The type of the key to be inserted
-     * @param The data point
-     * @param Tag to dispatch the unsorted insert
+    /**
+     * @brief Insert a data point into the grove using unsorted insertion
+     * @param index The index name (e.g., chromosome name) where the data should be inserted
+     * @param key_value The key value to insert (e.g., interval)
+     * @param data_value The data associated with the key
+     * @param Tag to dispatch to unsorted insertion algorithm
      * @return Pointer to the inserted key in the tree
      */
     gdt::key<key_type, data_type>* insert_data(std::string_view index, key_type key_value, data_type data_value,
@@ -285,13 +312,13 @@ class grove {
             return insert(index, key);
     }
 
-    /*
-     * @brief inserts a sorted data point into the grove
-     * @param The key associated with the data point
-     * @param The type of the key to be inserted
-     * @param The data point
-     * @param Tag to dispatch to sorted insert
-     * @note This assumes key_value is greater than all existing keys in the tree
+    /**
+     * @brief Insert a sorted data point into the grove using optimized sorted insertion
+     * @param index The index name (e.g., chromosome name) where the data should be inserted
+     * @param key_value The key value to insert (e.g., interval)
+     * @param data_value The data associated with the key
+     * @param Tag to dispatch to sorted insertion algorithm
+     * @note This assumes key_value is greater than all existing keys in the specified index
      * @return Pointer to the inserted key in the tree
      */
     gdt::key<key_type, data_type>* insert_data(std::string_view index, key_type key_value, data_type data_value,
@@ -300,11 +327,11 @@ class grove {
         return insert_data_sorted(index, key_value, data_value);
     }
 
-    /*
-     * @brief inserts a data point into the grove (defaults to unsorted)
-     * @param The key associated with the data point
-     * @param The type of the key to be inserted
-     * @param The data point
+    /**
+     * @brief Insert a data point into the grove (defaults to unsorted insertion)
+     * @param index The index name (e.g., chromosome name) where the data should be inserted
+     * @param key_value The key value to insert (e.g., interval)
+     * @param data_value The data associated with the key
      * @return Pointer to the inserted key in the tree
      */
     gdt::key<key_type, data_type>* insert_data(std::string_view index, key_type key_value, data_type data_value)
@@ -312,9 +339,13 @@ class grove {
             return insert_data(index, key_value, data_value, unsorted);
         }
 
-    /*
-     * @brief inserts a new key elements into the grove
+    /**
+     * @brief Insert a key into the grove at the specified index
+     * @param index The index name (e.g., chromosome name) where the key should be inserted
+     * @param key The key object to insert
      * @return Pointer to the inserted key in the tree
+     * @throws std::runtime_error if insertion fails
+     * @note Creates a new root if index doesn't exist; handles node splits automatically
      */
     gdt::key<key_type, data_type>* insert(std::string_view index, gdt::key<key_type, data_type>& key) {
         // get the root node for the given chromosome (or create a new one if it doesn't exist)
@@ -340,9 +371,12 @@ class grove {
         return key_ptr;
     }
 
-    /*
-     * @brief inserts a new key into the grove
-     * @return Pointer to the inserted key in the tree
+    /**
+     * @brief Recursively insert a key into the tree starting from a given node
+     * @param node The node to start insertion from
+     * @param key The key object to insert
+     * @return Pointer to the inserted key in the tree, or nullptr on failure
+     * @note This is a helper function for insert(); handles recursive traversal and leaf insertion
      */
     gdt::key<key_type, data_type>* insert_iter(node<key_type, data_type>* node, gdt::key<key_type, data_type>& key) {
         if(!node) {
@@ -373,6 +407,13 @@ class grove {
         }
     }
 
+    /**
+     * @brief Split an overflowing node by creating a new sibling and redistributing keys
+     * @param parent The parent node whose child will be split
+     * @param index The index of the child node to split within the parent
+     * @note Splits keys at midpoint, promotes separator to parent, links leaf nodes if applicable
+     * @note Automatically updates rightmost_nodes cache when splitting leaf nodes
+     */
     void split_node(node<key_type, data_type>* parent, int index) {
         node<key_type, data_type>* child = parent->get_child(index);
         node<key_type, data_type>* new_child = new node<key_type, data_type>(this->order);
@@ -410,13 +451,14 @@ class grove {
         }
     }
 
-    /*
-     * @brief inserts a sorted data point into the grove. This means that kval is greater than
-     * the values of the keys in the tree
-     * @param the index associated to the grove this should be inserted
-     * @param the value of the key to be inserted
-     * @param the value of the data to be inserted
+    /**
+     * @brief Insert a pre-sorted data point into the grove using optimized sorted insertion
+     * @param index The index name (e.g., chromosome name) where the data should be inserted
+     * @param key_value The key value to insert (e.g., interval)
+     * @param data_value The data associated with the key
      * @return Pointer to the inserted key in the tree
+     * @note Assumes key_value is greater than all existing keys in the specified index
+     * @note This is a helper function called by insert_data(..., sorted_t)
      */
     gdt::key<key_type, data_type>* insert_data_sorted(std::string_view index, key_type key_value, data_type data_value)
         requires (!std::is_void_v<data_type>) {
@@ -424,6 +466,14 @@ class grove {
             return insert_sorted(index, key);
     }
 
+    /**
+     * @brief Insert a pre-sorted key directly to the rightmost leaf node for optimal performance
+     * @param index The index name (e.g., chromosome name) where the key should be inserted
+     * @param key The key object to insert
+     * @return Pointer to the inserted key in the tree
+     * @note Assumes key is greater than all existing keys in the index; bypasses tree traversal
+     * @note Significantly faster than regular insert() for sorted data
+     */
     gdt::key<key_type, data_type>* insert_sorted(std::string_view index, gdt::key<key_type, data_type>& key) {
         node<key_type, data_type>* root = this->get_root(index);
         if(root == nullptr) {
@@ -459,6 +509,12 @@ class grove {
         }
     }
 
+    /**
+     * @brief Find all keys that overlap with the query across all indices
+     * @param query The query key to search for (e.g., genomic interval)
+     * @return query_result containing all overlapping keys from all indices
+     * @note Searches all root nodes (all chromosomes/indices) in the grove
+     */
     gdt::query_result<key_type, data_type> intersect(key_type& query) {
         gdt::query_result<key_type, data_type> result{query};
         // if index is not specified, all root nodes need to be checked
@@ -468,7 +524,13 @@ class grove {
         return result;
     }
 
-    // template <typename query_type>
+    /**
+     * @brief Find all keys that overlap with the query in a specific index
+     * @param query The query key to search for (e.g., genomic interval)
+     * @param index The index name (e.g., chromosome name) to search within
+     * @return query_result containing all overlapping keys from the specified index
+     * @note Returns empty result if index doesn't exist
+     */
     gdt::query_result<key_type, data_type> intersect(key_type& query, const std::string& index) {
         gdt::query_result<key_type, data_type> result{query};
         node<key_type, data_type>* root = this->get_root(index);
@@ -480,6 +542,14 @@ class grove {
         return result;
     }
 
+    /**
+     * @brief Recursively search the tree for keys that overlap with the query
+     * @param node The current node being searched
+     * @param query The query key to search for
+     * @param result Reference to query_result where matching keys are accumulated
+     * @note Uses overlap detection to prune search space and traverse linked leaf nodes
+     * @note Optimized for interval types with early termination when no overlap is possible
+     */
     void search_iter(node<key_type, data_type>* node, key_type& query,
         gdt::query_result<key_type, data_type>& result) {
         if(node == nullptr) {
@@ -531,8 +601,11 @@ class grove {
         }
     }
 
-    /*
-     * @brief write the grove to a stream (for debugging purposes)
+    /**
+     * @brief Write the grove structure to a stream in SIF (Simple Interaction Format) for visualization
+     * @param os Output stream to write to
+     * @param root Root node of the tree to visualize
+     * @note Used for debugging and visualization; outputs node and leaf links in SIF format
      */
     void grove_to_sif(std::ostream& os, node<key_type, data_type>* root) {
         if(!root) { return; }
@@ -574,6 +647,12 @@ class grove {
         }
     }
 
+    /**
+     * @brief Serialize the grove to a binary output stream
+     * @param os Output stream to write binary data to
+     * @note Writes order, number of root nodes, then each root (index name + tree structure)
+     * @note Rightmost nodes are NOT serialized; they are recalculated during deserialization
+     */
     void serialize(std::ostream& os) {
         // write the order of the tree
         os.write(reinterpret_cast<const char*>(&this->order), sizeof(this->order));
@@ -592,6 +671,13 @@ class grove {
         // note: we don't serialize rightmost node - and rather calculate them quickly when deserializing
     }
 
+    /**
+     * @brief Deserialize a grove from a binary input stream
+     * @param is Input stream to read binary data from
+     * @return Deserialized grove object
+     * @note Reads order and root nodes; recalculates rightmost nodes after loading
+     * @warning Current implementation is incomplete (missing root node deserialization loop)
+     */
     grove deserialize(std::istream& is) {
         int order;
         is.read(reinterpret_cast<char*>(&order), sizeof(order));
@@ -603,9 +689,12 @@ class grove {
     }
 
   private:
-    /*
-     * @brief Allocate a key in the grove's storage and return a pointer to it
-     * @note Keys are stored in a deque for stable addresses and better cache locality
+    /**
+     * @brief Allocate a key in the grove's deque storage and return a stable pointer to it
+     * @param key The key object to allocate and store
+     * @return Pointer to the newly allocated key in the deque
+     * @note Keys are stored in a deque for stable addresses (required by graph_overlay)
+     * @note Deque storage provides better cache locality than individual heap allocations
      */
     gdt::key<key_type, data_type>* allocate_key(const gdt::key<key_type, data_type>& key) {
         key_storage.push_back(key);
