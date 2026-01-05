@@ -26,22 +26,74 @@ namespace ggu = genogrove::utility;
 namespace gdt = genogrove::data_type;
 
 namespace genogrove::structure {
-    // tag types for insert dispatch
+    /**
+     * @brief Tag type for dispatching to unsorted insertion algorithm
+     * @see grove::insert_data(std::string_view, key_type, data_type, unsorted_t)
+     */
     struct unsorted_t {};
+
+    /**
+     * @brief Tag type for dispatching to sorted insertion algorithm
+     * @note Use this when inserting data that is already sorted for optimal performance
+     * @see grove::insert_data(std::string_view, key_type, data_type, sorted_t)
+     */
     struct sorted_t {};
+
+    /**
+     * @brief Tag type for dispatching to bulk insertion algorithm
+     * @note Currently not fully implemented
+     */
     struct bulk_t {};
 
+    /// Global constant for unsorted insertion dispatch
     inline static constexpr unsorted_t unsorted{};
+
+    /// Global constant for sorted insertion dispatch
     inline static constexpr sorted_t sorted{};
+
+    /// Global constant for bulk insertion dispatch
     inline static constexpr bulk_t bulk{};
 
+/**
+ * @class grove
+ * @brief Template-based B+ tree container for efficient genomic interval storage and querying
+ *
+ * @tparam key_type The type of keys stored in the tree (must satisfy key_type_base concept)
+ * @tparam data_type Optional associated data type (default: void for no data)
+ * @tparam edge_data_type Optional edge metadata type for graph overlay (default: void)
+ *
+ * The grove is a specialized B+ tree implementation designed for genomic data with:
+ * - Multi-index support: Separate trees for different indices (e.g., chromosomes)
+ * - Optimized sorted insertion: Direct rightmost leaf insertion for pre-sorted data
+ * - Graph overlay: Optional directed graph structure on top of the tree
+ * - Deque-based key storage: Stable memory addresses with improved cache locality
+ * - Linked leaf nodes: Efficient range traversal through leaf chaining
+ *
+ * Key features:
+ * - Insert operations return pointers to inserted keys for immediate use
+ * - Automatic node splitting when capacity (order) is exceeded
+ * - Efficient overlap-based queries for genomic intervals
+ * - Embedded graph_overlay for relationship management between keys
+ *
+ * @note The order parameter controls the maximum number of keys per node (B+ tree capacity)
+ * @note Keys are stored in a std::deque owned by the grove for stable addresses
+ * @note The graph overlay is embedded within the grove and shares its lifetime
+ *
+ * Example usage:
+ * @code
+ * grove<interval, bed_entry> g(100);  // Create grove with order 100
+ * auto* key_ptr = g.insert_data("chr1", interval{100, 200}, data, sorted);
+ * auto results = g.intersect(query_interval, "chr1");
+ * g.add_edge(key_ptr, another_key);  // Build graph relationships
+ * @endcode
+ */
 template <typename key_type, typename data_type = void, typename edge_data_type = void>
 class grove {
 
   public:
     /**
      * @brief Construct a grove with specified order
-     * @param order The maximum number of keys per node in the B+ tree
+     * @param order Determines the maximum number of k-1 keys and k children per node
      */
     grove(int order) : order(order), root_nodes(), rightmost_nodes() {}
 
@@ -701,12 +753,19 @@ class grove {
         return &key_storage.back();
     }
 
+    /// Maximum number of keys per node (B+ tree order/capacity)
     int order;
-    std::unordered_map<std::string, node<key_type, data_type>*> root_nodes;
-    std::unordered_map<std::string, node<key_type, data_type>*> rightmost_nodes;
-    std::deque<gdt::key<key_type, data_type>> key_storage; // Contiguous storage for keys
 
-    // Single graph overlay for this grove
+    /// Map from index names (e.g., chromosome names) to their root nodes
+    std::unordered_map<std::string, node<key_type, data_type>*> root_nodes;
+
+    /// Cache of rightmost leaf nodes for each index (used for sorted insertion optimization)
+    std::unordered_map<std::string, node<key_type, data_type>*> rightmost_nodes;
+
+    /// Deque storage for all keys; provides stable pointers and better cache locality than individual allocations
+    std::deque<gdt::key<key_type, data_type>> key_storage;
+
+    /// Embedded graph overlay for managing directed edges and relationships between keys
     graph_overlay<key_type, data_type, edge_data_type> graph_data;
 };
 
