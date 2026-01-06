@@ -183,12 +183,14 @@ namespace genogrove::io {
 
                     // BED6: strand
                     if (ss >> strand_str) {
-                        if (!strand_str.empty() && (strand_str[0] == '+'
+                        if (strand_str.length() == 1
+                            && (strand_str[0] == '+'
                             || strand_str[0] == '-'
                             || strand_str[0] == '.')) {
                             entry.strand = strand_str[0];
                         } else if (!strand_str.empty()) {
-                            error_message = "Invalid strand (must be +, -, or .) at line " + std::to_string(line_num);
+                            error_message = "Invalid strand (must be exactly one character: +, -, or .) at line ";
+                            error_message += std::to_string(line_num);
                             return false;
                         }
 
