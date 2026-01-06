@@ -247,6 +247,7 @@ namespace genogrove::io {
                                 } else {
                                     error_message = "Invalid RGB format (expected R,G,B) at line ";
                                     error_message += std::to_string(line_num);
+                                    return false;
                                 }
                             }
 
