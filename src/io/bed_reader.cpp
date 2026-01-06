@@ -200,8 +200,8 @@ namespace genogrove::io {
                                 uint64_t thick_end = std::stoul(thick_end_str);
 
                                 // Validate thickness coordinates
-                                if (thick_start >= thick_end) {
-                                    error_message = "Invalid thickness (thickStart >= thickEnd) at line ";
+                                if (thick_start > thick_end) {
+                                    error_message = "Invalid thickness (thickStart > thickEnd) at line ";
                                     error_message += std::to_string(line_num);
                                     return false;
                                 }
@@ -210,7 +210,6 @@ namespace genogrove::io {
                                     error_message += std::to_string(line_num);
                                     return false;
                                 }
-
                                 entry.thickness = thick_info(thick_start, thick_end);
                             } else {
                                 error_message = "Invalid thickness format (non-integer) at line ";
@@ -220,20 +219,33 @@ namespace genogrove::io {
 
                             // Parse RGB values (format: "R,G,B")
                             std::vector<size_t> rgb_values = parse_csv(item_rgb_str);
-                            if (rgb_values.size() == 3) {
-                                // Validate RGB values are in valid range (0-255)
-                                if (rgb_values[0] <= 255 && rgb_values[1] <= 255 && rgb_values[2] <= 255) {
-                                    entry.item_rgb = rgb_color(rgb_values[0], rgb_values[1], rgb_values[2]);
+                            if(rgb_values.size() == 1) {
+                                if(rgb_values[0] == 0) {
+                                    entry.item_rgb = rgb_color(0,0,0);
                                 } else {
-                                    error_message = "Invalid RGB values (must be 0-255) at line ";
+                                    error_message = "Only 0 (default) as single RGB value allowed";
+                                    error_message += " - is " + std::to_string(rgb_values[0]) + " at line";
                                     error_message += std::to_string(line_num);
                                     return false;
                                 }
-                            } else if (!item_rgb_str.empty()) {
-                                // RGB field present but invalid format
-                                error_message = "Invalid RGB format (expected R,G,B) at line ";
-                                error_message += std::to_string(line_num);
-                                return false;
+                            } else {
+                                if (rgb_values.size() == 3) {
+                                    // Validate RGB values are in valid range (0-255)
+                                    if (rgb_values[0] <= 255
+                                        && rgb_values[1] <= 255 &&
+                                        rgb_values[2] <= 255) {
+                                        entry.item_rgb = rgb_color(rgb_values[0],
+                                            rgb_values[1],
+                                            rgb_values[2]);
+                                    } else {
+                                        error_message = "Invalid RGB values (must be 0-255) at line ";
+                                        error_message += std::to_string(line_num);
+                                        return false;
+                                    }
+                                } else {
+                                    error_message = "Invalid RGB format (expected R,G,B) at line ";
+                                    error_message += std::to_string(line_num);
+                                }
                             }
 
                             if (ss >> block_count_str >> block_sizes_str >> block_starts_str) {
