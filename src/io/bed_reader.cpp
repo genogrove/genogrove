@@ -20,11 +20,16 @@ namespace genogrove::io {
         std::string token;
 
         while (std::getline(ss, token, ',')) {
-            if (!token.empty() && std::all_of(token.begin(), token.end(), ::isdigit)) {
-                result.push_back(std::stoul(token));
-            }
-        }
+            // trim leading/trailing whitespaces
+            token.erase(0, token.find_first_not_of(" \t"));
+            token.erase(token.find_last_not_of(" \t") + 1);
 
+            if(token.empty()) { return {}; } // ERROR: return empty vector
+            if (!std::all_of(token.begin(), token.end(), ::isdigit)) {
+                return {};
+            }
+            result.push_back(std::stoul(token));
+        }
         return result;
     }
     bed_reader::bed_reader(const std::filesystem::path& fpath)
