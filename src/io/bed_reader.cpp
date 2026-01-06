@@ -291,7 +291,7 @@ namespace genogrove::io {
             size_t start_num = std::stoul(start);
             size_t end_num = std::stoul(end);
             if (start_num >= end_num) {
-                error_message = "Start coordinate is greater than end coordinate at line ";
+                error_message = "Start coordinate is greater than or equal to the end coordinate at line ";
                 error_message += std::to_string(line_num);
                 return false;
             }
