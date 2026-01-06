@@ -100,6 +100,16 @@ namespace genogrove::io {
         BGZF* bgzf_file;
         size_t line_num;
         std::string error_message;
+
+        // Helper functions for parsing BED fields
+        bool parse_score(bed_entry& entry, const std::string& score_str);
+        bool parse_strand(bed_entry& entry, const std::string& strand_str);
+        bool parse_thickness(bed_entry& entry, const std::string& thick_start_str,
+                           const std::string& thick_end_str, size_t start_num, size_t end_num);
+        bool parse_rgb(bed_entry& entry, const std::string& item_rgb_str);
+        bool parse_blocks(bed_entry& entry, const std::string& block_count_str,
+                        const std::string& block_sizes_str, const std::string& block_starts_str,
+                        size_t start_num, size_t end_num);
     };
 
 }
