@@ -115,7 +115,15 @@ namespace genogrove::io {
             error_message += std::to_string(line_num);
             return false;
         }
-        int score = std::stoi(score_str);
+        int score;
+        try {
+            score = std::stoi(score_str);
+        } catch (const std::exception&) {
+            error_message = "Invalid score format (out of range) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
         if (score < 0 || score > 1000) {
             error_message = "Invalid score (must be 0-1000) at line ";
             error_message += std::to_string(line_num);
@@ -151,8 +159,16 @@ namespace genogrove::io {
             return false;
         }
 
-        uint64_t thick_start = std::stoul(thick_start_str);
-        uint64_t thick_end = std::stoul(thick_end_str);
+        uint64_t thick_start;
+        uint64_t thick_end;
+        try {
+            thick_start = std::stoul(thick_start_str);
+            thick_end = std::stoul(thick_end_str);
+        } catch(std::exception&) {
+            error_message = "Thickness coordinate out of range at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
 
         if (thick_start > thick_end) {
             error_message = "Invalid thickness (thickStart > thickEnd) at line ";
@@ -206,7 +222,15 @@ namespace genogrove::io {
             return false;
         }
 
-        int block_count = std::stoi(block_count_str);
+        int block_count;
+        try {
+            block_count = std::stoi(block_count_str);
+        } catch(const std::exception&) {
+            error_message = "Block count out of range at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
         if (block_count < 0) {
             error_message = "Invalid block count (negative) at line ";
             error_message += std::to_string(line_num);
@@ -215,6 +239,17 @@ namespace genogrove::io {
 
         std::vector<size_t> block_sizes = parse_csv(block_sizes_str);
         std::vector<size_t> block_starts = parse_csv(block_starts_str);
+
+        if(block_sizes.empty() && !block_sizes_str.empty()) {
+            error_message = "Invalid block sizes format at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+        if(block_starts.empty() && !block_starts_str.empty()) {
+            error_message = "Invalid block start format at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
 
         if (block_count != static_cast<int>(block_sizes.size())) {
             error_message = "Block count mismatch with block sizes at line ";
@@ -288,8 +323,17 @@ namespace genogrove::io {
             }
 
             // validate and create interval object
-            size_t start_num = std::stoul(start);
-            size_t end_num = std::stoul(end);
+            size_t start_num;
+            size_t end_num;
+            try {
+                start_num = std::stoul(start);
+                end_num = std::stoul(end);
+            } catch(std::exception&) {
+                error_message = "Coordinate out of range at line ";
+                error_message += std::to_string(line_num);
+                return false;
+            }
+
             if (start_num >= end_num) {
                 error_message = "Start coordinate is greater than or equal to the end coordinate at line ";
                 error_message += std::to_string(line_num);
