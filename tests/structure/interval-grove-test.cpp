@@ -263,5 +263,212 @@ TEST(HeterogeneousGroveTest, VariantWithCustomStruct) {
     EXPECT_EQ(std::get<int>(results.get_keys()[1]->get_data()), 100);
 }
 
+// =============================================================================
+// Bulk Insert Tests
+// =============================================================================
+
+TEST(IntervalGroveTest, BulkInsertSorted) {
+    gst::grove<gdt::interval, int> grove(3);
+
+    // Create sorted data
+    std::vector<std::pair<gdt::interval, int>> data = {
+        {gdt::interval{5, 10}, 10},
+        {gdt::interval{10, 15}, 20},
+        {gdt::interval{20, 30}, 30},
+        {gdt::interval{40, 50}, 40},
+        {gdt::interval{60, 70}, 50}
+    };
+
+    // Bulk insert sorted data (auto-detects sorted)
+    grove.insert_data("chr1", data, gst::bulk);
+
+    // Query to verify all data was inserted
+    gdt::interval query{0, 100};
+    auto results = grove.intersect(query, "chr1");
+
+    ASSERT_EQ(results.get_keys().size(), 5);
+
+    // Verify data was inserted correctly
+    auto keys = results.get_keys();
+    EXPECT_EQ(keys[0]->get_value().get_start(), 5);
+    EXPECT_EQ(keys[0]->get_value().get_end(), 10);
+    EXPECT_EQ(keys[0]->get_data(), 10);
+
+    EXPECT_EQ(keys[1]->get_value().get_start(), 10);
+    EXPECT_EQ(keys[1]->get_value().get_end(), 15);
+    EXPECT_EQ(keys[1]->get_data(), 20);
+
+    EXPECT_EQ(keys[2]->get_value().get_start(), 20);
+    EXPECT_EQ(keys[2]->get_value().get_end(), 30);
+    EXPECT_EQ(keys[2]->get_data(), 30);
+
+    EXPECT_EQ(keys[3]->get_value().get_start(), 40);
+    EXPECT_EQ(keys[3]->get_value().get_end(), 50);
+    EXPECT_EQ(keys[3]->get_data(), 40);
+
+    EXPECT_EQ(keys[4]->get_value().get_start(), 60);
+    EXPECT_EQ(keys[4]->get_value().get_end(), 70);
+    EXPECT_EQ(keys[4]->get_data(), 50);
+}
+
+TEST(IntervalGroveTest, BulkInsertUnsorted) {
+    gst::grove<gdt::interval, int> grove(3);
+
+    // Create unsorted data
+    std::vector<std::pair<gdt::interval, int>> data = {
+        {gdt::interval{40, 50}, 40},
+        {gdt::interval{5, 10}, 10},
+        {gdt::interval{60, 70}, 50},
+        {gdt::interval{10, 15}, 20},
+        {gdt::interval{20, 30}, 30}
+    };
+
+    // Bulk insert unsorted data (should sort internally)
+    grove.insert_data("chr1", data, gst::bulk);
+
+    // Query to verify all data was inserted
+    gdt::interval query{0, 100};
+    auto results = grove.intersect(query, "chr1");
+
+    ASSERT_EQ(results.get_keys().size(), 5);
+
+    // Verify data was sorted and inserted correctly
+    auto keys = results.get_keys();
+    EXPECT_EQ(keys[0]->get_value().get_start(), 5);
+    EXPECT_EQ(keys[0]->get_value().get_end(), 10);
+    EXPECT_EQ(keys[0]->get_data(), 10);
+
+    EXPECT_EQ(keys[1]->get_value().get_start(), 10);
+    EXPECT_EQ(keys[1]->get_value().get_end(), 15);
+    EXPECT_EQ(keys[1]->get_data(), 20);
+
+    EXPECT_EQ(keys[2]->get_value().get_start(), 20);
+    EXPECT_EQ(keys[2]->get_value().get_end(), 30);
+    EXPECT_EQ(keys[2]->get_data(), 30);
+
+    EXPECT_EQ(keys[3]->get_value().get_start(), 40);
+    EXPECT_EQ(keys[3]->get_value().get_end(), 50);
+    EXPECT_EQ(keys[3]->get_data(), 40);
+
+    EXPECT_EQ(keys[4]->get_value().get_start(), 60);
+    EXPECT_EQ(keys[4]->get_value().get_end(), 70);
+    EXPECT_EQ(keys[4]->get_data(), 50);
+}
+
+TEST(IntervalGroveTest, BulkInsertEmpty) {
+    gst::grove<gdt::interval, int> grove(3);
+
+    // Create empty data
+    std::vector<std::pair<gdt::interval, int>> data;
+
+    // Bulk insert empty data (should do nothing)
+    grove.insert_data("chr1", data, gst::bulk);
+
+    // Query should return no results
+    gdt::interval query{0, 100};
+    auto results = grove.intersect(query, "chr1");
+
+    EXPECT_EQ(results.get_keys().size(), 0);
+}
+
+TEST(IntervalGroveTest, BulkInsertLargeDataset) {
+    gst::grove<gdt::interval, int> grove(10);
+
+    // Create larger sorted dataset
+    std::vector<std::pair<gdt::interval, int>> data;
+    for (size_t i = 0; i < 100; ++i) {
+        data.emplace_back(gdt::interval{i * 10, i * 10 + 5}, i);
+    }
+
+    // Bulk insert
+    grove.insert_data("chr1", data, gst::bulk);
+
+    // Query entire range
+    gdt::interval query{0, 1000};
+    auto results = grove.intersect(query, "chr1");
+
+    ASSERT_EQ(results.get_keys().size(), 100);
+
+    // Verify first and last elements
+    auto keys = results.get_keys();
+    EXPECT_EQ(keys[0]->get_data(), 0);
+    EXPECT_EQ(keys[99]->get_data(), 99);
+}
+
+TEST(IntervalGroveTest, BulkInsertVsIndividualInsert) {
+    gst::grove<gdt::interval, int> grove_bulk(5);
+    gst::grove<gdt::interval, int> grove_individual(5);
+
+    // Create test data
+    std::vector<std::pair<gdt::interval, int>> data = {
+        {gdt::interval{5, 10}, 10},
+        {gdt::interval{15, 20}, 20},
+        {gdt::interval{25, 30}, 30},
+        {gdt::interval{35, 40}, 40},
+        {gdt::interval{45, 50}, 50},
+        {gdt::interval{55, 60}, 60}
+    };
+
+    // Bulk insert
+    grove_bulk.insert_data("chr1", data, gst::bulk);
+
+    // Individual inserts
+    for (const auto& [interval, value] : data) {
+        grove_individual.insert_data("chr1", interval, value, gst::sorted);
+    }
+
+    // Query both groves
+    gdt::interval query{0, 100};
+    auto results_bulk = grove_bulk.intersect(query, "chr1");
+    auto results_individual = grove_individual.intersect(query, "chr1");
+
+    // Should have same number of results
+    ASSERT_EQ(results_bulk.get_keys().size(), results_individual.get_keys().size());
+
+    // Verify all elements match
+    auto keys_bulk = results_bulk.get_keys();
+    auto keys_individual = results_individual.get_keys();
+
+    for (size_t i = 0; i < keys_bulk.size(); ++i) {
+        EXPECT_EQ(keys_bulk[i]->get_value().get_start(),
+                  keys_individual[i]->get_value().get_start());
+        EXPECT_EQ(keys_bulk[i]->get_value().get_end(),
+                  keys_individual[i]->get_value().get_end());
+        EXPECT_EQ(keys_bulk[i]->get_data(),
+                  keys_individual[i]->get_data());
+    }
+}
+
+TEST(IntervalGroveTest, BulkInsertMultipleIndices) {
+    gst::grove<gdt::interval, int> grove(5);
+
+    // Create data for multiple chromosomes
+    std::vector<std::pair<gdt::interval, int>> chr1_data = {
+        {gdt::interval{10, 20}, 1},
+        {gdt::interval{30, 40}, 2}
+    };
+
+    std::vector<std::pair<gdt::interval, int>> chr2_data = {
+        {gdt::interval{50, 60}, 3},
+        {gdt::interval{70, 80}, 4}
+    };
+
+    // Bulk insert to different indices
+    grove.insert_data("chr1", chr1_data, gst::bulk);
+    grove.insert_data("chr2", chr2_data, gst::bulk);
+
+    // Query chr1
+    gdt::interval query{0, 100};
+    auto results_chr1 = grove.intersect(query, "chr1");
+    ASSERT_EQ(results_chr1.get_keys().size(), 2);
+    EXPECT_EQ(results_chr1.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results_chr1.get_keys()[1]->get_data(), 2);
+
+    // Query chr2
+    auto results_chr2 = grove.intersect(query, "chr2");
+    ASSERT_EQ(results_chr2.get_keys().size(), 2);
+    EXPECT_EQ(results_chr2.get_keys()[0]->get_data(), 3);
+    EXPECT_EQ(results_chr2.get_keys()[1]->get_data(), 4);
+}
 
 

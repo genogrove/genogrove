@@ -13,6 +13,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <deque>
+#include <algorithm>
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
@@ -390,10 +391,72 @@ class grove {
      * @param data_value The data associated with the key
      * @return Pointer to the inserted key in the tree
      */
-    gdt::key<key_type, data_type>* insert_data(std::string_view index, key_type key_value, data_type data_value)
-        requires (!std::is_void_v<data_type>) {
+    gdt::key<key_type, data_type>* insert_data(
+        std::string_view index,
+        key_type key_value,
+        data_type data_value) requires (!std::is_void_v<data_type>) {
             return insert_data(index, key_value, data_value, unsorted);
         }
+
+    /**
+     * @brief Bulk insert data with automatic sorted detection
+     * @tparam Container A container type holding pairs of (key_type, data_type)
+     * @param index The index name (e.g., chromosome name) where data should be inserted
+     * @param data Container of (key, data) pairs
+     * @param bulk_t Tag for bulk insertion
+     * @note Automatically checks if data is sorted and uses appropriate insertion method
+     * @note If data is already sorted, uses fast sorted bulk insert; otherwise sorts first
+     * @note Significantly faster than individual inserts for large datasets
+     */
+    template<typename Container>
+    void insert_data(std::string_view index, Container data, bulk_t)
+        requires (!std::is_void_v<data_type>) {
+        if (data.empty()) return;
+
+        // Check if data is already sorted
+        bool data_is_sorted = std::is_sorted(data.begin(), data.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        // Sort if needed
+        if (!data_is_sorted) {
+            std::sort(data.begin(), data.end(),
+                [](const auto& a, const auto& b) { return a.first < b.first; });
+        }
+
+        // Perform sorted bulk insert
+        node<key_type, data_type>* current_node = this->get_rightmost_node(index);
+
+        // If no root exists, create one
+        if (current_node == nullptr) {
+            auto* root = this->insert_root(index);
+            current_node = root;
+        }
+
+        for (const auto& [key_value, data_value] : data) {
+            gdt::key<key_type, data_type> key(key_value, data_value);
+            auto* key_ptr = allocate_key(key);
+            current_node->insert_key_ptr(key_ptr);
+
+            // Handle overflow
+            if (current_node->get_keys().size() == this->order) {
+                if (current_node->get_parent() == nullptr) {
+                    // Root node overflow
+                    auto* new_root = new node<key_type, data_type>(this->order);
+                    new_root->add_child(current_node, 0);
+                    new_root->set_is_leaf(false);
+                    current_node->set_parent(new_root);
+                    split_node(new_root, 0);
+                    this->root_nodes[std::string(index)] = new_root;
+                    current_node = this->get_rightmost_node(index);
+                } else {
+                    // Internal node overflow
+                    int child_index = current_node->get_parent()->get_children().size() - 1;
+                    split_node(current_node->get_parent(), child_index);
+                    current_node = this->get_rightmost_node(index);
+                }
+            }
+        }
+    }
 
     /**
      * @brief Insert a key into the grove at the specified index
