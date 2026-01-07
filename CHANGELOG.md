@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added bulk insertion capability for faster processing of large datasets. Insert multiple items simultaneously 
+with automatic sorting detection, significantly improving performance compared to individual insertions. 
+Fully supported across multiple indices ([#72](https://github.com/genogrove/genogrove/pull/72))
+- Comprehensive test coverage added for bulk insertion, including sorted and unsorted data, 
+empty datasets, large batches, and multi-index scenarios ([#72](https://github.com/genogrove/genogrove/pull/72))
+- Hybrid bulk-insert: fast O(n) construction for empty indices and validated 
+append-mode for existing indices, improving large pre-sorted import speed ([#74](https://github.com/genogrove/genogrove/pull/74))
+- New tests for append batches, multiple sequential inserts, unsorted inputs, 
+empty-batch no-ops, and empty-index initialization ([#74](https://github.com/genogrove/genogrove/pull/74))
+
 ### Refactor
 - BED file parsing now includes improved support for annotation data with enhanced handling 
 of colors, thickness information, and block data for more accurate file 
@@ -15,6 +26,10 @@ processing ([#70](https://github.com/genogrove/genogrove/pull/70))
 ### Bug fixes
 - Corrected missing sorted parameter (aka gst::sorted) for `insert_data` function on sorted 
 intervals ([#71](https://github.com/genogrove/genogrove/pull/71))
+- Append-path now enforces ordering preconditions and correctly handles node 
+overflow/splits while preserving ordering ([#74](https://github.com/genogrove/genogrove/pull/74))
+- Improved reliability of time formatting in the CLI utility ([#75](https://github.com/genogrove/genogrove/pull/75))
+
 
 ## [0.10.0] - 2026-01-03
 
