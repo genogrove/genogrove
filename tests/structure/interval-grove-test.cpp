@@ -380,8 +380,8 @@ TEST(IntervalGroveTest, BulkInsertLargeDataset) {
         data.emplace_back(gdt::interval{i * 10, i * 10 + 5}, i);
     }
 
-    // Bulk insert
-    grove.insert_data("chr1", data, gst::bulk);
+    // Bulk insert with explicit sorted tag (fastest)
+    grove.insert_data("chr1", data, gst::sorted, gst::bulk);
 
     // Query entire range
     gdt::interval query{0, 1000};
@@ -393,6 +393,60 @@ TEST(IntervalGroveTest, BulkInsertLargeDataset) {
     auto keys = results.get_keys();
     EXPECT_EQ(keys[0]->get_data(), 0);
     EXPECT_EQ(keys[99]->get_data(), 99);
+}
+
+TEST(IntervalGroveTest, BulkInsertExplicitUnsorted) {
+    gst::grove<gdt::interval, int> grove(3);
+
+    // Create unsorted data
+    std::vector<std::pair<gdt::interval, int>> data = {
+        {gdt::interval{40, 50}, 40},
+        {gdt::interval{5, 10}, 10},
+        {gdt::interval{60, 70}, 50},
+        {gdt::interval{10, 15}, 20},
+        {gdt::interval{20, 30}, 30}
+    };
+
+    // Bulk insert with explicit unsorted tag (sorts internally)
+    grove.insert_data("chr1", data, gst::unsorted, gst::bulk);
+
+    // Query to verify all data was inserted
+    gdt::interval query{0, 100};
+    auto results = grove.intersect(query, "chr1");
+
+    ASSERT_EQ(results.get_keys().size(), 5);
+
+    // Verify data was sorted and inserted correctly
+    auto keys = results.get_keys();
+    EXPECT_EQ(keys[0]->get_value().get_start(), 5);
+    EXPECT_EQ(keys[0]->get_data(), 10);
+
+    EXPECT_EQ(keys[4]->get_value().get_start(), 60);
+    EXPECT_EQ(keys[4]->get_data(), 50);
+}
+
+TEST(IntervalGroveTest, BulkInsertExplicitSorted) {
+    gst::grove<gdt::interval, int> grove(3);
+
+    // Create sorted data
+    std::vector<std::pair<gdt::interval, int>> data = {
+        {gdt::interval{5, 10}, 10},
+        {gdt::interval{10, 15}, 20},
+        {gdt::interval{20, 30}, 30},
+        {gdt::interval{40, 50}, 40}
+    };
+
+    // Bulk insert with explicit sorted tag (fastest - no check)
+    grove.insert_data("chr1", data, gst::sorted, gst::bulk);
+
+    // Query to verify
+    gdt::interval query{0, 100};
+    auto results = grove.intersect(query, "chr1");
+
+    ASSERT_EQ(results.get_keys().size(), 4);
+    auto keys = results.get_keys();
+    EXPECT_EQ(keys[0]->get_data(), 10);
+    EXPECT_EQ(keys[3]->get_data(), 40);
 }
 
 TEST(IntervalGroveTest, BulkInsertVsIndividualInsert) {
@@ -409,8 +463,8 @@ TEST(IntervalGroveTest, BulkInsertVsIndividualInsert) {
         {gdt::interval{55, 60}, 60}
     };
 
-    // Bulk insert
-    grove_bulk.insert_data("chr1", data, gst::bulk);
+    // Bulk insert with explicit sorted tag
+    grove_bulk.insert_data("chr1", data, gst::sorted, gst::bulk);
 
     // Individual inserts
     for (const auto& [interval, value] : data) {
@@ -453,9 +507,9 @@ TEST(IntervalGroveTest, BulkInsertMultipleIndices) {
         {gdt::interval{70, 80}, 4}
     };
 
-    // Bulk insert to different indices
-    grove.insert_data("chr1", chr1_data, gst::bulk);
-    grove.insert_data("chr2", chr2_data, gst::bulk);
+    // Bulk insert to different indices with explicit sorted tag
+    grove.insert_data("chr1", chr1_data, gst::sorted, gst::bulk);
+    grove.insert_data("chr2", chr2_data, gst::sorted, gst::bulk);
 
     // Query chr1
     gdt::interval query{0, 100};
@@ -471,4 +525,32 @@ TEST(IntervalGroveTest, BulkInsertMultipleIndices) {
     EXPECT_EQ(results_chr2.get_keys()[1]->get_data(), 4);
 }
 
+TEST(IntervalGroveTest, BulkInsertPreconditionViolation) {
+    gst::grove<gdt::interval, int> grove(3);
 
+    // Insert initial data
+    std::vector<std::pair<gdt::interval, int>> initial_data = {
+        {gdt::interval{10, 20}, 1},
+        {gdt::interval{30, 40}, 2}
+    };
+    grove.insert_data("chr1", initial_data, gst::sorted, gst::bulk);
+
+    // Try to insert data that violates precondition (not greater than existing max)
+    std::vector<std::pair<gdt::interval, int>> invalid_data = {
+        {gdt::interval{25, 35}, 3},  // Not strictly greater than existing [30, 40]
+        {gdt::interval{50, 60}, 4}
+    };
+
+    // Should throw runtime_error due to precondition violation
+    EXPECT_THROW(
+        grove.insert_data("chr1", invalid_data, gst::sorted, gst::bulk),
+        std::runtime_error
+    );
+
+    // Verify original data is still intact
+    gdt::interval query{0, 100};
+    auto results = grove.intersect(query, "chr1");
+    ASSERT_EQ(results.get_keys().size(), 2);
+    EXPECT_EQ(results.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results.get_keys()[1]->get_data(), 2);
+}
