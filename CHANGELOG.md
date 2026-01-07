@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-01-07
+
 ### Added
 - Added bulk insertion capability for faster processing of large datasets. Insert multiple items simultaneously 
 with automatic sorting detection, significantly improving performance compared to individual insertions. 
