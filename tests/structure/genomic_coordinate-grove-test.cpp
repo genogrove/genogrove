@@ -451,3 +451,448 @@ TEST(GenomicCoordinateGroveTest, wildcardQueryFindsAllStrands) {
     EXPECT_TRUE(found_minus);
     EXPECT_TRUE(found_dot);
 }
+
+// =============================================================================
+// Bulk Insert Tests with Genomic Coordinates
+// =============================================================================
+
+TEST(GenomicCoordinateGroveTest, BulkInsertSorted) {
+    gst::grove<gdt::genomic_coordinate, int> grove(3);
+
+    // Create sorted data (sorted by start, then end, then strand)
+    std::vector<std::pair<gdt::genomic_coordinate, int>> data = {
+        {gdt::genomic_coordinate('+', 5, 10), 10},
+        {gdt::genomic_coordinate('+', 10, 15), 20},
+        {gdt::genomic_coordinate('-', 20, 30), 30},
+        {gdt::genomic_coordinate('+', 40, 50), 40},
+        {gdt::genomic_coordinate('.', 60, 70), 50}
+    };
+
+    // Bulk insert sorted data (auto-detects sorted)
+    grove.insert_data("chr1", data, gst::bulk);
+
+    // Query to verify all data was inserted
+    gdt::genomic_coordinate query('*', 0, 100);
+    auto results = grove.intersect(query, "chr1");
+
+    ASSERT_EQ(results.get_keys().size(), 5);
+
+    // Verify data was inserted correctly with wildcard query
+    auto keys = results.get_keys();
+    EXPECT_EQ(keys[0]->get_data(), 10);
+    EXPECT_EQ(keys[1]->get_data(), 20);
+    EXPECT_EQ(keys[2]->get_data(), 30);
+    EXPECT_EQ(keys[3]->get_data(), 40);
+    EXPECT_EQ(keys[4]->get_data(), 50);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertUnsorted) {
+    gst::grove<gdt::genomic_coordinate, int> grove(3);
+
+    // Create unsorted data
+    std::vector<std::pair<gdt::genomic_coordinate, int>> data = {
+        {gdt::genomic_coordinate('+', 40, 50), 40},
+        {gdt::genomic_coordinate('+', 5, 10), 10},
+        {gdt::genomic_coordinate('.', 60, 70), 50},
+        {gdt::genomic_coordinate('+', 10, 15), 20},
+        {gdt::genomic_coordinate('-', 20, 30), 30}
+    };
+
+    // Bulk insert unsorted data (should sort internally)
+    grove.insert_data("chr1", data, gst::bulk);
+
+    // Query to verify all data was inserted and sorted
+    gdt::genomic_coordinate query('*', 0, 100);
+    auto results = grove.intersect(query, "chr1");
+
+    ASSERT_EQ(results.get_keys().size(), 5);
+
+    // Verify data was sorted: coordinate-first (start → end → strand)
+    auto keys = results.get_keys();
+    EXPECT_EQ(keys[0]->get_value().get_start(), 5);
+    EXPECT_EQ(keys[0]->get_data(), 10);
+    EXPECT_EQ(keys[4]->get_value().get_start(), 60);
+    EXPECT_EQ(keys[4]->get_data(), 50);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertEmpty) {
+    gst::grove<gdt::genomic_coordinate, int> grove(3);
+
+    // Create empty data
+    std::vector<std::pair<gdt::genomic_coordinate, int>> data;
+
+    // Bulk insert empty data (should do nothing)
+    grove.insert_data("chr1", data, gst::bulk);
+
+    // Query should return no results
+    gdt::genomic_coordinate query('*', 0, 100);
+    auto results = grove.intersect(query, "chr1");
+
+    EXPECT_EQ(results.get_keys().size(), 0);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertLargeDataset) {
+    gst::grove<gdt::genomic_coordinate, int> grove(10);
+
+    // Create larger sorted dataset with mixed strands
+    std::vector<std::pair<gdt::genomic_coordinate, int>> data;
+    for (size_t i = 0; i < 100; ++i) {
+        char strand = (i % 3 == 0) ? '+' : (i % 3 == 1) ? '-' : '.';
+        data.emplace_back(gdt::genomic_coordinate(strand, i * 10, i * 10 + 5), static_cast<int>(i));
+    }
+
+    // Bulk insert with explicit sorted tag (fastest)
+    grove.insert_data("chr1", data, gst::sorted, gst::bulk);
+
+    // Query entire range
+    gdt::genomic_coordinate query('*', 0, 1000);
+    auto results = grove.intersect(query, "chr1");
+
+    ASSERT_EQ(results.get_keys().size(), 100);
+
+    // Verify first and last elements
+    auto keys = results.get_keys();
+    EXPECT_EQ(keys[0]->get_data(), 0);
+    EXPECT_EQ(keys[99]->get_data(), 99);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertExplicitUnsorted) {
+    gst::grove<gdt::genomic_coordinate, int> grove(3);
+
+    // Create unsorted data
+    std::vector<std::pair<gdt::genomic_coordinate, int>> data = {
+        {gdt::genomic_coordinate('-', 40, 50), 40},
+        {gdt::genomic_coordinate('+', 5, 10), 10},
+        {gdt::genomic_coordinate('.', 60, 70), 50},
+        {gdt::genomic_coordinate('+', 10, 15), 20},
+        {gdt::genomic_coordinate('-', 20, 30), 30}
+    };
+
+    // Bulk insert with explicit unsorted tag (sorts internally)
+    grove.insert_data("chr1", data, gst::unsorted, gst::bulk);
+
+    // Query to verify all data was inserted
+    gdt::genomic_coordinate query('*', 0, 100);
+    auto results = grove.intersect(query, "chr1");
+
+    ASSERT_EQ(results.get_keys().size(), 5);
+
+    // Verify data was sorted
+    auto keys = results.get_keys();
+    EXPECT_EQ(keys[0]->get_value().get_start(), 5);
+    EXPECT_EQ(keys[0]->get_data(), 10);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertExplicitSorted) {
+    gst::grove<gdt::genomic_coordinate, int> grove(3);
+
+    // Create sorted data
+    std::vector<std::pair<gdt::genomic_coordinate, int>> data = {
+        {gdt::genomic_coordinate('+', 5, 10), 10},
+        {gdt::genomic_coordinate('+', 10, 15), 20},
+        {gdt::genomic_coordinate('-', 20, 30), 30},
+        {gdt::genomic_coordinate('+', 40, 50), 40}
+    };
+
+    // Bulk insert with explicit sorted tag (fastest - no check)
+    grove.insert_data("chr1", data, gst::sorted, gst::bulk);
+
+    // Query to verify
+    gdt::genomic_coordinate query('*', 0, 100);
+    auto results = grove.intersect(query, "chr1");
+
+    ASSERT_EQ(results.get_keys().size(), 4);
+    auto keys = results.get_keys();
+    EXPECT_EQ(keys[0]->get_data(), 10);
+    EXPECT_EQ(keys[3]->get_data(), 40);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertVsIndividualInsert) {
+    gst::grove<gdt::genomic_coordinate, int> grove_bulk(5);
+    gst::grove<gdt::genomic_coordinate, int> grove_individual(5);
+
+    // Create test data with mixed strands
+    std::vector<std::pair<gdt::genomic_coordinate, int>> data = {
+        {gdt::genomic_coordinate('+', 5, 10), 10},
+        {gdt::genomic_coordinate('-', 15, 20), 20},
+        {gdt::genomic_coordinate('+', 25, 30), 30},
+        {gdt::genomic_coordinate('.', 35, 40), 40},
+        {gdt::genomic_coordinate('+', 45, 50), 50},
+        {gdt::genomic_coordinate('-', 55, 60), 60}
+    };
+
+    // Bulk insert with explicit sorted tag
+    grove_bulk.insert_data("chr1", data, gst::sorted, gst::bulk);
+
+    // Individual inserts
+    for (const auto& [coord, value] : data) {
+        grove_individual.insert_data("chr1", coord, value, gst::sorted);
+    }
+
+    // Query both groves
+    gdt::genomic_coordinate query('*', 0, 100);
+    auto results_bulk = grove_bulk.intersect(query, "chr1");
+    auto results_individual = grove_individual.intersect(query, "chr1");
+
+    // Should have same number of results
+    ASSERT_EQ(results_bulk.get_keys().size(), results_individual.get_keys().size());
+
+    // Verify all elements match
+    auto keys_bulk = results_bulk.get_keys();
+    auto keys_individual = results_individual.get_keys();
+
+    for (size_t i = 0; i < keys_bulk.size(); ++i) {
+        EXPECT_EQ(keys_bulk[i]->get_value().get_strand(),
+                  keys_individual[i]->get_value().get_strand());
+        EXPECT_EQ(keys_bulk[i]->get_value().get_start(),
+                  keys_individual[i]->get_value().get_start());
+        EXPECT_EQ(keys_bulk[i]->get_value().get_end(),
+                  keys_individual[i]->get_value().get_end());
+        EXPECT_EQ(keys_bulk[i]->get_data(),
+                  keys_individual[i]->get_data());
+    }
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertMultipleIndices) {
+    gst::grove<gdt::genomic_coordinate, int> grove(5);
+
+    // Create data for multiple chromosomes with different strands
+    std::vector<std::pair<gdt::genomic_coordinate, int>> chr1_data = {
+        {gdt::genomic_coordinate('+', 10, 20), 1},
+        {gdt::genomic_coordinate('-', 30, 40), 2}
+    };
+
+    std::vector<std::pair<gdt::genomic_coordinate, int>> chr2_data = {
+        {gdt::genomic_coordinate('.', 50, 60), 3},
+        {gdt::genomic_coordinate('+', 70, 80), 4}
+    };
+
+    // Bulk insert to different indices with explicit sorted tag
+    grove.insert_data("chr1", chr1_data, gst::sorted, gst::bulk);
+    grove.insert_data("chr2", chr2_data, gst::sorted, gst::bulk);
+
+    // Query chr1
+    gdt::genomic_coordinate query('*', 0, 100);
+    auto results_chr1 = grove.intersect(query, "chr1");
+    ASSERT_EQ(results_chr1.get_keys().size(), 2);
+    EXPECT_EQ(results_chr1.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results_chr1.get_keys()[1]->get_data(), 2);
+
+    // Query chr2
+    auto results_chr2 = grove.intersect(query, "chr2");
+    ASSERT_EQ(results_chr2.get_keys().size(), 2);
+    EXPECT_EQ(results_chr2.get_keys()[0]->get_data(), 3);
+    EXPECT_EQ(results_chr2.get_keys()[1]->get_data(), 4);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertPreconditionViolation) {
+    gst::grove<gdt::genomic_coordinate, int> grove(3);
+
+    // Insert initial data
+    std::vector<std::pair<gdt::genomic_coordinate, int>> initial_data = {
+        {gdt::genomic_coordinate('+', 10, 20), 1},
+        {gdt::genomic_coordinate('+', 30, 40), 2}
+    };
+    grove.insert_data("chr1", initial_data, gst::sorted, gst::bulk);
+
+    // Try to insert data that violates precondition (not greater than existing max)
+    std::vector<std::pair<gdt::genomic_coordinate, int>> invalid_data = {
+        {gdt::genomic_coordinate('+', 25, 35), 3},  // Not strictly greater than [30, 40]
+        {gdt::genomic_coordinate('+', 50, 60), 4}
+    };
+
+    // Should throw runtime_error due to precondition violation
+    EXPECT_THROW(
+        grove.insert_data("chr1", invalid_data, gst::sorted, gst::bulk),
+        std::runtime_error
+    );
+
+    // Verify original data is still intact
+    gdt::genomic_coordinate query('*', 0, 100);
+    auto results = grove.intersect(query, "chr1");
+    ASSERT_EQ(results.get_keys().size(), 2);
+    EXPECT_EQ(results.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results.get_keys()[1]->get_data(), 2);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertAppendMode) {
+    gst::grove<gdt::genomic_coordinate, int> grove(3);
+
+    // Insert initial batch using bottom-up construction (empty grove)
+    std::vector<std::pair<gdt::genomic_coordinate, int>> batch1 = {
+        {gdt::genomic_coordinate('+', 10, 20), 1},
+        {gdt::genomic_coordinate('-', 30, 40), 2},
+        {gdt::genomic_coordinate('+', 50, 60), 3}
+    };
+    grove.insert_data("chr1", batch1, gst::sorted, gst::bulk);
+
+    // Verify first batch
+    gdt::genomic_coordinate query1('*', 0, 100);
+    auto results1 = grove.intersect(query1, "chr1");
+    ASSERT_EQ(results1.get_keys().size(), 3);
+
+    // Append second batch using rightmost-node append (grove has data)
+    std::vector<std::pair<gdt::genomic_coordinate, int>> batch2 = {
+        {gdt::genomic_coordinate('.', 70, 80), 4},
+        {gdt::genomic_coordinate('+', 90, 100), 5},
+        {gdt::genomic_coordinate('-', 110, 120), 6}
+    };
+    grove.insert_data("chr1", batch2, gst::sorted, gst::bulk);
+
+    // Verify both batches are present
+    gdt::genomic_coordinate query2('*', 0, 150);
+    auto results2 = grove.intersect(query2, "chr1");
+    ASSERT_EQ(results2.get_keys().size(), 6);
+
+    // Verify data values in sorted order
+    EXPECT_EQ(results2.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results2.get_keys()[1]->get_data(), 2);
+    EXPECT_EQ(results2.get_keys()[2]->get_data(), 3);
+    EXPECT_EQ(results2.get_keys()[3]->get_data(), 4);
+    EXPECT_EQ(results2.get_keys()[4]->get_data(), 5);
+    EXPECT_EQ(results2.get_keys()[5]->get_data(), 6);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertAppendModeMultipleBatches) {
+    gst::grove<gdt::genomic_coordinate, int> grove(5);
+
+    // Insert 5 batches sequentially with different strands
+    for (int batch = 0; batch < 5; ++batch) {
+        std::vector<std::pair<gdt::genomic_coordinate, int>> data;
+        for (int i = 0; i < 10; ++i) {
+            size_t start = static_cast<size_t>(batch * 100 + i * 10);
+            size_t end = start + 5;
+            int value = batch * 10 + i;
+            char strand = (value % 3 == 0) ? '+' : (value % 3 == 1) ? '-' : '.';
+            data.emplace_back(gdt::genomic_coordinate(strand, start, end), value);
+        }
+
+        // First batch uses bottom-up, rest use append
+        grove.insert_data("chr1", data, gst::sorted, gst::bulk);
+    }
+
+    // Verify all 50 coordinates are present
+    gdt::genomic_coordinate query('*', 0, 500);
+    auto results = grove.intersect(query, "chr1");
+    ASSERT_EQ(results.get_keys().size(), 50);
+
+    // Verify data values are in order
+    for (size_t i = 0; i < results.get_keys().size(); ++i) {
+        EXPECT_EQ(results.get_keys()[i]->get_data(), static_cast<int>(i));
+    }
+
+    // Verify first and last coordinates
+    EXPECT_EQ(results.get_keys()[0]->get_value().get_start(), 0);
+    EXPECT_EQ(results.get_keys()[0]->get_value().get_end(), 5);
+    EXPECT_EQ(results.get_keys()[49]->get_value().get_start(), 490);
+    EXPECT_EQ(results.get_keys()[49]->get_value().get_end(), 495);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertAppendWithUnsortedTag) {
+    gst::grove<gdt::genomic_coordinate, int> grove(3);
+
+    // Insert initial data
+    std::vector<std::pair<gdt::genomic_coordinate, int>> batch1 = {
+        {gdt::genomic_coordinate('+', 10, 20), 1},
+        {gdt::genomic_coordinate('-', 30, 40), 2}
+    };
+    grove.insert_data("chr1", batch1, gst::sorted, gst::bulk);
+
+    // Append unsorted data (should be sorted internally, then appended)
+    std::vector<std::pair<gdt::genomic_coordinate, int>> batch2 = {
+        {gdt::genomic_coordinate('+', 70, 80), 4},
+        {gdt::genomic_coordinate('.', 50, 60), 3},  // Out of order
+        {gdt::genomic_coordinate('-', 90, 100), 5}
+    };
+    grove.insert_data("chr1", batch2, gst::unsorted, gst::bulk);
+
+    // Verify all data is present and correctly sorted
+    gdt::genomic_coordinate query('*', 0, 150);
+    auto results = grove.intersect(query, "chr1");
+    ASSERT_EQ(results.get_keys().size(), 5);
+
+    // Verify sorted order
+    EXPECT_EQ(results.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results.get_keys()[1]->get_data(), 2);
+    EXPECT_EQ(results.get_keys()[2]->get_data(), 3);
+    EXPECT_EQ(results.get_keys()[3]->get_data(), 4);
+    EXPECT_EQ(results.get_keys()[4]->get_data(), 5);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertAppendEmptyBatch) {
+    gst::grove<gdt::genomic_coordinate, int> grove(3);
+
+    // Insert initial data
+    std::vector<std::pair<gdt::genomic_coordinate, int>> batch1 = {
+        {gdt::genomic_coordinate('+', 10, 20), 1},
+        {gdt::genomic_coordinate('-', 30, 40), 2}
+    };
+    grove.insert_data("chr1", batch1, gst::sorted, gst::bulk);
+
+    // Try to append empty batch (should be no-op)
+    std::vector<std::pair<gdt::genomic_coordinate, int>> empty_batch;
+    grove.insert_data("chr1", empty_batch, gst::sorted, gst::bulk);
+
+    // Verify original data is still intact
+    gdt::genomic_coordinate query('*', 0, 100);
+    auto results = grove.intersect(query, "chr1");
+    ASSERT_EQ(results.get_keys().size(), 2);
+    EXPECT_EQ(results.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results.get_keys()[1]->get_data(), 2);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertBottomUpReplacesEmptyRoot) {
+    gst::grove<gdt::genomic_coordinate, int> grove(3);
+
+    // First bulk insert on empty grove - uses bottom-up construction
+    std::vector<std::pair<gdt::genomic_coordinate, int>> data1 = {
+        {gdt::genomic_coordinate('+', 10, 20), 1},
+        {gdt::genomic_coordinate('-', 30, 40), 2},
+        {gdt::genomic_coordinate('.', 50, 60), 3}
+    };
+    grove.insert_data("chr1", data1, gst::sorted, gst::bulk);
+
+    // Verify data inserted correctly via bottom-up
+    gdt::genomic_coordinate query('*', 0, 100);
+    auto results = grove.intersect(query, "chr1");
+    ASSERT_EQ(results.get_keys().size(), 3);
+    EXPECT_EQ(results.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results.get_keys()[1]->get_data(), 2);
+    EXPECT_EQ(results.get_keys()[2]->get_data(), 3);
+
+    // Verify tree structure is valid by checking root exists
+    auto* root = grove.get_root("chr1");
+    ASSERT_NE(root, nullptr);
+}
+
+TEST(GenomicCoordinateGroveTest, BulkInsertStrandSorting) {
+    gst::grove<gdt::genomic_coordinate, int> grove(5);
+
+    // Insert coordinates at the same position with different strands
+    // Sorting order is: start → end → strand (with * < . < + < -)
+    // Data must be pre-sorted when using sorted tag
+    std::vector<std::pair<gdt::genomic_coordinate, int>> data = {
+        {gdt::genomic_coordinate('*', 10, 20), 10},  // * comes first
+        {gdt::genomic_coordinate('.', 10, 20), 20},  // . comes second
+        {gdt::genomic_coordinate('+', 10, 20), 30},  // + comes third
+        {gdt::genomic_coordinate('-', 10, 20), 40}   // - comes last
+    };
+
+    grove.insert_data("chr1", data, gst::sorted, gst::bulk);
+
+    // Query with wildcard to get all
+    gdt::genomic_coordinate query('*', 10, 20);
+    auto results = grove.intersect(query, "chr1");
+
+    ASSERT_EQ(results.get_keys().size(), 4);
+
+    // Verify strand sorting order: * < . < + < -
+    EXPECT_EQ(results.get_keys()[0]->get_value().get_strand(), '*');
+    EXPECT_EQ(results.get_keys()[0]->get_data(), 10);
+    EXPECT_EQ(results.get_keys()[1]->get_value().get_strand(), '.');
+    EXPECT_EQ(results.get_keys()[1]->get_data(), 20);
+    EXPECT_EQ(results.get_keys()[2]->get_value().get_strand(), '+');
+    EXPECT_EQ(results.get_keys()[2]->get_data(), 30);
+    EXPECT_EQ(results.get_keys()[3]->get_value().get_strand(), '-');
+    EXPECT_EQ(results.get_keys()[3]->get_data(), 40);
+}
