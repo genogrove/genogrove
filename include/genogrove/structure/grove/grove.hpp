@@ -399,17 +399,22 @@ class grove {
         }
 
     /**
-     * @brief Bulk insert pre-sorted data (fastest - no sorting or checking)
+     * @brief Bulk insert pre-sorted data using hybrid bottom-up/append approach
      * @tparam Container A container type holding pairs of (key_type, data_type)
      * @param index The index name (e.g., chromosome name) where data should be inserted
      * @param data Container of sorted (key, data) pairs
      * @param sorted_t Tag indicating data is already sorted
      * @param bulk_t Tag for bulk insertion
      *
-     * @note CRITICAL PRECONDITION: Data must be sorted AND all keys must be strictly
-     *       greater than any existing key in the index (rightmost-node insertion)
+     * @note HYBRID APPROACH:
+     *       - If index is empty: Uses fast bottom-up tree construction (O(n))
+     *       - If index has data: Uses rightmost-node append (requires new keys > existing keys)
+     *
+     * @note CRITICAL PRECONDITION (append mode): All keys must be strictly greater
+     *       than any existing key in the index
      * @note This is the fastest bulk insert - skips both sorting and sorted checking
-     * @throws std::runtime_error if precondition is violated
+     * @throws std::runtime_error if precondition is violated in append mode
+     * @see build_tree_bottom_up() for bottom-up construction
      * @see insert_sorted() for single-key rightmost insertion behavior
      */
     template<typename Container>
@@ -417,28 +422,41 @@ class grove {
         requires (!std::is_void_v<data_type>) {
         if (data.empty()) return;
 
-        // Perform sorted bulk insert using rightmost node (like insert_sorted)
-        node<key_type, data_type>* current_node = this->get_rightmost_node(index);
+        // Check if index is empty - use bottom-up construction for best performance
+        node<key_type, data_type>* rightmost_node = this->get_rightmost_node(index);
 
-        // If no root exists, create one
-        if (current_node == nullptr) {
-            auto* root = this->insert_root(index);
-            current_node = root;
-        } else {
-            // Runtime guard: verify precondition that all new keys are greater than existing max
-            if (!current_node->get_keys().empty()) {
-                const auto& max_existing_key = current_node->get_keys().back()->get_value();
-                const auto& min_new_key = data.begin()->first;
+        if (rightmost_node == nullptr || rightmost_node->get_keys().empty()) {
+            // Index is empty - use fast bottom-up tree construction
 
-                if (!(min_new_key > max_existing_key)) {
-                    throw std::runtime_error(
-                        "Bulk insert precondition violated: all keys must be strictly greater "
-                        "than existing keys in index '" + std::string(index) + "'. "
-                        "Use individual insert() or insert_data() without bulk tag for unsorted insertion."
-                    );
-                }
+            // Delete existing empty root node to avoid memory leak
+            auto* existing_root = this->get_root(index);
+            if (existing_root != nullptr) {
+                delete existing_root;
+                // rightmost_nodes will be updated by build_tree_bottom_up
             }
+
+            auto* new_root = build_tree_bottom_up(index, data);
+            if (new_root != nullptr) {
+                this->root_nodes[std::string(index)] = new_root;
+            }
+            return;
         }
+
+        // Index has existing data - use rightmost-node append approach
+        // Runtime guard: verify precondition that all new keys are greater than existing max
+        const auto& max_existing_key = rightmost_node->get_keys().back()->get_value();
+        const auto& min_new_key = data.begin()->first;
+
+        if (!(min_new_key > max_existing_key)) {
+            throw std::runtime_error(
+                "Bulk insert precondition violated: all keys must be strictly greater "
+                "than existing keys in index '" + std::string(index) + "'. "
+                "Use individual insert() or insert_data() without bulk tag for unsorted insertion."
+            );
+        }
+
+        // Perform rightmost-node append
+        node<key_type, data_type>* current_node = rightmost_node;
 
         for (const auto& [key_value, data_value] : data) {
             gdt::key<key_type, data_type> key(key_value, data_value);
@@ -893,6 +911,112 @@ class grove {
     gdt::key<key_type, data_type>* allocate_key(const gdt::key<key_type, data_type>& key) {
         key_storage.push_back(key);
         return &key_storage.back();
+    }
+
+    /**
+     * @brief Build a B+ tree from bottom-up using pre-sorted data
+     * @tparam Container A container type holding pairs of (key_type, data_type)
+     * @param index The index name for which to build the tree
+     * @param data Container of sorted (key, data) pairs
+     * @return Pointer to the root node of the constructed tree
+     *
+     * @note This is significantly faster than incremental insertion for large datasets
+     * @note Builds leaf nodes with optimal fill factor, then constructs internal layers
+     * @note Automatically links leaf nodes and sets parent/child relationships
+     * @note Time complexity: O(n) with better constants than incremental insertion
+     */
+    template<typename Container>
+    node<key_type, data_type>* build_tree_bottom_up(std::string_view index, const Container& data)
+        requires (!std::is_void_v<data_type>) {
+
+        if (data.empty()) {
+            return nullptr;
+        }
+
+        // Step 1: Create leaf nodes from sorted data
+        std::vector<node<key_type, data_type>*> leaves;
+
+        // Fill factor: use (order - 1) keys per node for optimal space utilization
+        // This gives us fuller nodes than the ~50% from split-based insertion
+        const int keys_per_leaf = this->order - 1;
+
+        size_t data_idx = 0;
+        while (data_idx < data.size()) {
+            auto* leaf = new node<key_type, data_type>(this->order);
+            leaf->set_is_leaf(true);
+
+            // Fill this leaf node with up to keys_per_leaf keys
+            size_t keys_in_this_leaf = 0;
+            auto it = data.begin();
+            std::advance(it, data_idx);
+
+            while (keys_in_this_leaf < keys_per_leaf && data_idx < data.size()) {
+                gdt::key<key_type, data_type> key(it->first, it->second);
+                auto* key_ptr = allocate_key(key);
+                leaf->get_keys().push_back(key_ptr);
+
+                ++keys_in_this_leaf;
+                ++data_idx;
+                if (data_idx < data.size()) {
+                    ++it;
+                }
+            }
+
+            leaves.push_back(leaf);
+        }
+
+        // Step 2: Link leaf nodes together for range queries
+        for (size_t i = 0; i < leaves.size() - 1; ++i) {
+            leaves[i]->set_next(leaves[i + 1]);
+        }
+
+        // Set rightmost leaf for this index
+        if (!leaves.empty()) {
+            this->rightmost_nodes[std::string(index)] = leaves.back();
+        }
+
+        // Step 3: Build internal layers bottom-up
+        std::vector<node<key_type, data_type>*> current_layer = leaves;
+
+        while (current_layer.size() > 1) {
+            std::vector<node<key_type, data_type>*> parent_layer;
+
+            // Each internal node can have up to 'order' children
+            const int children_per_node = this->order;
+
+            size_t child_idx = 0;
+            while (child_idx < current_layer.size()) {
+                auto* parent = new node<key_type, data_type>(this->order);
+                parent->set_is_leaf(false);
+
+                // Add up to 'order' children to this parent
+                size_t children_in_this_parent = 0;
+                while (children_in_this_parent < children_per_node && child_idx < current_layer.size()) {
+                    auto* child = current_layer[child_idx];
+                    parent->get_children().push_back(child);
+                    child->set_parent(parent);
+
+                    // Add separator key for all children except the last
+                    if (children_in_this_parent > 0) {
+                        // The separator key is the aggregate of the previous child
+                        key_type separator = current_layer[child_idx - 1]->calc_parent_key();
+                        gdt::key<key_type, data_type> sep_key(separator);
+                        auto* sep_key_ptr = allocate_key(sep_key);
+                        parent->get_keys().push_back(sep_key_ptr);
+                    }
+
+                    ++children_in_this_parent;
+                    ++child_idx;
+                }
+
+                parent_layer.push_back(parent);
+            }
+
+            current_layer = parent_layer;
+        }
+
+        // The last remaining node is the root
+        return current_layer[0];
     }
 
     /// Maximum number of keys per node (B+ tree order/capacity)
