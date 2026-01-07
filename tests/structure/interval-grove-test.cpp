@@ -604,8 +604,8 @@ TEST(IntervalGroveTest, BulkInsertAppendModeMultipleBatches) {
     for (int batch = 0; batch < 5; ++batch) {
         std::vector<std::pair<gdt::interval, int>> data;
         for (int i = 0; i < 10; ++i) {
-            int start = batch * 100 + i * 10;
-            int end = start + 5;
+            size_t start = static_cast<size_t>(batch * 100 + i * 10);
+            size_t end = start + 5;
             int value = batch * 10 + i;
             data.emplace_back(gdt::interval{start, end}, value);
         }
