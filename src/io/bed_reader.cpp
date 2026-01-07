@@ -3,6 +3,7 @@
 // standard
 #include <sstream>
 #include <algorithm>
+#include <vector>
 
 // htslib
 #include <htslib/kstring.h>
@@ -12,6 +13,25 @@ namespace gdt = genogrove::data_type;
 #include <cstdint>
 
 namespace genogrove::io {
+    // Helper function to parse comma-separated integers into a vector
+    static std::vector<size_t> parse_csv(const std::string& str) {
+        std::vector<size_t> result;
+        std::stringstream ss(str);
+        std::string token;
+
+        while (std::getline(ss, token, ',')) {
+            // trim leading/trailing whitespaces
+            token.erase(0, token.find_first_not_of(" \t"));
+            token.erase(token.find_last_not_of(" \t") + 1);
+
+            if(token.empty()) { return {}; } // ERROR: return empty vector
+            if (!std::all_of(token.begin(), token.end(), ::isdigit)) {
+                return {};
+            }
+            result.push_back(std::stoul(token));
+        }
+        return result;
+    }
     bed_reader::bed_reader(const std::filesystem::path& fpath)
         : line_num(0), bgzf_file(nullptr) {
         // note this handles both raw and gzipped files
@@ -89,6 +109,177 @@ namespace genogrove::io {
         }
     }
 
+    bool bed_reader::parse_score(bed_entry& entry, const std::string& score_str) {
+        if (!std::all_of(score_str.begin(), score_str.end(), ::isdigit)) {
+            error_message = "Invalid score format (non-integer) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+        int score;
+        try {
+            score = std::stoi(score_str);
+        } catch (const std::exception&) {
+            error_message = "Invalid score format (out of range) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
+        if (score < 0 || score > 1000) {
+            error_message = "Invalid score (must be 0-1000) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+        entry.score = score;
+        return true;
+    }
+
+    bool bed_reader::parse_strand(bed_entry& entry, const std::string& strand_str) {
+        if (strand_str.length() == 1
+            && (strand_str[0] == '+' || strand_str[0] == '-' || strand_str[0] == '.')) {
+            entry.strand = strand_str[0];
+            return true;
+        } else {
+            error_message = "Invalid strand (must be exactly one character: +, -, or .) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+    }
+
+    bool bed_reader::parse_thickness(bed_entry& entry, const std::string& thick_start_str,
+                                     const std::string& thick_end_str,
+                                     size_t start_num, size_t end_num) {
+        if (!std::all_of(thick_start_str.begin(), thick_start_str.end(), ::isdigit)) {
+            error_message = "Invalid thickStart format (non-integer) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+        if (!std::all_of(thick_end_str.begin(), thick_end_str.end(), ::isdigit)) {
+            error_message = "Invalid thickEnd format (non-integer) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
+        uint64_t thick_start;
+        uint64_t thick_end;
+        try {
+            thick_start = std::stoul(thick_start_str);
+            thick_end = std::stoul(thick_end_str);
+        } catch(std::exception&) {
+            error_message = "Thickness coordinate out of range at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
+        if (thick_start > thick_end) {
+            error_message = "Invalid thickness (thickStart > thickEnd) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+        if (thick_start < start_num || thick_end > end_num) {
+            error_message = "Invalid thickness (outside interval bounds) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+        entry.thickness = thick_info(thick_start, thick_end);
+        return true;
+    }
+
+    bool bed_reader::parse_rgb(bed_entry& entry, const std::string& item_rgb_str) {
+        std::vector<size_t> rgb_values = parse_csv(item_rgb_str);
+
+        if (rgb_values.size() == 1) {
+            if (rgb_values[0] == 0) {
+                // "0" means use default color - don't set item_rgb (leave as nullopt)
+                return true;
+            }
+            error_message = "Only 0 (default) as single RGB value allowed";
+            error_message += " - is " + std::to_string(rgb_values[0]) + " at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
+        if (rgb_values.size() == 3) {
+            if (rgb_values[0] <= 255 && rgb_values[1] <= 255 && rgb_values[2] <= 255) {
+                entry.item_rgb = rgb_color(rgb_values[0], rgb_values[1], rgb_values[2]);
+                return true;
+            }
+            error_message = "Invalid RGB values (must be 0-255) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
+        error_message = "Invalid RGB format (expected R,G,B) at line ";
+        error_message += std::to_string(line_num);
+        return false;
+    }
+
+    bool bed_reader::parse_blocks(bed_entry& entry, const std::string& block_count_str,
+                                  const std::string& block_sizes_str, const std::string& block_starts_str,
+                                  size_t start_num, size_t end_num) {
+        if (!std::all_of(block_count_str.begin(), block_count_str.end(), ::isdigit)) {
+            error_message = "Invalid block count format (non-integer) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
+        int block_count;
+        try {
+            block_count = std::stoi(block_count_str);
+        } catch(const std::exception&) {
+            error_message = "Block count out of range at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
+        if (block_count < 0) {
+            error_message = "Invalid block count (negative) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
+        std::vector<size_t> block_sizes = parse_csv(block_sizes_str);
+        std::vector<size_t> block_starts = parse_csv(block_starts_str);
+
+        if(block_sizes.empty() && !block_sizes_str.empty()) {
+            error_message = "Invalid block sizes format at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+        if(block_starts.empty() && !block_starts_str.empty()) {
+            error_message = "Invalid block start format at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
+        if (block_count != static_cast<int>(block_sizes.size())) {
+            error_message = "Block count mismatch with block sizes at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+        if (block_count != static_cast<int>(block_starts.size())) {
+            error_message = "Block count mismatch with block starts at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
+        size_t interval_length = end_num - start_num;
+        for (size_t i = 0; i < block_starts.size(); ++i) {
+            if (block_starts[i] >= interval_length) {
+                error_message = "Block start position outside interval bounds at line ";
+                error_message += std::to_string(line_num);
+                return false;
+            }
+            if (block_starts[i] + block_sizes[i] > interval_length) {
+                error_message = "Block end position outside interval bounds at line ";
+                error_message += std::to_string(line_num);
+                return false;
+            }
+        }
+
+        entry.blocks = block_info(block_count, std::move(block_sizes), std::move(block_starts));
+        return true;
+    }
+
     bool bed_reader::read_next(bed_entry& entry) {
         kstring_t str = {0, 0, nullptr};
         int ret = bgzf_getline(bgzf_file, '\n', &str);
@@ -132,14 +323,24 @@ namespace genogrove::io {
             }
 
             // validate and create interval object
-            size_t startNum = std::stoul(start);
-            size_t endNum = std::stoul(end);
-            if (startNum >= endNum) {
-                error_message = "Start coordinate is greater than end coordinate at line " + std::to_string(line_num);
+            size_t start_num;
+            size_t end_num;
+            try {
+                start_num = std::stoul(start);
+                end_num = std::stoul(end);
+            } catch(std::exception&) {
+                error_message = "Coordinate out of range at line ";
+                error_message += std::to_string(line_num);
+                return false;
+            }
+
+            if (start_num >= end_num) {
+                error_message = "Start coordinate is greater than or equal to the end coordinate at line ";
+                error_message += std::to_string(line_num);
                 return false;
             }
             entry.chrom = chrom;
-            entry.interval = gdt::interval(startNum, endNum);
+            entry.interval = gdt::interval(start_num, end_num);
 
             // Parse optional BED fields (BED4+)
             std::string name_str, score_str, strand_str;
@@ -152,33 +353,28 @@ namespace genogrove::io {
 
                 // BED5: score
                 if (ss >> score_str) {
-                    if (std::all_of(score_str.begin(), score_str.end(), ::isdigit)) {
-                        int score = std::stoi(score_str);
-                        if (score >= 0 && score <= 1000) {
-                            entry.score = score;
-                        }
-                    }
+                    if (!parse_score(entry, score_str)) return false;
 
                     // BED6: strand
                     if (ss >> strand_str) {
-                        if (!strand_str.empty() && (strand_str[0] == '+' || strand_str[0] == '-' || strand_str[0] == '.')) {
-                            entry.strand = strand_str[0];
-                        }
+                        if (!parse_strand(entry, strand_str)) return false;
 
                         // BED12: additional fields
                         if (ss >> thick_start_str >> thick_end_str >> item_rgb_str) {
-                            if (std::all_of(thick_start_str.begin(), thick_start_str.end(), ::isdigit)) {
-                                entry.thick_start = std::stoi(thick_start_str);
+                            if (!parse_thickness(entry,
+                                thick_start_str,
+                                thick_end_str,
+                                start_num,
+                                end_num)) {
+                                return false;
                             }
-                            if (std::all_of(thick_end_str.begin(), thick_end_str.end(), ::isdigit)) {
-                                entry.thick_end = std::stoi(thick_end_str);
-                            }
-                            entry.item_rgb = item_rgb_str;
+                            if (!parse_rgb(entry, item_rgb_str)) { return false; }
 
                             if (ss >> block_count_str >> block_sizes_str >> block_starts_str) {
-                                entry.block_count = block_count_str;
-                                entry.block_sizes = block_sizes_str;
-                                entry.block_starts = block_starts_str;
+                                if (!parse_blocks(entry, block_count_str, block_sizes_str,
+                                                 block_starts_str, start_num, end_num)) {
+                                    return false;
+                                }
                             }
                         }
                     }

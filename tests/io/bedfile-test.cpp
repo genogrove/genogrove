@@ -162,30 +162,33 @@ TEST_F(bedfileTest, readBED12Format) {
     EXPECT_EQ(entries[0].score.value(), 100);
     ASSERT_TRUE(entries[0].strand.has_value());
     EXPECT_EQ(entries[0].strand.value(), '+');
-    ASSERT_TRUE(entries[0].thick_start.has_value());
-    EXPECT_EQ(entries[0].thick_start.value(), 1200);
-    ASSERT_TRUE(entries[0].thick_end.has_value());
-    EXPECT_EQ(entries[0].thick_end.value(), 1800);
+    ASSERT_TRUE(entries[0].thickness.has_value());
+    EXPECT_EQ(entries[0].thickness.value().start, 1200);
+    EXPECT_EQ(entries[0].thickness.value().end, 1800);
     ASSERT_TRUE(entries[0].item_rgb.has_value());
-    EXPECT_EQ(entries[0].item_rgb.value(), "255,0,0");
-    ASSERT_TRUE(entries[0].block_count.has_value());
-    EXPECT_EQ(entries[0].block_count.value(), "2");
-    ASSERT_TRUE(entries[0].block_sizes.has_value());
-    EXPECT_EQ(entries[0].block_sizes.value(), "400,400");
-    ASSERT_TRUE(entries[0].block_starts.has_value());
-    EXPECT_EQ(entries[0].block_starts.value(), "0,600");
+    EXPECT_EQ(entries[0].item_rgb.value().red, 255);
+    EXPECT_EQ(entries[0].item_rgb.value().green, 0);
+    EXPECT_EQ(entries[0].item_rgb.value().blue, 0);
+    ASSERT_TRUE(entries[0].blocks.has_value());
+    EXPECT_EQ(entries[0].blocks.value().count, 2);
+    EXPECT_EQ(entries[0].blocks.value().sizes.size(), 2);
+    EXPECT_EQ(entries[0].blocks.value().sizes[0], 400);
+    EXPECT_EQ(entries[0].blocks.value().sizes[1], 400);
+    EXPECT_EQ(entries[0].blocks.value().starts.size(), 2);
+    EXPECT_EQ(entries[0].blocks.value().starts[0], 0);
+    EXPECT_EQ(entries[0].blocks.value().starts[1], 600);
 
     // Second entry - with 3 blocks
     EXPECT_EQ(entries[1].chrom, "chr2");
     EXPECT_EQ(entries[1].interval.get_start(), 5000);
     EXPECT_EQ(entries[1].interval.get_end(), 8000);
-    ASSERT_TRUE(entries[1].block_count.has_value());
-    EXPECT_EQ(entries[1].block_count.value(), "3");
+    ASSERT_TRUE(entries[1].blocks.has_value());
+    EXPECT_EQ(entries[1].blocks.value().count, 3);
 
     // Third entry - single block
     EXPECT_EQ(entries[2].chrom, "chrX");
-    ASSERT_TRUE(entries[2].block_count.has_value());
-    EXPECT_EQ(entries[2].block_count.value(), "1");
+    ASSERT_TRUE(entries[2].blocks.has_value());
+    EXPECT_EQ(entries[2].blocks.value().count, 1);
 }
 
 // ==========================================
@@ -460,14 +463,15 @@ TEST_F(bedfileTest, readGzippedBED12Format) {
     EXPECT_EQ(entries[0].interval.get_end(), 2000);
     ASSERT_TRUE(entries[0].name.has_value());
     EXPECT_EQ(entries[0].name.value(), "item1");
-    ASSERT_TRUE(entries[0].thick_start.has_value());
-    EXPECT_EQ(entries[0].thick_start.value(), 1200);
-    ASSERT_TRUE(entries[0].thick_end.has_value());
-    EXPECT_EQ(entries[0].thick_end.value(), 1800);
+    ASSERT_TRUE(entries[0].thickness.has_value());
+    EXPECT_EQ(entries[0].thickness.value().start, 1200);
+    EXPECT_EQ(entries[0].thickness.value().end, 1800);
     ASSERT_TRUE(entries[0].item_rgb.has_value());
-    EXPECT_EQ(entries[0].item_rgb.value(), "255,0,0");
-    ASSERT_TRUE(entries[0].block_count.has_value());
-    EXPECT_EQ(entries[0].block_count.value(), "2");
+    EXPECT_EQ(entries[0].item_rgb.value().red, 255);
+    EXPECT_EQ(entries[0].item_rgb.value().green, 0);
+    EXPECT_EQ(entries[0].item_rgb.value().blue, 0);
+    ASSERT_TRUE(entries[0].blocks.has_value());
+    EXPECT_EQ(entries[0].blocks.value().count, 2);
 
     // Remaining entries
     EXPECT_EQ(entries[1].chrom, "chr2");
