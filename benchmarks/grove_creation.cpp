@@ -130,7 +130,7 @@ static void BM_grove_creation_sorted(benchmark::State& state) {
             gst::grove<gdt::interval, int> grove(k);
 
             for (const auto& interval_data : intervals) {
-                grove.insert_data("chr1", interval_data.intvl, interval_data.data);
+                grove.insert_data("chr1", interval_data.intvl, interval_data.data, gst::sorted);
             }
 
             benchmark::DoNotOptimize(grove);
