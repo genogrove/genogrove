@@ -13,6 +13,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <deque>
+#include <algorithm>
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
@@ -390,10 +391,147 @@ class grove {
      * @param data_value The data associated with the key
      * @return Pointer to the inserted key in the tree
      */
-    gdt::key<key_type, data_type>* insert_data(std::string_view index, key_type key_value, data_type data_value)
-        requires (!std::is_void_v<data_type>) {
+    gdt::key<key_type, data_type>* insert_data(
+        std::string_view index,
+        key_type key_value,
+        data_type data_value) requires (!std::is_void_v<data_type>) {
             return insert_data(index, key_value, data_value, unsorted);
         }
+
+    /**
+     * @brief Bulk insert pre-sorted data (fastest - no sorting or checking)
+     * @tparam Container A container type holding pairs of (key_type, data_type)
+     * @param index The index name (e.g., chromosome name) where data should be inserted
+     * @param data Container of sorted (key, data) pairs
+     * @param sorted_t Tag indicating data is already sorted
+     * @param bulk_t Tag for bulk insertion
+     *
+     * @note CRITICAL PRECONDITION: Data must be sorted AND all keys must be strictly
+     *       greater than any existing key in the index (rightmost-node insertion)
+     * @note This is the fastest bulk insert - skips both sorting and sorted checking
+     * @throws std::runtime_error if precondition is violated
+     * @see insert_sorted() for single-key rightmost insertion behavior
+     */
+    template<typename Container>
+    void insert_data(std::string_view index, const Container& data, sorted_t, bulk_t)
+        requires (!std::is_void_v<data_type>) {
+        if (data.empty()) return;
+
+        // Perform sorted bulk insert using rightmost node (like insert_sorted)
+        node<key_type, data_type>* current_node = this->get_rightmost_node(index);
+
+        // If no root exists, create one
+        if (current_node == nullptr) {
+            auto* root = this->insert_root(index);
+            current_node = root;
+        } else {
+            // Runtime guard: verify precondition that all new keys are greater than existing max
+            if (!current_node->get_keys().empty()) {
+                const auto& max_existing_key = current_node->get_keys().back()->get_value();
+                const auto& min_new_key = data.begin()->first;
+
+                if (!(min_new_key > max_existing_key)) {
+                    throw std::runtime_error(
+                        "Bulk insert precondition violated: all keys must be strictly greater "
+                        "than existing keys in index '" + std::string(index) + "'. "
+                        "Use individual insert() or insert_data() without bulk tag for unsorted insertion."
+                    );
+                }
+            }
+        }
+
+        for (const auto& [key_value, data_value] : data) {
+            gdt::key<key_type, data_type> key(key_value, data_value);
+            auto* key_ptr = allocate_key(key);
+            current_node->insert_key_ptr(key_ptr);
+
+            // Handle overflow
+            if (current_node->get_keys().size() == this->order) {
+                if (current_node->get_parent() == nullptr) {
+                    // Root node overflow
+                    auto* new_root = new node<key_type, data_type>(this->order);
+                    new_root->add_child(current_node, 0);
+                    new_root->set_is_leaf(false);
+                    current_node->set_parent(new_root);
+                    split_node(new_root, 0);
+                    this->root_nodes[std::string(index)] = new_root;
+                    current_node = this->get_rightmost_node(index);
+                } else {
+                    // Internal node overflow
+                    int child_index = current_node->get_parent()->get_children().size() - 1;
+                    split_node(current_node->get_parent(), child_index);
+                    current_node = this->get_rightmost_node(index);
+                }
+            }
+        }
+    }
+
+    /**
+     * @brief Bulk insert unsorted data (sorts internally)
+     * @tparam Container A container type holding pairs of (key_type, data_type)
+     * @param index The index name (e.g., chromosome name) where data should be inserted
+     * @param data Container of unsorted (key, data) pairs
+     * @param unsorted_t Tag indicating data needs sorting
+     * @param bulk_t Tag for bulk insertion
+     *
+     * @note CRITICAL PRECONDITION: After sorting, all keys must be strictly greater
+     *       than any existing key in the index (rightmost-node insertion)
+     * @note Data is sorted in-place before insertion
+     * @throws std::runtime_error if precondition is violated
+     */
+    template<typename Container>
+    void insert_data(std::string_view index, Container data, unsorted_t, bulk_t)
+        requires (!std::is_void_v<data_type>) {
+        if (data.empty()) return;
+
+        // Sort the data
+        std::sort(data.begin(), data.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        // Use sorted bulk insert
+        insert_data(index, data, sorted, bulk);
+    }
+
+    /**
+     * @brief Bulk insert with automatic sorted detection (convenience)
+     * @tparam Container A container type holding pairs of (key_type, data_type)
+     * @param index The index name (e.g., chromosome name) where data should be inserted
+     * @param data Container of (key, data) pairs
+     * @param bulk_t Tag for bulk insertion
+     *
+     * @note CRITICAL PRECONDITION: All keys must be strictly greater than any existing
+     *       key in the index (rightmost-node insertion)
+     * @note Checks if data is sorted (O(n) overhead) and sorts if needed
+     * @note For performance, prefer sorted or unsorted overloads when data state is known
+     * @throws std::runtime_error if precondition is violated
+     *
+     * Example usage:
+     * @code
+     * // When you know data state - use explicit tags (faster):
+     * grove.insert_data("chr1", sorted_data, sorted, bulk);    // No check, fastest
+     * grove.insert_data("chr1", unsorted_data, unsorted, bulk); // Sorts
+     *
+     * // When unsure - use auto-detect (convenience):
+     * grove.insert_data("chr1", data, bulk);  // Checks if sorted, then acts
+     * @endcode
+     */
+    template<typename Container>
+    void insert_data(std::string_view index, Container data, bulk_t)
+        requires (!std::is_void_v<data_type>) {
+        if (data.empty()) return;
+
+        // Check if data is already sorted (O(n) overhead)
+        bool data_is_sorted = std::is_sorted(data.begin(), data.end(),
+            [](const auto& a, const auto& b) { return a.first < b.first; });
+
+        if (data_is_sorted) {
+            // Use sorted bulk insert (no sort needed)
+            insert_data(index, data, sorted, bulk);
+        } else {
+            // Use unsorted bulk insert (will sort)
+            insert_data(index, std::move(data), unsorted, bulk);
+        }
+    }
 
     /**
      * @brief Insert a key into the grove at the specified index
