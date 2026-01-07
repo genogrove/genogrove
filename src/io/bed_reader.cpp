@@ -189,7 +189,7 @@ namespace genogrove::io {
 
         if (rgb_values.size() == 1) {
             if (rgb_values[0] == 0) {
-                entry.item_rgb = rgb_color(0, 0, 0);
+                // "0" means use default color - don't set item_rgb (leave as nullopt)
                 return true;
             }
             error_message = "Only 0 (default) as single RGB value allowed";
