@@ -427,6 +427,14 @@ class grove {
 
         if (rightmost_node == nullptr || rightmost_node->get_keys().empty()) {
             // Index is empty - use fast bottom-up tree construction
+
+            // Delete existing empty root node to avoid memory leak
+            auto* existing_root = this->get_root(index);
+            if (existing_root != nullptr) {
+                delete existing_root;
+                // rightmost_nodes will be updated by build_tree_bottom_up
+            }
+
             auto* new_root = build_tree_bottom_up(index, data);
             if (new_root != nullptr) {
                 this->root_nodes[std::string(index)] = new_root;

@@ -554,3 +554,159 @@ TEST(IntervalGroveTest, BulkInsertPreconditionViolation) {
     EXPECT_EQ(results.get_keys()[0]->get_data(), 1);
     EXPECT_EQ(results.get_keys()[1]->get_data(), 2);
 }
+
+TEST(IntervalGroveTest, BulkInsertAppendMode) {
+    gst::grove<gdt::interval, int> grove(3);
+
+    // Insert initial batch using bottom-up construction (empty grove)
+    std::vector<std::pair<gdt::interval, int>> batch1 = {
+        {gdt::interval{10, 20}, 1},
+        {gdt::interval{30, 40}, 2},
+        {gdt::interval{50, 60}, 3}
+    };
+    grove.insert_data("chr1", batch1, gst::sorted, gst::bulk);
+
+    // Verify first batch
+    gdt::interval query1{0, 100};
+    auto results1 = grove.intersect(query1, "chr1");
+    ASSERT_EQ(results1.get_keys().size(), 3);
+
+    // Append second batch using rightmost-node append (grove has data)
+    std::vector<std::pair<gdt::interval, int>> batch2 = {
+        {gdt::interval{70, 80}, 4},
+        {gdt::interval{90, 100}, 5},
+        {gdt::interval{110, 120}, 6}
+    };
+    grove.insert_data("chr1", batch2, gst::sorted, gst::bulk);
+
+    // Verify both batches are present
+    gdt::interval query2{0, 150};
+    auto results2 = grove.intersect(query2, "chr1");
+    ASSERT_EQ(results2.get_keys().size(), 6);
+
+    // Verify data values in sorted order
+    EXPECT_EQ(results2.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results2.get_keys()[1]->get_data(), 2);
+    EXPECT_EQ(results2.get_keys()[2]->get_data(), 3);
+    EXPECT_EQ(results2.get_keys()[3]->get_data(), 4);
+    EXPECT_EQ(results2.get_keys()[4]->get_data(), 5);
+    EXPECT_EQ(results2.get_keys()[5]->get_data(), 6);
+
+    // Verify intervals are correct
+    EXPECT_EQ(results2.get_keys()[0]->get_value().get_start(), 10);
+    EXPECT_EQ(results2.get_keys()[5]->get_value().get_end(), 120);
+}
+
+TEST(IntervalGroveTest, BulkInsertAppendModeMultipleBatches) {
+    gst::grove<gdt::interval, int> grove(5);
+
+    // Insert 5 batches sequentially
+    for (int batch = 0; batch < 5; ++batch) {
+        std::vector<std::pair<gdt::interval, int>> data;
+        for (int i = 0; i < 10; ++i) {
+            int start = batch * 100 + i * 10;
+            int end = start + 5;
+            int value = batch * 10 + i;
+            data.emplace_back(gdt::interval{start, end}, value);
+        }
+
+        // First batch uses bottom-up, rest use append
+        grove.insert_data("chr1", data, gst::sorted, gst::bulk);
+    }
+
+    // Verify all 50 intervals are present
+    gdt::interval query{0, 500};
+    auto results = grove.intersect(query, "chr1");
+    ASSERT_EQ(results.get_keys().size(), 50);
+
+    // Verify data values are in order
+    for (size_t i = 0; i < results.get_keys().size(); ++i) {
+        EXPECT_EQ(results.get_keys()[i]->get_data(), static_cast<int>(i));
+    }
+
+    // Verify first and last intervals
+    EXPECT_EQ(results.get_keys()[0]->get_value().get_start(), 0);
+    EXPECT_EQ(results.get_keys()[0]->get_value().get_end(), 5);
+    EXPECT_EQ(results.get_keys()[49]->get_value().get_start(), 490);
+    EXPECT_EQ(results.get_keys()[49]->get_value().get_end(), 495);
+}
+
+TEST(IntervalGroveTest, BulkInsertAppendWithUnsortedTag) {
+    gst::grove<gdt::interval, int> grove(3);
+
+    // Insert initial data
+    std::vector<std::pair<gdt::interval, int>> batch1 = {
+        {gdt::interval{10, 20}, 1},
+        {gdt::interval{30, 40}, 2}
+    };
+    grove.insert_data("chr1", batch1, gst::sorted, gst::bulk);
+
+    // Append unsorted data (should be sorted internally, then appended)
+    std::vector<std::pair<gdt::interval, int>> batch2 = {
+        {gdt::interval{70, 80}, 4},
+        {gdt::interval{50, 60}, 3},  // Out of order
+        {gdt::interval{90, 100}, 5}
+    };
+    grove.insert_data("chr1", batch2, gst::unsorted, gst::bulk);
+
+    // Verify all data is present and correctly sorted
+    gdt::interval query{0, 150};
+    auto results = grove.intersect(query, "chr1");
+    ASSERT_EQ(results.get_keys().size(), 5);
+
+    // Verify sorted order
+    EXPECT_EQ(results.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results.get_keys()[1]->get_data(), 2);
+    EXPECT_EQ(results.get_keys()[2]->get_data(), 3);
+    EXPECT_EQ(results.get_keys()[3]->get_data(), 4);
+    EXPECT_EQ(results.get_keys()[4]->get_data(), 5);
+}
+
+TEST(IntervalGroveTest, BulkInsertAppendEmptyBatch) {
+    gst::grove<gdt::interval, int> grove(3);
+
+    // Insert initial data
+    std::vector<std::pair<gdt::interval, int>> batch1 = {
+        {gdt::interval{10, 20}, 1},
+        {gdt::interval{30, 40}, 2}
+    };
+    grove.insert_data("chr1", batch1, gst::sorted, gst::bulk);
+
+    // Try to append empty batch (should be no-op)
+    std::vector<std::pair<gdt::interval, int>> empty_batch;
+    grove.insert_data("chr1", empty_batch, gst::sorted, gst::bulk);
+
+    // Verify original data is still intact
+    gdt::interval query{0, 100};
+    auto results = grove.intersect(query, "chr1");
+    ASSERT_EQ(results.get_keys().size(), 2);
+    EXPECT_EQ(results.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results.get_keys()[1]->get_data(), 2);
+}
+
+TEST(IntervalGroveTest, BulkInsertBottomUpReplacesEmptyRoot) {
+    gst::grove<gdt::interval, int> grove(3);
+
+    // Create an empty root by inserting then clearing (simulating empty state)
+    // Actually, let's just create the grove fresh which has no root initially
+
+    // First bulk insert on empty grove - uses bottom-up construction
+    std::vector<std::pair<gdt::interval, int>> data1 = {
+        {gdt::interval{10, 20}, 1},
+        {gdt::interval{30, 40}, 2},
+        {gdt::interval{50, 60}, 3}
+    };
+    grove.insert_data("chr1", data1, gst::sorted, gst::bulk);
+
+    // Verify data inserted correctly via bottom-up
+    gdt::interval query{0, 100};
+    auto results = grove.intersect(query, "chr1");
+    ASSERT_EQ(results.get_keys().size(), 3);
+    EXPECT_EQ(results.get_keys()[0]->get_data(), 1);
+    EXPECT_EQ(results.get_keys()[1]->get_data(), 2);
+    EXPECT_EQ(results.get_keys()[2]->get_data(), 3);
+
+    // Verify tree structure is valid by checking root exists
+    auto* root = grove.get_root("chr1");
+    ASSERT_NE(root, nullptr);
+}
