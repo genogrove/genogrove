@@ -28,12 +28,6 @@ namespace gdt = genogrove::data_type;
 
 namespace genogrove::structure {
     /**
-     * @brief Tag type for dispatching to unsorted insertion algorithm
-     * @see grove::insert_data(std::string_view, key_type, data_type, unsorted_t)
-     */
-    struct unsorted_t {};
-
-    /**
      * @brief Tag type for dispatching to sorted insertion algorithm
      * @note Use this when inserting data that is already sorted for optimal performance
      * @see grove::insert_data(std::string_view, key_type, data_type, sorted_t)
@@ -42,12 +36,8 @@ namespace genogrove::structure {
 
     /**
      * @brief Tag type for dispatching to bulk insertion algorithm
-     * @note Currently not fully implemented
      */
     struct bulk_t {};
-
-    /// Global constant for unsorted insertion dispatch
-    inline static constexpr unsorted_t unsorted{};
 
     /// Global constant for sorted insertion dispatch
     inline static constexpr sorted_t sorted{};
@@ -351,23 +341,6 @@ class grove {
     }
 
     /**
-     * @brief Insert a data point into the grove using unsorted insertion
-     * @param index The index name (e.g., chromosome name) where the data should be inserted
-     * @param key_value The key value to insert (e.g., interval)
-     * @param data_value The data associated with the key
-     * @param Tag to dispatch to unsorted insertion algorithm
-     * @return Pointer to the inserted key in the tree
-     */
-    gdt::key<key_type, data_type>* insert_data(
-        std::string_view index,
-        key_type key_value,
-        data_type data_value,
-        unsorted_t) requires (!std::is_void_v<data_type>) {
-            gdt::key<key_type, data_type> key(key_value, data_value);
-            return insert(index, key);
-    }
-
-    /**
      * @brief Insert a sorted data point into the grove using optimized sorted insertion
      * @param index The index name (e.g., chromosome name) where the data should be inserted
      * @param key_value The key value to insert (e.g., interval)
@@ -385,17 +358,19 @@ class grove {
     }
 
     /**
-     * @brief Insert a data point into the grove (defaults to unsorted insertion)
+     * @brief Insert a data point into the grove using tree-based insertion
      * @param index The index name (e.g., chromosome name) where the data should be inserted
      * @param key_value The key value to insert (e.g., interval)
      * @param data_value The data associated with the key
      * @return Pointer to the inserted key in the tree
+     * @note Uses standard tree traversal (O(log n)). For sorted data, use sorted tag for better performance.
      */
     gdt::key<key_type, data_type>* insert_data(
         std::string_view index,
         key_type key_value,
         data_type data_value) requires (!std::is_void_v<data_type>) {
-            return insert_data(index, key_value, data_value, unsorted);
+            gdt::key<key_type, data_type> key(key_value, data_value);
+            return insert(index, key);
         }
 
     /**
@@ -485,52 +460,29 @@ class grove {
     }
 
     /**
-     * @brief Bulk insert unsorted data (sorts internally)
-     * @tparam Container A container type holding pairs of (key_type, data_type)
-     * @param index The index name (e.g., chromosome name) where data should be inserted
-     * @param data Container of unsorted (key, data) pairs
-     * @param unsorted_t Tag indicating data needs sorting
-     * @param bulk_t Tag for bulk insertion
-     *
-     * @note CRITICAL PRECONDITION: After sorting, all keys must be strictly greater
-     *       than any existing key in the index (rightmost-node insertion)
-     * @note Data is sorted in-place before insertion
-     * @throws std::runtime_error if precondition is violated
-     */
-    template<typename Container>
-    void insert_data(std::string_view index, Container data, unsorted_t, bulk_t)
-        requires (!std::is_void_v<data_type>) {
-        if (data.empty()) return;
-
-        // Sort the data
-        std::sort(data.begin(), data.end(),
-            [](const auto& a, const auto& b) { return a.first < b.first; });
-
-        // Use sorted bulk insert
-        insert_data(index, data, sorted, bulk);
-    }
-
-    /**
-     * @brief Bulk insert with automatic sorted detection (convenience)
+     * @brief Bulk insert data (sorts internally if needed)
      * @tparam Container A container type holding pairs of (key_type, data_type)
      * @param index The index name (e.g., chromosome name) where data should be inserted
      * @param data Container of (key, data) pairs
      * @param bulk_t Tag for bulk insertion
      *
-     * @note CRITICAL PRECONDITION: All keys must be strictly greater than any existing
-     *       key in the index (rightmost-node insertion)
-     * @note Checks if data is sorted (O(n) overhead) and sorts if needed
-     * @note For performance, prefer sorted or unsorted overloads when data state is known
-     * @throws std::runtime_error if precondition is violated
+     * @note HYBRID APPROACH:
+     *       - If index is empty: Uses fast bottom-up tree construction (O(n))
+     *       - If index has data: Uses rightmost-node append (requires new keys > existing keys)
+     *
+     * @note CRITICAL PRECONDITION (append mode): After sorting, all keys must be strictly greater
+     *       than any existing key in the index
+     * @note Data is always sorted (O(n log n)) before insertion
+     * @note For pre-sorted data, use the sorted tag variant to skip sorting: insert_data(index, data, sorted, bulk)
+     * @throws std::runtime_error if precondition is violated in append mode
      *
      * Example usage:
      * @code
-     * // When you know data state - use explicit tags (faster):
-     * grove.insert_data("chr1", sorted_data, sorted, bulk);    // No check, fastest
-     * grove.insert_data("chr1", unsorted_data, unsorted, bulk); // Sorts
+     * // When data is already sorted - use sorted tag (fastest, skips sort):
+     * grove.insert_data("chr1", sorted_data, sorted, bulk);
      *
-     * // When unsure - use auto-detect (convenience):
-     * grove.insert_data("chr1", data, bulk);  // Checks if sorted, then acts
+     * // When data may or may not be sorted - just use bulk tag (always sorts):
+     * grove.insert_data("chr1", data, bulk);  // Sorts data (O(n log n)), then bulk inserts
      * @endcode
      */
     template<typename Container>
@@ -538,17 +490,12 @@ class grove {
         requires (!std::is_void_v<data_type>) {
         if (data.empty()) return;
 
-        // Check if data is already sorted (O(n) overhead)
-        bool data_is_sorted = std::is_sorted(data.begin(), data.end(),
+        // Sort the data (O(n log n))
+        std::sort(data.begin(), data.end(),
             [](const auto& a, const auto& b) { return a.first < b.first; });
 
-        if (data_is_sorted) {
-            // Use sorted bulk insert (no sort needed)
-            insert_data(index, data, sorted, bulk);
-        } else {
-            // Use unsorted bulk insert (will sort)
-            insert_data(index, std::move(data), unsorted, bulk);
-        }
+        // Use sorted bulk insert
+        insert_data(index, data, sorted, bulk);
     }
 
     /**
