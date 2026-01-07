@@ -279,8 +279,8 @@ TEST(IntervalGroveTest, BulkInsertSorted) {
         {gdt::interval{60, 70}, 50}
     };
 
-    // Bulk insert sorted data (auto-detects sorted)
-    grove.insert_data("chr1", data, gst::bulk);
+    // Bulk insert sorted data
+    grove.insert_data("chr1", data, gst::sorted, gst::bulk);
 
     // Query to verify all data was inserted
     gdt::interval query{0, 100};
@@ -393,60 +393,6 @@ TEST(IntervalGroveTest, BulkInsertLargeDataset) {
     auto keys = results.get_keys();
     EXPECT_EQ(keys[0]->get_data(), 0);
     EXPECT_EQ(keys[99]->get_data(), 99);
-}
-
-TEST(IntervalGroveTest, BulkInsertExplicitUnsorted) {
-    gst::grove<gdt::interval, int> grove(3);
-
-    // Create unsorted data
-    std::vector<std::pair<gdt::interval, int>> data = {
-        {gdt::interval{40, 50}, 40},
-        {gdt::interval{5, 10}, 10},
-        {gdt::interval{60, 70}, 50},
-        {gdt::interval{10, 15}, 20},
-        {gdt::interval{20, 30}, 30}
-    };
-
-    // Bulk insert with explicit unsorted tag (sorts internally)
-    grove.insert_data("chr1", data, gst::unsorted, gst::bulk);
-
-    // Query to verify all data was inserted
-    gdt::interval query{0, 100};
-    auto results = grove.intersect(query, "chr1");
-
-    ASSERT_EQ(results.get_keys().size(), 5);
-
-    // Verify data was sorted and inserted correctly
-    auto keys = results.get_keys();
-    EXPECT_EQ(keys[0]->get_value().get_start(), 5);
-    EXPECT_EQ(keys[0]->get_data(), 10);
-
-    EXPECT_EQ(keys[4]->get_value().get_start(), 60);
-    EXPECT_EQ(keys[4]->get_data(), 50);
-}
-
-TEST(IntervalGroveTest, BulkInsertExplicitSorted) {
-    gst::grove<gdt::interval, int> grove(3);
-
-    // Create sorted data
-    std::vector<std::pair<gdt::interval, int>> data = {
-        {gdt::interval{5, 10}, 10},
-        {gdt::interval{10, 15}, 20},
-        {gdt::interval{20, 30}, 30},
-        {gdt::interval{40, 50}, 40}
-    };
-
-    // Bulk insert with explicit sorted tag (fastest - no check)
-    grove.insert_data("chr1", data, gst::sorted, gst::bulk);
-
-    // Query to verify
-    gdt::interval query{0, 100};
-    auto results = grove.intersect(query, "chr1");
-
-    ASSERT_EQ(results.get_keys().size(), 4);
-    auto keys = results.get_keys();
-    EXPECT_EQ(keys[0]->get_data(), 10);
-    EXPECT_EQ(keys[3]->get_data(), 40);
 }
 
 TEST(IntervalGroveTest, BulkInsertVsIndividualInsert) {
@@ -641,13 +587,13 @@ TEST(IntervalGroveTest, BulkInsertAppendWithUnsortedTag) {
     };
     grove.insert_data("chr1", batch1, gst::sorted, gst::bulk);
 
-    // Append unsorted data (should be sorted internally, then appended)
+    // Append unsorted data (sorts internally, then appended)
     std::vector<std::pair<gdt::interval, int>> batch2 = {
         {gdt::interval{70, 80}, 4},
         {gdt::interval{50, 60}, 3},  // Out of order
         {gdt::interval{90, 100}, 5}
     };
-    grove.insert_data("chr1", batch2, gst::unsorted, gst::bulk);
+    grove.insert_data("chr1", batch2, gst::bulk);
 
     // Verify all data is present and correctly sorted
     gdt::interval query{0, 150};
@@ -686,9 +632,6 @@ TEST(IntervalGroveTest, BulkInsertAppendEmptyBatch) {
 
 TEST(IntervalGroveTest, BulkInsertBottomUpReplacesEmptyRoot) {
     gst::grove<gdt::interval, int> grove(3);
-
-    // Create an empty root by inserting then clearing (simulating empty state)
-    // Actually, let's just create the grove fresh which has no root initially
 
     // First bulk insert on empty grove - uses bottom-up construction
     std::vector<std::pair<gdt::interval, int>> data1 = {
