@@ -457,9 +457,45 @@ class grove {
                     this->root_nodes[std::string(index)] = new_root;
                     current_node = this->get_rightmost_node(index);
                 } else {
-                    // Internal node overflow
-                    int child_index = current_node->get_parent()->get_children().size() - 1;
-                    split_node(current_node->get_parent(), child_index);
+                    // Issue #2: Find actual child index instead of assuming last position
+                    auto* parent = current_node->get_parent();
+                    int child_index = 0;
+                    auto& children = parent->get_children();
+                    for(; child_index < static_cast<int>(children.size()); ++child_index) {
+                        if(children[child_index] == current_node) {
+                            break;
+                        }
+                    }
+                    split_node(parent, child_index);
+                    
+                    // Issue #1: Propagate overflow handling up the tree
+                    // After splitting the leaf's parent, check if parent overflowed and handle recursively
+                    node<key_type, data_type>* ancestor = parent;
+                    while(ancestor != nullptr && ancestor->get_keys().size() == this->order) {
+                        if(ancestor->get_parent() == nullptr) {
+                            // ancestor is the root and needs to be split
+                            auto* new_root = new node<key_type, data_type>(this->order);
+                            new_root->add_child(ancestor, 0);
+                            new_root->set_is_leaf(false);
+                            ancestor->set_parent(new_root);
+                            split_node(new_root, 0);
+                            this->root_nodes[std::string(index)] = new_root;
+                            break; // root split is terminal
+                        } else {
+                            // Find ancestor's index in its parent
+                            auto* grandparent = ancestor->get_parent();
+                            int ancestor_index = 0;
+                            auto& grandparent_children = grandparent->get_children();
+                            for(; ancestor_index < static_cast<int>(grandparent_children.size()); ++ancestor_index) {
+                                if(grandparent_children[ancestor_index] == ancestor) {
+                                    break;
+                                }
+                            }
+                            split_node(grandparent, ancestor_index);
+                            ancestor = grandparent; // move up to check grandparent
+                        }
+                    }
+                    
                     current_node = this->get_rightmost_node(index);
                 }
             }
@@ -642,6 +678,13 @@ class grove {
             new_child->get_children().assign(child->get_children().begin() + mid,
                 child->get_children().end());
             child->get_children().resize(mid); // resize the original node
+            
+            // Update parent pointers for moved children
+            for(auto* moved_child : new_child->get_children()) {
+                if(moved_child != nullptr) {
+                    moved_child->set_parent(new_child);
+                }
+            }
         }
     }
 
@@ -679,6 +722,13 @@ class grove {
         } else {
             // get rightmost node and insert
             node<key_type, data_type>* rightmost_node = this->get_rightmost_node(index);
+            
+            // Issue #3: Handle null rightmost_node (can happen if rightmost_nodes not initialized)
+            if(rightmost_node == nullptr) {
+                // Fallback to generic insertion when rightmost_node is not available
+                return insert(index, key);
+            }
+            
             // Allocate key from grove's deque storage
             auto* key_ptr = allocate_key(key);
             rightmost_node->insert_key_ptr(key_ptr);
@@ -694,9 +744,44 @@ class grove {
                     split_node(new_root, 0);
                     this->root_nodes[std::string(index)] = new_root;
                 } else {
-                    // regular split - rightmost child is at last index
-                    int child_index = rightmost_node->get_parent()->get_children().size() - 1;
-                    split_node(rightmost_node->get_parent(), child_index);
+                    // Issue #2: Find actual child index instead of assuming last position
+                    auto* parent = rightmost_node->get_parent();
+                    int child_index = 0;
+                    auto& children = parent->get_children();
+                    for(; child_index < static_cast<int>(children.size()); ++child_index) {
+                        if(children[child_index] == rightmost_node) {
+                            break;
+                        }
+                    }
+                    split_node(parent, child_index);
+                    
+                    // Issue #1: Propagate overflow handling up the tree
+                    // After splitting the leaf's parent, check if parent overflowed and handle recursively
+                    node<key_type, data_type>* current = parent;
+                    while(current != nullptr && current->get_keys().size() == this->order) {
+                        if(current->get_parent() == nullptr) {
+                            // current is the root and needs to be split
+                            node<key_type, data_type>* new_root = new node<key_type, data_type>(this->order);
+                            new_root->add_child(current, 0);
+                            new_root->set_is_leaf(false);
+                            current->set_parent(new_root);
+                            split_node(new_root, 0);
+                            this->root_nodes[std::string(index)] = new_root;
+                            break; // root split is terminal
+                        } else {
+                            // Find current's index in its parent before splitting
+                            auto* grandparent = current->get_parent();
+                            int current_index = 0;
+                            auto& grandparent_children = grandparent->get_children();
+                            for(; current_index < static_cast<int>(grandparent_children.size()); ++current_index) {
+                                if(grandparent_children[current_index] == current) {
+                                    break;
+                                }
+                            }
+                            split_node(grandparent, current_index);
+                            current = grandparent; // move up to check grandparent for overflow
+                        }
+                    }
                 }
             }
             return key_ptr;
