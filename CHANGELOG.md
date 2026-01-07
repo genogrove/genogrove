@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactor
+- BED file parsing now includes improved support for annotation data with enhanced handling 
+of colors, thickness information, and block data for more accurate file 
+processing ([#70](https://github.com/genogrove/genogrove/pull/70))
+
+### Bug fixes
+- Corrected missing sorted parameter (aka gst::sorted) for `insert_data` function on sorted 
+intervals ([#71](https://github.com/genogrove/genogrove/pull/71))
+
 ## [0.10.0] - 2026-01-03
 
 ### Added
