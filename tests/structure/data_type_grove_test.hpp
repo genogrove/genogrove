@@ -355,9 +355,9 @@ protected:
         // Keep a copy of sorted data for verification
         auto sorted_data = data;
 
-        // lets shuffle it for testing
+        // Shuffle with fixed seed for reproducibility
         std::shuffle(data.begin(), data.end(),
-            std::mt19937{std::random_device{}()});
+            std::mt19937{42});
 
         // Insert keys one by one without sorted/bulk tags
         std::vector<gdt::key<key_type, data_type>*> inserted_keys;
