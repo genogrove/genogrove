@@ -11,7 +11,7 @@
 #include <gtest/gtest.h>
 
 // Test base
-#include "data_type_grove_test.hpp"
+#include "key_type_grove_test.hpp"
 
 // genogrove
 #include <genogrove/data_type/interval.hpp>

@@ -27,7 +27,7 @@ namespace gst = genogrove::structure;
 
 /**
  * @brief Holds a query key along with expected matching indices from test data
- * @tparam KeyType The key type being tested
+ * @tparam key_type The key type being tested
  */
 template <typename key_type>
 struct query_overlap_expectation {
