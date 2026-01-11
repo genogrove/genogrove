@@ -34,6 +34,8 @@ namespace genogrove::data_type {
         interval intvl = {std::max(intvl1.get_start(), intvl2.get_start()),
                           std::min(intvl1.get_end(), intvl2.get_end())};
 
+        // For closed intervals [start, end], use <=
+        // Example: [0, 50] and [50, 100] DO overlap at position 50
         return intvl.get_start() <= intvl.get_end();
     }
 

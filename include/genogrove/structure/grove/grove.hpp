@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <deque>
 #include <algorithm>
+#include <optional>
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
@@ -254,6 +255,69 @@ class grove {
     }
 
     /**
+     * @brief Create edges between adjacent keys based on a predicate
+     * @tparam Predicate A callable type that takes two adjacent key pointers and returns bool
+     * @param keys Vector of key pointers (typically returned from bulk insert)
+     * @param predicate Function that determines if an edge should be created between adjacent keys
+     *
+     * @note Iterates through consecutive pairs of keys (keys[i], keys[i+1])
+     * @note Creates edge from keys[i] → keys[i+1] if predicate(keys[i], keys[i+1]) returns true
+     * @note No edges are created when predicate returns false
+     *
+     * Example usage:
+     * @code
+     * auto exon_keys = grove.insert_data("chr1", exons, sorted, bulk);
+     * // Link exons from the same transcript
+     * grove.link_if(exon_keys,
+     *     [](auto* k1, auto* k2) {
+     *         return k1->get_data().transcript_id == k2->get_data().transcript_id;
+     *     });
+     * @endcode
+     */
+    template<typename Predicate>
+    void link_if(const std::vector<gdt::key<key_type, data_type>*>& keys, Predicate predicate) {
+        for (size_t i = 0; i + 1 < keys.size(); ++i) {
+            if (predicate(keys[i], keys[i + 1])) {
+                add_edge(keys[i], keys[i + 1]);
+            }
+        }
+    }
+
+    /**
+     * @brief Create edges with metadata between adjacent keys based on a predicate
+     * @tparam Predicate A callable type that takes two adjacent key pointers and returns std::optional<edge_data_type>
+     * @param keys Vector of key pointers (typically returned from bulk insert)
+     * @param predicate Function that returns edge metadata if edge should be created, or std::nullopt otherwise
+     *
+     * @note Iterates through consecutive pairs of keys (keys[i], keys[i+1])
+     * @note Creates edge from keys[i] → keys[i+1] with metadata if predicate returns non-null optional
+     * @note No edge is created when predicate returns std::nullopt
+     *
+     * Example usage:
+     * @code
+     * auto exon_keys = grove.insert_data("chr1", exons, sorted, bulk);
+     * // Link exons from same transcript with intron metadata
+     * grove.link_if(exon_keys,
+     *     [](auto* k1, auto* k2) -> std::optional<IntronMetadata> {
+     *         if (k1->get_data().transcript_id == k2->get_data().transcript_id) {
+     *             return IntronMetadata{length: k2->get_value().get_start() - k1->get_value().get_end()};
+     *         }
+     *         return std::nullopt;
+     *     });
+     * @endcode
+     */
+    template<typename Predicate>
+    void link_if(const std::vector<gdt::key<key_type, data_type>*>& keys, Predicate predicate)
+        requires (!std::is_void_v<edge_data_type>) {
+        for (size_t i = 0; i + 1 < keys.size(); ++i) {
+            auto metadata_opt = predicate(keys[i], keys[i + 1]);
+            if (metadata_opt.has_value()) {
+                add_edge(keys[i], keys[i + 1], std::move(*metadata_opt));
+            }
+        }
+    }
+
+    /**
      * @brief Get the order (maximum capacity) of the grove
      * @return The order of the B+ tree (maximum number of keys per node)
      */
@@ -380,6 +444,7 @@ class grove {
      * @param data Container of sorted (key, data) pairs
      * @param sorted_t Tag indicating data is already sorted
      * @param bulk_t Tag for bulk insertion
+     * @return Vector of pointers to all inserted keys (in insertion order)
      *
      * @note HYBRID APPROACH:
      *       - If index is empty: Uses fast bottom-up tree construction (O(n))
@@ -393,9 +458,11 @@ class grove {
      * @see insert_sorted() for single-key rightmost insertion behavior
      */
     template<typename Container>
-    void insert_data(std::string_view index, const Container& data, sorted_t, bulk_t)
+    std::vector<gdt::key<key_type, data_type>*> insert_data(std::string_view index,
+        const Container& data, sorted_t, bulk_t)
         requires (!std::is_void_v<data_type>) {
-        if (data.empty()) return;
+        std::vector<gdt::key<key_type, data_type>*> inserted_keys;
+        if (data.empty()) return inserted_keys;
 
         // Check if index is empty - use bottom-up construction for best performance
         node<key_type, data_type>* rightmost_node = this->get_rightmost_node(index);
@@ -410,11 +477,11 @@ class grove {
                 // rightmost_nodes will be updated by build_tree_bottom_up
             }
 
-            auto* new_root = build_tree_bottom_up(index, data);
+            auto [new_root, keys] = build_tree_bottom_up(index, data);
             if (new_root != nullptr) {
                 this->root_nodes[std::string(index)] = new_root;
             }
-            return;
+            return keys;
         }
 
         // Index has existing data - use rightmost-node append approach
@@ -432,11 +499,13 @@ class grove {
 
         // Perform rightmost-node append
         node<key_type, data_type>* current_node = rightmost_node;
+        inserted_keys.reserve(data.size());
 
         for (const auto& [key_value, data_value] : data) {
             gdt::key<key_type, data_type> key(key_value, data_value);
             auto* key_ptr = allocate_key(key);
             current_node->insert_key_ptr(key_ptr);
+            inserted_keys.push_back(key_ptr);
 
             // Handle overflow
             if (current_node->get_keys().size() == this->order) {
@@ -457,6 +526,7 @@ class grove {
                 }
             }
         }
+        return inserted_keys;
     }
 
     /**
@@ -465,6 +535,7 @@ class grove {
      * @param index The index name (e.g., chromosome name) where data should be inserted
      * @param data Container of (key, data) pairs
      * @param bulk_t Tag for bulk insertion
+     * @return Vector of pointers to all inserted keys (in insertion order)
      *
      * @note HYBRID APPROACH:
      *       - If index is empty: Uses fast bottom-up tree construction (O(n))
@@ -479,23 +550,23 @@ class grove {
      * Example usage:
      * @code
      * // When data is already sorted - use sorted tag (fastest, skips sort):
-     * grove.insert_data("chr1", sorted_data, sorted, bulk);
+     * auto keys = grove.insert_data("chr1", sorted_data, sorted, bulk);
      *
      * // When data may or may not be sorted - just use bulk tag (always sorts):
-     * grove.insert_data("chr1", data, bulk);  // Sorts data (O(n log n)), then bulk inserts
+     * auto keys = grove.insert_data("chr1", data, bulk);  // Sorts data (O(n log n)), then bulk inserts
      * @endcode
      */
     template<typename Container>
-    void insert_data(std::string_view index, Container data, bulk_t)
+    std::vector<gdt::key<key_type, data_type>*> insert_data(std::string_view index, Container data, bulk_t)
         requires (!std::is_void_v<data_type>) {
-        if (data.empty()) return;
+        if (data.empty()) return {};
 
         // Sort the data (O(n log n))
         std::sort(data.begin(), data.end(),
             [](const auto& a, const auto& b) { return a.first < b.first; });
 
         // Use sorted bulk insert
-        insert_data(index, data, sorted, bulk);
+        return insert_data(index, data, sorted, bulk);
     }
 
     /**
@@ -593,6 +664,7 @@ class grove {
         parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
 
         if(child->get_is_leaf()) {
+            new_child->set_next(child->get_next());
             new_child->set_next(child->get_next());
             child->set_next(new_child);
 
@@ -865,7 +937,7 @@ class grove {
      * @tparam Container A container type holding pairs of (key_type, data_type)
      * @param index The index name for which to build the tree
      * @param data Container of sorted (key, data) pairs
-     * @return Pointer to the root node of the constructed tree
+     * @return Pair of (root node pointer, vector of inserted key pointers)
      *
      * @note This is significantly faster than incremental insertion for large datasets
      * @note Builds leaf nodes with optimal fill factor, then constructs internal layers
@@ -873,15 +945,18 @@ class grove {
      * @note Time complexity: O(n) with better constants than incremental insertion
      */
     template<typename Container>
-    node<key_type, data_type>* build_tree_bottom_up(std::string_view index, const Container& data)
+    std::pair<node<key_type, data_type>*, std::vector<gdt::key<key_type, data_type>*>>
+    build_tree_bottom_up(std::string_view index, const Container& data)
         requires (!std::is_void_v<data_type>) {
 
+        std::vector<gdt::key<key_type, data_type>*> inserted_keys;
         if (data.empty()) {
-            return nullptr;
+            return {nullptr, inserted_keys};
         }
 
         // Step 1: Create leaf nodes from sorted data
         std::vector<node<key_type, data_type>*> leaves;
+        inserted_keys.reserve(data.size());
 
         // Fill factor: use (order - 1) keys per node for optimal space utilization
         // This gives us fuller nodes than the ~50% from split-based insertion
@@ -901,6 +976,7 @@ class grove {
                 gdt::key<key_type, data_type> key(it->first, it->second);
                 auto* key_ptr = allocate_key(key);
                 leaf->get_keys().push_back(key_ptr);
+                inserted_keys.push_back(key_ptr);
 
                 ++keys_in_this_leaf;
                 ++data_idx;
@@ -963,7 +1039,7 @@ class grove {
         }
 
         // The last remaining node is the root
-        return current_layer[0];
+        return {current_layer[0], inserted_keys};
     }
 
     /// Maximum number of keys per node (B+ tree order/capacity)
