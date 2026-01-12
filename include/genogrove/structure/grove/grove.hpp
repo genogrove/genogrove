@@ -46,6 +46,18 @@ namespace genogrove::structure {
     /// Global constant for bulk insertion dispatch
     inline static constexpr bulk_t bulk{};
 
+    namespace detail {
+        // Type trait to detect if a type is std::optional
+        template<typename T>
+        struct is_optional : std::false_type {};
+
+        template<typename T>
+        struct is_optional<std::optional<T>> : std::true_type {};
+
+        template<typename T>
+        inline constexpr bool is_optional_v = is_optional<T>::value;
+    }
+
 /**
  * @class grove
  * @brief Template-based B+ tree container for efficient genomic interval storage and querying
@@ -256,15 +268,20 @@ class grove {
 
     /**
      * @brief Create edges between adjacent keys based on a predicate
-     * @tparam Predicate A callable type that takes two adjacent key pointers and returns bool
+     * @tparam Predicate A callable type that takes two adjacent key pointers
      * @param keys Vector of key pointers (typically returned from bulk insert)
-     * @param predicate Function that determines if an edge should be created between adjacent keys
+     * @param predicate Function that determines if/how edges should be created
      *
      * @note Iterates through consecutive pairs of keys (keys[i], keys[i+1])
-     * @note Creates edge from keys[i] → keys[i+1] if predicate(keys[i], keys[i+1]) returns true
-     * @note No edges are created when predicate returns false
+     * @note Supports two predicate types:
+     *       - `bool(key*, key*)`: Returns true to create simple edge, false to skip
+     *       - `std::optional<edge_data_type>(key*, key*)`: Returns metadata to create edge with data, std::nullopt to skip
      *
-     * Example usage:
+     * @note MULTIPLE EDGE METADATA TYPES: Use std::variant as edge_data_type to support different metadata types.
+     *       The optional-returning predicate can return any type implicitly convertible to edge_data_type,
+     *       allowing different link_if calls to attach different metadata variants to edges.
+     *
+     * Example usage (boolean predicate):
      * @code
      * auto exon_keys = grove.insert_data("chr1", exons, sorted, bulk);
      * // Link exons from the same transcript
@@ -273,27 +290,8 @@ class grove {
      *         return k1->get_data().transcript_id == k2->get_data().transcript_id;
      *     });
      * @endcode
-     */
-    template<typename Predicate>
-    void link_if(const std::vector<gdt::key<key_type, data_type>*>& keys, Predicate predicate) {
-        for (size_t i = 0; i + 1 < keys.size(); ++i) {
-            if (predicate(keys[i], keys[i + 1])) {
-                add_edge(keys[i], keys[i + 1]);
-            }
-        }
-    }
-
-    /**
-     * @brief Create edges with metadata between adjacent keys based on a predicate
-     * @tparam Predicate A callable type that takes two adjacent key pointers and returns std::optional<edge_data_type>
-     * @param keys Vector of key pointers (typically returned from bulk insert)
-     * @param predicate Function that returns edge metadata if edge should be created, or std::nullopt otherwise
      *
-     * @note Iterates through consecutive pairs of keys (keys[i], keys[i+1])
-     * @note Creates edge from keys[i] → keys[i+1] with metadata if predicate returns non-null optional
-     * @note No edge is created when predicate returns std::nullopt
-     *
-     * Example usage:
+     * Example usage (optional-returning predicate with metadata):
      * @code
      * auto exon_keys = grove.insert_data("chr1", exons, sorted, bulk);
      * // Link exons from same transcript with intron metadata
@@ -305,14 +303,56 @@ class grove {
      *         return std::nullopt;
      *     });
      * @endcode
+     *
+     * Example usage (variant edge metadata for multiple types):
+     * @code
+     * // Grove with variant edge metadata supporting multiple types
+     * using EdgeMetadata = std::variant<IntronMetadata, ExonMetadata, UTRMetadata>;
+     * grove<interval, bed_entry, EdgeMetadata> g;
+     *
+     * auto exon_keys = g.insert_data("chr1", exons, sorted, bulk);
+     *
+     * // First pass: link with intron metadata (implicitly converts to variant)
+     * g.link_if(exon_keys,
+     *     [](auto* k1, auto* k2) -> std::optional<IntronMetadata> {
+     *         if (same_transcript(k1, k2)) {
+     *             return IntronMetadata{compute_length(k1, k2)};
+     *         }
+     *         return std::nullopt;
+     *     });
+     *
+     * // Second pass: link with different metadata type
+     * g.link_if(exon_keys,
+     *     [](auto* k1, auto* k2) -> std::optional<ExonMetadata> {
+     *         if (same_reading_frame(k1, k2)) {
+     *             return ExonMetadata{get_frame(k1)};
+     *         }
+     *         return std::nullopt;
+     *     });
+     * @endcode
      */
     template<typename Predicate>
-    void link_if(const std::vector<gdt::key<key_type, data_type>*>& keys, Predicate predicate)
-        requires (!std::is_void_v<edge_data_type>) {
+    void link_if(const std::vector<gdt::key<key_type, data_type>*>& keys, Predicate predicate) {
+        using key_ptr = gdt::key<key_type, data_type>*;
+        using result_type = std::invoke_result_t<Predicate, key_ptr, key_ptr>;
+
         for (size_t i = 0; i + 1 < keys.size(); ++i) {
-            auto metadata_opt = predicate(keys[i], keys[i + 1]);
-            if (metadata_opt.has_value()) {
-                add_edge(keys[i], keys[i + 1], std::move(*metadata_opt));
+            if constexpr (std::is_same_v<result_type, bool>) {
+                // Predicate returns bool - simple edge creation
+                if (predicate(keys[i], keys[i + 1])) {
+                    add_edge(keys[i], keys[i + 1]);
+                }
+            } else if constexpr (detail::is_optional_v<result_type>) {
+                // Predicate returns optional - edge with metadata
+                static_assert(!std::is_void_v<edge_data_type>,
+                    "link_if with optional-returning predicate requires edge_data_type != void");
+                auto metadata_opt = predicate(keys[i], keys[i + 1]);
+                if (metadata_opt.has_value()) {
+                    add_edge(keys[i], keys[i + 1], std::move(*metadata_opt));
+                }
+            } else {
+                static_assert(std::is_same_v<result_type, bool> || detail::is_optional_v<result_type>,
+                    "Predicate must return bool or std::optional<edge_data_type>");
             }
         }
     }
