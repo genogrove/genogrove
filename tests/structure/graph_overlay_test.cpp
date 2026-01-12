@@ -752,9 +752,12 @@ TEST(GraphOverlayTest, MultipleChromosomesComplexGraph) {
     ASSERT_EQ(chr2_e2_chimeric.size(), 1);
     EXPECT_EQ(chr2_e2_chimeric[0], chr3_e1);
 
-    // Verify vertex count (only counts vertices with outgoing edges)
+    // Verify vertex count with edges (only counts vertices with outgoing edges)
     // chr1_e1, chr1_e2, chr2_e1, chr2_e2 have outgoing edges (4 vertices)
     // chr1_e3 and chr3_e1 only have incoming edges, so they're not counted
-    EXPECT_EQ(grove.vertex_count(), 4);
+    EXPECT_EQ(grove.vertex_count_with_edges(), 4);
+
+    // Verify total vertex count (all keys)
+    EXPECT_EQ(grove.vertex_count(), 6);  // All 6 keys inserted
 }
 
