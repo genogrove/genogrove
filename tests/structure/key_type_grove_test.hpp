@@ -555,11 +555,14 @@ protected:
         auto keys = grove.insert_data(get_default_index(), data,
             gst::sorted, gst::bulk);
 
-        // Create chain of edges
+        // Create chain of edges: keys[0] -> keys[1] -> ... -> keys[key_count-1]
+        // This creates key_count-1 edges, with key_count-1 vertices having outgoing edges
+        // (last key has no outgoing edge)
         for (size_t i = 0; i + 1 < keys.size(); ++i) {
             grove.add_edge(keys[i], keys[i + 1]);
         }
-        EXPECT_EQ(grove.vertex_count(), key_count);
+        EXPECT_EQ(grove.vertex_count(), key_count);  // Total vertices (all keys)
+        EXPECT_EQ(grove.vertex_count_with_edges(), key_count - 1);  // Vertices with outgoing edges
         EXPECT_EQ(grove.edge_count(), key_count - 1);
 
         EXPECT_EQ(grove.edge_count(), key_count - 1);

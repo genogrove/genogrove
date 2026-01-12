@@ -243,11 +243,21 @@ class grove {
     }
 
     /**
-     * @brief Get number of vertices with outgoing edges (convenience forwarding to graph)
-     * @return Number of keys that have at least one outgoing edge
+     * @brief Get total number of vertices (keys) in the grove
+     * @return Total number of keys in the grove (including isolated vertices with no edges)
+     * @note This counts all keys regardless of whether they have edges
      */
     [[nodiscard]] size_t vertex_count() const {
-        return graph_data.vertex_count();
+        return key_storage.size();
+    }
+
+    /**
+     * @brief Get number of vertices with outgoing edges (convenience forwarding to graph)
+     * @return Number of keys that have at least one outgoing edge
+     * @note This only counts keys that appear as sources in the graph adjacency
+     */
+    [[nodiscard]] size_t vertex_count_with_edges() const {
+        return graph_data.vertex_count_with_edges();
     }
 
     /**

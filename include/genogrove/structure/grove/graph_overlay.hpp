@@ -229,10 +229,10 @@ class graph_overlay {
     }
 
     /*
-     * @brief Get number of keys with outgoing edges
-     * @return Number of source keys
+     * @brief Get number of vertices (keys) with at least one outgoing edge
+     * @return Number of keys that have outgoing edges
      */
-    [[nodiscard]] size_t vertex_count() const {
+    [[nodiscard]] size_t vertex_count_with_edges() const {
         return adjacency.size();
     }
 
