@@ -53,7 +53,7 @@ gtest_discover_tests(genogrove_config_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BI
 # ----------------------------
 # DATA_TYPE TESTS
 # ----------------------------
-FILE(GLOB TEST_SOURCES_DATA_TYPE "./data_type/*.cpp")
+FILE(GLOB_RECURSE TEST_SOURCES_DATA_TYPE "./data_type/*.cpp")
 add_executable(genogrove_data_type_tests ${TEST_SOURCES_DATA_TYPE})
 target_include_directories(
         genogrove_data_type_tests
