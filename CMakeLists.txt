@@ -33,8 +33,9 @@ endif()
 
 # create the genogrove library
 FILE(GLOB SOURCES "src/*.cpp")
+FILE(GLOB SOURCES_DATA_TYPE "src/data_type/*.cpp")
 FILE(GLOB SOURCES_IO "src/io/*.cpp")
-add_library(genogrove ${SOURCES} ${SOURCES_IO})
+add_library(genogrove ${SOURCES} ${SOURCES_DATA_TYPE} ${SOURCES_IO})
 target_include_directories(genogrove
         PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
