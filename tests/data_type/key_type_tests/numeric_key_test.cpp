@@ -14,6 +14,9 @@
 #include <genogrove/data_type/key.hpp>
 #include <genogrove/data_type/numeric.hpp>
 
+// standard
+#include <sstream>
+
 namespace gdt = genogrove::data_type;
 
 // ==========================================

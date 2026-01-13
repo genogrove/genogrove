@@ -49,7 +49,7 @@ namespace genogrove::data_type {
 
             /**
              * @brief Aggregate multiple numeric values.
-             * Returns the minimum value to represent the smallest enclosing point.
+             * Returns the maximum value to represent the smallest enclosing point.
              */
             static numeric aggregate(const std::vector<numeric>& values);
 
