@@ -1,11 +1,39 @@
 # Changelog
 
-All notable changes to GenoGrove will be documented in this file.
+All notable changes to genogrove will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.12.0] - 2026-01-12
+
+### Added 
+- Added vertex_count() method to retrieve the total number of keys in the grove, including 
+isolated ones without edges ([#79](https://github.com/genogrove/genogrove/pull/79))
+- Added numeric data type for use as a key in tree-based structures. Supports comparison operators 
+(equality, less than, greater than), integer value accessors and mutators, string representation, 
+binary format serialization/deserialization utilities, and static helper methods for detecting value 
+overlaps and aggregating numeric value collections ([#80](https://github.com/genogrove/genogrove/pull/80))
+- Large expansion of test coverage: numeric and key-type suites, new interval tests, grove tests for 
+numeric; removed some legacy interval grove tests; test discovery now 
+collects sources recursively ([#80](https://github.com/genogrove/genogrove/pull/80))
+
+### Refactor
+- Removed unsorted insertion mode. The bulk insertion API now requires an 
+explicit sorted flag parameter, changing how batch data is inserted. Direct unsorted insertions 
+are no longer supported ([#77](https://github.com/genogrove/genogrove/pull/77))
+- Refactor tests for simplified test setup when adding 
+more data types ([927196b](https://github.com/genogrove/genogrove/commit/927196bd858e76c39b15ad4911fb324939cfd45d))
+- enhances the link_if method to accept predicates returning either bool or 
+std::optional<edge_data_type>, enabling optional edge metadata. A new is_optional type trait detects 
+optional types, and implementation uses if constexpr for compile-time dispatch ([#78](https://github.com/genogrove/genogrove/pull/78))
+- Clarified distinction between total key count and edge-connected 
+key count through separate, purpose-specific methods for better code clarity ([#79](https://github.com/genogrove/genogrove/pull/79))
+
+### Chores
+- Public headers updated to expose numeric types ([#80](https://github.com/genogrove/genogrove/pull/80))
 
 ## [0.11.0] - 2026-01-07
 
