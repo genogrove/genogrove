@@ -18,6 +18,7 @@
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/data_type/key.hpp>
 #include <genogrove/data_type/key_type_base.hpp>
+#include <genogrove/data_type/kmer.hpp>
 #include <genogrove/data_type/numeric.hpp>
 #include <genogrove/data_type/query_result.hpp>
 
@@ -32,6 +33,7 @@
  * - **interval**: Basic genomic intervals with start/end positions (0-based half-open)
  * - **genomic_coordinate**: Stranded genomic intervals with coordinate-first sorting
  * - **numeric**: Point-based integer type for non-genomic B+ tree operations
+ * - **kmer**: K-mer sequences with 2-bit encoding for sequence-based indexing
  *
  * ## Type Wrappers and Containers
  * - **key**: Template wrapper combining key_type with optional associated data
