@@ -9,6 +9,7 @@ namespace genogrove::data_type {
 
     kmer::kmer(std::string_view sequence) : encoding(0), k(0) {
         if (sequence.length() > max_k) {
+            std::cout << sequence.length() << std::endl;
             throw std::invalid_argument("K-mer length exceeds maximum of 32");
         }
         if (sequence.empty()) {
