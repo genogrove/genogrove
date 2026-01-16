@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-01-16
+
+### Added
+- Added extensive doxygen documentation for data_types ([#81](https://github.com/genogrove/genogrove/pull/81))
+- Added a k-mer data type for DNA sequences (up to 32 bases) with compact 2-bit encoding; 
+supports construction, comparison, ordering, serialization, 
+aggregation, and exact-match overlap ([#82](https://github.com/genogrove/genogrove/pull/82))
+- Added comprehensive unit and integration tests covering construction, encoding/decoding, comparison, 
+serialization, aggregation, querying, graph edges, and boundary conditions ([#82](https://github.com/genogrove/genogrove/pull/82))
+- Introduced a new data registry system for managing per-type singleton metadata storage with 
+ID-based retrieval and validation ([#83](https://github.com/genogrove/genogrove/pull/83))
+- Enhanced serialization and deserialization capabilities for grove structures and nodes, 
+enabling improved persistence and reconstruction of complex data hierarchies ([#83](https://github.com/genogrove/genogrove/pull/83))
+
 ## [0.12.0] - 2026-01-12
 
 ### Added 
