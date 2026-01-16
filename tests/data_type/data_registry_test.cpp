@@ -412,15 +412,15 @@ TEST_F(DataRegistryTest, CombinedRegistryAndGroveSerialization) {
     // === Deserialize in the same order ===
     ss.seekg(0);
 
-    // 1. Deserialize registry FIRST
+    // 1. Deserialize registry FIRST (would also work with initial reg)
     auto& restored_reg = gdt::data_registry<std::string>::deserialize(ss);
 
     // Verify registry is restored
-    EXPECT_EQ(reg.size(), 5);
-    EXPECT_EQ(*reg.get(0), "SampleA_liver");
-    EXPECT_EQ(*reg.get(1), "SampleB_brain");
-    EXPECT_EQ(*reg.get(2), "SampleC_heart");
-    EXPECT_EQ(*reg.get(3), "SampleD_kidney");
+    EXPECT_EQ(restored_reg.size(), 5);
+    EXPECT_EQ(*restored_reg.get(0), "SampleA_liver");
+    EXPECT_EQ(*restored_reg.get(1), "SampleB_brain");
+    EXPECT_EQ(*restored_reg.get(2), "SampleC_heart");
+    EXPECT_EQ(*restored_reg.get(3), "SampleD_kidney");
     EXPECT_EQ(*reg.get(4), "SampleE_lung");
 
     // 2. Deserialize grove
