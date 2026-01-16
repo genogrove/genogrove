@@ -4,13 +4,10 @@
 #include <cctype>
 
 namespace genogrove::data_type {
+kmer::kmer() : encoding(0), k(0) {}
 
-    kmer::kmer() : encoding(0), k(0) {}
-
-    kmer::kmer(std::string_view sequence) : encoding(0), k(0) {
-        std::cout << "before: " << sequence.length() << std::endl;
-        if (sequence.length() > max_k) {
-            std::cout << sequence.length() << std::endl;
+kmer::kmer(std::string_view sequence) : encoding(0), k(0) {
+        if (sequence.length() > 32) {
             throw std::invalid_argument("K-mer length exceeds maximum of 32");
         }
         if (sequence.empty()) {

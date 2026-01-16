@@ -63,19 +63,17 @@ TEST(kmerTest, stringConstructorEmpty) {
 }
 
 TEST(kmerTest, stringConstructorInvalidCharacter) {
-    EXPECT_THROW(gdt::kmer("ACGN"), std::invalid_argument);
-    EXPECT_THROW(gdt::kmer("ACGX"), std::invalid_argument);
-    EXPECT_THROW(gdt::kmer("ACG1"), std::invalid_argument);
+    EXPECT_THROW(gdt::kmer{"ACGN"}, std::invalid_argument);
+    EXPECT_THROW(gdt::kmer{"ACGX"}, std::invalid_argument);
+    EXPECT_THROW(gdt::kmer{"ACG1"}, std::invalid_argument);
 }
 
 TEST(kmerTest, stringConstructorTooLong) {
-    // 33 bases should throw
     std::string too_long(33, 'A');
-    EXPECT_THROW(gdt::kmer(too_long), std::invalid_argument);
+    EXPECT_THROW(gdt::kmer{too_long}, std::invalid_argument);
 
-    // 32 bases should be fine
     std::string max_length(32, 'A');
-    EXPECT_NO_THROW(gdt::kmer(max_length));
+    EXPECT_NO_THROW(gdt::kmer{max_length});
 }
 
 TEST(kmerTest, encodingConstructor) {

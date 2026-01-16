@@ -93,7 +93,14 @@ namespace genogrove::data_type {
              */
             kmer(uint64_t encoding, uint8_t k);
 
+
             ~kmer() = default;
+
+            // Robust user-facing creation from any string-like input
+            // template <class S>
+            // static kmer from_sequence(const S& s) {
+            //     return kmer(std::string_view{s});
+            // }
 
             /**
              * @brief Less-than comparison based on encoding value.
@@ -237,6 +244,7 @@ namespace genogrove::data_type {
             uint64_t encoding;  ///< 2-bit encoded k-mer (A=00, C=01, G=10, T=11)
             uint8_t k;          ///< Length of the k-mer (1-32)
     };
+
 }
 
 #endif // GENOGROVE_DATA_TYPE_KMER_HPP
