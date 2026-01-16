@@ -96,17 +96,11 @@ namespace genogrove::data_type {
 
             ~kmer() = default;
 
-            // Robust user-facing creation from any string-like input
-            // template <class S>
-            // static kmer from_sequence(const S& s) {
-            //     return kmer(std::string_view{s});
-            // }
-
             /**
              * @brief Less-than comparison based on encoding value.
              *
+             * K-mers of different lengths are compared by length first, then by encoding.
              * K-mers are compared by their encoding, which gives lexicographic ordering.
-             * K-mers of different lengths are compared by encoding first, then by length.
              *
              * @param other K-mer to compare against
              * @return true if this k-mer is less than other

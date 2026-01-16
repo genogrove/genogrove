@@ -109,6 +109,9 @@ kmer::kmer(std::string_view sequence) : encoding(0), k(0) {
         uint8_t len;
         is.read(reinterpret_cast<char*>(&enc), sizeof(enc));
         is.read(reinterpret_cast<char*>(&len), sizeof(len));
+        if(!is) {
+            throw std::runtime_error("Failed to deserialize k-mer: stream error");
+        }
         return kmer(enc, len);
     }
 
