@@ -12,6 +12,7 @@
 #define GENOGROVE_DATA_TYPE_ALL_HPP
 
 #include <genogrove/data_type/constants.hpp>
+#include <genogrove/data_type/data_registry.hpp>
 #include <genogrove/data_type/genomic_coordinate.hpp>
 #include <genogrove/data_type/index.hpp>
 #include <genogrove/data_type/index_registry.hpp>
@@ -44,6 +45,7 @@
  *   (comparison operators, overlap(), aggregate(), to_string())
  * - **index**: Index identifier management (e.g., chromosome names)
  * - **index_registry**: Global registry for managing index identifiers
+ * - **data_registry**: Template registry for shared metadata (per-type singleton)
  * - **type_registry**: Type information registry system
  * - **serialization_traits**: Traits for type-specific serialization
  * - **constants**: Common constants and type definitions

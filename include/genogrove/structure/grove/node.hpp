@@ -10,12 +10,15 @@
 #define GENOGROVE_STRUCTURE_NODE_HPP
 
 // standard
+#include <istream>
+#include <ostream>
 #include <string_view>
 #include <vector>
 
 // genogrove
 #include "genogrove/data_type/interval.hpp"
 #include "genogrove/data_type/key.hpp"
+#include "genogrove/data_type/serialization_traits.hpp"
 
 namespace gdt = genogrove::data_type;
 
@@ -344,6 +347,90 @@ class node {
     /// Flag indicating whether this is a leaf node
     bool is_leaf;
 };
+} // namespace genogrove::structure
+
+// =============================================================================
+// Template Implementation
+// =============================================================================
+
+namespace genogrove::structure {
+
+template<typename key_type, typename data_type>
+void node<key_type, data_type>::serialize(std::ostream& os) {
+    // Write is_leaf flag
+    os.write(reinterpret_cast<const char*>(&is_leaf), sizeof(is_leaf));
+
+    // Write number of keys
+    size_t num_keys = keys.size();
+    os.write(reinterpret_cast<const char*>(&num_keys), sizeof(num_keys));
+
+    // Write each key
+    for (const auto* key_ptr : keys) {
+        // Serialize key_type value
+        gdt::serializer<key_type>::write(os, key_ptr->get_value());
+
+        // Serialize data_type if not void
+        if constexpr (!std::is_void_v<data_type>) {
+            gdt::serializer<data_type>::write(os, key_ptr->get_data());
+        }
+    }
+
+    // If not leaf, serialize children
+    if (!is_leaf) {
+        size_t num_children = children.size();
+        os.write(reinterpret_cast<const char*>(&num_children), sizeof(num_children));
+
+        for (auto* child : children) {
+            child->serialize(os);
+        }
+    }
+}
+
+template<typename key_type, typename data_type>
+node<key_type, data_type>* node<key_type, data_type>::deserialize(std::istream& is, int order) {
+    // Create new node
+    auto* n = new node<key_type, data_type>(order);
+
+    // Read is_leaf flag
+    is.read(reinterpret_cast<char*>(&n->is_leaf), sizeof(n->is_leaf));
+
+    // Read number of keys
+    size_t num_keys;
+    is.read(reinterpret_cast<char*>(&num_keys), sizeof(num_keys));
+
+    // Read each key
+    n->keys.reserve(num_keys);
+    for (size_t i = 0; i < num_keys; ++i) {
+        // Read key_type value
+        key_type key_value = gdt::serializer<key_type>::read(is);
+
+        // Create key (with or without data)
+        gdt::key<key_type, data_type>* key_ptr;
+        if constexpr (std::is_void_v<data_type>) {
+            key_ptr = new gdt::key<key_type, data_type>(key_value);
+        } else {
+            data_type data_value = gdt::serializer<data_type>::read(is);
+            key_ptr = new gdt::key<key_type, data_type>(key_value, data_value);
+        }
+        n->keys.push_back(key_ptr);
+    }
+
+    // If not leaf, deserialize children
+    if (!n->is_leaf) {
+        size_t num_children;
+        is.read(reinterpret_cast<char*>(&num_children), sizeof(num_children));
+
+        n->children.reserve(num_children);
+        for (size_t i = 0; i < num_children; ++i) {
+            auto* child = node<key_type, data_type>::deserialize(is, order);
+            child->parent = n;
+            n->children.push_back(child);
+        }
+    }
+
+    return n;
+}
+
 } // namespace genogrove::structure
 
 #endif // GENOGROVE_STRUCTURE_NODE_HPP

@@ -1,9 +1,9 @@
 /*
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: GPLv3
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
- * This file is part of genogrove and is licensed under the terms of the MIT license.
+ * This file is part of genogrove and is licensed under the terms of the GPLv3 license.
  * See the LICENSE file in the root of the repository for more information.
  */
 #ifndef STRUCTURE_GROVE_HPP
@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <deque>
 #include <algorithm>
+#include <functional>
 #include <optional>
 
 // genogrove
@@ -956,17 +957,39 @@ class grove {
      * @brief Deserialize a grove from a binary input stream
      * @param is Input stream to read binary data from
      * @return Deserialized grove object
-     * @note Reads order and root nodes; recalculates rightmost nodes after loading
-     * @warning Current implementation is incomplete (missing root node deserialization loop)
+     * @note Reads order and root nodes; recalculates rightmost nodes and leaf links after loading
      */
-    grove deserialize(std::istream& is) {
+    static grove deserialize(std::istream& is) {
         int order;
         is.read(reinterpret_cast<char*>(&order), sizeof(order));
-        grove grove(order);
+        grove g(order);
 
         size_t number_root_nodes;
         is.read(reinterpret_cast<char*>(&number_root_nodes), sizeof(number_root_nodes));
 
+        // Deserialize each root node
+        for (size_t i = 0; i < number_root_nodes; ++i) {
+            // Read index name
+            size_t index_name_length;
+            is.read(reinterpret_cast<char*>(&index_name_length), sizeof(index_name_length));
+            std::string index_name(index_name_length, '\0');
+            is.read(index_name.data(), index_name_length);
+
+            // Deserialize the tree for this index
+            node<key_type, data_type>* root = node<key_type, data_type>::deserialize(is, order);
+
+            // Move heap-allocated keys to grove's deque and fix pointers
+            g.rehome_keys(root);
+
+            // Link leaf nodes and find rightmost
+            node<key_type, data_type>* rightmost = g.link_leaves_and_find_rightmost(root);
+
+            // Store root and rightmost
+            g.root_nodes[index_name] = root;
+            g.rightmost_nodes[index_name] = rightmost;
+        }
+
+        return g;
     }
 
   private:
@@ -1090,6 +1113,67 @@ class grove {
 
         // The last remaining node is the root
         return {current_layer[0], inserted_keys};
+    }
+
+    /**
+     * @brief Move heap-allocated keys from deserialized nodes to grove's deque storage
+     * @param n Root node of the tree to process
+     * @note Recursively walks the tree and moves all keys to key_storage for stable pointers
+     * @note Called during deserialization to transfer ownership to the grove
+     */
+    void rehome_keys(node<key_type, data_type>* n) {
+        if (n == nullptr) return;
+
+        // Process keys in this node - move from heap to deque
+        auto& keys = n->get_keys();
+        for (size_t i = 0; i < keys.size(); ++i) {
+            // Copy key to deque
+            key_storage.push_back(*keys[i]);
+            // Delete heap-allocated key
+            delete keys[i];
+            // Update pointer to point to deque entry
+            keys[i] = &key_storage.back();
+        }
+
+        // Recursively process children (only for internal nodes)
+        if (!n->get_is_leaf()) {
+            for (auto* child : n->get_children()) {
+                rehome_keys(child);
+            }
+        }
+    }
+
+    /**
+     * @brief Link leaf nodes together and find the rightmost leaf
+     * @param root Root node of the tree
+     * @return Pointer to the rightmost leaf node
+     * @note Links leaf nodes via their next pointers for range traversal
+     * @note Called during deserialization to restore leaf chain
+     */
+    node<key_type, data_type>* link_leaves_and_find_rightmost(node<key_type, data_type>* root) {
+        if (root == nullptr) return nullptr;
+
+        // Find all leaf nodes via DFS
+        std::vector<node<key_type, data_type>*> leaves;
+        std::function<void(node<key_type, data_type>*)> collect_leaves = [&](node<key_type, data_type>* n) {
+            if (n == nullptr) return;
+            if (n->get_is_leaf()) {
+                leaves.push_back(n);
+            } else {
+                for (auto* child : n->get_children()) {
+                    collect_leaves(child);
+                }
+            }
+        };
+        collect_leaves(root);
+
+        // Link leaves together
+        for (size_t i = 0; i + 1 < leaves.size(); ++i) {
+            leaves[i]->set_next(leaves[i + 1]);
+        }
+
+        // Return rightmost leaf
+        return leaves.empty() ? nullptr : leaves.back();
     }
 
     /// Maximum number of keys per node (B+ tree order/capacity)
