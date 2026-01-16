@@ -13,6 +13,7 @@
 // Standard
 #include <sstream>
 #include <string>
+#include <limits>
 
 // Genogrove
 #include <genogrove/data_type/data_registry.hpp>
