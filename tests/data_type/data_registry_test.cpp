@@ -421,7 +421,7 @@ TEST_F(DataRegistryTest, CombinedRegistryAndGroveSerialization) {
     EXPECT_EQ(*restored_reg.get(1), "SampleB_brain");
     EXPECT_EQ(*restored_reg.get(2), "SampleC_heart");
     EXPECT_EQ(*restored_reg.get(3), "SampleD_kidney");
-    EXPECT_EQ(*reg.get(4), "SampleE_lung");
+    EXPECT_EQ(*restored_reg.get(4), "SampleE_lung");
 
     // 2. Deserialize grove
     auto restored_grove = gs::grove<gdt::interval, uint32_t>::deserialize(ss);
@@ -434,26 +434,26 @@ TEST_F(DataRegistryTest, CombinedRegistryAndGroveSerialization) {
     gdt::interval query1(150, 250);
     auto results1 = restored_grove.intersect(query1, "chr1");
     ASSERT_EQ(results1.get_keys().size(), 1);
-    EXPECT_EQ(*reg.get(results1.get_keys()[0]->get_data()), "SampleA_liver");
+    EXPECT_EQ(*restored_reg.get(results1.get_keys()[0]->get_data()), "SampleA_liver");
 
     gdt::interval query2(350, 450);
     auto results2 = restored_grove.intersect(query2, "chr1");
     ASSERT_EQ(results2.get_keys().size(), 1);
-    EXPECT_EQ(*reg.get(results2.get_keys()[0]->get_data()), "SampleB_brain");
+    EXPECT_EQ(*restored_reg.get(results2.get_keys()[0]->get_data()), "SampleB_brain");
 
     gdt::interval query3(750, 850);
     auto results3 = restored_grove.intersect(query3, "chr1");
     ASSERT_EQ(results3.get_keys().size(), 1);
-    EXPECT_EQ(*reg.get(results3.get_keys()[0]->get_data()), "SampleD_kidney");
+    EXPECT_EQ(*restored_reg.get(results3.get_keys()[0]->get_data()), "SampleD_kidney");
 
     gdt::interval query4(950, 1050);
     auto results4 = restored_grove.intersect(query4, "chr1");
     ASSERT_EQ(results4.get_keys().size(), 1);
-    EXPECT_EQ(*reg.get(results4.get_keys()[0]->get_data()), "SampleE_lung");
+    EXPECT_EQ(*restored_reg.get(results4.get_keys()[0]->get_data()), "SampleE_lung");
 
     // Query chr2 as well
     gdt::interval query5(1050, 1150);
     auto chr2_results = restored_grove.intersect(query5, "chr2");
     ASSERT_EQ(chr2_results.get_keys().size(), 1);
-    EXPECT_EQ(*reg.get(chr2_results.get_keys()[0]->get_data()), "SampleC_heart");
+    EXPECT_EQ(*restored_reg.get(chr2_results.get_keys()[0]->get_data()), "SampleC_heart");
 }
