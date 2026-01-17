@@ -21,6 +21,7 @@
 #include <string>
 #include <optional>
 #include <random>
+#include <sstream>
 #include <unordered_map>
 
 namespace gst = genogrove::structure;
@@ -830,6 +831,77 @@ TYPED_TEST_P(grove_typed_test, bulk_insert_precondition_violation) {
         << "Original data should remain intact after failed bulk insert";
 }
 
+TYPED_TEST_P(grove_typed_test, serialization) {
+    // Insert data into grove
+    auto data = this->generate_test_data(25);
+    auto keys = this->grove.insert_data(this->get_default_index(), data, gst::sorted, gst::bulk);
+    ASSERT_EQ(keys.size(), 25) << "Should insert 25 keys";
+
+    // Serialize grove to stream
+    std::stringstream ss;
+    this->grove.serialize(ss);
+
+    // Deserialize into new grove
+    auto restored_grove = gst::grove<TypeParam, int>::deserialize(ss);
+
+    // Verify data is intact by querying
+    auto expectation = this->create_overlapping_query(data);
+    auto results = restored_grove.intersect(expectation.query, this->get_default_index());
+
+    EXPECT_EQ(results.get_keys().size(), expectation.expected_indices.size())
+        << "Deserialized grove should return same query results";
+
+    // Verify non-overlapping query still returns empty
+    auto non_overlap = this->create_non_overlapping_query(data);
+    auto non_results = restored_grove.intersect(non_overlap.query, this->get_default_index());
+    EXPECT_EQ(non_results.get_keys().size(), 0)
+        << "Non-overlapping query should still return 0 results after deserialization";
+}
+
+TYPED_TEST_P(grove_typed_test, serialization_empty_grove) {
+    // Serialize empty grove
+    std::stringstream ss;
+    this->grove.serialize(ss);
+
+    // Deserialize into new grove
+    auto restored_grove = gst::grove<TypeParam, int>::deserialize(ss);
+
+    // Query should find nothing
+    auto data = this->generate_test_data(5);
+    auto expectation = this->create_overlapping_query(data);
+    auto results = restored_grove.intersect(expectation.query, this->get_default_index());
+    EXPECT_EQ(results.get_keys().size(), 0)
+        << "Query on deserialized empty grove should find nothing";
+}
+
+TYPED_TEST_P(grove_typed_test, serialization_multiple_indices) {
+    // Insert data into multiple indices
+    auto data1 = this->generate_test_data(10);
+    auto data2 = this->generate_test_data(10);
+
+    this->grove.insert_data(this->get_default_index(), data1, gst::sorted, gst::bulk);
+    this->grove.insert_data(this->get_alternative_index(), data2, gst::sorted, gst::bulk);
+
+    // Serialize
+    std::stringstream ss;
+    this->grove.serialize(ss);
+
+    // Deserialize
+    auto restored_grove = gst::grove<TypeParam, int>::deserialize(ss);
+
+    // Verify first index
+    auto expectation1 = this->create_overlapping_query(data1);
+    auto results1 = restored_grove.intersect(expectation1.query, this->get_default_index());
+    EXPECT_EQ(results1.get_keys().size(), expectation1.expected_indices.size())
+        << "First index should have correct data after deserialization";
+
+    // Verify second index
+    auto expectation2 = this->create_overlapping_query(data2);
+    auto results2 = restored_grove.intersect(expectation2.query, this->get_alternative_index());
+    EXPECT_EQ(results2.get_keys().size(), expectation2.expected_indices.size())
+        << "Second index should have correct data after deserialization";
+}
+
 // Register all the KEY_TYPE-DEPENDENT tests
 REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     regular_insert,
@@ -840,6 +912,9 @@ REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     bulk_insert_large_dataset,
     bulk_insert_append_mode,
     bulk_insert_multiple_indices,
-    bulk_insert_precondition_violation);
+    bulk_insert_precondition_violation,
+    serialization,
+    serialization_empty_grove,
+    serialization_multiple_indices);
 
 #endif // GENOGROVE_TESTS_DATA_TYPE_GROVE_TEST_HPP

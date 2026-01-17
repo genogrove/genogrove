@@ -177,7 +177,7 @@ namespace genogrove::data_type {
              * @param is Input stream to read from
              * @return Deserialized numeric
              */
-            numeric deserialize(std::istream& is);
+            [[nodiscard]] static numeric deserialize(std::istream& is);
 
         private:
             int value;   ///< The wrapped integer value

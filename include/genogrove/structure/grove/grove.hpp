@@ -950,7 +950,7 @@ class grove {
             os.write(key.c_str(), index_name_length);
             root->serialize(os);
         }
-        // note: we don't serialize rightmost node - and rather calculate them quickly when deserializing
+        // note: we don't serialize rightmost nodes - and rather calculate them quickly when deserializing
     }
 
     /**
@@ -959,7 +959,7 @@ class grove {
      * @return Deserialized grove object
      * @note Reads order and root nodes; recalculates rightmost nodes and leaf links after loading
      */
-    static grove deserialize(std::istream& is) {
+    [[nodiscard]] static grove deserialize(std::istream& is) {
         int order;
         is.read(reinterpret_cast<char*>(&order), sizeof(order));
         grove g(order);

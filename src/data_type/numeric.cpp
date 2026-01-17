@@ -1,6 +1,9 @@
 #include <genogrove/data_type/numeric.hpp>
+
+// standard
 #include <limits>
 #include <algorithm>
+#include <stdexcept>
 
 namespace genogrove::data_type {
     numeric::numeric() : value(std::numeric_limits<int>::min()) {}
@@ -57,6 +60,9 @@ namespace genogrove::data_type {
     numeric numeric::deserialize(std::istream& is) {
         numeric n;
         is.read(reinterpret_cast<char*>(&n.value), sizeof(n.value));
+        if(!is) {
+            throw std::runtime_error("Failed to deserialize numeric: stream error");
+        }
         return n;
     }
 }

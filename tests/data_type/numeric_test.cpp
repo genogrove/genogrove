@@ -10,6 +10,10 @@
 // Google Test
 #include <gtest/gtest.h>
 
+// Standard
+#include <limits>
+#include <sstream>
+
 // Genogrove
 #include <genogrove/data_type/numeric.hpp>
 #include <genogrove/data_type/key_type_base.hpp>
@@ -173,4 +177,63 @@ TEST(numericTest, sorting) {
     EXPECT_EQ(values[2].get_value(), 10);
     EXPECT_EQ(values[3].get_value(), 20);
     EXPECT_EQ(values[4].get_value(), 30);
+}
+
+TEST(numericTest, serialization) {
+    gdt::numeric original(42);
+
+    std::stringstream ss;
+    original.serialize(ss);
+
+    gdt::numeric restored = gdt::numeric::deserialize(ss);
+
+    EXPECT_EQ(original, restored);
+    EXPECT_EQ(restored.get_value(), 42);
+}
+
+TEST(numericTest, serializationDefault) {
+    gdt::numeric original;
+
+    std::stringstream ss;
+    original.serialize(ss);
+
+    gdt::numeric restored = gdt::numeric::deserialize(ss);
+
+    EXPECT_EQ(original, restored);
+    EXPECT_EQ(restored.get_value(), std::numeric_limits<int>::min());
+}
+
+TEST(numericTest, serializationNegative) {
+    gdt::numeric original(-100);
+
+    std::stringstream ss;
+    original.serialize(ss);
+
+    gdt::numeric restored = gdt::numeric::deserialize(ss);
+
+    EXPECT_EQ(original, restored);
+    EXPECT_EQ(restored.get_value(), -100);
+}
+
+TEST(numericTest, serializationMultiple) {
+    gdt::numeric n1(10);
+    gdt::numeric n2(-50);
+    gdt::numeric n3(0);
+    gdt::numeric n4(999);
+
+    std::stringstream ss;
+    n1.serialize(ss);
+    n2.serialize(ss);
+    n3.serialize(ss);
+    n4.serialize(ss);
+
+    gdt::numeric restored1 = gdt::numeric::deserialize(ss);
+    gdt::numeric restored2 = gdt::numeric::deserialize(ss);
+    gdt::numeric restored3 = gdt::numeric::deserialize(ss);
+    gdt::numeric restored4 = gdt::numeric::deserialize(ss);
+
+    EXPECT_EQ(n1, restored1);
+    EXPECT_EQ(n2, restored2);
+    EXPECT_EQ(n3, restored3);
+    EXPECT_EQ(n4, restored4);
 }

@@ -207,7 +207,7 @@ namespace genogrove::data_type {
              * @param is Input stream to read from
              * @return Deserialized k-mer
              */
-            static kmer deserialize(std::istream& is);
+            [[nodiscard]] static kmer deserialize(std::istream& is);
 
             /**
              * @brief Encode a single nucleotide to its 2-bit representation.

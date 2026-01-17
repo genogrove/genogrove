@@ -12,6 +12,7 @@
 
 // Standard
 #include <cstddef>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -209,6 +210,25 @@ namespace genogrove::data_type {
              * @note No validation is performed
              */
             void set_end(std::size_t end);
+
+            /**
+             * @brief Serialize the genomic coordinate to an output stream.
+             *
+             * Writes the coordinate in binary format for persistence.
+             *
+             * @param os Output stream to write to
+             */
+            void serialize(std::ostream& os) const;
+
+            /**
+             * @brief Deserialize a genomic coordinate from an input stream.
+             *
+             * Reads the coordinate from binary format and returns it.
+             *
+             * @param is Input stream to read from
+             * @return Deserialized genomic coordinate
+             */
+            [[nodiscard]] static genomic_coordinate deserialize(std::istream& is);
 
         private:
             char strand;         ///< Strand indicator: '+', '-', '.', or '*'

@@ -1,5 +1,10 @@
 #include <genogrove/data_type/interval.hpp>
 
+// standard
+#include <algorithm>
+#include <stdexcept>
+#include <string>
+
 namespace genogrove::data_type {
     interval::interval() : start(std::string::npos), end(std::string::npos) {}
     interval::interval(size_t start, size_t end) : start(start), end(end) {}
@@ -70,6 +75,9 @@ namespace genogrove::data_type {
         interval intvl;
         is.read(reinterpret_cast<char*>(&intvl.start), sizeof(intvl.start));
         is.read(reinterpret_cast<char*>(&intvl.end), sizeof(intvl.end));
+        if(!is) {
+            throw std::runtime_error("Failed to deserialize interval: stream error");
+        }
         return intvl;
     }
 }
