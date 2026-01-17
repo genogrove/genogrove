@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-01-16
+
+### Chores
+- Added (missing) serialization and deserialization support for genomic 
+coordinates ([#84](https://github.com/genogrove/genogrove/pull/84))
+- Standardized serialization API across data types for consistency and 
+extensibility ([#84](https://github.com/genogrove/genogrove/pull/84))
+- Improved serialization framework architecture for better 
+maintainability and extensibility ([#84](https://github.com/genogrove/genogrove/pull/84))
+
 ## [0.13.0] - 2026-01-16
 
 ### Added
