@@ -201,7 +201,7 @@ namespace genogrove::data_type {
              * @param is Input stream to read from
              * @return Deserialized interval
              */
-            interval deserialize(std::istream& is);
+            [[nodiscard]] static interval deserialize(std::istream& is);
 
         private:
             size_t start;   ///< Start position (0-based, inclusive)

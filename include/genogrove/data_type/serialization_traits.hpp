@@ -1,9 +1,9 @@
 /*
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: GPLv3
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
- * This file is part of genogrove and is licensed under the terms of the MIT license.
+ * This file is part of genogrove and is licensed under the terms of the GPLv3 license.
  * See the LICENSE file in the root of the repository for more information.
  */
 
@@ -19,53 +19,92 @@
 
 namespace genogrove::data_type {
 
+/**
+ * @file serialization_traits.hpp
+ * @brief Serialization infrastructure for genogrove types
+ *
+ * ## Serialization Design
+ *
+ * For custom types to support serialization, implement:
+ *
+ * - **serialize**: Member method (non-static)
+ *   ```cpp
+ *   void serialize(std::ostream& os) const;
+ *   ```
+ *
+ * - **deserialize**: Static method with [[nodiscard]]
+ *   ```cpp
+ *   [[nodiscard]] static T deserialize(std::istream& is);
+ *   ```
+ *
+ * The asymmetry is intentional:
+ * - serialize: You have an object, serialize it → member method
+ * - deserialize: You create an object from stream → static factory
+ *
+ * ## Alternatives for types you don't control
+ *
+ * 1. **Trivially copyable types** (int, etc.): Work automatically via raw memory copy
+ * 2. **Specialize serialization_traits<T>**: For third-party types (e.g., std::string)
+ *
+ * ## Example
+ *
+ * ```cpp
+ * class MyType {
+ * public:
+ *     void serialize(std::ostream& os) const {
+ *         os.write(reinterpret_cast<const char*>(&value), sizeof(value));
+ *     }
+ *
+ *     [[nodiscard]] static MyType deserialize(std::istream& is) {
+ *         MyType obj;
+ *         is.read(reinterpret_cast<char*>(&obj.value), sizeof(obj.value));
+ *         return obj;
+ *     }
+ * private:
+ *     int value;
+ * };
+ * ```
+ */
+
 // forward declaration
 template<typename T>
 struct serialization_traits;
 
-/*
- * @brief Concept to check if type has an instance serialize() method
+/**
+ * @brief Concept to check if type has a member serialize() method
+ * @note serialize must be a const member method: void serialize(std::ostream& os) const
+ * @note Static serialize is not allowed - use member method only
  */
 template<typename T>
-concept has_member_serialize = requires(std::ostream& os, const T& value) {
+concept has_serialize = requires(std::ostream& os, const T& value) {
     { value.serialize(os) } -> std::same_as<void>;
 };
 
-/*
- * @brief Concept to check if type has a static deserialize() method
- */
-template<typename T>
-concept has_static_serialize = requires(std::ostream& os, const T& value) {
-    { T::serialize(os, value) } -> std::same_as<void>;
-};
-
-/*
- * @brief Concept to check if type has a serialize method implemented (class or static)
- */
-template<typename T>
-concept has_serialize = has_member_serialize<T> || has_static_serialize<T>;
-
-/*
+/**
  * @brief Concept to check if type has static deserialize() method
+ * @note deserialize must be static and should be marked [[nodiscard]]:
+ *       [[nodiscard]] static T deserialize(std::istream& is)
+ * @note Non-static deserialize is not allowed - use static method only
  */
 template<typename T>
 concept has_deserialize = requires(std::istream& is) {
     { T::deserialize(is) } -> std::same_as<T>;
 };
 
-
-/*
+/**
  * @brief Trait-based serialization dispatcher
- * @details Prefers member serialize(), then static serialize(),
- *     finally falls back to serialization_traits
+ *
+ * Dispatches serialization calls based on type capabilities:
+ * 1. If type has member serialize()/static deserialize() → use those
+ * 2. Otherwise → fall back to serialization_traits<T>
+ *
+ * @tparam T The type to serialize/deserialize
  */
 template<typename T>
 struct serializer {
     static void write(std::ostream& os, const T& value) {
-        if constexpr(has_member_serialize<T>) {
+        if constexpr(has_serialize<T>) {
             value.serialize(os);
-        } else if constexpr(has_static_serialize<T>) {
-            T::serialize(os, value);
         } else {
             serialization_traits<T>::serialize(os, value);
         }

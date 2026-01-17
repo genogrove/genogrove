@@ -366,10 +366,10 @@ void node<key_type, data_type>::serialize(std::ostream& os) {
 
     // Write each key
     for (const auto* key_ptr : keys) {
-        // Serialize key_type value
-        gdt::serializer<key_type>::write(os, key_ptr->get_value());
+        // Serialize key_type value (requires member serialize method)
+        key_ptr->get_value().serialize(os);
 
-        // Serialize data_type if not void
+        // Serialize data_type if not void (uses serialization_traits)
         if constexpr (!std::is_void_v<data_type>) {
             gdt::serializer<data_type>::write(os, key_ptr->get_data());
         }
@@ -401,8 +401,8 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize(std::istream& 
     // Read each key
     n->keys.reserve(num_keys);
     for (size_t i = 0; i < num_keys; ++i) {
-        // Read key_type value
-        key_type key_value = gdt::serializer<key_type>::read(is);
+        // Read key_type value (requires static deserialize method)
+        key_type key_value = key_type::deserialize(is);
 
         // Create key (with or without data)
         gdt::key<key_type, data_type>* key_ptr;

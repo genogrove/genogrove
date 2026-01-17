@@ -10,6 +10,9 @@
 // Google Test
 #include <gtest/gtest.h>
 
+// Standard
+#include <sstream>
+
 // Genogrove
 #include <genogrove/data_type/genomic_coordinate.hpp>
 #include <genogrove/data_type/key_type_base.hpp>
@@ -346,4 +349,55 @@ TEST(genomicCoordinateTest, sortingMixed) {
     // start=20
     EXPECT_EQ(coords[4].get_strand(), '-');
     EXPECT_EQ(coords[4].get_start(), 20);
+}
+
+TEST(genomicCoordinateTest, serialization) {
+    gdt::genomic_coordinate original('+', 100, 200);
+
+    std::stringstream ss;
+    original.serialize(ss);
+
+    gdt::genomic_coordinate restored = gdt::genomic_coordinate::deserialize(ss);
+
+    EXPECT_EQ(original, restored);
+    EXPECT_EQ(restored.get_strand(), '+');
+    EXPECT_EQ(restored.get_start(), 100);
+    EXPECT_EQ(restored.get_end(), 200);
+}
+
+TEST(genomicCoordinateTest, serializationDefault) {
+    gdt::genomic_coordinate original;
+
+    std::stringstream ss;
+    original.serialize(ss);
+
+    gdt::genomic_coordinate restored = gdt::genomic_coordinate::deserialize(ss);
+
+    EXPECT_EQ(original, restored);
+    EXPECT_EQ(restored.get_strand(), '.');
+    EXPECT_EQ(restored.get_start(), 0);
+    EXPECT_EQ(restored.get_end(), 0);
+}
+
+TEST(genomicCoordinateTest, serializationAllStrands) {
+    gdt::genomic_coordinate coord_plus('+', 10, 20);
+    gdt::genomic_coordinate coord_minus('-', 30, 40);
+    gdt::genomic_coordinate coord_unstranded('.', 50, 60);
+    gdt::genomic_coordinate coord_wildcard('*', 70, 80);
+
+    std::stringstream ss;
+    coord_plus.serialize(ss);
+    coord_minus.serialize(ss);
+    coord_unstranded.serialize(ss);
+    coord_wildcard.serialize(ss);
+
+    gdt::genomic_coordinate restored1 = gdt::genomic_coordinate::deserialize(ss);
+    gdt::genomic_coordinate restored2 = gdt::genomic_coordinate::deserialize(ss);
+    gdt::genomic_coordinate restored3 = gdt::genomic_coordinate::deserialize(ss);
+    gdt::genomic_coordinate restored4 = gdt::genomic_coordinate::deserialize(ss);
+
+    EXPECT_EQ(coord_plus, restored1);
+    EXPECT_EQ(coord_minus, restored2);
+    EXPECT_EQ(coord_unstranded, restored3);
+    EXPECT_EQ(coord_wildcard, restored4);
 }

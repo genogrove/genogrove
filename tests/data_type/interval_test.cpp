@@ -10,12 +10,13 @@
 // Google Test
 #include <gtest/gtest.h>
 
+// Standard
+#include <algorithm>
+#include <sstream>
+
 // Genogrove
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/data_type/key_type_base.hpp>
-
-// Standard
-#include <algorithm>
 
 namespace gdt = genogrove::data_type;
 
@@ -316,4 +317,49 @@ TEST(intervalTest, sortingByEndSecondary) {
     EXPECT_EQ(intervals[1].get_end(), 20);
     EXPECT_EQ(intervals[2].get_end(), 30);
     EXPECT_EQ(intervals[3].get_end(), 40);
+}
+
+TEST(intervalTest, serialization) {
+    gdt::interval original(100, 200);
+
+    std::stringstream ss;
+    original.serialize(ss);
+
+    gdt::interval restored = gdt::interval::deserialize(ss);
+
+    EXPECT_EQ(original, restored);
+    EXPECT_EQ(restored.get_start(), 100);
+    EXPECT_EQ(restored.get_end(), 200);
+}
+
+TEST(intervalTest, serializationDefault) {
+    gdt::interval original;
+
+    std::stringstream ss;
+    original.serialize(ss);
+
+    gdt::interval restored = gdt::interval::deserialize(ss);
+
+    EXPECT_EQ(original, restored);
+    EXPECT_EQ(restored.get_start(), std::string::npos);
+    EXPECT_EQ(restored.get_end(), std::string::npos);
+}
+
+TEST(intervalTest, serializationMultiple) {
+    gdt::interval intvl1(0, 50);
+    gdt::interval intvl2(100, 200);
+    gdt::interval intvl3(1000, 2000);
+
+    std::stringstream ss;
+    intvl1.serialize(ss);
+    intvl2.serialize(ss);
+    intvl3.serialize(ss);
+
+    gdt::interval restored1 = gdt::interval::deserialize(ss);
+    gdt::interval restored2 = gdt::interval::deserialize(ss);
+    gdt::interval restored3 = gdt::interval::deserialize(ss);
+
+    EXPECT_EQ(intvl1, restored1);
+    EXPECT_EQ(intvl2, restored2);
+    EXPECT_EQ(intvl3, restored3);
 }
