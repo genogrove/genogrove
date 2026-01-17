@@ -70,6 +70,9 @@ namespace genogrove::data_type {
         interval intvl;
         is.read(reinterpret_cast<char*>(&intvl.start), sizeof(intvl.start));
         is.read(reinterpret_cast<char*>(&intvl.end), sizeof(intvl.end));
+        if(!is) {
+            throw std::runtime_error("Failed to deserialize interval: stream error");
+        }
         return intvl;
     }
 }

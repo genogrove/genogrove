@@ -143,6 +143,9 @@ namespace genogrove::data_type {
         is.read(reinterpret_cast<char*>(&strand), sizeof(strand));
         is.read(reinterpret_cast<char*>(&start), sizeof(start));
         is.read(reinterpret_cast<char*>(&end), sizeof(end));
+        if(!is) {
+            throw std::runtime_error("Failed to deserialize genomic coordinate: stream error");
+        }
         return genomic_coordinate(strand, start, end);
     }
 }
