@@ -1,5 +1,10 @@
 #include <genogrove/data_type/interval.hpp>
 
+// standard
+#include <algorithm>
+#include <stdexcept>
+#include <string>
+
 namespace genogrove::data_type {
     interval::interval() : start(std::string::npos), end(std::string::npos) {}
     interval::interval(size_t start, size_t end) : start(start), end(end) {}

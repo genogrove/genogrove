@@ -1,6 +1,9 @@
 #include <genogrove/data_type/numeric.hpp>
+
+// standard
 #include <limits>
 #include <algorithm>
+#include <stdexcept>
 
 namespace genogrove::data_type {
     numeric::numeric() : value(std::numeric_limits<int>::min()) {}
