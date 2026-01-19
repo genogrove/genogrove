@@ -761,3 +761,294 @@ TEST(GraphOverlayTest, MultipleChromosomesComplexGraph) {
     EXPECT_EQ(grove.vertex_count(), 6);  // All 6 keys inserted
 }
 
+// =============================================================================
+// External Key Tests
+// =============================================================================
+
+TEST(ExternalKeyTest, BasicExternalKeyCreation) {
+    gst::grove<gdt::interval, std::string> grove(5);
+
+    // Create external key
+    auto* ext = grove.add_external_key(gdt::interval{5000, 5500}, "enhancer_1");
+
+    ASSERT_NE(ext, nullptr);
+    EXPECT_EQ(ext->get_value().get_start(), 5000);
+    EXPECT_EQ(ext->get_value().get_end(), 5500);
+    EXPECT_EQ(ext->get_data(), "enhancer_1");
+
+    // External keys contribute to total vertex count
+    EXPECT_EQ(grove.vertex_count(), 1);
+    EXPECT_EQ(grove.external_vertex_count(), 1);
+    EXPECT_EQ(grove.indexed_vertex_count(), 0);
+}
+
+TEST(ExternalKeyTest, VertexCountingSeparation) {
+    gst::grove<gdt::interval, std::string> grove(5);
+
+    // Insert indexed keys
+    grove.insert_data("chr1", gdt::interval{100, 200}, "exon1", gst::sorted);
+    grove.insert_data("chr1", gdt::interval{300, 400}, "exon2", gst::sorted);
+    grove.insert_data("chr1", gdt::interval{500, 600}, "exon3", gst::sorted);
+
+    // Add external keys
+    grove.add_external_key(gdt::interval{5000, 5500}, "enhancer_1");
+    grove.add_external_key(gdt::interval{6000, 6500}, "enhancer_2");
+
+    // Verify counts
+    EXPECT_EQ(grove.indexed_vertex_count(), 3);
+    EXPECT_EQ(grove.external_vertex_count(), 2);
+    EXPECT_EQ(grove.vertex_count(), 5);  // Total = indexed + external
+}
+
+TEST(ExternalKeyTest, EdgeBetweenIndexedAndExternal) {
+    gst::grove<gdt::interval, std::string> grove(5);
+
+    // Create indexed key
+    auto* exon = grove.insert_data("chr1", gdt::interval{1000, 1200}, "exon1", gst::sorted);
+
+    // Create external key
+    auto* enhancer = grove.add_external_key(gdt::interval{5000, 5500}, "enhancer_1");
+
+    // Create edge from indexed to external
+    grove.add_edge(exon, enhancer);
+
+    EXPECT_EQ(grove.edge_count(), 1);
+    EXPECT_TRUE(grove.has_edge(exon, enhancer));
+    EXPECT_EQ(grove.out_degree(exon), 1);
+
+    auto neighbors = grove.get_neighbors(exon);
+    ASSERT_EQ(neighbors.size(), 1);
+    EXPECT_EQ(neighbors[0], enhancer);
+}
+
+TEST(ExternalKeyTest, EdgeBetweenExternalAndIndexed) {
+    gst::grove<gdt::interval, std::string> grove(5);
+
+    // Create external key
+    auto* enhancer = grove.add_external_key(gdt::interval{5000, 5500}, "enhancer_1");
+
+    // Create indexed key
+    auto* exon = grove.insert_data("chr1", gdt::interval{1000, 1200}, "exon1", gst::sorted);
+
+    // Create edge from external to indexed
+    grove.add_edge(enhancer, exon);
+
+    EXPECT_EQ(grove.edge_count(), 1);
+    EXPECT_TRUE(grove.has_edge(enhancer, exon));
+    EXPECT_EQ(grove.out_degree(enhancer), 1);
+
+    auto neighbors = grove.get_neighbors(enhancer);
+    ASSERT_EQ(neighbors.size(), 1);
+    EXPECT_EQ(neighbors[0], exon);
+}
+
+TEST(ExternalKeyTest, EdgeBetweenTwoExternalKeys) {
+    gst::grove<gdt::interval, std::string> grove(5);
+
+    // Create two external keys
+    auto* ext1 = grove.add_external_key(gdt::interval{5000, 5500}, "enhancer_1");
+    auto* ext2 = grove.add_external_key(gdt::interval{6000, 6500}, "enhancer_2");
+
+    // Create edge between them
+    grove.add_edge(ext1, ext2);
+
+    EXPECT_EQ(grove.edge_count(), 1);
+    EXPECT_TRUE(grove.has_edge(ext1, ext2));
+    EXPECT_EQ(grove.out_degree(ext1), 1);
+    EXPECT_EQ(grove.out_degree(ext2), 0);
+
+    // Verify vertex counts
+    EXPECT_EQ(grove.indexed_vertex_count(), 0);
+    EXPECT_EQ(grove.external_vertex_count(), 2);
+    EXPECT_EQ(grove.vertex_count(), 2);
+}
+
+TEST(ExternalKeyTest, ExternalKeysNotInSpatialQueries) {
+    gst::grove<gdt::interval, std::string> grove(5);
+
+    // Create indexed key
+    grove.insert_data("chr1", gdt::interval{1000, 1200}, "exon1", gst::sorted);
+
+    // Create external key that overlaps the query range
+    grove.add_external_key(gdt::interval{1100, 1300}, "enhancer_1");
+
+    // Query should only return indexed key, not external
+    gdt::interval query{1050, 1250};
+    auto result = grove.intersect(query, "chr1");
+
+    // Only the indexed key should be found
+    auto keys = result.get_keys();
+    EXPECT_EQ(keys.size(), 1);
+    EXPECT_EQ(keys[0]->get_data(), "exon1");
+}
+
+TEST(ExternalKeyTest, MultipleExternalKeysWithEdges) {
+    gst::grove<gdt::interval, std::string> grove(5);
+
+    // Create indexed exons
+    auto* exon1 = grove.insert_data("chr1", gdt::interval{1000, 1200}, "exon1", gst::sorted);
+    auto* exon2 = grove.insert_data("chr1", gdt::interval{2000, 2200}, "exon2", gst::sorted);
+
+    // Create external regulatory elements
+    auto* enhancer = grove.add_external_key(gdt::interval{5000, 5500}, "enhancer");
+    auto* promoter = grove.add_external_key(gdt::interval{500, 600}, "promoter");
+    auto* silencer = grove.add_external_key(gdt::interval{8000, 8500}, "silencer");
+
+    // Create complex edge relationships
+    grove.add_edge(enhancer, exon1);  // enhancer regulates exon1
+    grove.add_edge(enhancer, exon2);  // enhancer regulates exon2
+    grove.add_edge(promoter, exon1);  // promoter activates exon1
+    grove.add_edge(silencer, exon2);  // silencer represses exon2
+
+    // Verify edge counts
+    EXPECT_EQ(grove.edge_count(), 4);
+    EXPECT_EQ(grove.out_degree(enhancer), 2);
+    EXPECT_EQ(grove.out_degree(promoter), 1);
+    EXPECT_EQ(grove.out_degree(silencer), 1);
+
+    // Verify counts
+    EXPECT_EQ(grove.indexed_vertex_count(), 2);
+    EXPECT_EQ(grove.external_vertex_count(), 3);
+    EXPECT_EQ(grove.vertex_count(), 5);
+}
+
+TEST(ExternalKeyTest, ExternalKeyWithEdgeMetadata) {
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
+
+    // Create indexed exon
+    auto* exon = grove.insert_data("chr1", gdt::interval{1000, 1200}, "exon1", gst::sorted);
+
+    // Create external enhancer
+    auto* enhancer = grove.add_external_key(gdt::interval{5000, 5500}, "enhancer");
+
+    // Create edge with metadata
+    TranscriptEdge edge_meta{"regulatory", "enhancer_link", 0.85, 50};
+    grove.add_edge(enhancer, exon, edge_meta);
+
+    EXPECT_EQ(grove.edge_count(), 1);
+    EXPECT_TRUE(grove.has_edge(enhancer, exon));
+
+    // Verify edge metadata
+    auto edges = grove.get_edge_list(enhancer);
+    ASSERT_EQ(edges.size(), 1);
+    EXPECT_EQ(edges[0].metadata.transcript_id, "regulatory");
+    EXPECT_EQ(edges[0].metadata.junction_type, "enhancer_link");
+    EXPECT_EQ(edges[0].metadata.confidence, 0.85);
+    EXPECT_EQ(edges[0].metadata.read_support, 50);
+}
+
+TEST(ExternalKeyTest, SerializationDeserialization) {
+    std::stringstream ss;
+
+    // Create grove with indexed and external keys
+    {
+        gst::grove<gdt::interval, std::string> grove(5);
+
+        // Indexed keys
+        grove.insert_data("chr1", gdt::interval{1000, 1200}, "exon1", gst::sorted);
+        grove.insert_data("chr1", gdt::interval{2000, 2200}, "exon2", gst::sorted);
+
+        // External keys
+        grove.add_external_key(gdt::interval{5000, 5500}, "enhancer_1");
+        grove.add_external_key(gdt::interval{6000, 6500}, "enhancer_2");
+        grove.add_external_key(gdt::interval{7000, 7500}, "enhancer_3");
+
+        // Verify counts before serialization
+        EXPECT_EQ(grove.indexed_vertex_count(), 2);
+        EXPECT_EQ(grove.external_vertex_count(), 3);
+        EXPECT_EQ(grove.vertex_count(), 5);
+
+        grove.serialize(ss);
+    }
+
+    // Deserialize and verify
+    {
+        ss.seekg(0);
+        auto restored = gst::grove<gdt::interval, std::string>::deserialize(ss);
+
+        // Verify counts after deserialization
+        EXPECT_EQ(restored.indexed_vertex_count(), 2);
+        EXPECT_EQ(restored.external_vertex_count(), 3);
+        EXPECT_EQ(restored.vertex_count(), 5);
+
+        // Verify indexed keys are queryable
+        gdt::interval query{1050, 1150};
+        auto result = restored.intersect(query, "chr1");
+        auto keys = result.get_keys();
+        EXPECT_EQ(keys.size(), 1);
+        EXPECT_EQ(keys[0]->get_data(), "exon1");
+    }
+}
+
+TEST(ExternalKeyTest, PointerStabilityForExternalKeys) {
+    gst::grove<gdt::interval, std::string> grove(3);  // Small order to force possible reallocations
+
+    // Create many external keys to test pointer stability
+    std::vector<gdt::key<gdt::interval, std::string>*> ext_keys;
+    for (int i = 0; i < 100; ++i) {
+        size_t start = i * 1000;
+        size_t end = start + 500;
+        auto* ext = grove.add_external_key(
+            gdt::interval{start, end},
+            "ext_" + std::to_string(i));
+        ext_keys.push_back(ext);
+    }
+
+    // All pointers should still be valid
+    for (int i = 0; i < 100; ++i) {
+        EXPECT_EQ(ext_keys[i]->get_value().get_start(), i * 1000);
+        EXPECT_EQ(ext_keys[i]->get_data(), "ext_" + std::to_string(i));
+    }
+
+    // Create edges using stored pointers
+    for (int i = 0; i < 99; ++i) {
+        grove.add_edge(ext_keys[i], ext_keys[i + 1]);
+    }
+
+    EXPECT_EQ(grove.edge_count(), 99);
+}
+
+TEST(ExternalKeyTest, MixedGraphWithExternalKeys) {
+    gst::grove<gdt::interval, std::string> grove(5);
+
+    // Create a complex graph mixing indexed and external keys
+    // Simulating gene regulation network
+
+    // Indexed genes/exons
+    auto* gene1_exon1 = grove.insert_data("chr1", gdt::interval{1000, 1500}, "gene1_exon1", gst::sorted);
+    auto* gene1_exon2 = grove.insert_data("chr1", gdt::interval{2000, 2500}, "gene1_exon2", gst::sorted);
+    auto* gene2_exon1 = grove.insert_data("chr2", gdt::interval{1000, 1500}, "gene2_exon1", gst::sorted);
+
+    // External regulatory elements (not queryable by position)
+    auto* tf1 = grove.add_external_key(gdt::interval{0, 0}, "transcription_factor_1");
+    auto* tf2 = grove.add_external_key(gdt::interval{0, 0}, "transcription_factor_2");
+    auto* enhancer = grove.add_external_key(gdt::interval{50000, 50500}, "enhancer_region");
+
+    // Indexed to indexed edges (normal splice graph)
+    grove.add_edge(gene1_exon1, gene1_exon2);
+
+    // External to indexed edges (TF binds to gene)
+    grove.add_edge(tf1, gene1_exon1);
+    grove.add_edge(tf2, gene1_exon1);
+    grove.add_edge(tf1, gene2_exon1);
+
+    // External to external edges (regulatory network)
+    grove.add_edge(enhancer, tf1);
+    grove.add_edge(enhancer, tf2);
+
+    // Verify total edge count
+    EXPECT_EQ(grove.edge_count(), 6);
+
+    // Verify vertex counts
+    EXPECT_EQ(grove.indexed_vertex_count(), 3);
+    EXPECT_EQ(grove.external_vertex_count(), 3);
+    EXPECT_EQ(grove.vertex_count(), 6);
+
+    // Verify we can traverse from enhancer through TF to genes
+    auto enhancer_neighbors = grove.get_neighbors(enhancer);
+    EXPECT_EQ(enhancer_neighbors.size(), 2);  // tf1 and tf2
+
+    auto tf1_neighbors = grove.get_neighbors(tf1);
+    EXPECT_EQ(tf1_neighbors.size(), 2);  // gene1_exon1 and gene2_exon1
+}
+
