@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-01-18
+
+### Added
+- Extended the API to support creating external keys with 
+optional associated data ([#85](https://github.com/genogrove/genogrove/pull/85))
+- Added vertex counting methods to distinguish between indexed and 
+external vertices ([#85](https://github.com/genogrove/genogrove/pull/85))
+
 ## [0.13.1] - 2026-01-16
 
 ### Chores
