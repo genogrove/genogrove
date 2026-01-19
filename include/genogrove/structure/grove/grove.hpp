@@ -244,12 +244,69 @@ class grove {
     }
 
     /**
-     * @brief Get total number of vertices (keys) in the grove
+     * @brief Get total number of vertices (keys) in the grove (indexed + external)
      * @return Total number of keys in the grove (including isolated vertices with no edges)
      * @note This counts all keys regardless of whether they have edges
      */
     [[nodiscard]] size_t vertex_count() const {
+        return key_storage.size() + external_key_storage.size();
+    }
+
+    /**
+     * @brief Get number of indexed keys (stored in B+ tree)
+     * @return Number of keys indexed in the B+ tree
+     * @note These keys can be found via spatial queries (intersect)
+     */
+    [[nodiscard]] size_t indexed_vertex_count() const {
         return key_storage.size();
+    }
+
+    /**
+     * @brief Get number of external (graph-only) keys
+     * @return Number of keys that can participate in graph edges but are not indexed
+     * @note These keys cannot be found via spatial queries
+     */
+    [[nodiscard]] size_t external_vertex_count() const {
+        return external_key_storage.size();
+    }
+
+    /**
+     * @brief Add an external (graph-only) key with associated data
+     * @param key_value The key value (e.g., interval)
+     * @param data_value The data associated with the key
+     * @return Pointer to the newly created external key
+     * @note External keys are owned by the grove and participate in graph edges
+     * @note External keys are NOT indexed in any B+ tree (no spatial queries)
+     * @note External keys are serialized/deserialized with the grove
+     *
+     * Example usage:
+     * @code
+     * // Create external key for a regulatory element not needed for spatial queries
+     * auto* enhancer = grove.add_external_key(interval{5000, 5500}, "enhancer_1");
+     *
+     * // Link indexed exon to external enhancer
+     * auto* exon = grove.insert_data("chr1", interval{1000, 1200}, "exon1", sorted);
+     * grove.add_edge(exon, enhancer);
+     * @endcode
+     */
+    gdt::key<key_type, data_type>* add_external_key(key_type key_value, data_type data_value)
+        requires (!std::is_void_v<data_type>) {
+        external_key_storage.emplace_back(std::move(key_value), std::move(data_value));
+        return &external_key_storage.back();
+    }
+
+    /**
+     * @brief Add an external (graph-only) key without associated data
+     * @param key_value The key value (e.g., interval)
+     * @return Pointer to the newly created external key
+     * @note External keys are owned by the grove and participate in graph edges
+     * @note External keys are NOT indexed in any B+ tree (no spatial queries)
+     * @note External keys are serialized/deserialized with the grove
+     */
+    gdt::key<key_type, data_type>* add_external_key(key_type key_value)
+        requires (std::is_void_v<data_type>) {
+        external_key_storage.emplace_back(std::move(key_value));
+        return &external_key_storage.back();
     }
 
     /**
@@ -933,6 +990,7 @@ class grove {
      * @brief Serialize the grove to a binary output stream
      * @param os Output stream to write binary data to
      * @note Writes order, number of root nodes, then each root (index name + tree structure)
+     * @note Also writes external (graph-only) keys
      * @note Rightmost nodes are NOT serialized; they are recalculated during deserialization
      */
     void serialize(std::ostream& os) {
@@ -951,6 +1009,15 @@ class grove {
             root->serialize(os);
         }
         // note: we don't serialize rightmost nodes - and rather calculate them quickly when deserializing
+
+        // Write external keys count
+        size_t external_count = external_key_storage.size();
+        os.write(reinterpret_cast<const char*>(&external_count), sizeof(external_count));
+
+        // Write each external key
+        for (const auto& key : external_key_storage) {
+            key.serialize(os);
+        }
     }
 
     /**
@@ -958,6 +1025,7 @@ class grove {
      * @param is Input stream to read binary data from
      * @return Deserialized grove object
      * @note Reads order and root nodes; recalculates rightmost nodes and leaf links after loading
+     * @note Also reads external (graph-only) keys
      */
     [[nodiscard]] static grove deserialize(std::istream& is) {
         int order;
@@ -973,7 +1041,7 @@ class grove {
             size_t index_name_length;
             is.read(reinterpret_cast<char*>(&index_name_length), sizeof(index_name_length));
             std::string index_name(index_name_length, '\0');
-            is.read(index_name.data(), index_name_length);
+            is.read(index_name.data(), static_cast<std::streamsize>(index_name_length));
 
             // Deserialize the tree for this index
             node<key_type, data_type>* root = node<key_type, data_type>::deserialize(is, order);
@@ -987,6 +1055,15 @@ class grove {
             // Store root and rightmost
             g.root_nodes[index_name] = root;
             g.rightmost_nodes[index_name] = rightmost;
+        }
+
+        // Read external keys count
+        size_t external_count;
+        is.read(reinterpret_cast<char*>(&external_count), sizeof(external_count));
+
+        // Read each external key - directly into external_key_storage
+        for (size_t i = 0; i < external_count; ++i) {
+            g.external_key_storage.push_back(gdt::key<key_type, data_type>::deserialize(is));
         }
 
         return g;
@@ -1185,8 +1262,11 @@ class grove {
     /// Cache of rightmost leaf nodes for each index (used for sorted insertion optimization)
     std::unordered_map<std::string, node<key_type, data_type>*> rightmost_nodes;
 
-    /// Deque storage for all keys; provides stable pointers and better cache locality than individual allocations
+    /// Deque storage for all indexed keys; provides stable pointers and better cache locality than individual allocations
     std::deque<gdt::key<key_type, data_type>> key_storage;
+
+    /// Deque storage for external (graph-only) keys that can participate in edges but are not indexed in the B+ tree
+    std::deque<gdt::key<key_type, data_type>> external_key_storage;
 
     /// Embedded graph overlay for managing directed edges and relationships between keys
     graph_overlay<key_type, data_type, edge_data_type> graph_data;
