@@ -540,7 +540,11 @@ class grove {
      * @brief Replace the grove's root nodes with a new set
      * @param new_root_nodes New map of root nodes to use
      * @note This deletes all existing root nodes and clears rightmost node cache
-     * @note Thread-safe
+     * @warning REQUIRES EXCLUSIVE ACCESS: No concurrent operations (insert, intersect, etc.)
+     *          may be in progress when calling this method. Typically used during
+     *          initialization or deserialization when no other threads access the grove.
+     *          Leftover index_mutexes for removed indices are harmless and not cleared
+     *          to avoid invalidating references held by concurrent callers.
      */
     void set_root_nodes(std::unordered_map<std::string, node<key_type, data_type>*> new_root_nodes) {
         std::lock_guard<std::mutex> lock(grove_mutex);
@@ -550,7 +554,8 @@ class grove {
         }
         this->root_nodes = std::move(new_root_nodes);
         this->rightmost_nodes.clear();
-        this->index_mutexes.clear();  // Clear index mutexes as indices have changed
+        // Note: index_mutexes intentionally NOT cleared to avoid dangling references
+        // Leftover mutexes for removed indices are harmless
     }
 
     /**
