@@ -46,11 +46,10 @@ TEST_F(GroveThreadSafetyTest, ConcurrentInsertionsDifferentIndices) {
 
     EXPECT_EQ(total_inserted.load(), NUM_THREADS * INSERTIONS_PER_THREAD);
 
-    // Note: indexed_vertex_count() includes internal B+ tree separator keys,
-    // so it will be >= the number of data insertions
-    EXPECT_GE(g.indexed_vertex_count(), static_cast<size_t>(NUM_THREADS * INSERTIONS_PER_THREAD));
+    // indexed_vertex_count() counts only leaf (data) keys, not internal separator keys
+    EXPECT_EQ(g.indexed_vertex_count(), static_cast<size_t>(NUM_THREADS * INSERTIONS_PER_THREAD));
 
-    // Verify each index has the correct number of entries via intersect (leaf keys only)
+    // Verify each index has the correct number of entries via intersect
     for (int t = 0; t < NUM_THREADS; ++t) {
         std::string index = "chr" + std::to_string(t);
         gdt::interval query(0, INSERTIONS_PER_THREAD * 100);
