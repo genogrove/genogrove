@@ -69,15 +69,16 @@ class graph_overlay {
     graph_overlay(const graph_overlay&) = delete;
     graph_overlay& operator=(const graph_overlay&) = delete;
 
-    // Move constructor
-    graph_overlay(graph_overlay&& other) noexcept
-        : adjacency(std::move(other.adjacency)) {}
+    // Move constructor - lock source to avoid races
+    graph_overlay(graph_overlay&& other) noexcept {
+        std::lock_guard<std::mutex> lock(other.graph_mutex);
+        adjacency = std::move(other.adjacency);
+    }
 
-    // Move assignment
+    // Move assignment - use scoped_lock to avoid deadlock
     graph_overlay& operator=(graph_overlay&& other) noexcept {
         if (this != &other) {
-            std::lock_guard<std::mutex> lock(graph_mutex);
-            std::lock_guard<std::mutex> other_lock(other.graph_mutex);
+            std::scoped_lock lock(graph_mutex, other.graph_mutex);
             adjacency = std::move(other.adjacency);
         }
         return *this;

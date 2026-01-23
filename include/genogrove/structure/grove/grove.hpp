@@ -116,21 +116,29 @@ class grove {
     /**
      * @brief Move constructor
      * @note Moves all data from other grove; other grove is left in valid but unspecified state
+     * @note Locks source mutexes to avoid races during move
      */
     grove(grove&& other) noexcept
-        : order(other.order),
-          root_nodes(std::move(other.root_nodes)),
-          rightmost_nodes(std::move(other.rightmost_nodes)),
-          key_storage(std::move(other.key_storage)),
-          external_key_storage(std::move(other.external_key_storage)),
-          graph_data(std::move(other.graph_data)) {}
+        : order(other.order) {
+        // Lock all source mutexes before moving
+        std::scoped_lock lock(other.grove_mutex, other.key_storage_mutex, other.external_key_mutex);
+        root_nodes = std::move(other.root_nodes);
+        rightmost_nodes = std::move(other.rightmost_nodes);
+        key_storage = std::move(other.key_storage);
+        external_key_storage = std::move(other.external_key_storage);
+        graph_data = std::move(other.graph_data);
+    }
 
     /**
      * @brief Move assignment operator
      * @note Moves all data from other grove; other grove is left in valid but unspecified state
+     * @note Locks both source and destination mutexes to avoid races
      */
     grove& operator=(grove&& other) noexcept {
         if (this != &other) {
+            // Lock all mutexes from both source and destination (scoped_lock avoids deadlock)
+            std::scoped_lock lock(grove_mutex, key_storage_mutex, external_key_mutex,
+                                  other.grove_mutex, other.key_storage_mutex, other.external_key_mutex);
             // Clean up existing data
             for (auto& [key, root] : root_nodes) {
                 delete root;
