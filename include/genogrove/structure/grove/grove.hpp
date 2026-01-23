@@ -298,8 +298,7 @@ class grove {
      * @note Thread-safe
      */
     [[nodiscard]] size_t vertex_count() const {
-        std::lock_guard<std::mutex> lock1(key_storage_mutex);
-        std::lock_guard<std::mutex> lock2(external_key_mutex);
+        std::scoped_lock lock(key_storage_mutex, external_key_mutex);
         return key_storage.size() + external_key_storage.size();
     }
 
@@ -334,8 +333,7 @@ class grove {
      * @note Thread-safe
      */
     [[nodiscard]] size_t total_key_count() const {
-        std::lock_guard<std::mutex> lock1(key_storage_mutex);
-        std::lock_guard<std::mutex> lock2(external_key_mutex);
+        std::scoped_lock lock(key_storage_mutex, external_key_mutex);
         return key_storage.size() + external_key_storage.size();
     }
 
