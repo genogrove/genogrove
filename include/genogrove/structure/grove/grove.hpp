@@ -1292,8 +1292,9 @@ class grove {
      * @param index The index name (e.g., chromosome name)
      * @return Reference to the shared_mutex for this index
      * @note Protected by grove_mutex when creating new entries
+     * @note Const-safe because index_mutexes is mutable
      */
-    std::shared_mutex& get_index_mutex(const std::string& index) {
+    std::shared_mutex& get_index_mutex(const std::string& index) const {
         std::lock_guard<std::mutex> lock(grove_mutex);
         return index_mutexes[index];
     }
