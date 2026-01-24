@@ -306,12 +306,20 @@ class grove {
      * @brief Get number of indexed data keys (leaf keys in B+ tree)
      * @return Number of data keys that can be found via spatial queries (intersect)
      * @note Excludes internal B+ tree separator keys used for navigation
-     * @note Thread-safe; traverses linked leaves on each call (O(leaves))
+     * @note Thread-safe; acquires shared locks per-index during traversal (O(leaves))
      */
     [[nodiscard]] size_t indexed_vertex_count() const {
-        std::lock_guard<std::mutex> lock(grove_mutex);
+        // Snapshot root nodes while holding grove_mutex
+        std::unordered_map<std::string, node<key_type, data_type>*> roots_snapshot;
+        {
+            std::lock_guard<std::mutex> lock(grove_mutex);
+            roots_snapshot = root_nodes;
+        }
+
+        // Traverse each index with its own shared lock
         size_t count = 0;
-        for (const auto& [idx, root] : root_nodes) {
+        for (const auto& [idx, root] : roots_snapshot) {
+            std::shared_lock lock(get_index_mutex(idx));
             // Find leftmost leaf
             auto* n = root;
             while (n && !n->get_is_leaf()) {
