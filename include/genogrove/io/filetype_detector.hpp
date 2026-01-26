@@ -23,6 +23,8 @@ namespace genogrove::io {
         GFF,
         GTF,
         VCF,
+        SAM,
+        BAM,
         GG,
         UNKNOWN
     };
