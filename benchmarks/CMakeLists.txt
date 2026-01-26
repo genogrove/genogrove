@@ -6,11 +6,6 @@ set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
 set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
 set(BENCHMARK_USE_BUNDLED_GTEST OFF CACHE BOOL "" FORCE)
 
-# Explicitly set regex backend to avoid detection issues
-set(HAVE_STD_REGEX ON CACHE BOOL "" FORCE)
-set(HAVE_POSIX_REGEX OFF CACHE BOOL "" FORCE)
-set(HAVE_GNU_POSIX_REGEX OFF CACHE BOOL "" FORCE)
-
 FetchContent_Declare(
         benchmark
         GIT_REPOSITORY https://github.com/google/benchmark.git

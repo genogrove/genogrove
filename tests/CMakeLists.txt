@@ -94,8 +94,7 @@ target_include_directories(
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
-find_package(Threads REQUIRED)
-target_link_libraries(genogrove_structure_tests genogrove gtest gtest_main Threads::Threads)
+target_link_libraries(genogrove_structure_tests genogrove gtest gtest_main)
 set_target_properties(genogrove_structure_tests PROPERTIES
         BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
         INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"

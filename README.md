@@ -47,30 +47,7 @@ This repository contains the genogrove library.
 
 ## Development
 
-### Sanitizers
-
-Two sanitizer options are available (mutually exclusive):
-
-**AddressSanitizer** - Detects memory errors, leaks, and undefined behavior:
-```bash
-cmake -B build -S . -DENABLE_ADDRESS_SANITIZER=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Debug
-cmake --build build
-ctest --output-on-failure
-```
-
-**ThreadSanitizer** - Detects data races in multithreaded code:
-```bash
-cmake -B build -S . -DENABLE_THREAD_SANITIZER=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Debug
-cmake --build build
-ctest --output-on-failure
-```
-
-Run thread safety tests specifically:
-```bash
-./build/tests/genogrove_structure_tests --gtest_filter="GroveThreadSafety*"
-```
-
-> **Note**: Only one sanitizer can be enabled at a time. Enabling both will result in a CMake error.
+1. Run sanitizers (AddressSanitizer and UndefinedBehaviorSanitizer) to catch memory issues and undefined behavior during development. See [SANITIZERS.md](SANITIZERS.md) for details.
 
 ## Documentation
 

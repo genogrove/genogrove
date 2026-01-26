@@ -16,8 +16,6 @@
 #include <algorithm>
 #include <functional>
 #include <optional>
-#include <mutex>
-#include <shared_mutex>
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
@@ -109,51 +107,6 @@ class grove {
      */
     grove() : order(3), root_nodes(), rightmost_nodes() {}
 
-    // Delete copy constructor and assignment (mutex is not copyable)
-    grove(const grove&) = delete;
-    grove& operator=(const grove&) = delete;
-
-    /**
-     * @brief Move constructor
-     * @note Moves all data from other grove; other grove is left in valid but unspecified state
-     * @note Locks source mutexes to avoid races during move
-     */
-    grove(grove&& other) noexcept
-        : order(other.order) {
-        // Lock all source mutexes before moving
-        std::scoped_lock lock(other.grove_mutex, other.key_storage_mutex, other.external_key_mutex);
-        root_nodes = std::move(other.root_nodes);
-        rightmost_nodes = std::move(other.rightmost_nodes);
-        key_storage = std::move(other.key_storage);
-        external_key_storage = std::move(other.external_key_storage);
-        graph_data = std::move(other.graph_data);
-    }
-
-    /**
-     * @brief Move assignment operator
-     * @note Moves all data from other grove; other grove is left in valid but unspecified state
-     * @note Locks both source and destination mutexes to avoid races
-     */
-    grove& operator=(grove&& other) noexcept {
-        if (this != &other) {
-            // Lock all mutexes from both source and destination (scoped_lock avoids deadlock)
-            std::scoped_lock lock(grove_mutex, key_storage_mutex, external_key_mutex,
-                                  other.grove_mutex, other.key_storage_mutex, other.external_key_mutex);
-            // Clean up existing data
-            for (auto& [key, root] : root_nodes) {
-                delete root;
-            }
-            // Move data
-            order = other.order;
-            root_nodes = std::move(other.root_nodes);
-            rightmost_nodes = std::move(other.rightmost_nodes);
-            key_storage = std::move(other.key_storage);
-            external_key_storage = std::move(other.external_key_storage);
-            graph_data = std::move(other.graph_data);
-        }
-        return *this;
-    }
-
     /**
      * @brief Destructor that cleans up all tree nodes
      * @note Recursively deletes all root nodes and their children; keys in deque are automatically freed
@@ -241,10 +194,9 @@ class grove {
     /**
      * @brief Get all outgoing edge structures (convenience forwarding to graph)
      * @param source Pointer to source key
-     * @return Copy of vector of edge structures containing target and metadata
-     * @note Thread-safe; returns a copy for thread safety
+     * @return Const reference to vector of edge structures containing target and metadata
      */
-    std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>
+    const std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>&
     get_edge_list(gdt::key<key_type, data_type>* source) const {
         return graph_data.get_edge_list(source);
     }
@@ -295,64 +247,26 @@ class grove {
      * @brief Get total number of vertices (keys) in the grove (indexed + external)
      * @return Total number of keys in the grove (including isolated vertices with no edges)
      * @note This counts all keys regardless of whether they have edges
-     * @note Thread-safe
      */
     [[nodiscard]] size_t vertex_count() const {
-        std::scoped_lock lock(key_storage_mutex, external_key_mutex);
         return key_storage.size() + external_key_storage.size();
     }
 
     /**
-     * @brief Get number of indexed data keys (leaf keys in B+ tree)
-     * @return Number of data keys that can be found via spatial queries (intersect)
-     * @note Excludes internal B+ tree separator keys used for navigation
-     * @note Thread-safe; acquires shared locks per-index during traversal (O(leaves))
+     * @brief Get number of indexed keys (stored in B+ tree)
+     * @return Number of keys indexed in the B+ tree
+     * @note These keys can be found via spatial queries (intersect)
      */
     [[nodiscard]] size_t indexed_vertex_count() const {
-        // Snapshot root nodes while holding grove_mutex
-        std::unordered_map<std::string, node<key_type, data_type>*> roots_snapshot;
-        {
-            std::lock_guard<std::mutex> lock(grove_mutex);
-            roots_snapshot = root_nodes;
-        }
-
-        // Traverse each index with its own shared lock
-        size_t count = 0;
-        for (const auto& [idx, root] : roots_snapshot) {
-            std::shared_lock lock(get_index_mutex(idx));
-            // Find leftmost leaf
-            auto* n = root;
-            while (n && !n->get_is_leaf()) {
-                n = n->get_child(0);
-            }
-            // Traverse linked leaves
-            while (n) {
-                count += n->get_keys().size();
-                n = n->get_next();
-            }
-        }
-        return count;
-    }
-
-    /**
-     * @brief Get total number of keys in storage (including internal B+ tree keys)
-     * @return Total keys including data keys, internal separator keys, and external keys
-     * @note Internal separator keys are created during node splits for tree navigation
-     * @note Thread-safe
-     */
-    [[nodiscard]] size_t total_key_count() const {
-        std::scoped_lock lock(key_storage_mutex, external_key_mutex);
-        return key_storage.size() + external_key_storage.size();
+        return key_storage.size();
     }
 
     /**
      * @brief Get number of external (graph-only) keys
      * @return Number of keys that can participate in graph edges but are not indexed
      * @note These keys cannot be found via spatial queries
-     * @note Thread-safe
      */
     [[nodiscard]] size_t external_vertex_count() const {
-        std::lock_guard<std::mutex> lock(external_key_mutex);
         return external_key_storage.size();
     }
 
@@ -364,7 +278,6 @@ class grove {
      * @note External keys are owned by the grove and participate in graph edges
      * @note External keys are NOT indexed in any B+ tree (no spatial queries)
      * @note External keys are serialized/deserialized with the grove
-     * @note Thread-safe
      *
      * Example usage:
      * @code
@@ -378,7 +291,6 @@ class grove {
      */
     gdt::key<key_type, data_type>* add_external_key(key_type key_value, data_type data_value)
         requires (!std::is_void_v<data_type>) {
-        std::lock_guard<std::mutex> lock(external_key_mutex);
         external_key_storage.emplace_back(std::move(key_value), std::move(data_value));
         return &external_key_storage.back();
     }
@@ -390,11 +302,9 @@ class grove {
      * @note External keys are owned by the grove and participate in graph edges
      * @note External keys are NOT indexed in any B+ tree (no spatial queries)
      * @note External keys are serialized/deserialized with the grove
-     * @note Thread-safe
      */
     gdt::key<key_type, data_type>* add_external_key(key_type key_value)
         requires (std::is_void_v<data_type>) {
-        std::lock_guard<std::mutex> lock(external_key_mutex);
         external_key_storage.emplace_back(std::move(key_value));
         return &external_key_storage.back();
     }
@@ -535,33 +445,23 @@ class grove {
     /**
      * @brief Get map of all root nodes indexed by their string keys
      * @return Unordered map from index names (e.g., chromosome names) to root node pointers
-     * @note Thread-safe; returns a copy
      */
     std::unordered_map<std::string, node<key_type, data_type>*> get_root_nodes() const {
-        std::lock_guard<std::mutex> lock(grove_mutex);
         return this->root_nodes;
     }
 
     /**
      * @brief Replace the grove's root nodes with a new set
-     * @param new_root_nodes New map of root nodes to use
+     * @param root_nodes New map of root nodes to use
      * @note This deletes all existing root nodes and clears rightmost node cache
-     * @warning REQUIRES EXCLUSIVE ACCESS: No concurrent operations (insert, intersect, etc.)
-     *          may be in progress when calling this method. Typically used during
-     *          initialization or deserialization when no other threads access the grove.
-     *          Leftover index_mutexes for removed indices are harmless and not cleared
-     *          to avoid invalidating references held by concurrent callers.
      */
-    void set_root_nodes(std::unordered_map<std::string, node<key_type, data_type>*> new_root_nodes) {
-        std::lock_guard<std::mutex> lock(grove_mutex);
-        // Delete existing root nodes
-        for(auto& [_, root] : this->root_nodes) {
+    void set_root_nodes(std::unordered_map<std::string, node<key_type, data_type>*> root_nodes) {
+        // this->root_nodes = root_nodes;
+        for(auto& [_, root] : root_nodes) {
             delete root;
         }
-        this->root_nodes = std::move(new_root_nodes);
+        this->root_nodes = std::move(root_nodes);
         this->rightmost_nodes.clear();
-        // Note: index_mutexes intentionally NOT cleared to avoid dangling references
-        // Leftover mutexes for removed indices are harmless
     }
 
     /**
@@ -569,61 +469,27 @@ class grove {
      * @param key The index name (e.g., chromosome name)
      * @return Pointer to rightmost leaf node, or nullptr if index doesn't exist
      * @note Used for optimized sorted insertion
-     * @note Thread-safe
      */
     node<key_type, data_type>* get_rightmost_node(std::string_view key) {
-        std::string idx(key);
-        std::shared_lock lock(get_index_mutex(idx));
-        return get_rightmost_node_impl(key);
-    }
-
-    /**
-     * @brief Get the rightmost leaf node for a given index (implementation)
-     * @param key The index name (e.g., chromosome name)
-     * @return Pointer to rightmost leaf node, or nullptr if index doesn't exist
-     * @note Internal helper - caller must hold index lock
-     * @note Acquires grove_mutex internally to protect rightmost_nodes map access
-     */
-    node<key_type, data_type>* get_rightmost_node_impl(std::string_view key) {
-        std::lock_guard<std::mutex> lock(grove_mutex);
         return ggu::value_lookup(this->rightmost_nodes, std::string(key)).value_or(nullptr);
     }
 
     /**
      * @brief Set the rightmost leaf node for a given index
      * @param key The index name (e.g., chromosome name)
-     * @param nd Pointer to the new rightmost leaf node
+     * @param node Pointer to the new rightmost leaf node
      * @note Updated automatically during node splits and insertions
-     * @note Thread-safe
      */
-    void set_rightmost_node(std::string_view key, node<key_type, data_type>* nd) {
-        std::string idx(key);
-        std::unique_lock index_lock(get_index_mutex(idx));
-        std::lock_guard<std::mutex> map_lock(grove_mutex);
-        this->rightmost_nodes[std::string(key)] = nd;
+    void set_rightmost_node(std::string_view key, node<key_type, data_type>* node) {
+        this->rightmost_nodes[std::string(key)] = node;
     }
 
     /**
      * @brief Get the root node for a specific index
      * @param key The index name (e.g., chromosome name) to look up
      * @return Pointer to root node, or nullptr if index doesn't exist
-     * @note Thread-safe
      */
     node<key_type, data_type>* get_root(std::string_view key) {
-        std::string idx(key);
-        std::shared_lock lock(get_index_mutex(idx));
-        return get_root_impl(key);
-    }
-
-    /**
-     * @brief Get the root node for a specific index (implementation)
-     * @param key The index name (e.g., chromosome name) to look up
-     * @return Pointer to root node, or nullptr if index doesn't exist
-     * @note Internal helper - caller must hold index lock
-     * @note Acquires grove_mutex internally to protect root_nodes map access
-     */
-    node<key_type, data_type>* get_root_impl(std::string_view key) {
-        std::lock_guard<std::mutex> lock(grove_mutex);
         return ggu::value_lookup(this->root_nodes, std::string(key)).value_or(nullptr);
     }
 
@@ -632,24 +498,8 @@ class grove {
      * @param key The index name (e.g., chromosome name) for the new root
      * @return Pointer to the newly created root node
      * @throws std::runtime_error if a root already exists for this key
-     * @note Thread-safe
      */
     node<key_type, data_type>* insert_root(std::string_view key) {
-        std::string idx(key);
-        std::unique_lock lock(get_index_mutex(idx));
-        return insert_root_impl(key);
-    }
-
-    /**
-     * @brief Create and insert a new root node for a given index (implementation)
-     * @param key The index name (e.g., chromosome name) for the new root
-     * @return Pointer to the newly created root node
-     * @throws std::runtime_error if a root already exists for this key
-     * @note Internal helper - caller must hold index lock
-     * @note Acquires grove_mutex internally to protect root_nodes/rightmost_nodes map access
-     */
-    node<key_type, data_type>* insert_root_impl(std::string_view key) {
-        std::lock_guard<std::mutex> lock(grove_mutex);
         // check if the root node is already in the map (error)
         std::string key_str(key);
         if(ggu::value_lookup(this->root_nodes, key_str)) {
@@ -670,16 +520,13 @@ class grove {
      * @param Tag to dispatch to sorted insertion algorithm
      * @note This assumes key_value is greater than all existing keys in the specified index
      * @return Pointer to the inserted key in the tree
-     * @note Thread-safe
      */
     gdt::key<key_type, data_type>* insert_data(
         std::string_view index,
         key_type key_value,
         data_type data_value,
         sorted_t) requires(!std::is_void_v<data_type>) {
-        std::string idx(index);
-        std::unique_lock lock(get_index_mutex(idx));
-        return insert_data_sorted_impl(index, key_value, data_value);
+        return insert_data_sorted(index, key_value, data_value);
     }
 
     /**
@@ -689,16 +536,13 @@ class grove {
      * @param data_value The data associated with the key
      * @return Pointer to the inserted key in the tree
      * @note Uses standard tree traversal (O(log n)). For sorted data, use sorted tag for better performance.
-     * @note Thread-safe
      */
     gdt::key<key_type, data_type>* insert_data(
         std::string_view index,
         key_type key_value,
         data_type data_value) requires (!std::is_void_v<data_type>) {
-            std::string idx(index);
-            std::unique_lock lock(get_index_mutex(idx));
             gdt::key<key_type, data_type> key(key_value, data_value);
-            return insert_impl(index, key);
+            return insert(index, key);
         }
 
     /**
@@ -720,26 +564,22 @@ class grove {
      * @throws std::runtime_error if precondition is violated in append mode
      * @see build_tree_bottom_up() for bottom-up construction
      * @see insert_sorted() for single-key rightmost insertion behavior
-     * @note Thread-safe
      */
     template<typename Container>
     std::vector<gdt::key<key_type, data_type>*> insert_data(std::string_view index,
         const Container& data, sorted_t, bulk_t)
         requires (!std::is_void_v<data_type>) {
-        std::string idx(index);
-        std::unique_lock lock(get_index_mutex(idx));
-
         std::vector<gdt::key<key_type, data_type>*> inserted_keys;
         if (data.empty()) return inserted_keys;
 
         // Check if index is empty - use bottom-up construction for best performance
-        node<key_type, data_type>* rightmost_node = this->get_rightmost_node_impl(index);
+        node<key_type, data_type>* rightmost_node = this->get_rightmost_node(index);
 
         if (rightmost_node == nullptr || rightmost_node->get_keys().empty()) {
             // Index is empty - use fast bottom-up tree construction
 
             // Delete existing empty root node to avoid memory leak
-            auto* existing_root = this->get_root_impl(index);
+            auto* existing_root = this->get_root(index);
             if (existing_root != nullptr) {
                 delete existing_root;
                 // rightmost_nodes will be updated by build_tree_bottom_up
@@ -747,7 +587,6 @@ class grove {
 
             auto [new_root, keys] = build_tree_bottom_up(index, data);
             if (new_root != nullptr) {
-                std::lock_guard<std::mutex> map_lock(grove_mutex);
                 this->root_nodes[std::string(index)] = new_root;
             }
             return keys;
@@ -785,16 +624,13 @@ class grove {
                     new_root->set_is_leaf(false);
                     current_node->set_parent(new_root);
                     split_node(new_root, 0);
-                    {
-                        std::lock_guard<std::mutex> map_lock(grove_mutex);
-                        this->root_nodes[std::string(index)] = new_root;
-                    }
-                    current_node = this->get_rightmost_node_impl(index);
+                    this->root_nodes[std::string(index)] = new_root;
+                    current_node = this->get_rightmost_node(index);
                 } else {
                     // Internal node overflow
                     int child_index = current_node->get_parent()->get_children().size() - 1;
                     split_node(current_node->get_parent(), child_index);
-                    current_node = this->get_rightmost_node_impl(index);
+                    current_node = this->get_rightmost_node(index);
                 }
             }
         }
@@ -818,7 +654,6 @@ class grove {
      * @note Data is always sorted (O(n log n)) before insertion
      * @note For pre-sorted data, use the sorted tag variant to skip sorting: insert_data(index, data, sorted, bulk)
      * @throws std::runtime_error if precondition is violated in append mode
-     * @note Thread-safe
      *
      * Example usage:
      * @code
@@ -834,11 +669,11 @@ class grove {
         requires (!std::is_void_v<data_type>) {
         if (data.empty()) return {};
 
-        // Sort the data (O(n log n)) - done outside of lock
+        // Sort the data (O(n log n))
         std::sort(data.begin(), data.end(),
             [](const auto& a, const auto& b) { return a.first < b.first; });
 
-        // Use sorted bulk insert (which will acquire the lock)
+        // Use sorted bulk insert
         return insert_data(index, data, sorted, bulk);
     }
 
@@ -849,27 +684,12 @@ class grove {
      * @return Pointer to the inserted key in the tree
      * @throws std::runtime_error if insertion fails
      * @note Creates a new root if index doesn't exist; handles node splits automatically
-     * @note Thread-safe
      */
     gdt::key<key_type, data_type>* insert(std::string_view index, gdt::key<key_type, data_type>& key) {
-        std::string idx(index);
-        std::unique_lock lock(get_index_mutex(idx));
-        return insert_impl(index, key);
-    }
-
-    /**
-     * @brief Insert a key into the grove at the specified index (implementation)
-     * @param index The index name (e.g., chromosome name) where the key should be inserted
-     * @param key The key object to insert
-     * @return Pointer to the inserted key in the tree
-     * @throws std::runtime_error if insertion fails
-     * @note Internal helper - caller must hold index lock
-     */
-    gdt::key<key_type, data_type>* insert_impl(std::string_view index, gdt::key<key_type, data_type>& key) {
         // get the root node for the given chromosome (or create a new one if it doesn't exist)
-        node<key_type, data_type>* root = this->get_root_impl(index);
+        node<key_type, data_type>* root = this->get_root(index);
         if(root == nullptr) {
-            root = this->insert_root_impl(index);
+            root = this->insert_root(index);
         }
         auto* key_ptr = insert_iter(root, key);
         if(key_ptr == nullptr) {
@@ -884,10 +704,7 @@ class grove {
             root->set_parent(new_root);
             split_node(new_root, 0);
             root = new_root;
-            {
-                std::lock_guard<std::mutex> map_lock(grove_mutex);
-                this->root_nodes[std::string(index)] = root; // update the root node in the map
-            }
+            this->root_nodes[std::string(index)] = root; // update the root node in the map
         }
         return key_ptr;
     }
@@ -960,13 +777,10 @@ class grove {
             child->set_next(new_child);
 
             // update the rightmost node if necessary
-            {
-                std::lock_guard<std::mutex> map_lock(grove_mutex);
-                for(auto& [key, rightmost_node] : this->rightmost_nodes) {
-                    if(rightmost_node == child) {
-                        this->rightmost_nodes[key] = new_child;
-                        break;
-                    }
+            for(auto& [key, rightmost_node] : this->rightmost_nodes) {
+                if(rightmost_node == child) {
+                    this->rightmost_nodes[key] = new_child;
+                    break;
                 }
             }
         } else {
@@ -977,18 +791,18 @@ class grove {
     }
 
     /**
-     * @brief Insert a pre-sorted data point into the grove using optimized sorted insertion (implementation)
+     * @brief Insert a pre-sorted data point into the grove using optimized sorted insertion
      * @param index The index name (e.g., chromosome name) where the data should be inserted
      * @param key_value The key value to insert (e.g., interval)
      * @param data_value The data associated with the key
      * @return Pointer to the inserted key in the tree
      * @note Assumes key_value is greater than all existing keys in the specified index
-     * @note Internal helper - caller must hold index lock
+     * @note This is a helper function called by insert_data(..., sorted_t)
      */
-    gdt::key<key_type, data_type>* insert_data_sorted_impl(std::string_view index, key_type key_value, data_type data_value)
+    gdt::key<key_type, data_type>* insert_data_sorted(std::string_view index, key_type key_value, data_type data_value)
         requires (!std::is_void_v<data_type>) {
             gdt::key<key_type, data_type> key(key_value, data_value); // create the key object
-            return insert_sorted_impl(index, key);
+            return insert_sorted(index, key);
     }
 
     /**
@@ -998,32 +812,18 @@ class grove {
      * @return Pointer to the inserted key in the tree
      * @note Assumes key is greater than all existing keys in the index; bypasses tree traversal
      * @note Significantly faster than regular insert() for sorted data
-     * @note Thread-safe
      */
     gdt::key<key_type, data_type>* insert_sorted(std::string_view index, gdt::key<key_type, data_type>& key) {
-        std::string idx(index);
-        std::unique_lock lock(get_index_mutex(idx));
-        return insert_sorted_impl(index, key);
-    }
-
-    /**
-     * @brief Insert a pre-sorted key directly to the rightmost leaf node (implementation)
-     * @param index The index name (e.g., chromosome name) where the key should be inserted
-     * @param key The key object to insert
-     * @return Pointer to the inserted key in the tree
-     * @note Internal helper - caller must hold index lock
-     */
-    gdt::key<key_type, data_type>* insert_sorted_impl(std::string_view index, gdt::key<key_type, data_type>& key) {
-        node<key_type, data_type>* root = this->get_root_impl(index);
+        node<key_type, data_type>* root = this->get_root(index);
         if(root == nullptr) {
-            root = this->insert_root_impl(index);
+            root = this->insert_root(index);
             // Allocate key from grove's deque storage
             auto* key_ptr = allocate_key(key);
             root->insert_key_ptr(key_ptr);
             return key_ptr;
         } else {
             // get rightmost node and insert
-            node<key_type, data_type>* rightmost_node = this->get_rightmost_node_impl(index);
+            node<key_type, data_type>* rightmost_node = this->get_rightmost_node(index);
             // Allocate key from grove's deque storage
             auto* key_ptr = allocate_key(key);
             rightmost_node->insert_key_ptr(key_ptr);
@@ -1037,10 +837,7 @@ class grove {
                     new_root->set_is_leaf(false);
                     rightmost_node->set_parent(new_root);
                     split_node(new_root, 0);
-                    {
-                        std::lock_guard<std::mutex> map_lock(grove_mutex);
-                        this->root_nodes[std::string(index)] = new_root;
-                    }
+                    this->root_nodes[std::string(index)] = new_root;
                 } else {
                     // regular split - rightmost child is at last index
                     int child_index = rightmost_node->get_parent()->get_children().size() - 1;
@@ -1056,21 +853,11 @@ class grove {
      * @param query The query key to search for (e.g., genomic interval)
      * @return query_result containing all overlapping keys from all indices
      * @note Searches all root nodes (all chromosomes/indices) in the grove
-     * @note Thread-safe (acquires shared locks on all indices)
      */
     gdt::query_result<key_type, data_type> intersect(key_type& query) {
         gdt::query_result<key_type, data_type> result{query};
-
-        // Get a snapshot of root nodes while holding grove_mutex
-        std::unordered_map<std::string, node<key_type, data_type>*> roots_snapshot;
-        {
-            std::lock_guard<std::mutex> lock(grove_mutex);
-            roots_snapshot = this->root_nodes;
-        }
-
-        // Search each index with its own shared lock
-        for(const auto& [index, root] : roots_snapshot) {
-            std::shared_lock lock(get_index_mutex(index));
+        // if index is not specified, all root nodes need to be checked
+        for(const auto& [index, root] : this->get_root_nodes()) {
             search_iter(root, query, result);
         }
         return result;
@@ -1082,12 +869,10 @@ class grove {
      * @param index The index name (e.g., chromosome name) to search within
      * @return query_result containing all overlapping keys from the specified index
      * @note Returns empty result if index doesn't exist
-     * @note Thread-safe
      */
     gdt::query_result<key_type, data_type> intersect(key_type& query, const std::string& index) {
-        std::shared_lock lock(get_index_mutex(index));
         gdt::query_result<key_type, data_type> result{query};
-        node<key_type, data_type>* root = this->get_root_impl(index);
+        node<key_type, data_type>* root = this->get_root(index);
 
         if(root == nullptr) {
             return result;
@@ -1285,32 +1070,14 @@ class grove {
     }
 
   private:
-    // ========== Thread Safety Infrastructure ==========
-
-    /**
-     * @brief Get or create a mutex for a specific index
-     * @param index The index name (e.g., chromosome name)
-     * @return Reference to the shared_mutex for this index
-     * @note Protected by grove_mutex when creating new entries
-     * @note Const-safe because index_mutexes is mutable
-     */
-    std::shared_mutex& get_index_mutex(const std::string& index) const {
-        std::lock_guard<std::mutex> lock(grove_mutex);
-        return index_mutexes[index];
-    }
-
-    // ========== Key Allocation ==========
-
     /**
      * @brief Allocate a key in the grove's deque storage and return a stable pointer to it
      * @param key The key object to allocate and store
      * @return Pointer to the newly allocated key in the deque
      * @note Keys are stored in a deque for stable addresses (required by graph_overlay)
      * @note Deque storage provides better cache locality than individual heap allocations
-     * @note Thread-safe via key_storage_mutex
      */
     gdt::key<key_type, data_type>* allocate_key(const gdt::key<key_type, data_type>& key) {
-        std::lock_guard<std::mutex> lock(key_storage_mutex);
         key_storage.push_back(key);
         return &key_storage.back();
     }
@@ -1378,7 +1145,6 @@ class grove {
 
         // Set rightmost leaf for this index
         if (!leaves.empty()) {
-            std::lock_guard<std::mutex> map_lock(grove_mutex);
             this->rightmost_nodes[std::string(index)] = leaves.back();
         }
 
@@ -1504,20 +1270,6 @@ class grove {
 
     /// Embedded graph overlay for managing directed edges and relationships between keys
     graph_overlay<key_type, data_type, edge_data_type> graph_data;
-
-    // ========== Thread Safety Mutexes ==========
-
-    /// Protects root_nodes and rightmost_nodes map modifications and index_mutexes creation
-    mutable std::mutex grove_mutex;
-
-    /// Protects key_storage deque modifications
-    mutable std::mutex key_storage_mutex;
-
-    /// Protects external_key_storage deque modifications
-    mutable std::mutex external_key_mutex;
-
-    /// Per-index mutexes for tree operations (allows concurrent access to different indices)
-    mutable std::unordered_map<std::string, std::shared_mutex> index_mutexes;
 };
 
 } // namespace genogrove::structure
