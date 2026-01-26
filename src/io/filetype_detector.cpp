@@ -13,6 +13,8 @@ namespace genogrove::io {
         {"gff", filetype::GFF},
         {"gtf", filetype::GTF},
         {"vcf", filetype::VCF},
+        {"sam", filetype::SAM},
+        {"bam", filetype::BAM},
         {"gg", filetype::GG}
     };
 
