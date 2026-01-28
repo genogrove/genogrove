@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-01-28
+
+### Added
+
+- **SAM/BAM/CRAM Reader**: New `bam_reader` class for reading alignment files using htslib with
+automatic format detection. Provides full access to alignment data including read name (QNAME),
+reference name (RNAME), genomic interval (computed from POS + CIGAR), alignment flags, mapping
+quality (MAPQ), CIGAR string, sequence (SEQ), quality scores (QUAL), mate information for paired
+reads, and all auxiliary tags
+- **Alignment Filtering**: Configurable `bam_reader_options` with factory methods for common
+use cases: `defaults()` (skip unmapped), `include_all()`, `primary_only()` (skip secondary and
+supplementary), `high_quality(min_mapq)` (skip secondary, supplementary, QC-failed, duplicates,
+and low MAPQ reads)
+- **CIGAR Support**: Full CIGAR parsing with `cigar_element` struct containing operation type
+(`cigar_op` enum) and length. Helper methods `consumes_reference()` and `consumes_query()` for
+interval computation
+- **Flag Helpers**: `alignment_flags` wrapper class with convenience methods: `is_paired()`,
+`is_proper_pair()`, `is_unmapped()`, `is_reverse()`, `is_secondary()`, `is_supplementary()`,
+`is_duplicate()`, `is_qc_fail()`, etc.
+- **Tag Parsing**: All SAM auxiliary tag types supported via `std::variant`: character (A),
+integer (i), float (f), string (Z/H), and typed arrays (B:c, B:C, B:s, B:S, B:i, B:I, B:f)
+- **Header Access**: Methods to retrieve full header text and reference sequence names
+- **Iterator Support**: Modern range-based iteration with `for (const auto& entry : reader)`
+syntax, consistent with `bed_reader` and `gff_reader`
+- **Filetype Detection**: Added SAM and BAM to `filetype` enum in filetype_detector for
+consistent file type handling
+- Added comprehensive test coverage for SAM/BAM file reading including basic reading,
+filtering options, CIGAR parsing with various operations (M, I, D, N, S), interval computation,
+tag parsing (integer, string, character types), mate information, flag methods, iterator
+support, header extraction, and format transparency (SAM vs BAM content equivalence)
+
 ## [0.14.0] - 2026-01-18
 
 ### Added
