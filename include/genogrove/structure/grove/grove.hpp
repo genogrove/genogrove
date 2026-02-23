@@ -16,11 +16,10 @@
 #include <algorithm>
 #include <functional>
 #include <optional>
+#include <queue>
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
-
-#include <queue>
 #include <genogrove/data_type/query_result.hpp>
 #include <genogrove/structure/grove/node.hpp>
 #include <genogrove/structure/grove/graph_overlay.hpp>
@@ -100,12 +99,12 @@ class grove {
      * @brief Construct a grove with specified order
      * @param order Determines the maximum number of k-1 keys and k children per node
      */
-    grove(int order) : order(order), root_nodes(), rightmost_nodes() {}
+    grove(int order) : order(order) {}
 
     /**
      * @brief Construct a grove with default order of 3
      */
-    grove() : order(3), root_nodes(), rightmost_nodes() {}
+    grove() : order(3) {}
 
     /**
      * @brief Destructor that cleans up all tree nodes
@@ -693,9 +692,7 @@ class grove {
         }
         auto* key_ptr = insert_iter(root, key);
         if(key_ptr == nullptr) {
-            // insertion failed
             throw std::runtime_error("Failed to insert key into tree");
-            return nullptr;
         }
         if(root->get_keys().size() == this->order) {
             node<key_type, data_type>* new_root = new node<key_type, data_type>(this->order);
@@ -721,16 +718,9 @@ class grove {
             throw std::runtime_error("Null node passed to insert_iter");
         }
         if(node->get_is_leaf()) {
-            try {
-                // Allocate key from grove's deque storage
-                auto* key_ptr = allocate_key(key);
-                node->insert_key_ptr(key_ptr);
-                return key_ptr;
-
-            } catch(const std::exception& e) {
-                std::cerr << "Failed to insert key into leaf node: " << e.what() << std::endl;
-                return nullptr;
-            }
+            auto* key_ptr = allocate_key(key);
+            node->insert_key_ptr(key_ptr);
+            return key_ptr;
         } else {
             int child_index = 0;
             while(child_index < node->get_keys().size() &&
@@ -954,7 +944,7 @@ class grove {
                 }
             }
         } else {
-            // abort if left of key (not overlapping) - only neded for intervals
+            // abort if left of key (not overlapping) - only needed for intervals
             if constexpr (requires { key_type::is_interval; }) {
                 if(query < node->get_keys()[0]->get_value() &&
                    !key_type::overlap(node->get_keys()[0]->get_value(), query)) {
