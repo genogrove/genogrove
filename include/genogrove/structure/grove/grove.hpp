@@ -758,25 +758,25 @@ class grove {
         new_child->set_parent(parent);
         int mid = (this->order + 2 - 1) / 2;
 
-        // move overflowing keys to the new child node (and resize the original node)
         new_child->set_is_leaf(child->get_is_leaf());
 
-        new_child->get_keys().assign(child->get_keys().begin() + mid, child->get_keys().end());
-        child->get_keys().resize(mid); // resize the original node
-
-        // update the parent (aka new child node)
-        parent->get_children().insert(parent->get_children().begin() + index + 1, new_child);
-        gdt::key<key_type, data_type> parent_key{child->calc_parent_key()};
-        // Allocate parent key from grove's deque storage
-        auto* parent_key_ptr = allocate_key(parent_key);
-        parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
-
         if(child->get_is_leaf()) {
-            new_child->set_next(child->get_next());
+            // === LEAF SPLIT ===
+            // All keys stay in leaves; left [0..mid-1], right [mid..end]
+            new_child->get_keys().assign(child->get_keys().begin() + mid, child->get_keys().end());
+            child->get_keys().resize(mid);
+
+            // Parent separator = aggregate of left leaf's keys
+            gdt::key<key_type, data_type> parent_key{child->calc_parent_key()};
+            auto* parent_key_ptr = allocate_key(parent_key);
+            parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
+            parent->get_children().insert(parent->get_children().begin() + index + 1, new_child);
+
+            // Link leaf chain
             new_child->set_next(child->get_next());
             child->set_next(new_child);
 
-            // update the rightmost node if necessary
+            // Update rightmost node cache if the split leaf was the rightmost
             for(auto& [key, rightmost_node] : this->rightmost_nodes) {
                 if(rightmost_node == child) {
                     this->rightmost_nodes[key] = new_child;
@@ -784,9 +784,39 @@ class grove {
                 }
             }
         } else {
-            new_child->get_children().assign(child->get_children().begin() + mid,
+            // === INTERNAL NODE SPLIT ===
+            // B+ tree invariant: n keys -> n+1 children.
+            // Promote key[mid]: left keeps [0..mid-1] keys and [0..mid] children,
+            // right gets [mid+1..end] keys and [mid+1..end] children.
+
+            // Compute parent separator covering the full left subtree (keys[0..mid])
+            // BEFORE modifying the child, so child[mid]'s range is included
+            std::vector<key_type> left_subtree_keys;
+            left_subtree_keys.reserve(mid + 1);
+            for (int i = 0; i <= mid; ++i) {
+                left_subtree_keys.push_back(child->get_keys()[i]->get_value());
+            }
+            key_type parent_separator = key_type::aggregate(left_subtree_keys);
+            gdt::key<key_type, data_type> parent_key{parent_separator};
+            auto* parent_key_ptr = allocate_key(parent_key);
+
+            // Keys: left [0..mid-1], promote key[mid], right [mid+1..end]
+            new_child->get_keys().assign(child->get_keys().begin() + mid + 1, child->get_keys().end());
+            child->get_keys().resize(mid);
+
+            // Children: left [0..mid], right [mid+1..end]
+            new_child->get_children().assign(child->get_children().begin() + mid + 1,
                 child->get_children().end());
-            child->get_children().resize(mid); // resize the original node
+            child->get_children().resize(mid + 1);
+
+            // Update parent pointers for moved children
+            for (auto* moved_child : new_child->get_children()) {
+                moved_child->set_parent(new_child);
+            }
+
+            // Insert separator and new child into parent
+            parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
+            parent->get_children().insert(parent->get_children().begin() + index + 1, new_child);
         }
     }
 
@@ -828,20 +858,23 @@ class grove {
             auto* key_ptr = allocate_key(key);
             rightmost_node->insert_key_ptr(key_ptr);
 
-            // handle key overflow in node
-            if(rightmost_node->get_keys().size() == this->order) {
-                // check if the rightmost node is the root
-                if(rightmost_node->get_parent() == nullptr) {
-                    node<key_type, data_type>* new_root = new node<key_type, data_type>(this->order);
-                    new_root->add_child(rightmost_node, 0);
+            // handle key overflow - cascade splits upward until no overflow
+            auto* overflow_node = rightmost_node;
+            while (overflow_node->get_keys().size() == this->order) {
+                if (overflow_node->get_parent() == nullptr) {
+                    // root overflow - create new root
+                    auto* new_root = new node<key_type, data_type>(this->order);
+                    new_root->add_child(overflow_node, 0);
                     new_root->set_is_leaf(false);
-                    rightmost_node->set_parent(new_root);
+                    overflow_node->set_parent(new_root);
                     split_node(new_root, 0);
                     this->root_nodes[std::string(index)] = new_root;
+                    break;
                 } else {
-                    // regular split - rightmost child is at last index
-                    int child_index = rightmost_node->get_parent()->get_children().size() - 1;
-                    split_node(rightmost_node->get_parent(), child_index);
+                    auto* parent_node = overflow_node->get_parent();
+                    int child_index = static_cast<int>(parent_node->get_children().size()) - 1;
+                    split_node(parent_node, child_index);
+                    overflow_node = parent_node;
                 }
             }
             return key_ptr;

@@ -654,6 +654,73 @@ protected:
 };
 
 // =============================================================================
+// Tree Invariant Validation Helpers
+// =============================================================================
+
+/**
+ * @brief Recursively validate B+ tree invariants for a node and its subtree
+ *
+ * Checks:
+ * - Internal nodes: children.size() == keys.size() + 1
+ * - Leaf nodes: no children
+ * - Parent pointers match actual parent
+ * - All leaves at the same depth
+ * - Key count does not exceed order-1
+ */
+template <typename key_type, typename data_type>
+void validate_tree_invariants(
+    gst::node<key_type, data_type>* n,
+    gst::node<key_type, data_type>* expected_parent,
+    int depth,
+    int order,
+    int& leaf_depth,
+    size_t& leaf_count) {
+
+    ASSERT_NE(n, nullptr) << "Node should not be null at depth " << depth;
+
+    EXPECT_EQ(n->get_parent(), expected_parent)
+        << "Parent pointer mismatch at depth " << depth;
+
+    EXPECT_LE(n->get_keys().size(), static_cast<size_t>(order - 1))
+        << "Node has too many keys at depth " << depth
+        << " (has " << n->get_keys().size() << ", max " << (order - 1) << ")";
+
+    if (n->get_is_leaf()) {
+        EXPECT_TRUE(n->get_children().empty())
+            << "Leaf node should have no children at depth " << depth;
+
+        if (leaf_depth < 0) {
+            leaf_depth = depth;
+        } else {
+            EXPECT_EQ(depth, leaf_depth)
+                << "All leaves should be at the same depth";
+        }
+
+        leaf_count += n->get_keys().size();
+
+        for (size_t i = 1; i < n->get_keys().size(); ++i) {
+            EXPECT_FALSE(n->get_keys()[i]->get_value() < n->get_keys()[i-1]->get_value())
+                << "Keys should be sorted within leaf at depth " << depth;
+        }
+    } else {
+        EXPECT_EQ(n->get_children().size(), n->get_keys().size() + 1)
+            << "Internal node invariant violated at depth " << depth
+            << ": " << n->get_children().size() << " children but "
+            << n->get_keys().size() << " keys";
+
+        for (size_t i = 1; i < n->get_keys().size(); ++i) {
+            EXPECT_FALSE(n->get_keys()[i]->get_value() < n->get_keys()[i-1]->get_value())
+                << "Keys should be sorted within internal node at depth " << depth;
+        }
+
+        for (size_t i = 0; i < n->get_children().size(); ++i) {
+            validate_tree_invariants(
+                n->get_children()[i], n, depth + 1, order, leaf_depth, leaf_count);
+        }
+    }
+}
+
+// =============================================================================
 // Typed Test Suite - Define tests ONCE, run for all types
 // =============================================================================
 
@@ -902,6 +969,85 @@ TYPED_TEST_P(grove_typed_test, serialization_multiple_indices) {
         << "Second index should have correct data after deserialization";
 }
 
+TYPED_TEST_P(grove_typed_test, internal_node_split_invariants) {
+    // Order 3 forces internal node splits after ~6 keys (max 2 keys/node)
+    gst::grove<TypeParam, int> small_grove(3);
+
+    auto data = grove_test_traits<TypeParam, int>::generate_test_data(20);
+
+    // Insert via sorted insertion to exercise insert_sorted -> split_node path
+    std::vector<gdt::key<TypeParam, int>*> inserted_keys;
+    for (const auto& [key_val, data_val] : data) {
+        auto* key_ptr = small_grove.insert_data(
+            this->get_default_index(), key_val, data_val, gst::sorted);
+        inserted_keys.push_back(key_ptr);
+    }
+    ASSERT_EQ(inserted_keys.size(), 20u);
+
+    // Validate full tree structure
+    auto* root = small_grove.get_root(this->get_default_index());
+    ASSERT_NE(root, nullptr);
+
+    int leaf_depth = -1;
+    size_t leaf_count = 0;
+    validate_tree_invariants(root, static_cast<gst::node<TypeParam, int>*>(nullptr),
+        0, 3, leaf_depth, leaf_count);
+
+    EXPECT_EQ(leaf_count, 20u) << "All 20 keys should be in leaf nodes";
+
+    // Validate leaf chain completeness
+    auto* current = root;
+    while (!current->get_is_leaf()) {
+        ASSERT_GT(current->get_children().size(), 0u);
+        current = current->get_children()[0];
+    }
+    size_t chain_count = 0;
+    while (current != nullptr) {
+        chain_count += current->get_keys().size();
+        current = current->get_next();
+    }
+    EXPECT_EQ(chain_count, 20u) << "Leaf chain should contain all 20 keys";
+
+    // Verify data is queryable
+    auto expectation = grove_test_traits<TypeParam, int>::create_overlapping_query(data);
+    auto results = small_grove.intersect(expectation.query, this->get_default_index());
+    EXPECT_EQ(results.get_keys().size(), expectation.expected_indices.size());
+}
+
+TYPED_TEST_P(grove_typed_test, internal_node_split_regular_insert) {
+    // Test with non-sorted insertion to exercise insert_iter -> split_node path
+    gst::grove<TypeParam, int> small_grove(3);
+
+    auto data = grove_test_traits<TypeParam, int>::generate_test_data(15);
+
+    std::vector<gdt::key<TypeParam, int>*> inserted_keys;
+    for (const auto& [key_val, data_val] : data) {
+        auto* key_ptr = small_grove.insert_data(
+            this->get_default_index(), key_val, data_val);
+        inserted_keys.push_back(key_ptr);
+    }
+    ASSERT_EQ(inserted_keys.size(), 15u);
+
+    // Validate tree structure
+    auto* root = small_grove.get_root(this->get_default_index());
+    ASSERT_NE(root, nullptr);
+
+    int leaf_depth = -1;
+    size_t leaf_count = 0;
+    validate_tree_invariants(root, static_cast<gst::node<TypeParam, int>*>(nullptr),
+        0, 3, leaf_depth, leaf_count);
+
+    EXPECT_EQ(leaf_count, 15u) << "All 15 keys should be in leaf nodes";
+
+    // Verify all data is queryable
+    for (const auto& [key_val, data_val] : data) {
+        auto query = key_val;
+        auto results = small_grove.intersect(query, this->get_default_index());
+        EXPECT_GE(results.get_keys().size(), 1u)
+            << "Each inserted key should be queryable";
+    }
+}
+
 // Register all the KEY_TYPE-DEPENDENT tests
 REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     regular_insert,
@@ -915,6 +1061,8 @@ REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     bulk_insert_precondition_violation,
     serialization,
     serialization_empty_grove,
-    serialization_multiple_indices);
+    serialization_multiple_indices,
+    internal_node_split_invariants,
+    internal_node_split_regular_insert);
 
 #endif // GENOGROVE_TESTS_DATA_TYPE_GROVE_TEST_HPP
