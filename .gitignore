@@ -89,6 +89,8 @@ Temporary Items
 
 build
 .cache
+.claude/
 CLAUDE.md
+docs/
 
 # End of https://www.toptal.com/developers/gitignore/api/cmake,macos,c++
