@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-02-22
+
+### Fixed
+- **Internal node split bugs**: Fixed three bugs in B+ tree `split_node` that caused structural
+corruption when splitting internal (non-leaf) nodes ([#89](https://github.com/genogrove/genogrove/issues/89), [#90](https://github.com/genogrove/genogrove/pull/90)):
+  - Children were split at the same index as keys, violating the B+ tree invariant (n keys → n+1 children). Now promotes the middle key and splits children correctly.
+  - Moved children's parent pointers were never updated to the new sibling node.
+  - Removed duplicate `set_next` call on the leaf split path.
+- **Cascading splits in sorted insertion**: `insert_sorted` now cascades splits upward when a
+leaf split causes the parent to also overflow, ensuring tree validity with small orders.
+
+### Added
+- B+ tree invariant validation tests (`internal_node_split_invariants`,
+`internal_node_split_regular_insert`) that verify tree structure with order=3 across all key types.
+
 ## [0.15.0] - 2026-01-28
 
 ### Added
