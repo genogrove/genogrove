@@ -12,6 +12,7 @@
 #define GENOGROVE_ANYTYPE_HPP
 
 // Standard
+#include <istream>
 #include <memory>
 #include <ostream>
 #include <string>

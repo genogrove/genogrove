@@ -17,7 +17,6 @@
 // genogrove
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/structure/grove/grove.hpp>
-#include <genogrove/io/file_reader_factory.hpp>
 
 // genogrove-cli
 #include <subcalls/subcall.hpp>

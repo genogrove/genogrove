@@ -18,19 +18,20 @@
 
 namespace gdt = genogrove::data_type;
 namespace ggs = genogrove::structure;
+namespace gio = genogrove::io;
 
 namespace handlers {
 namespace gff {
 
 // Insert GFF/GTF file entries into a grove
 void grove_insert(
-    ggs::grove<gdt::interval, gff_entry>& grove,
+    ggs::grove<gdt::interval, gio::gff_entry>& grove,
     const std::string& filepath
 );
 
 // Intersect GFF/GTF query file against a populated grove
 void grove_intersect(
-    const ggs::grove<gdt::interval, gff_entry>& grove,
+    ggs::grove<gdt::interval, gio::gff_entry>& grove,
     const std::string& queryfile,
     std::ostream& output
 );
