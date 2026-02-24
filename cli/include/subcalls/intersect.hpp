@@ -15,7 +15,6 @@
 
 // genogrove
 #include <genogrove/structure/all.hpp>
-#include <genogrove/io/file_reader_factory.hpp>
 #include <genogrove/io/filetype_detector.hpp>
 
 // cli

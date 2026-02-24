@@ -35,7 +35,7 @@ CPMAddPackage(
 #)
 
 # sources
-file(GLOB CLI_SOURCES src/*.cpp)
+file(GLOB_RECURSE CLI_SOURCES src/*.cpp)
 
 add_executable(genogrove-cli ${CLI_SOURCES})
 target_include_directories(genogrove-cli PUBLIC ${cxxopts_SOURCE_DIR}/include) # include cxxopts headers

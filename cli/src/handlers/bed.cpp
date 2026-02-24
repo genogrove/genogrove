@@ -5,10 +5,10 @@ namespace handlers {
 namespace bed {
 
 void grove_insert(
-    ggs::grove<gdt::interval, bed_entry>& grove,
+    ggs::grove<gdt::interval, gio::bed_entry>& grove,
     const std::string& filepath
 ) {
-    bed_reader reader(filepath);
+    gio::bed_reader reader(filepath);
 
     // Use iterator-based approach - no need to initialize entry separately
     for (const auto& entry : reader) {
@@ -18,16 +18,17 @@ void grove_insert(
 }
 
 void grove_intersect(
-    const ggs::grove<gdt::interval, bed_entry>& grove,
+    ggs::grove<gdt::interval, gio::bed_entry>& grove,
     const std::string& queryfile,
     std::ostream& output
 ) {
-    bed_reader reader(queryfile);
+    gio::bed_reader reader(queryfile);
 
     // Use iterator-based approach for cleaner code
     for (const auto& query_entry : reader) {
-        // Intersect query with grove
-        auto results = grove.intersect(query_entry.interval, query_entry.chrom);
+        // Copy interval since intersect() takes non-const reference
+        auto query = query_entry.interval;
+        auto results = grove.intersect(query, query_entry.chrom);
 
         // Output all matching intervals
         for(auto* result : results.get_keys()) {

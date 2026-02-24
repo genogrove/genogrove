@@ -31,7 +31,7 @@ void grove_insert(
 
 // Intersect BED query file against a populated grove
 void grove_intersect(
-    const ggs::grove<gdt::interval, gio::bed_entry>& grove,
+    ggs::grove<gdt::interval, gio::bed_entry>& grove,
     const std::string& queryfile,
     std::ostream& output
 );

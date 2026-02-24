@@ -1,6 +1,9 @@
 #include <subcalls/intersect.hpp>
 #include <handlers/bed.hpp>
 #include <fstream>
+#include <memory>
+
+namespace gio = genogrove::io;
 
 namespace subcalls {
 cxxopts::Options intersect::parse_args(int argc, char** argv) {
@@ -16,7 +19,7 @@ cxxopts::Options intersect::parse_args(int argc, char** argv) {
              cxxopts::value<int>()->default_value("3"))
             ("h,help", "Print the help")
             ;
-    options.parse_positional({"inputfile"});
+    options.parse_positional({"queryfile", "targetfile"});
     return options;
 }
 
@@ -71,19 +74,27 @@ void intersect::execute(const cxxopts::ParseResult& args) {
     int k = args["k"].as<int>();
 
     // stream for output (either to stdout or to file)
+    std::unique_ptr<std::ofstream> output_file;
     std::ostream* outputStream = &std::cout;
     if(args.count("outputfile")) {
         std::string outputfile = args["outputfile"].as<std::string>();
-        outputStream = new std::ofstream(outputfile);
+        if(outputfile != "stdout") {
+            output_file = std::make_unique<std::ofstream>(outputfile);
+            if(!output_file->is_open()) {
+                std::cerr << "Error: Could not open output file: " << outputfile << std::endl;
+                exit(1);
+            }
+            outputStream = output_file.get();
+        }
     }
 
     // Detect file types
-    auto [query_filetype, query_compression] = filetype_detector().detect_filetype(queryfile);
-    auto [target_filetype, target_compression] = filetype_detector().detect_filetype(targetfile);
+    auto [query_filetype, query_compression] = gio::filetype_detector().detect_filetype(queryfile);
+    auto [target_filetype, target_compression] = gio::filetype_detector().detect_filetype(targetfile);
 
     // Only support BED files for now
     switch(target_filetype) {
-        case filetype::BED:
+        case gio::filetype::BED:
             break;
         default:
             std::cerr << "Error: Only BED format is currently supported for target files\n";
@@ -91,7 +102,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
     }
 
     switch(query_filetype) {
-        case filetype::BED:
+        case gio::filetype::BED:
             break;
         default:
             std::cerr << "Error: Only BED format is currently supported for query files\n";
@@ -99,7 +110,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
     }
 
     // Create grove and populate with target file
-    ggs::grove<gdt::interval, bed_entry> grove(k);
+    ggs::grove<gdt::interval, gio::bed_entry> grove(k);
     handlers::bed::grove_insert(grove, targetfile);
 
     // Intersect query file with the populated grove
