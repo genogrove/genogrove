@@ -100,14 +100,15 @@ jobs:
       # configure cmake on linux
       - name: configure cmake (Linux)
         if: startsWith(matrix.os, 'ubuntu') || startsWith(matrix.os, 'macos')
-        run: cmake -B ${{ steps.strings.outputs.build-output-dir }} \
-          -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
-          -DCMAKE_CXX_STANDARD=20 \
-          -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-          -DBUILD_TESTING=ON \
-          -DBUILD_CLI=ON \
-          -S ${{ github.workspace }}
+        run: |
+          cmake -B ${{ steps.strings.outputs.build-output-dir }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DBUILD_TESTING=ON \
+            -DBUILD_CLI=ON \
+            -S ${{ github.workspace }}
 
       # configure cmake on windows
 #      - name: configure cmake (windows)
