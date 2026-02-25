@@ -10,7 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **set_root_nodes() dangling pointer bug**: Fixed `set_root_nodes()` deleting the new parameter's nodes instead of the old member nodes, resulting in dangling pointers ([#93](https://github.com/genogrove/genogrove/issues/93), [#95](https://github.com/genogrove/genogrove/pull/95))
 - **CLI intersect bugs**: Fixed undefined positional binding (`"inputfile"` → `"queryfile", "targetfile"`), memory leak from raw `new std::ofstream` replaced with `std::unique_ptr`, added output file open validation, fixed missing namespace qualifiers in BED/GFF handlers, and fixed `any_type.hpp` incomplete `std::istream` type warning ([#40](https://github.com/genogrove/genogrove/issues/40), [#96](https://github.com/genogrove/genogrove/pull/96))
-- **CLI intersect validation**: Required parameters (`queryfile`, `targetfile`) now exit on missing instead of continuing, targetfile validates file existence instead of only parent directory, and outputfile skips parent directory check for simple filenames ([#41](https://github.com/genogrove/genogrove/issues/41))
+- **CLI intersect validation**: Required parameters (`queryfile`, `targetfile`) now exit on missing instead of continuing, targetfile validates file existence instead of only parent directory, and outputfile skips parent directory check for simple filenames ([#41](https://github.com/genogrove/genogrove/issues/41), [#98](https://github.com/genogrove/genogrove/pull/98))
+- **CLI main parser crash**: Fixed unrecognised subcommand options (`-q`, `-t`, etc.) crashing with SIGABRT by adding `allow_unrecognised_options()` to the main parser, and fixed spaces in option definitions ([#98](https://github.com/genogrove/genogrove/pull/98))
+
+### Added
+- **CLI integration tests**: Unit tests for intersect handlers/validation and end-to-end tests spawning the CLI binary. Gated behind `BUILD_CLI=ON`. CI now builds and tests the CLI ([#97](https://github.com/genogrove/genogrove/issues/97), [#98](https://github.com/genogrove/genogrove/pull/98))
 
 ### Changed
 - **grove.hpp cleanup**: Removed dead code (unreachable return, unused try-catch in `insert_iter`), fixed include grouping, removed redundant constructor initializers, fixed typo ([#94](https://github.com/genogrove/genogrove/pull/94))
