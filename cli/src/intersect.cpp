@@ -24,37 +24,36 @@ cxxopts::Options intersect::parse_args(int argc, char** argv) {
 }
 
 void intersect::validate(const cxxopts::ParseResult& args) {
-    if(args.count("queryfile")) { // validate the queryfile
-        // check if file exists
-        std::string queryFilePath = args["queryfile"].as<std::string>();
-        if(!std::filesystem::exists(queryFilePath)) {
-            std::cerr << "File does not exist: " << queryFilePath << std::endl;
-            exit(1);
-        }
-    } else {
+    if(!args.count("queryfile")) {
         std::cerr << "Error: queryfile is required\n";
+        exit(1);
     }
-    if(args.count("targetfile")) {
-        // check if path to file exists
-        std::string inputfile = args["targetfile"].as<std::string>();
-        std::filesystem::path inputfilePath(inputfile);
-        if(!std::filesystem::exists(inputfilePath.parent_path())) {
-            std::cerr << "Parent directory does not exist: " << inputfilePath.parent_path() << std::endl;
-            exit(1);
-        }
+    if(!std::filesystem::exists(args["queryfile"].as<std::string>())) {
+        std::cerr << "File does not exist: " << args["queryfile"].as<std::string>() << std::endl;
+        exit(1);
     }
+
+    if(!args.count("targetfile")) {
+        std::cerr << "Error: targetfile is required\n";
+        exit(1);
+    }
+    if(!std::filesystem::exists(args["targetfile"].as<std::string>())) {
+        std::cerr << "File does not exist: " << args["targetfile"].as<std::string>() << std::endl;
+        exit(1);
+    }
+
     if(args.count("outputfile")) {
-        // check if path to file exists
         std::string outputfile = args["outputfile"].as<std::string>();
-        // Only validate real file paths; "stdout" is treated as a sentinel.
         if(outputfile != "stdout") {
             std::filesystem::path outputfile_path(outputfile);
-            if(!std::filesystem::exists(outputfile_path.parent_path())) {
-                std::cerr << "Parent directory does not exist: " << outputfile_path.parent_path() << std::endl;
+            auto parent = outputfile_path.parent_path();
+            if(!parent.empty() && !std::filesystem::exists(parent)) {
+                std::cerr << "Parent directory does not exist: " << parent << std::endl;
                 exit(1);
             }
         }
     }
+
     if(args.count("k")) {
         int k = args["k"].as<int>();
         if(k < 2) {

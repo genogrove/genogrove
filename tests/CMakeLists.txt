@@ -104,6 +104,7 @@ gtest_discover_tests(genogrove_structure_tests WORKING_DIRECTORY ${CMAKE_CURRENT
 # ----------------------------
 # IO TESTS
 # ----------------------------
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/io/data DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/io)
 FILE(GLOB TEST_SOURCES_IO "./io/*.cpp")
 add_executable(genogrove_io_tests ${TEST_SOURCES_IO})
 target_include_directories(
@@ -118,4 +119,37 @@ set_target_properties(genogrove_io_tests PROPERTIES
 )
 gtest_discover_tests(genogrove_io_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-
+# ----------------------------
+# CLI TESTS
+# ----------------------------
+if(BUILD_CLI)
+    message(STATUS "Building CLI tests")
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/cli/data DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/cli)
+    FILE(GLOB TEST_SOURCES_CLI "./cli/*.cpp")
+    set(CLI_HANDLER_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../cli/src/handlers/bed.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../cli/src/handlers/gff.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../cli/src/intersect.cpp
+    )
+    add_executable(genogrove_cli_tests ${TEST_SOURCES_CLI} ${CLI_HANDLER_SOURCES})
+    target_include_directories(
+            genogrove_cli_tests
+            PUBLIC
+            ${CMAKE_CURRENT_SOURCE_DIR}/../include
+            ${CMAKE_CURRENT_SOURCE_DIR}/../cli/include
+            ${cxxopts_SOURCE_DIR}/include
+    )
+    target_compile_definitions(
+            genogrove_cli_tests
+            PRIVATE
+            GENOGROVE_CLI_PATH="${CMAKE_BINARY_DIR}/bin/genogrove"
+    )
+    target_link_libraries(genogrove_cli_tests genogrove gtest gtest_main)
+    set_target_properties(genogrove_cli_tests PROPERTIES
+        BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
+        INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
+    )
+    # Ensure the CLI binary is built before running e2e tests
+    add_dependencies(genogrove_cli_tests genogrove-cli)
+    gtest_discover_tests(genogrove_cli_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endif()

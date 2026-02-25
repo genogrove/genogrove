@@ -15,7 +15,7 @@ This repository contains the genogrove library.
 | GCC 12   | ![gcc-12-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=gcc-12-Release&style=flat&event=push) |
 | GCC 13   | ![gcc-13-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=gcc-13-Release&style=flat&event=push) |
 | GCC 14   | ![gcc-14-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=gcc-14-Release&style=flat&event=push) |
-| Clang 14 | ![clang-14-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=clang-14-Release&style=flat&event=push) |
+| Clang 18 | ![clang-18-Release](https://img.shields.io/github/actions/workflow/status/genogrove/structure/ci.yml?branch=main&label=clang-18-Release&style=flat&event=push) |
 
 ## 🚀 Quick Start
 
