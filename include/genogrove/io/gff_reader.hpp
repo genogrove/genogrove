@@ -80,6 +80,27 @@ namespace genogrove::io {
         // Constructor with optional validation mode (default: RELAXED)
         gff_reader(const std::filesystem::path& path);
 
+        // Non-copyable (owns raw BGZF* resource)
+        gff_reader(const gff_reader&) = delete;
+        gff_reader& operator=(const gff_reader&) = delete;
+
+        // Movable
+        gff_reader(gff_reader&& other) noexcept
+            : bgzf_file(other.bgzf_file), line_num(other.line_num),
+              error_message(std::move(other.error_message)) {
+            other.bgzf_file = nullptr;
+        }
+        gff_reader& operator=(gff_reader&& other) noexcept {
+            if (this != &other) {
+                if (bgzf_file) bgzf_close(bgzf_file);
+                bgzf_file = other.bgzf_file;
+                line_num = other.line_num;
+                error_message = std::move(other.error_message);
+                other.bgzf_file = nullptr;
+            }
+            return *this;
+        }
+
         bool read_next(gff_entry& entry) override;
         bool has_next() override;
         std::string get_error_message() override;
