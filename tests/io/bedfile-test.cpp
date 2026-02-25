@@ -594,6 +594,63 @@ TEST_F(bedfileTest, iteratorPostIncrement) {
     EXPECT_EQ(it->chrom, "chr2");
 }
 
+// ==========================================
+// Mixed BED Format Tests (stale optional regression)
+// ==========================================
+
+TEST_F(bedfileTest, mixedBedFormatsNoStaleOptionals) {
+    // BED12 followed by BED3 followed by BED6
+    // Verifies that optional fields from a previous record don't leak into the next
+    fs::path mixed_path = test_data_dir / "test_mixed_bed.bed";
+    gio::bed_reader reader(mixed_path);
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    ASSERT_EQ(entries.size(), 3);
+
+    // First entry: BED12 — all optional fields present
+    EXPECT_EQ(entries[0].chrom, "chr1");
+    EXPECT_EQ(entries[0].interval.get_start(), 1000);
+    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    ASSERT_TRUE(entries[0].name.has_value());
+    EXPECT_EQ(entries[0].name.value(), "item1");
+    ASSERT_TRUE(entries[0].score.has_value());
+    EXPECT_EQ(entries[0].score.value(), 100);
+    ASSERT_TRUE(entries[0].strand.has_value());
+    EXPECT_EQ(entries[0].strand.value(), '+');
+    ASSERT_TRUE(entries[0].thickness.has_value());
+    ASSERT_TRUE(entries[0].item_rgb.has_value());
+    ASSERT_TRUE(entries[0].blocks.has_value());
+
+    // Second entry: BED3 — ALL optional fields must be empty (not stale from BED12)
+    EXPECT_EQ(entries[1].chrom, "chr2");
+    EXPECT_EQ(entries[1].interval.get_start(), 5000);
+    EXPECT_EQ(entries[1].interval.get_end(), 6000);
+    EXPECT_FALSE(entries[1].name.has_value()) << "name should be reset for BED3 record";
+    EXPECT_FALSE(entries[1].score.has_value()) << "score should be reset for BED3 record";
+    EXPECT_FALSE(entries[1].strand.has_value()) << "strand should be reset for BED3 record";
+    EXPECT_FALSE(entries[1].thickness.has_value()) << "thickness should be reset for BED3 record";
+    EXPECT_FALSE(entries[1].item_rgb.has_value()) << "item_rgb should be reset for BED3 record";
+    EXPECT_FALSE(entries[1].blocks.has_value()) << "blocks should be reset for BED3 record";
+
+    // Third entry: BED6 — only name/score/strand present, rest must be empty
+    EXPECT_EQ(entries[2].chrom, "chr3");
+    EXPECT_EQ(entries[2].interval.get_start(), 3000);
+    EXPECT_EQ(entries[2].interval.get_end(), 4000);
+    ASSERT_TRUE(entries[2].name.has_value());
+    EXPECT_EQ(entries[2].name.value(), "feature3");
+    ASSERT_TRUE(entries[2].score.has_value());
+    EXPECT_EQ(entries[2].score.value(), 500);
+    ASSERT_TRUE(entries[2].strand.has_value());
+    EXPECT_EQ(entries[2].strand.value(), '-');
+    EXPECT_FALSE(entries[2].thickness.has_value()) << "thickness should be reset for BED6 record";
+    EXPECT_FALSE(entries[2].item_rgb.has_value()) << "item_rgb should be reset for BED6 record";
+    EXPECT_FALSE(entries[2].blocks.has_value()) << "blocks should be reset for BED6 record";
+}
+
 TEST_F(bedfileTest, iteratorGzippedFile) {
     gio::bed_reader reader(bed3_path_gz);
 
