@@ -11,6 +11,7 @@
 #include <gtest/gtest.h>
 
 // Standard
+#include <algorithm>
 #include <limits>
 #include <sstream>
 

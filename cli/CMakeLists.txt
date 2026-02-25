@@ -22,11 +22,6 @@ CPMAddPackage(
         "CXXOPTS_BUILD_EXAMPLES OFF"
         "CXXOPTS_BUILD_TESTS OFF"
 )
-CPMAddPackage(
-        NAME zlib
-        GITHUB_REPOSITORY madler/zlib
-        GIT_TAG v1.3.1
-)
 ## add the actual genogrove
 #CPMAddPackage(
 #        NAME genogrove
@@ -43,7 +38,7 @@ target_include_directories(genogrove-cli PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../
 target_include_directories(genogrove-cli PUBLIC include) # include genogrove_cli headers
 
 # Link to genogrove library (brings in htslib transitively)
-target_link_libraries(genogrove-cli genogrove cxxopts zlibstatic)
+target_link_libraries(genogrove-cli genogrove cxxopts)
 
 # set the output directory for the executable
 set_target_properties(genogrove-cli PROPERTIES
