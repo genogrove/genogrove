@@ -3,13 +3,18 @@ on: [push, pull_request]
 
 jobs:
   build:
-    name: ${{ matrix.os }}-apple-clang-${{ matrix.build_type }}
+    name: ${{ matrix.os }}-apple-clang-${{ matrix.clang_version }}-${{ matrix.build_type }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [macos-14, macos-15]
         build_type: [Debug, Release]
+        include:
+          - os: macos-14
+            clang_version: "15"
+          - os: macos-15
+            clang_version: "16"
 
     steps:
       - name: checkout code
