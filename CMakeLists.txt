@@ -66,6 +66,13 @@ configure_file(
         ${CMAKE_CURRENT_BINARY_DIR}/include/genogrove/config/version.hpp
 )
 
+# build the CLI if requested (before tests so CLI targets are available for CLI tests)
+option(BUILD_CLI "Building the commandline interface" OFF)
+if(BUILD_CLI)
+    message(STATUS "Building the commandline interface")
+    add_subdirectory(cli)
+endif()
+
 ##########################################
 # Testing
 ##########################################
@@ -123,13 +130,6 @@ install(FILES
         "${CMAKE_CURRENT_BINARY_DIR}/genogrove_config_version.cmake"
         DESTINATION lib/cmake/genogrove
 )
-
-# build the CLI if requested
-option(BUILD_CLI "Building the commandline interface" OFF)
-if(BUILD_CLI)
-    message(STATUS "Building the commandline interface")
-    add_subdirectory(cli)
-endif()
 
 ##########################################
 # Benchmarks
