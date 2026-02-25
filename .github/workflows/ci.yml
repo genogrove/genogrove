@@ -106,6 +106,7 @@ jobs:
           -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DBUILD_TESTING=ON \
+          -DBUILD_CLI=ON \
           -S ${{ github.workspace }}
 
       # configure cmake on windows
@@ -139,11 +140,6 @@ jobs:
 #          echo ""
 #          echo "=== Running ctest in debug mode ==="
 #          ctest -N
-
-      - name: Copy test data files for IO tests
-        run: |
-          mkdir -p build/tests/io/data
-          cp tests/io/data/* build/tests/io/data/
 
       - name: run tests
         working-directory: ${{ steps.strings.outputs.build-output-dir }}

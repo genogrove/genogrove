@@ -32,10 +32,11 @@ int main(int argc, char** argv) {
     cxxopts::Options options("genogrove", "...");
     options.add_options()
         ("subcall", "The subcommand to run", cxxopts::value<std::string>())
-        ("h, help", "Print help")
-        ("v, version", "Print version")
+        ("h,help", "Print help")
+        ("v,version", "Print version")
         ;
     options.parse_positional({"subcall"});
+    options.allow_unrecognised_options();
 
     // parse the commandline arguments
     auto args = options.parse(argc, argv);
