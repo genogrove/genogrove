@@ -8,6 +8,9 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 
 namespace fs = std::filesystem;
 
