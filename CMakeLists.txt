@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(genogrove VERSION 0.15.1)
+project(genogrove VERSION 0.15.2)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(HTSLIB REQUIRED htslib)
