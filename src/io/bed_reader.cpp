@@ -1,8 +1,9 @@
 #include <genogrove/io/bed_reader.hpp>
 
 // standard
-#include <sstream>
 #include <algorithm>
+#include <cctype>
+#include <sstream>
 #include <vector>
 
 // htslib
@@ -13,6 +14,9 @@ namespace gdt = genogrove::data_type;
 #include <cstdint>
 
 namespace genogrove::io {
+    // Safe isdigit wrapper to avoid UB with signed char
+    static auto is_digit = [](unsigned char c) { return std::isdigit(c) != 0; };
+
     // Helper function to parse comma-separated integers into a vector
     static std::vector<size_t> parse_csv(const std::string& str) {
         std::vector<size_t> result;
@@ -25,7 +29,7 @@ namespace genogrove::io {
             token.erase(token.find_last_not_of(" \t") + 1);
 
             if(token.empty()) { return {}; } // ERROR: return empty vector
-            if (!std::all_of(token.begin(), token.end(), ::isdigit)) {
+            if (!std::all_of(token.begin(), token.end(), is_digit)) {
                 return {};
             }
             result.push_back(std::stoul(token));
@@ -70,8 +74,8 @@ namespace genogrove::io {
 
             // Validate coordinates are integers
             if (start.empty() || end.empty() ||
-                !std::all_of(start.begin(), start.end(), ::isdigit) ||
-                !std::all_of(end.begin(), end.end(), ::isdigit)) {
+                !std::all_of(start.begin(), start.end(), is_digit) ||
+                !std::all_of(end.begin(), end.end(), is_digit)) {
                     if(str.s) free(str.s);
                     bgzf_close(bgzf_file);
                     throw std::runtime_error("Invalid BED coordinates (non-integer) in " + fpath.string());
@@ -110,7 +114,7 @@ namespace genogrove::io {
     }
 
     bool bed_reader::parse_score(bed_entry& entry, const std::string& score_str) {
-        if (!std::all_of(score_str.begin(), score_str.end(), ::isdigit)) {
+        if (!std::all_of(score_str.begin(), score_str.end(), is_digit)) {
             error_message = "Invalid score format (non-integer) at line ";
             error_message += std::to_string(line_num);
             return false;
@@ -148,12 +152,12 @@ namespace genogrove::io {
     bool bed_reader::parse_thickness(bed_entry& entry, const std::string& thick_start_str,
                                      const std::string& thick_end_str,
                                      size_t start_num, size_t end_num) {
-        if (!std::all_of(thick_start_str.begin(), thick_start_str.end(), ::isdigit)) {
+        if (!std::all_of(thick_start_str.begin(), thick_start_str.end(), is_digit)) {
             error_message = "Invalid thickStart format (non-integer) at line ";
             error_message += std::to_string(line_num);
             return false;
         }
-        if (!std::all_of(thick_end_str.begin(), thick_end_str.end(), ::isdigit)) {
+        if (!std::all_of(thick_end_str.begin(), thick_end_str.end(), is_digit)) {
             error_message = "Invalid thickEnd format (non-integer) at line ";
             error_message += std::to_string(line_num);
             return false;
@@ -216,7 +220,7 @@ namespace genogrove::io {
     bool bed_reader::parse_blocks(bed_entry& entry, const std::string& block_count_str,
                                   const std::string& block_sizes_str, const std::string& block_starts_str,
                                   size_t start_num, size_t end_num) {
-        if (!std::all_of(block_count_str.begin(), block_count_str.end(), ::isdigit)) {
+        if (!std::all_of(block_count_str.begin(), block_count_str.end(), is_digit)) {
             error_message = "Invalid block count format (non-integer) at line ";
             error_message += std::to_string(line_num);
             return false;
@@ -281,10 +285,21 @@ namespace genogrove::io {
     }
 
     bool bed_reader::read_next(bed_entry& entry) {
+        // Reset optional fields to avoid stale data from previous records
+        entry.name.reset();
+        entry.score.reset();
+        entry.strand.reset();
+        entry.thickness.reset();
+        entry.item_rgb.reset();
+        entry.blocks.reset();
+
         kstring_t str = {0, 0, nullptr};
         int ret = bgzf_getline(bgzf_file, '\n', &str);
         if(ret < 0) {
             if(str.s) free(str.s);
+            if(ret < -1) {
+                error_message = "I/O error reading file at line " + std::to_string(line_num + 1);
+            }
             return false;
         }
         std::string line(str.s);
@@ -297,6 +312,9 @@ namespace genogrove::io {
             ret = bgzf_getline(bgzf_file, '\n', &str2);
             if(ret < 0) {
                 if (str2.s) free(str2.s);
+                if(ret < -1) {
+                    error_message = "I/O error reading file at line " + std::to_string(line_num + 1);
+                }
                 return false;
             }
             line = std::string(str2.s);
@@ -316,8 +334,8 @@ namespace genogrove::io {
             // validate integers
             if(start.empty() ||
                 end.empty() ||
-                !std::all_of(start.begin(), start.end(), ::isdigit) ||
-                !std::all_of(end.begin(), end.end(), ::isdigit)) {
+                !std::all_of(start.begin(), start.end(), is_digit) ||
+                !std::all_of(end.begin(), end.end(), is_digit)) {
                 error_message = "Invalid coordinate format at line " + std::to_string(line_num);
                 return false;
             }
