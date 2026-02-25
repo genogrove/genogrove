@@ -15,9 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **CLI integration tests**: Unit tests for intersect handlers/validation and end-to-end tests spawning the CLI binary. Gated behind `BUILD_CLI=ON`. CI now builds and tests the CLI ([#97](https://github.com/genogrove/genogrove/issues/97), [#98](https://github.com/genogrove/genogrove/pull/98))
+- **Missing `#include <algorithm>`**: Added explicit include for `std::sort` in `numeric_test.cpp` and `genomic_coordinate_test.cpp` ([#98](https://github.com/genogrove/genogrove/pull/98))
 
 ### Changed
 - **grove.hpp cleanup**: Removed dead code (unreachable return, unused try-catch in `insert_iter`), fixed include grouping, removed redundant constructor initializers, fixed typo ([#94](https://github.com/genogrove/genogrove/pull/94))
+- **CI: upgrade clang-14 to clang-18**: clang-14 is incompatible with GCC 14's libstdc++ C++20 headers on ubuntu-24.04. Updated CI matrix and README badge ([#98](https://github.com/genogrove/genogrove/pull/98))
+- **CLI: remove unused zlib CPM dependency**: CLI gets zlib transitively through genogrove → htslib; the explicit CPM fetch was unnecessary and polluted global build state ([#98](https://github.com/genogrove/genogrove/pull/98))
 
 ## [0.15.1] - 2026-02-22
 
