@@ -1,9 +1,8 @@
 # genogrove
 
-![gcc-12-Release](https://img.shields.io/github/actions/workflow/status/genogrove/genogrove/ci.yml?branch=main&label=gcc-12-Release&style=flat&event=push)
-![gcc-13-Release](https://img.shields.io/github/actions/workflow/status/genogrove/genogrove/ci.yml?branch=main&label=gcc-13-Release&style=flat&event=push)
-![gcc-14-Release](https://img.shields.io/github/actions/workflow/status/genogrove/genogrove/ci.yml?branch=main&label=gcc-14-Release&style=flat&event=push)
-![clang-18-Release](https://img.shields.io/github/actions/workflow/status/genogrove/genogrove/ci.yml?branch=main&label=clang-18-Release&style=flat&event=push)
+[![Build](https://img.shields.io/github/actions/workflow/status/genogrove/genogrove/ci.yml?branch=main&label=build&style=flat)](https://github.com/genogrove/genogrove/actions/workflows/ci.yml)
+![Compilers](https://img.shields.io/badge/compilers-GCC%2012--14%20|%20Clang%2016--18-informational)
+![Platforms](https://img.shields.io/badge/platforms-Linux%20|%20macOS-informational)
 [![Release](https://img.shields.io/github/v/release/genogrove/genogrove)](https://github.com/genogrove/genogrove/releases/latest)
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)
 [![Downloads](https://img.shields.io/github/downloads/genogrove/genogrove/total.svg)](https://github.com/genogrove/genogrove/releases)
