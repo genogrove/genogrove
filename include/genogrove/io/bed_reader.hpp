@@ -90,6 +90,28 @@ namespace genogrove::io {
     class bed_reader : public file_reader<bed_entry> {
     public:
         bed_reader(const std::filesystem::path& path);
+
+        // Non-copyable (owns raw BGZF* resource)
+        bed_reader(const bed_reader&) = delete;
+        bed_reader& operator=(const bed_reader&) = delete;
+
+        // Movable
+        bed_reader(bed_reader&& other) noexcept
+            : bgzf_file(other.bgzf_file), line_num(other.line_num),
+              error_message(std::move(other.error_message)) {
+            other.bgzf_file = nullptr;
+        }
+        bed_reader& operator=(bed_reader&& other) noexcept {
+            if (this != &other) {
+                if (bgzf_file) bgzf_close(bgzf_file);
+                bgzf_file = other.bgzf_file;
+                line_num = other.line_num;
+                error_message = std::move(other.error_message);
+                other.bgzf_file = nullptr;
+            }
+            return *this;
+        }
+
         bool read_next(bed_entry& entry) override;
         bool has_next() override;
         std::string get_error_message() override;
