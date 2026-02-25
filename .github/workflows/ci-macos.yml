@@ -1,0 +1,42 @@
+name: CI (macOS)
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: ${{ matrix.os }}-apple-clang-${{ matrix.clang_version }}-${{ matrix.build_type }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]
+        build_type: [Debug, Release]
+        include:
+          - os: macos-14
+            clang_version: "15"
+          - os: macos-15
+            clang_version: "16"
+
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v5
+
+      - name: install htslib
+        run: brew install htslib
+
+      - name: configure cmake
+        run: |
+          cmake -B build \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_CXX_STANDARD=20 \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DBUILD_TESTING=ON \
+            -DBUILD_CLI=ON \
+            -S ${{ github.workspace }}
+
+      - name: build
+        run: cmake --build build --parallel
+
+      - name: test
+        working-directory: build
+        run: ctest --output-on-failure
