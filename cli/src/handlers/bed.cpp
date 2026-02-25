@@ -1,4 +1,5 @@
 #include <handlers/bed.hpp>
+#include <cstdlib>
 #include <iostream>
 
 namespace handlers {
@@ -14,6 +15,10 @@ void grove_insert(
     for (const auto& entry : reader) {
         // Insert using chrom as index, interval as key, and bed_entry as data
         grove.insert_data(entry.chrom, entry.interval, entry);
+    }
+    if (!reader.get_error_message().empty()) {
+        std::cerr << "Error reading BED file: " << reader.get_error_message() << std::endl;
+        exit(1);
     }
 }
 
@@ -36,6 +41,10 @@ void grove_intersect(
                    << result->get_data().interval.get_start() << "\t"
                    << result->get_data().interval.get_end() << "\n";
         }
+    }
+    if (!reader.get_error_message().empty()) {
+        std::cerr << "Error reading BED file: " << reader.get_error_message() << std::endl;
+        exit(1);
     }
 }
 
