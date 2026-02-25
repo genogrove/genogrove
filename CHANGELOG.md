@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-02-25
+
 ### Fixed
 - **set_root_nodes() dangling pointer bug**: Fixed `set_root_nodes()` deleting the new parameter's nodes instead of the old member nodes, resulting in dangling pointers ([#93](https://github.com/genogrove/genogrove/issues/93), [#95](https://github.com/genogrove/genogrove/pull/95))
 - **CLI intersect bugs**: Fixed undefined positional binding (`"inputfile"` → `"queryfile", "targetfile"`), memory leak from raw `new std::ofstream` replaced with `std::unique_ptr`, added output file open validation, fixed missing namespace qualifiers in BED/GFF handlers, and fixed `any_type.hpp` incomplete `std::istream` type warning ([#40](https://github.com/genogrove/genogrove/issues/40), [#96](https://github.com/genogrove/genogrove/pull/96))
@@ -15,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **bed_reader stale optionals**: Reset all optional `bed_entry` fields at the start of each `read_next()` to prevent stale data from previous records (e.g., BED12 → BED3). Also replaced bare `::isdigit` with a safe `unsigned char` lambda to avoid UB, and set `error_message` on I/O failures ([#58](https://github.com/genogrove/genogrove/issues/58), [#100](https://github.com/genogrove/genogrove/pull/100))
 - **bed_reader/gff_reader non-copyable**: Deleted copy constructor and copy assignment to prevent double-free of owned `BGZF*` resources; added move constructor and move assignment ([#62](https://github.com/genogrove/genogrove/issues/62), [#101](https://github.com/genogrove/genogrove/pull/101))
 - **CLI silent reader errors**: CLI handlers now check `get_error_message()` after iterator loops and report parsing errors to stderr instead of silently discarding malformed records ([#68](https://github.com/genogrove/genogrove/issues/68), [#102](https://github.com/genogrove/genogrove/pull/102))
+- **Missing `<sys/wait.h>` in e2e tests**: Added `#include <sys/wait.h>` (guarded with `#ifndef _WIN32`) for `WIFEXITED`/`WEXITSTATUS` macros that could fail on stricter toolchains ([#99](https://github.com/genogrove/genogrove/issues/99), [#103](https://github.com/genogrove/genogrove/pull/103))
 
 ### Added
 - **CLI integration tests**: Unit tests for intersect handlers/validation and end-to-end tests spawning the CLI binary. Gated behind `BUILD_CLI=ON`. CI now builds and tests the CLI ([#97](https://github.com/genogrove/genogrove/issues/97), [#98](https://github.com/genogrove/genogrove/pull/98))
