@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **gff_reader `::isdigit` undefined behavior**: Replaced bare `::isdigit` calls with a safe wrapper that casts to `unsigned char`, matching the pattern already used in `bed_reader` ([#111](https://github.com/genogrove/genogrove/issues/111))
+
+### Changed
+- **CI: split into separate workflows**: Replaced single `ci.yml` with `ci-ubuntu.yml` and `ci-macos.yml` for cleaner matrix configuration. Added Clang 16/17 to Ubuntu and macOS 15 (Apple Clang 16) to macOS. Eliminates all macOS exclude entries ([#105](https://github.com/genogrove/genogrove/pull/105))
+- **README overhaul**: Consolidated badges (single dynamic build badge + static compiler/platform badges), fixed `genogrove/structure` URLs, added usage example, language bindings table, and compiler support section ([#105](https://github.com/genogrove/genogrove/pull/105))
+
 ## [0.15.2] - 2026-02-25
 
 ### Fixed
