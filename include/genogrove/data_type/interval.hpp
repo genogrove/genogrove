@@ -121,7 +121,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            static bool is_overlapping(const interval& a, const interval& b);
+            [[nodiscard]] static bool is_overlapping(const interval& a, const interval& b);
 
             /**
              * @brief Aggregate multiple intervals into a bounding interval.

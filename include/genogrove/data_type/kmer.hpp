@@ -150,7 +150,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            static bool is_overlapping(const kmer& a, const kmer& b);
+            [[nodiscard]] static bool is_overlapping(const kmer& a, const kmer& b);
 
             /**
              * @brief Aggregate multiple k-mers.

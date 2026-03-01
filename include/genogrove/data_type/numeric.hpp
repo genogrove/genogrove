@@ -118,7 +118,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            static bool is_overlapping(const numeric& a, const numeric& b);
+            [[nodiscard]] static bool is_overlapping(const numeric& a, const numeric& b);
 
             /**
              * @brief Aggregate multiple numeric values.
