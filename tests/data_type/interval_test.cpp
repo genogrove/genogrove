@@ -118,8 +118,8 @@ TEST(intervalTest, overlapOverlapping) {
     gdt::interval intvl1(10, 30);
     gdt::interval intvl2(20, 40);
 
-    EXPECT_TRUE(gdt::interval::overlap(intvl1, intvl2));
-    EXPECT_TRUE(gdt::interval::overlap(intvl2, intvl1));
+    EXPECT_TRUE(gdt::interval::is_overlapping(intvl1, intvl2));
+    EXPECT_TRUE(gdt::interval::is_overlapping(intvl2, intvl1));
 }
 
 TEST(intervalTest, overlapAdjacent) {
@@ -128,8 +128,8 @@ TEST(intervalTest, overlapAdjacent) {
     gdt::interval intvl2(20, 30);
 
     // For closed intervals, touching intervals overlap
-    EXPECT_TRUE(gdt::interval::overlap(intvl1, intvl2));
-    EXPECT_TRUE(gdt::interval::overlap(intvl2, intvl1));
+    EXPECT_TRUE(gdt::interval::is_overlapping(intvl1, intvl2));
+    EXPECT_TRUE(gdt::interval::is_overlapping(intvl2, intvl1));
 }
 
 TEST(intervalTest, overlapDisjoint) {
@@ -137,8 +137,8 @@ TEST(intervalTest, overlapDisjoint) {
     gdt::interval intvl1(10, 20);
     gdt::interval intvl2(21, 30);
 
-    EXPECT_FALSE(gdt::interval::overlap(intvl1, intvl2));
-    EXPECT_FALSE(gdt::interval::overlap(intvl2, intvl1));
+    EXPECT_FALSE(gdt::interval::is_overlapping(intvl1, intvl2));
+    EXPECT_FALSE(gdt::interval::is_overlapping(intvl2, intvl1));
 }
 
 TEST(intervalTest, overlapContained) {
@@ -146,8 +146,8 @@ TEST(intervalTest, overlapContained) {
     gdt::interval intvl1(10, 50);
     gdt::interval intvl2(20, 30);
 
-    EXPECT_TRUE(gdt::interval::overlap(intvl1, intvl2));
-    EXPECT_TRUE(gdt::interval::overlap(intvl2, intvl1));
+    EXPECT_TRUE(gdt::interval::is_overlapping(intvl1, intvl2));
+    EXPECT_TRUE(gdt::interval::is_overlapping(intvl2, intvl1));
 }
 
 TEST(intervalTest, overlapIdentical) {
@@ -155,7 +155,7 @@ TEST(intervalTest, overlapIdentical) {
     gdt::interval intvl1(10, 30);
     gdt::interval intvl2(10, 30);
 
-    EXPECT_TRUE(gdt::interval::overlap(intvl1, intvl2));
+    EXPECT_TRUE(gdt::interval::is_overlapping(intvl1, intvl2));
 }
 
 TEST(intervalTest, overlapPartialOverlap) {
@@ -165,10 +165,10 @@ TEST(intervalTest, overlapPartialOverlap) {
     gdt::interval intvl3(20, 40);
     gdt::interval intvl4(30, 50);
 
-    EXPECT_TRUE(gdt::interval::overlap(intvl1, intvl2));  // [10,25] overlaps [15,35]
-    EXPECT_TRUE(gdt::interval::overlap(intvl2, intvl3));  // [15,35] overlaps [20,40]
-    EXPECT_TRUE(gdt::interval::overlap(intvl1, intvl3));  // [10,25] overlaps [20,40] at [20,25]
-    EXPECT_FALSE(gdt::interval::overlap(intvl1, intvl4)); // [10,25] does not overlap [30,50]
+    EXPECT_TRUE(gdt::interval::is_overlapping(intvl1, intvl2));  // [10,25] overlaps [15,35]
+    EXPECT_TRUE(gdt::interval::is_overlapping(intvl2, intvl3));  // [15,35] overlaps [20,40]
+    EXPECT_TRUE(gdt::interval::is_overlapping(intvl1, intvl3));  // [10,25] overlaps [20,40] at [20,25]
+    EXPECT_FALSE(gdt::interval::is_overlapping(intvl1, intvl4)); // [10,25] does not overlap [30,50]
 }
 
 TEST(intervalTest, aggregateSingle) {

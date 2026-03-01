@@ -118,7 +118,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            static bool overlap(const numeric& a, const numeric& b);
+            [[nodiscard]] static bool is_overlapping(const numeric& a, const numeric& b);
 
             /**
              * @brief Aggregate multiple numeric values.
@@ -133,7 +133,7 @@ namespace genogrove::data_type {
              * @note Required by key_type_base concept for internal node construction
              * @throws std::runtime_error if values is empty (in debug builds)
              */
-            static numeric aggregate(const std::vector<numeric>& values);
+            [[nodiscard]] static numeric aggregate(const std::vector<numeric>& values);
 
             /**
              * @brief Convert the numeric value to string representation.

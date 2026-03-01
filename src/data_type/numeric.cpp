@@ -30,7 +30,7 @@ namespace genogrove::data_type {
         this->value = value;
     }
 
-    bool numeric::overlap(const numeric& a, const numeric& b) {
+    bool numeric::is_overlapping(const numeric& a, const numeric& b) {
         // For point values, they only overlap if they're equal
         return a.value == b.value;
     }

@@ -145,8 +145,8 @@ TEST(genomicCoordinateTest, overlapSameStrandOverlapping) {
     gdt::genomic_coordinate coord2('+', 20, 40);
 
     // Overlapping ranges on same strand
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(coord1, coord2));
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(coord2, coord1));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(coord1, coord2));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(coord2, coord1));
 }
 
 TEST(genomicCoordinateTest, overlapSameStrandAdjacent) {
@@ -154,8 +154,8 @@ TEST(genomicCoordinateTest, overlapSameStrandAdjacent) {
     gdt::genomic_coordinate coord1('+', 10, 20);
     gdt::genomic_coordinate coord2('+', 20, 30);
 
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(coord1, coord2));
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(coord2, coord1));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(coord1, coord2));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(coord2, coord1));
 }
 
 TEST(genomicCoordinateTest, overlapSameStrandDisjoint) {
@@ -163,8 +163,8 @@ TEST(genomicCoordinateTest, overlapSameStrandDisjoint) {
     gdt::genomic_coordinate coord1('+', 10, 20);
     gdt::genomic_coordinate coord2('+', 21, 30);
 
-    EXPECT_FALSE(gdt::genomic_coordinate::overlap(coord1, coord2));
-    EXPECT_FALSE(gdt::genomic_coordinate::overlap(coord2, coord1));
+    EXPECT_FALSE(gdt::genomic_coordinate::is_overlapping(coord1, coord2));
+    EXPECT_FALSE(gdt::genomic_coordinate::is_overlapping(coord2, coord1));
 }
 
 TEST(genomicCoordinateTest, overlapDifferentStrands) {
@@ -172,8 +172,8 @@ TEST(genomicCoordinateTest, overlapDifferentStrands) {
     gdt::genomic_coordinate coord1('+', 10, 30);
     gdt::genomic_coordinate coord2('-', 20, 40);
 
-    EXPECT_FALSE(gdt::genomic_coordinate::overlap(coord1, coord2));
-    EXPECT_FALSE(gdt::genomic_coordinate::overlap(coord2, coord1));
+    EXPECT_FALSE(gdt::genomic_coordinate::is_overlapping(coord1, coord2));
+    EXPECT_FALSE(gdt::genomic_coordinate::is_overlapping(coord2, coord1));
 }
 
 TEST(genomicCoordinateTest, overlapUnstrandedWithStranded) {
@@ -184,18 +184,18 @@ TEST(genomicCoordinateTest, overlapUnstrandedWithStranded) {
     gdt::genomic_coordinate all_strands('*', 20, 40);
 
     // Unstranded matches plus strand
-    EXPECT_FALSE(gdt::genomic_coordinate::overlap(unstranded, plus_strand));
-    EXPECT_FALSE(gdt::genomic_coordinate::overlap(plus_strand, unstranded));
+    EXPECT_FALSE(gdt::genomic_coordinate::is_overlapping(unstranded, plus_strand));
+    EXPECT_FALSE(gdt::genomic_coordinate::is_overlapping(plus_strand, unstranded));
 
-    EXPECT_FALSE(gdt::genomic_coordinate::overlap(unstranded, minus_strand));
-    EXPECT_FALSE(gdt::genomic_coordinate::overlap(minus_strand, unstranded));
+    EXPECT_FALSE(gdt::genomic_coordinate::is_overlapping(unstranded, minus_strand));
+    EXPECT_FALSE(gdt::genomic_coordinate::is_overlapping(minus_strand, unstranded));
 
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(unstranded, all_strands));
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(all_strands, unstranded));
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(all_strands, plus_strand));
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(plus_strand, all_strands));
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(all_strands, minus_strand));
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(minus_strand, all_strands));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(unstranded, all_strands));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(all_strands, unstranded));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(all_strands, plus_strand));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(plus_strand, all_strands));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(all_strands, minus_strand));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(minus_strand, all_strands));
 
 }
 
@@ -204,8 +204,8 @@ TEST(genomicCoordinateTest, overlapSameStrandContained) {
     gdt::genomic_coordinate coord1('+', 10, 50);
     gdt::genomic_coordinate coord2('+', 20, 30);
 
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(coord1, coord2));
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(coord2, coord1));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(coord1, coord2));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(coord2, coord1));
 }
 
 TEST(genomicCoordinateTest, overlapSameStrandIdentical) {
@@ -213,7 +213,7 @@ TEST(genomicCoordinateTest, overlapSameStrandIdentical) {
     gdt::genomic_coordinate coord1('+', 10, 30);
     gdt::genomic_coordinate coord2('+', 10, 30);
 
-    EXPECT_TRUE(gdt::genomic_coordinate::overlap(coord1, coord2));
+    EXPECT_TRUE(gdt::genomic_coordinate::is_overlapping(coord1, coord2));
 }
 
 TEST(genomicCoordinateTest, aggregateSingle) {

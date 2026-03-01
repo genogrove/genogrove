@@ -308,7 +308,7 @@ class node {
      * Reads serialized node data from the stream and reconstructs the node
      * structure, including keys and child relationships.
      */
-    static node<key_type, data_type>* deserialize(std::istream& is, int order);
+    [[nodiscard]] static node<key_type, data_type>* deserialize(std::istream& is, int order);
 
     // =========================================================================
     // Debugging & Utilities

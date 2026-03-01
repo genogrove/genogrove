@@ -192,19 +192,19 @@ namespace genogrove::io {
         uint8_t min_mapq = 0;               ///< Minimum mapping quality (0 = no filter)
 
         /// Factory method for default options (skip unmapped only)
-        static bam_reader_options defaults() {
+        [[nodiscard]] static bam_reader_options defaults() {
             return bam_reader_options{};
         }
 
         /// Factory method to include all reads
-        static bam_reader_options include_all() {
+        [[nodiscard]] static bam_reader_options include_all() {
             bam_reader_options opts;
             opts.skip_unmapped = false;
             return opts;
         }
 
         /// Factory method for primary alignments only
-        static bam_reader_options primary_only() {
+        [[nodiscard]] static bam_reader_options primary_only() {
             bam_reader_options opts;
             opts.skip_secondary = true;
             opts.skip_supplementary = true;
@@ -212,7 +212,7 @@ namespace genogrove::io {
         }
 
         /// Factory method for high-quality primary alignments
-        static bam_reader_options high_quality(uint8_t min_mapq = 20) {
+        [[nodiscard]] static bam_reader_options high_quality(uint8_t min_mapq = 20) {
             bam_reader_options opts;
             opts.skip_secondary = true;
             opts.skip_supplementary = true;

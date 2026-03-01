@@ -191,8 +191,8 @@ TEST(kmerTest, overlapEqual) {
     gdt::kmer k3("ACGA");
 
     // Overlap only when exactly equal
-    EXPECT_TRUE(gdt::kmer::overlap(k1, k2));
-    EXPECT_FALSE(gdt::kmer::overlap(k1, k3));
+    EXPECT_TRUE(gdt::kmer::is_overlapping(k1, k2));
+    EXPECT_FALSE(gdt::kmer::is_overlapping(k1, k3));
 }
 
 TEST(kmerTest, overlapDifferentK) {
@@ -200,7 +200,7 @@ TEST(kmerTest, overlapDifferentK) {
     gdt::kmer k2("ACGT");
 
     // Different k means no overlap
-    EXPECT_FALSE(gdt::kmer::overlap(k1, k2));
+    EXPECT_FALSE(gdt::kmer::is_overlapping(k1, k2));
 }
 
 TEST(kmerTest, aggregateSingle) {

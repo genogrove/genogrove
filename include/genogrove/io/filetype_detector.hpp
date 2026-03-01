@@ -41,7 +41,7 @@ namespace genogrove::io {
 
     class filetype_detector {
     public:
-        std::tuple<filetype, compression_type> detect_filetype(const fs::path& filepath);
+        [[nodiscard]] std::tuple<filetype, compression_type> detect_filetype(const fs::path& filepath);
     private:
         compression_type detect_compression(const fs::path& filepath);
         bool validate_extension(const fs::path& filepath, std::string& extension,

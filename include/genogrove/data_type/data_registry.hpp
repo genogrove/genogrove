@@ -122,7 +122,7 @@ class data_registry {
      * @param id The ID to check
      * @return true if ID refers to valid data, false otherwise
      */
-    bool contains(id_type id) const {
+    [[nodiscard]] bool contains(id_type id) const {
         return id < storage.size();
     }
 
@@ -183,7 +183,7 @@ class data_registry {
      * @note Clears existing data before loading; all previous IDs become invalid
      * @note Loaded entries will have the same IDs as when serialized
      */
-    static data_registry& deserialize(std::istream& is) {
+    [[nodiscard]] static data_registry& deserialize(std::istream& is) {
         auto& inst = instance();
         inst.clear();
 

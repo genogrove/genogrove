@@ -150,7 +150,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            static bool overlap(const kmer& a, const kmer& b);
+            [[nodiscard]] static bool is_overlapping(const kmer& a, const kmer& b);
 
             /**
              * @brief Aggregate multiple k-mers.
@@ -163,7 +163,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept for internal node construction
              */
-            static kmer aggregate(const std::vector<kmer>& kmers);
+            [[nodiscard]] static kmer aggregate(const std::vector<kmer>& kmers);
 
             /**
              * @brief Convert the k-mer to its DNA sequence string.
@@ -232,7 +232,7 @@ namespace genogrove::data_type {
              * @param sequence DNA sequence to validate
              * @return true if sequence contains only A, C, G, T (case insensitive)
              */
-            static bool is_valid(std::string_view sequence);
+            [[nodiscard]] static bool is_valid(std::string_view sequence);
 
         private:
             uint64_t encoding;  ///< 2-bit encoded k-mer (A=00, C=01, G=10, T=11)
