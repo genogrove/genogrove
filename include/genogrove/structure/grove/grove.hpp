@@ -876,7 +876,7 @@ class grove {
      * @return query_result containing all overlapping keys from all indices
      * @note Searches all root nodes (all chromosomes/indices) in the grove
      */
-    gdt::query_result<key_type, data_type> intersect(key_type& query) {
+    gdt::query_result<key_type, data_type> intersect(const key_type& query) {
         gdt::query_result<key_type, data_type> result{query};
         // if index is not specified, all root nodes need to be checked
         for(const auto& [index, root] : this->get_root_nodes()) {
@@ -892,7 +892,7 @@ class grove {
      * @return query_result containing all overlapping keys from the specified index
      * @note Returns empty result if index doesn't exist
      */
-    gdt::query_result<key_type, data_type> intersect(key_type& query, const std::string& index) {
+    gdt::query_result<key_type, data_type> intersect(const key_type& query, const std::string& index) {
         gdt::query_result<key_type, data_type> result{query};
         node<key_type, data_type>* root = this->get_root(index);
 
@@ -911,7 +911,7 @@ class grove {
      * @note Uses overlap detection to prune search space and traverse linked leaf nodes
      * @note Optimized for interval types with early termination when no overlap is possible
      */
-    void search_iter(node<key_type, data_type>* node, key_type& query,
+    void search_iter(node<key_type, data_type>* node, const key_type& query,
         gdt::query_result<key_type, data_type>& result) {
         if(node == nullptr) {
             return;
