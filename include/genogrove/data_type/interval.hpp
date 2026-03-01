@@ -121,7 +121,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            static bool overlap(const interval& a, const interval& b);
+            static bool is_overlapping(const interval& a, const interval& b);
 
             /**
              * @brief Aggregate multiple intervals into a bounding interval.
@@ -139,7 +139,7 @@ namespace genogrove::data_type {
              * @note Required by key_type_base concept for internal node construction
              * @throws std::runtime_error if intervals is empty (in debug builds)
              */
-            static interval aggregate(const std::vector<interval>& intervals);
+            [[nodiscard]] static interval aggregate(const std::vector<interval>& intervals);
 
             /**
              * @brief Convert interval to string representation.

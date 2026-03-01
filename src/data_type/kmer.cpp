@@ -62,7 +62,7 @@ kmer::kmer(std::string_view sequence) : encoding(0), k(0) {
         return k;
     }
 
-    bool kmer::overlap(const kmer& a, const kmer& b) {
+    bool kmer::is_overlapping(const kmer& a, const kmer& b) {
         // For k-mers, overlap is exact match only
         return a.k == b.k && a.encoding == b.encoding;
     }

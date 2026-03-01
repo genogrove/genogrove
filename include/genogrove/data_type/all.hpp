@@ -42,7 +42,7 @@
  *
  * ## Type System Infrastructure
  * - **key_type_base**: C++20 concept defining requirements for key types
- *   (comparison operators, overlap(), aggregate(), to_string())
+ *   (comparison operators, is_overlapping(), aggregate(), to_string())
  * - **index**: Index identifier management (e.g., chromosome names)
  * - **index_registry**: Global registry for managing index identifiers
  * - **data_registry**: Template registry for shared metadata (per-type singleton)
@@ -53,7 +53,7 @@
  * ## Key Type Requirements
  * All key types must satisfy the key_type_base concept by providing:
  * - Comparison operators: operator<, operator>, operator==
- * - Static overlap() method for detecting overlaps between keys
+ * - Static is_overlapping() method for detecting overlaps between keys
  * - Static aggregate() method for combining multiple keys into a bounding key
  * - Instance to_string() method for string representation
  *

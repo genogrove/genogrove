@@ -131,7 +131,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            static bool overlap(const genomic_coordinate& a, const genomic_coordinate& b);
+            static bool is_overlapping(const genomic_coordinate& a, const genomic_coordinate& b);
 
             /**
              * @brief Aggregate multiple coordinates into a bounding coordinate.
@@ -150,7 +150,7 @@ namespace genogrove::data_type {
              * @note Required by key_type_base concept for internal node construction
              * @throws std::runtime_error if coords is empty (in debug builds)
              */
-            static genomic_coordinate aggregate(const std::vector<genomic_coordinate>& coords);
+            [[nodiscard]] static genomic_coordinate aggregate(const std::vector<genomic_coordinate>& coords);
 
             /**
              * @brief Convert coordinate to string representation.

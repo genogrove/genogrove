@@ -169,7 +169,7 @@ Example:
 ```cpp
 std::vector<size_t> expected_indices;
 for (size_t i = 0; i < test_data.size(); ++i) {
-    if (gdt::interval::overlap(test_data[i].first, query)) {
+    if (gdt::interval::is_overlapping(test_data[i].first, query)) {
         expected_indices.push_back(i);
     }
 }

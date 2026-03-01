@@ -88,9 +88,9 @@ TEST(numericTest, overlapEqual) {
     gdt::numeric n2(10);
     gdt::numeric n3(20);
 
-    EXPECT_TRUE(gdt::numeric::overlap(n1, n2));
-    EXPECT_FALSE(gdt::numeric::overlap(n1, n3));
-    EXPECT_FALSE(gdt::numeric::overlap(n2, n3));
+    EXPECT_TRUE(gdt::numeric::is_overlapping(n1, n2));
+    EXPECT_FALSE(gdt::numeric::is_overlapping(n1, n3));
+    EXPECT_FALSE(gdt::numeric::is_overlapping(n2, n3));
 }
 
 TEST(numericTest, overlapDifferent) {
@@ -98,7 +98,7 @@ TEST(numericTest, overlapDifferent) {
     gdt::numeric n1(10);
     gdt::numeric n2(11);
 
-    EXPECT_FALSE(gdt::numeric::overlap(n1, n2));
+    EXPECT_FALSE(gdt::numeric::is_overlapping(n1, n2));
 }
 
 TEST(numericTest, aggregateSingle) {

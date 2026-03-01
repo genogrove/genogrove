@@ -48,7 +48,7 @@ namespace genogrove::data_type {
     }
 
     // Static overlap method
-    bool genomic_coordinate::overlap(const genomic_coordinate& a, const genomic_coordinate& b) {
+    bool genomic_coordinate::is_overlapping(const genomic_coordinate& a, const genomic_coordinate& b) {
         // Check if coordinates overlap (including touching
         // Ranges [a.start, a.end] and [b.start, b.end] overlap if
         // a.start <= b.end AND b.start <= a.end

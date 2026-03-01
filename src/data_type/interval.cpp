@@ -35,7 +35,7 @@ namespace genogrove::data_type {
     size_t interval::get_end() const { return this->end; }
     void interval::set_end(size_t end) { this->end = end; }
 
-    bool interval::overlap(const interval& intvl1, const interval& intvl2) {
+    bool interval::is_overlapping(const interval& intvl1, const interval& intvl2) {
         interval intvl = {std::max(intvl1.get_start(), intvl2.get_start()),
                           std::min(intvl1.get_end(), intvl2.get_end())};
 

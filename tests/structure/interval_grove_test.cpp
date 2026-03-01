@@ -63,7 +63,7 @@ struct grove_test_traits<gdt::interval, int> {
         std::vector<size_t> expected_indices;
         gdt::interval query{query_start, query_end};
         for (size_t i = 0; i < test_data.size(); ++i) {
-            if (gdt::interval::overlap(test_data[i].first, query)) {
+            if (gdt::interval::is_overlapping(test_data[i].first, query)) {
                 expected_indices.push_back(i);
             }
         }

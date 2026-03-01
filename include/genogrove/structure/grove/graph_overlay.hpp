@@ -195,7 +195,7 @@ class graph_overlay {
      * @param target Pointer to target key
      * @return true if edge exists, false otherwise
      */
-    bool has_edge(gdt::key<key_type, data_type>* source,
+    [[nodiscard]] bool has_edge(gdt::key<key_type, data_type>* source,
                   gdt::key<key_type, data_type>* target) const {
         auto it = adjacency.find(source);
         if (it == adjacency.end()) {
