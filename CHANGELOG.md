@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- **gff_reader `::isdigit` undefined behavior**: Replaced bare `::isdigit` calls with a safe wrapper that casts to `unsigned char`, matching the pattern already used in `bed_reader` ([#111](https://github.com/genogrove/genogrove/issues/111))
+- **gff_reader `::isdigit` undefined behavior**: Replaced bare `::isdigit` calls with a safe wrapper that casts to `unsigned char`, matching the pattern already used in `bed_reader` ([#111](https://github.com/genogrove/genogrove/issues/111), [#118](https://github.com/genogrove/genogrove/pull/118))
 
 ### Changed
 - **Rename `overlap()` → `is_overlapping()`**: Renamed the static overlap method on all key types (`interval`, `genomic_coordinate`, `numeric`, `kmer`) and in the `key_type_base` concept to `is_overlapping()` for self-documenting intent ([#112](https://github.com/genogrove/genogrove/issues/112), [#119](https://github.com/genogrove/genogrove/pull/119))
