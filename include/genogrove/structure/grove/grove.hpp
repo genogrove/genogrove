@@ -785,7 +785,7 @@ class grove {
             for (int i = 0; i <= mid; ++i) {
                 left_subtree_keys.push_back(child->get_keys()[i]->get_value());
             }
-            k    ey_type parent_separator = key_type::aggregate(left_subtree_keys);
+            key_type parent_separator = key_type::aggregate(left_subtree_keys);
             gdt::key<key_type, data_type> parent_key{parent_separator};
             auto* parent_key_ptr = allocate_key(parent_key);
 
