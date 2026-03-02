@@ -36,7 +36,7 @@ namespace genogrove::data_type {
      * ## Template Parameters
      * - `key_type`: The core key value type (must satisfy key_type_base concept)
      *   - Required operations: comparison operators (<, >, ==)
-     *   - Required static methods: is_overlapping(), aggregate()
+     *   - Required static methods: overlaps(), aggregate()
      *   - Required instance method: to_string()
      * - `data_type`: Optional associated data (default: void for keys without data)
      *   - When void: key contains only the key_type value (zero overhead)

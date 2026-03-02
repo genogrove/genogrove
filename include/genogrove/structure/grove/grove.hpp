@@ -919,7 +919,7 @@ class grove {
         if(node->get_is_leaf()) {
             std::optional<size_t> last_match;
             for(size_t i = 0; i < node->get_keys().size(); ++i) {
-                if(key_type::is_overlapping(node->get_keys()[i]->get_value(), query)) {
+                if(key_type::overlaps(node->get_keys()[i]->get_value(), query)) {
                     last_match = i;
                     result.add_key(node->get_keys()[i]);
                 }
@@ -937,7 +937,7 @@ class grove {
                     }
                 } else {
                     // For non-interval types, use regular overlap
-                    if(key_type::is_overlapping(first_key_next, query)) {
+                    if(key_type::overlaps(first_key_next, query)) {
                         search_iter(node->get_next(), query, result);
                     }
                 }
@@ -946,14 +946,14 @@ class grove {
             // abort if left of key (not overlapping) - only needed for intervals
             if constexpr (requires { key_type::is_interval; }) {
                 if(query < node->get_keys()[0]->get_value() &&
-                   !key_type::is_overlapping(node->get_keys()[0]->get_value(), query)) {
+                   !key_type::overlaps(node->get_keys()[0]->get_value(), query)) {
                     return;
                 }
             }
 
             size_t i = 0;
             while(i < node->get_keys().size() && (query > node->get_keys()[i]->get_value()) &&
-                  !key_type::is_overlapping(node->get_keys()[i]->get_value(), query)) {
+                  !key_type::overlaps(node->get_keys()[i]->get_value(), query)) {
                 i++;
             }
             if(node->get_children()[i] != nullptr) {

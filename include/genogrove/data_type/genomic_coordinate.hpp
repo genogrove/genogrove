@@ -149,7 +149,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            [[nodiscard]] static constexpr bool is_overlapping(const genomic_coordinate& a, const genomic_coordinate& b) {
+            [[nodiscard]] static constexpr bool overlaps(const genomic_coordinate& a, const genomic_coordinate& b) {
                 if (a.start > b.end || b.start > a.end) return false;
                 if (a.strand == '*' || b.strand == '*') return true;
                 return a.strand == b.strand;

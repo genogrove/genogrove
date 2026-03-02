@@ -125,7 +125,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            [[nodiscard]] static constexpr bool is_overlapping(const numeric& a, const numeric& b) {
+            [[nodiscard]] static constexpr bool overlaps(const numeric& a, const numeric& b) {
                 return a.value == b.value;
             }
 

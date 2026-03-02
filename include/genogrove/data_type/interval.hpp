@@ -134,7 +134,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            [[nodiscard]] static constexpr bool is_overlapping(const interval& a, const interval& b) {
+            [[nodiscard]] static constexpr bool overlaps(const interval& a, const interval& b) {
                 interval intvl = {std::max(a.start, b.start), std::min(a.end, b.end)};
                 return intvl.start <= intvl.end;
             }
