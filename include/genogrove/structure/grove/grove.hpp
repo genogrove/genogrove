@@ -99,7 +99,7 @@ class grove {
      * @brief Construct a grove with specified order
      * @param order Determines the maximum number of k-1 keys and k children per node
      */
-    grove(int order) : order(order) {}
+    explicit grove(int order) : order(order) {}
 
     /**
      * @brief Construct a grove with default order of 3
@@ -781,8 +781,8 @@ class grove {
             // Compute parent separator covering the full left subtree (keys[0..mid])
             // BEFORE modifying the child, so child[mid]'s range is included
             std::vector<key_type> left_subtree_keys;
-            left_subtree_keys.reserve(mid + 1);
-            for (int i = 0; i <= mid; ++i) {
+            left_subtree_keys.reserve(static_cast<size_t>(mid) + 1);
+            for (size_t i = 0; i <= static_cast<size_t>(mid); ++i) {
                 left_subtree_keys.push_back(child->get_keys()[i]->get_value());
             }
             key_type parent_separator = key_type::aggregate(left_subtree_keys);
@@ -917,8 +917,8 @@ class grove {
             return;
         }
         if(node->get_is_leaf()) {
-            int last_match = -1;
-            for(int i = 0; i < node->get_keys().size(); ++i) {
+            std::optional<size_t> last_match;
+            for(size_t i = 0; i < node->get_keys().size(); ++i) {
                 if(key_type::is_overlapping(node->get_keys()[i]->get_value(), query)) {
                     last_match = i;
                     result.add_key(node->get_keys()[i]);
@@ -951,7 +951,7 @@ class grove {
                 }
             }
 
-            int i = 0;
+            size_t i = 0;
             while(i < node->get_keys().size() && (query > node->get_keys()[i]->get_value()) &&
                   !key_type::is_overlapping(node->get_keys()[i]->get_value(), query)) {
                 i++;

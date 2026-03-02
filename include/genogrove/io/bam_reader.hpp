@@ -356,14 +356,14 @@ namespace genogrove::io {
          *
          * @return Error message string, empty if no error
          */
-        std::string get_error_message() override;
+        std::string get_error_message() const override;
 
         /**
          * @brief Get the current record number (1-based).
          *
          * @return Number of records read so far
          */
-        size_t get_current_line() override;
+        size_t get_current_line() const override;
 
         /**
          * @brief Get the SAM header text.

@@ -41,19 +41,19 @@ namespace genogrove::data_type {
             /*
              * @brief checks if given key has already been registered
              */
-            bool is_registered(const std::string& key);
+            bool is_registered(const std::string& key) const;
 
             /*
              * @brief retrieves the key for a given index (if present)
              * @return std::nullopt if the index is not in the registry
              */
-            std::optional<std::string> key_lookup(uint8_t value);
+            std::optional<std::string> key_lookup(uint8_t value) const;
 
             /*
              * @brief retrieves the index for a given key (if present)
              * @return std::nullopt if the key is not in the registry
              */
-            std::optional<uint8_t> value_lookup(const std::string& key);
+            std::optional<uint8_t> value_lookup(const std::string& key) const;
 
         private:
             std::unordered_map<std::string, uint8_t> registry;

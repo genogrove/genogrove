@@ -25,7 +25,7 @@ struct file_entry {
 
     file_entry() : chrom{""}, interval{0,0}, strand('.') {}
     file_entry(std::string chrom, ggt::interval interval, char strand) :
-        chrom{chrom}, interval{interval}, strand{strand} {}
+        chrom{std::move(chrom)}, interval{interval}, strand{strand} {}
 };
 
 #endif //GENOGROVE_CLI_FILE_ENTRY_HPP

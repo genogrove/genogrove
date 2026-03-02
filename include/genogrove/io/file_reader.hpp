@@ -19,8 +19,8 @@ namespace genogrove::io {
     class file_reader_base {
     public:
         virtual bool has_next() = 0;
-        virtual std::string get_error_message() = 0;
-        virtual size_t get_current_line() = 0;
+        virtual std::string get_error_message() const = 0;
+        virtual size_t get_current_line() const = 0;
         virtual ~file_reader_base() = default;
     };
 

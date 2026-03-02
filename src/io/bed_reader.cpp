@@ -424,11 +424,11 @@ namespace genogrove::io {
         return peek_result > 0;
     }
 
-    std::string bed_reader::get_error_message() {
+    std::string bed_reader::get_error_message() const {
         return error_message;
     }
 
-    size_t bed_reader::get_current_line() {
+    size_t bed_reader::get_current_line() const {
         return line_num;
     }
 

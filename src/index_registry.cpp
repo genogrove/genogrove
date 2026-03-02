@@ -17,15 +17,15 @@ namespace genogrove::data_type {
         return idx.value();
     }
 
-    bool index_registry::is_registered(const std::string &key) {
+    bool index_registry::is_registered(const std::string &key) const {
         return ggu::value_lookup(this->registry, key).has_value();
     }
 
-    std::optional<std::string> index_registry::key_lookup(uint8_t value) {
+    std::optional<std::string> index_registry::key_lookup(uint8_t value) const {
         return ggu::key_lookup(this->registry, value);
     }
 
-    std::optional<uint8_t> index_registry::value_lookup(const std::string &key) {
+    std::optional<uint8_t> index_registry::value_lookup(const std::string &key) const {
         return ggu::value_lookup(this->registry, key);
     }
 }
