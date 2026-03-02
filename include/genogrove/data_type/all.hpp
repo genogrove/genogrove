@@ -31,7 +31,7 @@
  * infrastructure for the genogrove library. It includes:
  *
  * ## Key Types (satisfying key_type_base concept)
- * - **interval**: Basic genomic intervals with start/end positions (0-based half-open)
+ * - **interval**: Basic genomic intervals with start/end positions (0-based closed)
  * - **genomic_coordinate**: Stranded genomic intervals with coordinate-first sorting
  * - **numeric**: Point-based integer type for non-genomic B+ tree operations
  * - **kmer**: K-mer sequences with 2-bit encoding for sequence-based indexing
