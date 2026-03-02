@@ -11,13 +11,12 @@ void grove_insert(
 ) {
     gio::gff_reader reader(filepath);
 
-    // Use iterator-based approach - no need to initialize entry separately
-    for (const auto& entry : reader) {
-        // Insert using seqid (not chrom!) as index, interval as key, and gff_entry as data
-        grove.insert_data(entry.seqid, entry.interval, entry);
-    }
-    if (!reader.get_error_message().empty()) {
-        std::cerr << "Error reading GFF file: " << reader.get_error_message() << std::endl;
+    try {
+        for (const auto& entry : reader) {
+            grove.insert_data(entry.seqid, entry.interval, entry);
+        }
+    } catch (const std::runtime_error& e) {
+        std::cerr << "Error reading GFF file: " << e.what() << std::endl;
         exit(1);
     }
 }
@@ -29,21 +28,19 @@ void grove_intersect(
 ) {
     gio::gff_reader reader(queryfile);
 
-    // Use iterator-based approach for cleaner code
-    for (const auto& query_entry : reader) {
-        // Copy interval since intersect() takes non-const reference
-        auto query = query_entry.interval;
-        auto results = grove.intersect(query, query_entry.seqid);
+    try {
+        for (const auto& query_entry : reader) {
+            auto query = query_entry.interval;
+            auto results = grove.intersect(query, query_entry.seqid);
 
-        // Output all matching intervals
-        for(auto* result : results.get_keys()) {
-            output << result->get_data().seqid << "\t"
-                   << result->get_data().interval.get_start() << "\t"
-                   << result->get_data().interval.get_end() << "\n";
+            for(auto* result : results.get_keys()) {
+                output << result->get_data().seqid << "\t"
+                       << result->get_data().interval.get_start() << "\t"
+                       << result->get_data().interval.get_end() << "\n";
+            }
         }
-    }
-    if (!reader.get_error_message().empty()) {
-        std::cerr << "Error reading GFF file: " << reader.get_error_message() << std::endl;
+    } catch (const std::runtime_error& e) {
+        std::cerr << "Error reading GFF file: " << e.what() << std::endl;
         exit(1);
     }
 }

@@ -190,6 +190,7 @@ namespace genogrove::io {
         bool skip_qc_fail = false;          ///< Skip QC-failed reads
         bool skip_duplicates = false;       ///< Skip duplicate reads
         uint8_t min_mapq = 0;               ///< Minimum mapping quality (0 = no filter)
+        bool skip_invalid_records = false;  ///< Skip malformed records instead of throwing (default: throw)
 
         /// Factory method for default options (skip unmapped only)
         [[nodiscard]] static bam_reader_options defaults() {
@@ -284,6 +285,7 @@ namespace genogrove::io {
      * for (const auto& entry : reader) {
      *     grove.insert_data(entry.chrom, entry.interval, entry);
      * }
+     * // If we get here, all records were read successfully
      * ```
      *
      * **With filtering options**:
@@ -294,12 +296,14 @@ namespace genogrove::io {
      * }
      * ```
      *
-     * **Traditional approach**:
+     * **Lenient mode (skip malformed records)**:
      * ```cpp
-     * bam_reader reader(filepath);
-     * sam_entry entry;
-     * while (reader.read_next(entry)) {
-     *     grove.insert_data(entry.chrom, entry.interval, entry);
+     * bam_reader_options opts;
+     * opts.skip_invalid_records = true;
+     * bam_reader reader(filepath, opts);
+     * for (const auto& entry : reader) { ... }
+     * if (!reader.get_error_message().empty()) {
+     *     std::cerr << "Warning: " << reader.get_error_message() << std::endl;
      * }
      * ```
      *
@@ -338,8 +342,13 @@ namespace genogrove::io {
          * Reads the next alignment from the file, applying configured filters.
          * Skipped records (based on options) are automatically bypassed.
          *
+         * By default, throws std::runtime_error on I/O or parse errors.
+         * Returns false only at EOF. Set skip_invalid_records=true in
+         * bam_reader_options to skip malformed records instead of throwing.
+         *
          * @param entry Output parameter for the alignment record
-         * @return true if a record was successfully read, false at EOF or error
+         * @return true if a record was successfully read, false at EOF
+         * @throws std::runtime_error on I/O or parse error (unless skip_invalid_records is set)
          */
         bool read_next(sam_entry& entry) override;
 

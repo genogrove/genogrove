@@ -75,10 +75,19 @@ namespace genogrove::io {
         bool is_gff3() const { return format == gff_format::GFF3; }
     };
 
+    /**
+     * @brief Configuration options for the GFF reader.
+     */
+    struct gff_reader_options {
+        bool skip_invalid_lines = false;    ///< Skip invalid lines instead of throwing
+
+        [[nodiscard]] static gff_reader_options defaults() { return {}; }
+    };
+
     class gff_reader : public file_reader<gff_entry> {
     public:
-        // Constructor with optional validation mode (default: RELAXED)
-        gff_reader(const std::filesystem::path& path);
+        explicit gff_reader(const std::filesystem::path& path);
+        gff_reader(const std::filesystem::path& path, const gff_reader_options& options);
 
         // Non-copyable (owns raw BGZF* resource)
         gff_reader(const gff_reader&) = delete;
@@ -87,7 +96,8 @@ namespace genogrove::io {
         // Movable
         gff_reader(gff_reader&& other) noexcept
             : bgzf_file(other.bgzf_file), line_num(other.line_num),
-              error_message(std::move(other.error_message)) {
+              error_message(std::move(other.error_message)),
+              options_(other.options_) {
             other.bgzf_file = nullptr;
         }
         gff_reader& operator=(gff_reader&& other) noexcept {
@@ -96,6 +106,7 @@ namespace genogrove::io {
                 bgzf_file = other.bgzf_file;
                 line_num = other.line_num;
                 error_message = std::move(other.error_message);
+                options_ = other.options_;
                 other.bgzf_file = nullptr;
             }
             return *this;
@@ -111,6 +122,7 @@ namespace genogrove::io {
         BGZF* bgzf_file;
         size_t line_num;
         std::string error_message;
+        gff_reader_options options_;
 
         // Helper to parse attributes (handles both GFF3 and GTF formats)
         // Returns the detected format

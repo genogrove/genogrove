@@ -225,14 +225,23 @@ TEST_F(gfffileTest, invalidCoordinateHandling) {
     ASSERT_TRUE(reader.read_next(entry));
     EXPECT_EQ(entry.seqid, "chr1");
 
-    // Second line has invalid coordinate (non-numeric)
-    EXPECT_FALSE(reader.read_next(entry));
-    EXPECT_FALSE(reader.get_error_message().empty());
+    // Second line has invalid coordinate — throws by default
+    EXPECT_THROW(reader.read_next(entry), std::runtime_error);
+}
 
-    // Error message should indicate the problem
-    std::string error = reader.get_error_message();
-    EXPECT_TRUE(error.find("Invalid coordinate format") != std::string::npos ||
-                error.find("line") != std::string::npos);
+TEST_F(gfffileTest, skipInvalidLines) {
+    gio::gff_reader reader(invalid_gff_path, {.skip_invalid_lines = true});
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    // Only the first valid line should be returned; invalid line skipped
+    EXPECT_EQ(entries.size(), 1);
+    EXPECT_EQ(entries[0].seqid, "chr1");
+    // Error message should be set for the skipped line
+    EXPECT_FALSE(reader.get_error_message().empty());
 }
 
 TEST_F(gfffileTest, fileNotFound) {
