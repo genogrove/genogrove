@@ -171,7 +171,8 @@ namespace genogrove::io {
 
         // Check for error vs EOF
         if (ret < -1) {
-            throw std::runtime_error("I/O error reading alignment record");
+            error_message_ = "I/O error reading alignment record after record " + std::to_string(record_num_);
+            throw std::runtime_error(error_message_);
         }
 
         at_eof_ = true;
