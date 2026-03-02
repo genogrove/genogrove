@@ -4,9 +4,8 @@
 #include <cctype>
 
 namespace genogrove::data_type {
-kmer::kmer() : encoding(0), k(0) {}
 
-kmer::kmer(std::string_view sequence) : encoding(0), k(0) {
+    kmer::kmer(std::string_view sequence) : encoding(0), k(0) {
         if (sequence.length() > 32) {
             throw std::invalid_argument("K-mer length exceeds maximum of 32");
         }
@@ -32,39 +31,6 @@ kmer::kmer(std::string_view sequence) : encoding(0), k(0) {
             uint64_t mask = (1ULL << (2 * k)) - 1;
             this->encoding = encoding & mask;
         }
-    }
-
-    bool kmer::operator<(const kmer& other) const {
-        // Compare by k first to group same-length k-mers together,
-        // then by encoding for lexicographic ordering within same k
-        if (k != other.k) {
-            return k < other.k;
-        }
-        return encoding < other.encoding;
-    }
-
-    bool kmer::operator>(const kmer& other) const {
-        if (k != other.k) {
-            return k > other.k;
-        }
-        return encoding > other.encoding;
-    }
-
-    bool kmer::operator==(const kmer& other) const {
-        return k == other.k && encoding == other.encoding;
-    }
-
-    uint64_t kmer::get_encoding() const {
-        return encoding;
-    }
-
-    uint8_t kmer::get_k() const {
-        return k;
-    }
-
-    bool kmer::is_overlapping(const kmer& a, const kmer& b) {
-        // For k-mers, overlap is exact match only
-        return a.k == b.k && a.encoding == b.encoding;
     }
 
     kmer kmer::aggregate(const std::vector<kmer>& kmers) {
@@ -124,11 +90,6 @@ kmer::kmer(std::string_view sequence) : encoding(0), k(0) {
             default:
                 throw std::invalid_argument(std::string("Invalid nucleotide: ") + base);
         }
-    }
-
-    char kmer::decode_base(uint8_t encoding) {
-        static const char bases[] = {'A', 'C', 'G', 'T'};
-        return bases[encoding & 0x03];
     }
 
     bool kmer::is_valid(std::string_view sequence) {

@@ -59,28 +59,28 @@ namespace genogrove::io {
      */
     class alignment_flags {
     public:
-        alignment_flags() : flags_(0) {}
-        explicit alignment_flags(uint16_t flags) : flags_(flags) {}
+        constexpr alignment_flags() : flags_(0) {}
+        constexpr explicit alignment_flags(uint16_t flags) : flags_(flags) {}
 
         /// Get the raw flag value
-        [[nodiscard]] uint16_t value() const { return flags_; }
+        [[nodiscard]] constexpr uint16_t value() const { return flags_; }
 
         /// Check if a specific flag bit is set
-        [[nodiscard]] bool has_flag(uint16_t flag) const { return (flags_ & flag) != 0; }
+        [[nodiscard]] constexpr bool has_flag(uint16_t flag) const { return (flags_ & flag) != 0; }
 
         // Convenience methods for common flag checks
-        [[nodiscard]] bool is_paired() const { return has_flag(sam_flags::PAIRED); }
-        [[nodiscard]] bool is_proper_pair() const { return has_flag(sam_flags::PROPER_PAIR); }
-        [[nodiscard]] bool is_unmapped() const { return has_flag(sam_flags::UNMAPPED); }
-        [[nodiscard]] bool is_mate_unmapped() const { return has_flag(sam_flags::MATE_UNMAPPED); }
-        [[nodiscard]] bool is_reverse() const { return has_flag(sam_flags::REVERSE); }
-        [[nodiscard]] bool is_mate_reverse() const { return has_flag(sam_flags::MATE_REVERSE); }
-        [[nodiscard]] bool is_read1() const { return has_flag(sam_flags::READ1); }
-        [[nodiscard]] bool is_read2() const { return has_flag(sam_flags::READ2); }
-        [[nodiscard]] bool is_secondary() const { return has_flag(sam_flags::SECONDARY); }
-        [[nodiscard]] bool is_qc_fail() const { return has_flag(sam_flags::QCFAIL); }
-        [[nodiscard]] bool is_duplicate() const { return has_flag(sam_flags::DUPLICATE); }
-        [[nodiscard]] bool is_supplementary() const { return has_flag(sam_flags::SUPPLEMENTARY); }
+        [[nodiscard]] constexpr bool is_paired() const { return has_flag(sam_flags::PAIRED); }
+        [[nodiscard]] constexpr bool is_proper_pair() const { return has_flag(sam_flags::PROPER_PAIR); }
+        [[nodiscard]] constexpr bool is_unmapped() const { return has_flag(sam_flags::UNMAPPED); }
+        [[nodiscard]] constexpr bool is_mate_unmapped() const { return has_flag(sam_flags::MATE_UNMAPPED); }
+        [[nodiscard]] constexpr bool is_reverse() const { return has_flag(sam_flags::REVERSE); }
+        [[nodiscard]] constexpr bool is_mate_reverse() const { return has_flag(sam_flags::MATE_REVERSE); }
+        [[nodiscard]] constexpr bool is_read1() const { return has_flag(sam_flags::READ1); }
+        [[nodiscard]] constexpr bool is_read2() const { return has_flag(sam_flags::READ2); }
+        [[nodiscard]] constexpr bool is_secondary() const { return has_flag(sam_flags::SECONDARY); }
+        [[nodiscard]] constexpr bool is_qc_fail() const { return has_flag(sam_flags::QCFAIL); }
+        [[nodiscard]] constexpr bool is_duplicate() const { return has_flag(sam_flags::DUPLICATE); }
+        [[nodiscard]] constexpr bool is_supplementary() const { return has_flag(sam_flags::SUPPLEMENTARY); }
 
     private:
         uint16_t flags_;
@@ -110,26 +110,26 @@ namespace genogrove::io {
         cigar_op op;        ///< CIGAR operation type
         uint32_t length;    ///< Number of bases for this operation
 
-        cigar_element() : op(cigar_op::MATCH), length(0) {}
-        cigar_element(cigar_op op, uint32_t length) : op(op), length(length) {}
+        constexpr cigar_element() : op(cigar_op::MATCH), length(0) {}
+        constexpr cigar_element(cigar_op op, uint32_t length) : op(op), length(length) {}
 
         /// Check if this operation consumes reference bases
-        [[nodiscard]] bool consumes_reference() const {
+        [[nodiscard]] constexpr bool consumes_reference() const {
             return op == cigar_op::MATCH || op == cigar_op::DEL ||
                    op == cigar_op::REF_SKIP || op == cigar_op::SEQ_MATCH ||
                    op == cigar_op::SEQ_MISMATCH;
         }
 
         /// Check if this operation consumes query (read) bases
-        [[nodiscard]] bool consumes_query() const {
+        [[nodiscard]] constexpr bool consumes_query() const {
             return op == cigar_op::MATCH || op == cigar_op::INS ||
                    op == cigar_op::SOFT_CLIP || op == cigar_op::SEQ_MATCH ||
                    op == cigar_op::SEQ_MISMATCH;
         }
 
         /// Convert operation to character representation
-        [[nodiscard]] char to_char() const {
-            static constexpr char ops[] = "MIDNSHP=X";
+        [[nodiscard]] constexpr char to_char() const {
+            constexpr char ops[] = "MIDNSHP=X";
             return ops[static_cast<uint8_t>(op)];
         }
     };

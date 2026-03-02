@@ -12,6 +12,7 @@
 
 #include <cstddef>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -62,14 +63,14 @@ namespace genogrove::data_type {
             /**
              * @brief Default constructor creating a numeric with value 0.
              */
-            numeric();
+            constexpr numeric() : value(std::numeric_limits<int>::min()) {}
 
             /**
              * @brief Construct a numeric with the specified integer value.
              *
              * @param value Integer value to wrap
              */
-            explicit numeric(int value);
+            constexpr explicit numeric(int value) : value(value) {}
 
             ~numeric() = default;
 
@@ -79,7 +80,9 @@ namespace genogrove::data_type {
              * @param other Numeric to compare against
              * @return true if this value is less than other's value
              */
-            bool operator<(const numeric& other) const;
+            constexpr bool operator<(const numeric& other) const {
+                return value < other.value;
+            }
 
             /**
              * @brief Greater-than comparison based on integer value.
@@ -87,7 +90,9 @@ namespace genogrove::data_type {
              * @param other Numeric to compare against
              * @return true if this value is greater than other's value
              */
-            bool operator>(const numeric& other) const;
+            constexpr bool operator>(const numeric& other) const {
+                return value > other.value;
+            }
 
             /**
              * @brief Equality comparison based on integer value.
@@ -95,7 +100,9 @@ namespace genogrove::data_type {
              * @param other Numeric to compare against
              * @return true if values are equal
              */
-            bool operator==(const numeric& other) const;
+            constexpr bool operator==(const numeric& other) const {
+                return value == other.value;
+            }
 
             /**
              * @brief Indicates this is a numeric type (enables type-specific operations).
@@ -118,7 +125,9 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            [[nodiscard]] static bool is_overlapping(const numeric& a, const numeric& b);
+            [[nodiscard]] static constexpr bool is_overlapping(const numeric& a, const numeric& b) {
+                return a.value == b.value;
+            }
 
             /**
              * @brief Aggregate multiple numeric values.
@@ -151,14 +160,14 @@ namespace genogrove::data_type {
              *
              * @return The wrapped integer value
              */
-            int get_value() const;
+            constexpr int get_value() const { return value; }
 
             /**
              * @brief Set the integer value.
              *
              * @param value New integer value
              */
-            void set_value(int value);
+            constexpr void set_value(int value) { this->value = value; }
 
             /**
              * @brief Serialize the numeric to an output stream.

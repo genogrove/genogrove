@@ -1,39 +1,11 @@
 #include <genogrove/data_type/numeric.hpp>
 
 // standard
-#include <limits>
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 
 namespace genogrove::data_type {
-    numeric::numeric() : value(std::numeric_limits<int>::min()) {}
-    numeric::numeric(int value) : value(value) {}
-
-    bool numeric::operator<(const numeric& other) const {
-        return this->value < other.value;
-    }
-
-    bool numeric::operator>(const numeric& other) const {
-        return this->value > other.value;
-    }
-
-    bool numeric::operator==(const numeric& other) const {
-        return this->value == other.value;
-    }
-
-    // Getters & Setters
-    int numeric::get_value() const {
-        return this->value;
-    }
-
-    void numeric::set_value(int value) {
-        this->value = value;
-    }
-
-    bool numeric::is_overlapping(const numeric& a, const numeric& b) {
-        // For point values, they only overlap if they're equal
-        return a.value == b.value;
-    }
 
     numeric numeric::aggregate(const std::vector<numeric>& values) {
         if (values.empty()) {
