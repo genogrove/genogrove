@@ -66,7 +66,7 @@ namespace genogrove::data_type {
              *
              * @param query The query used for intersection (stored by value)
              */
-            query_result(key_type query) : query(query), keys{} {}
+            explicit query_result(key_type query) : query(query), keys{} {}
 
             /**
              * @brief Get the original query that produced this result.

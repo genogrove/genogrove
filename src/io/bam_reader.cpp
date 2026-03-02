@@ -440,11 +440,11 @@ namespace genogrove::io {
         return !at_eof_ && sam_file_ != nullptr;
     }
 
-    std::string bam_reader::get_error_message() {
+    std::string bam_reader::get_error_message() const {
         return error_message_;
     }
 
-    size_t bam_reader::get_current_line() {
+    size_t bam_reader::get_current_line() const {
         return record_num_;
     }
 

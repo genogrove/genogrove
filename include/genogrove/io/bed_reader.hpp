@@ -84,7 +84,7 @@ namespace genogrove::io {
         std::optional<block_info> blocks;
 
         bed_entry() = default;
-        bed_entry(std::string chrom, gdt::interval interval) : chrom(chrom), interval(interval) {}
+        bed_entry(std::string chrom, gdt::interval interval) : chrom(std::move(chrom)), interval(interval) {}
     };
 
     class bed_reader : public file_reader<bed_entry> {
@@ -114,8 +114,8 @@ namespace genogrove::io {
 
         bool read_next(bed_entry& entry) override;
         bool has_next() override;
-        std::string get_error_message() override;
-        size_t get_current_line() override;
+        std::string get_error_message() const override;
+        size_t get_current_line() const override;
         ~bed_reader() override;
 
     private:

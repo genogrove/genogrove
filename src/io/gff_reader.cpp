@@ -356,11 +356,11 @@ namespace genogrove::io {
         return peek_result > 0;
     }
 
-    std::string gff_reader::get_error_message() {
+    std::string gff_reader::get_error_message() const {
         return error_message;
     }
 
-    size_t gff_reader::get_current_line() {
+    size_t gff_reader::get_current_line() const {
         return line_num;
     }
 

@@ -59,7 +59,7 @@ class node {
      * - No parent or next sibling (set later during tree operations)
      * - Not marked as leaf (set explicitly when needed)
      */
-    node(int order)
+    explicit node(int order)
         : order(order), keys{}, children{}, parent{nullptr}, next{nullptr}, is_leaf{false} {
         // Reserve capacity upfront to avoid reallocations
         keys.reserve(order-1);
@@ -208,7 +208,7 @@ class node {
      * @note This performs a linear search; consider using indexed insertion for bulk operations
      */
     void insert_key_ptr(gdt::key<key_type, data_type>* key_ptr) {
-        int i = 0;
+        size_t i = 0;
         while(i < this->keys.size() && key_ptr->get_value() > this->keys[i]->get_value()) {
             i++;
         }
@@ -247,7 +247,7 @@ class node {
         // create vector of reference intervals with reserved capacity
         std::vector<key_type> values;
         values.reserve(this->keys.size());
-        for(int i = 0; i < this->keys.size(); i++) {
+        for(size_t i = 0; i < this->keys.size(); i++) {
             values.push_back(this->keys[i]->get_value());
         }
         return key_type::aggregate(values);
@@ -323,7 +323,7 @@ class node {
      * by the specified separator. Useful for debugging and visualization.
      */
     void print_keys(std::ostream& os, std::string_view sep = "\t") {
-        for(int i = 0; i < this->keys.size(); ++i) {
+        for(size_t i = 0; i < this->keys.size(); ++i) {
             os << this->keys[i]->get_value().to_string() << sep;
         }
     }

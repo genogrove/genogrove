@@ -47,7 +47,7 @@ namespace genogrove::io {
 
         gff_entry() : format(gff_format::UNKNOWN) {}
         gff_entry(std::string seqid, gdt::interval interval, std::string type)
-            : seqid(seqid), interval(interval), type(type), format(gff_format::UNKNOWN) {}
+            : seqid(std::move(seqid)), interval(interval), type(std::move(type)), format(gff_format::UNKNOWN) {}
 
         // GTF-specific helper methods
         // Returns the value of the gene_id attribute (GTF standard)
@@ -103,8 +103,8 @@ namespace genogrove::io {
 
         bool read_next(gff_entry& entry) override;
         bool has_next() override;
-        std::string get_error_message() override;
-        size_t get_current_line() override;
+        std::string get_error_message() const override;
+        size_t get_current_line() const override;
         ~gff_reader() override;
 
     private:
