@@ -57,7 +57,7 @@ namespace genogrove::data_type {
      * a subtree while preserving strand information when possible.
      *
      * @note Satisfies the key_type_base concept requirements (operators, overlap, aggregate, to_string)
-     * @note Uses 0-based half-open coordinate system: [start, end)
+     * @note Uses 0-based closed coordinate system: [start, end]
      * @see interval for non-stranded genomic intervals
      * @see numeric for simple point-based key type
      */
@@ -73,7 +73,7 @@ namespace genogrove::data_type {
              *
              * @param strand Strand indicator ('+', '-', '.', or '*')
              * @param start Starting position (0-based, inclusive)
-             * @param end Ending position (0-based, exclusive)
+             * @param end Ending position (0-based, inclusive)
              *
              * @note No validation is performed on strand value or coordinate validity
              */
@@ -134,14 +134,14 @@ namespace genogrove::data_type {
              * @brief Determine if two genomic coordinates overlap.
              *
              * Overlap requires both spatial overlap AND strand compatibility:
-             * - Coordinates overlap if: max(a.start, b.start) < min(a.end, b.end)
+             * - Coordinates overlap if: a.start <= b.end AND b.start <= a.end
              * - Strands must match exactly, EXCEPT wildcard '*' matches any strand
              *
              * ## Examples
-             * - `[100,200,'+')` overlaps `[150,250,'+')` → true (spatial + strand match)
-             * - `[100,200,'+')` overlaps `[150,250,'-')` → false (strand mismatch)
-             * - `[100,200,'+')` overlaps `[150,250,'*')` → true (wildcard matches)
-             * - `[100,200,'+')` overlaps `[300,400,'+')` → false (no spatial overlap)
+             * - `[100,200,'+']` overlaps `[150,250,'+']` → true (spatial + strand match)
+             * - `[100,200,'+']` overlaps `[150,250,'-']` → false (strand mismatch)
+             * - `[100,200,'+']` overlaps `[150,250,'*']` → true (wildcard matches)
+             * - `[100,200,'+']` overlaps `[300,400,'+']` → false (no spatial overlap)
              *
              * @param a First coordinate
              * @param b Second coordinate
@@ -149,7 +149,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            [[nodiscard]] static constexpr bool is_overlapping(const genomic_coordinate& a, const genomic_coordinate& b) {
+            [[nodiscard]] static constexpr bool overlaps(const genomic_coordinate& a, const genomic_coordinate& b) {
                 if (a.start > b.end || b.start > a.end) return false;
                 if (a.strand == '*' || b.strand == '*') return true;
                 return a.strand == b.strand;
@@ -177,7 +177,7 @@ namespace genogrove::data_type {
             /**
              * @brief Convert coordinate to string representation.
              *
-             * Format: "[start,end,strand)" (e.g., "[100,200,+)")
+             * Format: "strand:start-end" (e.g., "+:100-200")
              *
              * @return String representation of the coordinate
              *
@@ -200,7 +200,7 @@ namespace genogrove::data_type {
             constexpr std::size_t get_start() const { return start; }
 
             /**
-             * @brief Get the end position (0-based, exclusive).
+             * @brief Get the end position (0-based, inclusive).
              *
              * @return End position
              */
@@ -227,7 +227,7 @@ namespace genogrove::data_type {
             /**
              * @brief Set the end position.
              *
-             * @param end End position (0-based, exclusive)
+             * @param end End position (0-based, inclusive)
              *
              * @note No validation is performed
              */
@@ -255,7 +255,7 @@ namespace genogrove::data_type {
         private:
             char strand;         ///< Strand indicator: '+', '-', '.', or '*'
             std::size_t start;   ///< Start position (0-based, inclusive)
-            std::size_t end;     ///< End position (0-based, exclusive)
+            std::size_t end;     ///< End position (0-based, inclusive)
     };
 }
 

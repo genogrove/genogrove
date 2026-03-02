@@ -31,7 +31,7 @@
  * infrastructure for the genogrove library. It includes:
  *
  * ## Key Types (satisfying key_type_base concept)
- * - **interval**: Basic genomic intervals with start/end positions (0-based half-open)
+ * - **interval**: Basic genomic intervals with start/end positions (0-based closed)
  * - **genomic_coordinate**: Stranded genomic intervals with coordinate-first sorting
  * - **numeric**: Point-based integer type for non-genomic B+ tree operations
  * - **kmer**: K-mer sequences with 2-bit encoding for sequence-based indexing
@@ -42,7 +42,7 @@
  *
  * ## Type System Infrastructure
  * - **key_type_base**: C++20 concept defining requirements for key types
- *   (comparison operators, is_overlapping(), aggregate(), to_string())
+ *   (comparison operators, overlaps(), aggregate(), to_string())
  * - **index**: Index identifier management (e.g., chromosome names)
  * - **index_registry**: Global registry for managing index identifiers
  * - **data_registry**: Template registry for shared metadata (per-type singleton)
@@ -53,7 +53,7 @@
  * ## Key Type Requirements
  * All key types must satisfy the key_type_base concept by providing:
  * - Comparison operators: operator<, operator>, operator==
- * - Static is_overlapping() method for detecting overlaps between keys
+ * - Static overlaps() method for detecting overlaps between keys
  * - Static aggregate() method for combining multiple keys into a bounding key
  * - Instance to_string() method for string representation
  *

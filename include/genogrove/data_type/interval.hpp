@@ -26,15 +26,15 @@ namespace genogrove::data_type {
      * semantics for interval storage, overlap detection, and aggregation.
      *
      * ## Coordinate System
-     * Uses 0-based half-open coordinates: [start, end)
+     * Uses 0-based closed coordinates: [start, end]
      * - Start position is inclusive
-     * - End position is exclusive
-     * - Length = end - start
+     * - End position is inclusive
+     * - Length = end - start + 1
      *
      * ## Overlap Semantics
      * Two intervals overlap if they share any positions:
-     * - Overlap condition: max(a.start, b.start) < min(a.end, b.end)
-     * - Adjacent intervals (e.g., [0,10) and [10,20)) do NOT overlap
+     * - Overlap condition: max(a.start, b.start) <= min(a.end, b.end)
+     * - Adjacent intervals (e.g., [0,10] and [10,20]) overlap at the shared position
      *
      * ## Aggregate Semantics
      * The aggregate function returns a bounding interval:
@@ -57,7 +57,7 @@ namespace genogrove::data_type {
     class interval {
         public:
             /**
-             * @brief Default constructor creating an empty interval [0, 0).
+             * @brief Default constructor creating an uninitialized interval.
              */
             constexpr interval() : start(std::string::npos), end(std::string::npos) {}
 
@@ -65,7 +65,7 @@ namespace genogrove::data_type {
              * @brief Construct an interval with specified start and end positions.
              *
              * @param start Starting position (0-based, inclusive)
-             * @param end Ending position (0-based, exclusive)
+             * @param end Ending position (0-based, inclusive)
              *
              * @note No validation is performed on coordinate validity (start <= end)
              */
@@ -124,17 +124,18 @@ namespace genogrove::data_type {
              * Uses the standard range intersection test.
              *
              * ## Examples
-             * - [100,200) overlaps [150,250) → true (shared region: [150,200))
-             * - [100,200) overlaps [200,300) → false (adjacent but not overlapping)
-             * - [100,300) overlaps [150,250) → true (second fully contained in first)
+             * - [100,200] overlaps [150,250] → true (shared region: [150,200])
+             * - [100,200] overlaps [200,300] → true (shared position: 200)
+             * - [100,200] overlaps [201,300] → false (disjoint)
+             * - [100,300] overlaps [150,250] → true (second fully contained in first)
              *
              * @param a First interval
              * @param b Second interval
-             * @return true if intervals overlap (max(a.start, b.start) < min(a.end, b.end))
+             * @return true if intervals overlap (max(a.start, b.start) <= min(a.end, b.end))
              *
              * @note Required by key_type_base concept
              */
-            [[nodiscard]] static constexpr bool is_overlapping(const interval& a, const interval& b) {
+            [[nodiscard]] static constexpr bool overlaps(const interval& a, const interval& b) {
                 interval intvl = {std::max(a.start, b.start), std::min(a.end, b.end)};
                 return intvl.start <= intvl.end;
             }
@@ -160,7 +161,7 @@ namespace genogrove::data_type {
             /**
              * @brief Convert interval to string representation.
              *
-             * Format: "[start,end)" (e.g., "[100,200)")
+             * Format: "[start,end]" (e.g., "[100,200]")
              *
              * @return String representation of the interval
              *
@@ -185,7 +186,7 @@ namespace genogrove::data_type {
             constexpr void set_start(size_t start) { this->start = start; }
 
             /**
-             * @brief Get the end position (0-based, exclusive).
+             * @brief Get the end position (0-based, inclusive).
              *
              * @return End position
              */
@@ -194,7 +195,7 @@ namespace genogrove::data_type {
             /**
              * @brief Set the end position.
              *
-             * @param end End position (0-based, exclusive)
+             * @param end End position (0-based, inclusive)
              *
              * @note No validation is performed
              */
@@ -221,7 +222,7 @@ namespace genogrove::data_type {
 
         private:
             size_t start;   ///< Start position (0-based, inclusive)
-            size_t end;     ///< End position (0-based, exclusive)
+            size_t end;     ///< End position (0-based, inclusive)
     };
 }
 
