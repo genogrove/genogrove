@@ -37,7 +37,10 @@ namespace genogrove::io {
         return result;
     }
     bed_reader::bed_reader(const std::filesystem::path& fpath)
-        : line_num(0), bgzf_file(nullptr) {
+        : bed_reader(fpath, bed_reader_options::defaults()) {}
+
+    bed_reader::bed_reader(const std::filesystem::path& fpath, const bed_reader_options& options)
+        : line_num(0), bgzf_file(nullptr), options_(options) {
         // note this handles both raw and gzipped files
         bgzf_file = bgzf_open(fpath.c_str(), "r"); // open file
         if(!bgzf_file) {
@@ -285,124 +288,136 @@ namespace genogrove::io {
     }
 
     bool bed_reader::read_next(bed_entry& entry) {
-        // Reset optional fields to avoid stale data from previous records
-        entry.name.reset();
-        entry.score.reset();
-        entry.strand.reset();
-        entry.thickness.reset();
-        entry.item_rgb.reset();
-        entry.blocks.reset();
+        while (true) {
+            // Reset optional fields to avoid stale data from previous records
+            entry.name.reset();
+            entry.score.reset();
+            entry.strand.reset();
+            entry.thickness.reset();
+            entry.item_rgb.reset();
+            entry.blocks.reset();
 
-        kstring_t str = {0, 0, nullptr};
-        int ret = bgzf_getline(bgzf_file, '\n', &str);
-        if(ret < 0) {
-            if(str.s) free(str.s);
-            if(ret < -1) {
-                error_message = "I/O error reading file at line " + std::to_string(line_num + 1);
-            }
-            return false;
-        }
-        std::string line(str.s);
-        free(str.s); // free the memory allocated by bgzf_getline
-        line_num++;
-
-        // skip empty or commented lines
-        while(line.empty() || line[0] == '#') {
-            kstring_t str2 = {0, 0, nullptr};
-            ret = bgzf_getline(bgzf_file, '\n', &str2);
+            kstring_t str = {0, 0, nullptr};
+            int ret = bgzf_getline(bgzf_file, '\n', &str);
             if(ret < 0) {
-                if (str2.s) free(str2.s);
+                if(str.s) free(str.s);
                 if(ret < -1) {
-                    error_message = "I/O error reading file at line " + std::to_string(line_num + 1);
+                    throw std::runtime_error("I/O error reading file at line " + std::to_string(line_num + 1));
                 }
-                return false;
+                return false; // EOF
             }
-            line = std::string(str2.s);
-            free(str2.s);
+            std::string line(str.s);
+            free(str.s);
             line_num++;
-        }
 
-        // parse the line
-        std::stringstream ss(line);
-        std::string chrom, start, end;
-        try {
-            if (!(ss >> chrom >> start >> end)) {
-                error_message = "Invalid line format at line " + std::to_string(line_num);
-                return false;
+            // skip empty or commented lines
+            while(line.empty() || line[0] == '#') {
+                kstring_t str2 = {0, 0, nullptr};
+                ret = bgzf_getline(bgzf_file, '\n', &str2);
+                if(ret < 0) {
+                    if (str2.s) free(str2.s);
+                    if(ret < -1) {
+                        throw std::runtime_error("I/O error reading file at line " + std::to_string(line_num + 1));
+                    }
+                    return false; // EOF
+                }
+                line = std::string(str2.s);
+                free(str2.s);
+                line_num++;
             }
 
-            // validate integers
-            if(start.empty() ||
-                end.empty() ||
-                !std::all_of(start.begin(), start.end(), is_digit) ||
-                !std::all_of(end.begin(), end.end(), is_digit)) {
-                error_message = "Invalid coordinate format at line " + std::to_string(line_num);
-                return false;
-            }
-
-            // validate and create interval object
-            size_t start_num;
-            size_t end_num;
+            // parse the line
+            std::stringstream ss(line);
+            std::string chrom, start, end;
             try {
-                start_num = std::stoul(start);
-                end_num = std::stoul(end);
-            } catch(std::exception&) {
-                error_message = "Coordinate out of range at line ";
-                error_message += std::to_string(line_num);
-                return false;
-            }
+                if (!(ss >> chrom >> start >> end)) {
+                    error_message = "Invalid line format at line " + std::to_string(line_num);
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
+                }
 
-            if (start_num >= end_num) {
-                error_message = "Start coordinate is greater than or equal to the end coordinate at line ";
-                error_message += std::to_string(line_num);
-                return false;
-            }
-            entry.chrom = chrom;
-            entry.interval = gdt::interval(start_num, end_num);
+                // validate integers
+                if(start.empty() ||
+                    end.empty() ||
+                    !std::all_of(start.begin(), start.end(), is_digit) ||
+                    !std::all_of(end.begin(), end.end(), is_digit)) {
+                    error_message = "Invalid coordinate format at line " + std::to_string(line_num);
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
+                }
 
-            // Parse optional BED fields (BED4+)
-            std::string name_str, score_str, strand_str;
-            std::string thick_start_str, thick_end_str, item_rgb_str;
-            std::string block_count_str, block_sizes_str, block_starts_str;
+                // validate and create interval object
+                size_t start_num;
+                size_t end_num;
+                try {
+                    start_num = std::stoul(start);
+                    end_num = std::stoul(end);
+                } catch(std::exception&) {
+                    error_message = "Coordinate out of range at line " + std::to_string(line_num);
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
+                }
 
-            // BED4: name
-            if (ss >> name_str) {
-                entry.name = name_str;
+                if (start_num >= end_num) {
+                    error_message = "Start coordinate is greater than or equal to the end coordinate at line " + std::to_string(line_num);
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
+                }
+                entry.chrom = chrom;
+                entry.interval = gdt::interval(start_num, end_num);
 
-                // BED5: score
-                if (ss >> score_str) {
-                    if (!parse_score(entry, score_str)) return false;
+                // Parse optional BED fields (BED4+)
+                std::string name_str, score_str, strand_str;
+                std::string thick_start_str, thick_end_str, item_rgb_str;
+                std::string block_count_str, block_sizes_str, block_starts_str;
 
-                    // BED6: strand
-                    if (ss >> strand_str) {
-                        if (!parse_strand(entry, strand_str)) return false;
+                bool parse_ok = true;
 
-                        // BED12: additional fields
-                        if (ss >> thick_start_str >> thick_end_str >> item_rgb_str) {
-                            if (!parse_thickness(entry,
-                                thick_start_str,
-                                thick_end_str,
-                                start_num,
-                                end_num)) {
-                                return false;
-                            }
-                            if (!parse_rgb(entry, item_rgb_str)) { return false; }
+                // BED4: name
+                if (ss >> name_str) {
+                    entry.name = name_str;
 
-                            if (ss >> block_count_str >> block_sizes_str >> block_starts_str) {
-                                if (!parse_blocks(entry, block_count_str, block_sizes_str,
-                                                 block_starts_str, start_num, end_num)) {
-                                    return false;
+                    // BED5: score
+                    if (ss >> score_str) {
+                        if (!parse_score(entry, score_str)) { parse_ok = false; }
+
+                        // BED6: strand
+                        if (parse_ok && (ss >> strand_str)) {
+                            if (!parse_strand(entry, strand_str)) { parse_ok = false; }
+
+                            // BED12: additional fields
+                            if (parse_ok && (ss >> thick_start_str >> thick_end_str >> item_rgb_str)) {
+                                if (!parse_thickness(entry, thick_start_str, thick_end_str,
+                                                     start_num, end_num)) {
+                                    parse_ok = false;
+                                }
+                                if (parse_ok && !parse_rgb(entry, item_rgb_str)) { parse_ok = false; }
+
+                                if (parse_ok && (ss >> block_count_str >> block_sizes_str >> block_starts_str)) {
+                                    if (!parse_blocks(entry, block_count_str, block_sizes_str,
+                                                     block_starts_str, start_num, end_num)) {
+                                        parse_ok = false;
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            return true;
-        } catch (std::exception &e) {
-            error_message = "Failed to parse line at " + std::to_string(line_num) + ": " + line;
-            return false;
+                if (!parse_ok) {
+                    // error_message already set by parse_* helper
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
+                }
+
+                return true;
+            } catch (std::runtime_error&) {
+                throw; // re-throw our own exceptions
+            } catch (std::exception &e) {
+                error_message = "Failed to parse line at " + std::to_string(line_num) + ": " + line;
+                if (options_.skip_invalid_lines) continue;
+                throw std::runtime_error(error_message);
+            }
         }
     }
 

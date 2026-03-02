@@ -190,6 +190,7 @@ namespace genogrove::io {
         bool skip_qc_fail = false;          ///< Skip QC-failed reads
         bool skip_duplicates = false;       ///< Skip duplicate reads
         uint8_t min_mapq = 0;               ///< Minimum mapping quality (0 = no filter)
+        bool skip_invalid_records = false;  ///< Skip records that fail parsing instead of throwing
 
         /// Factory method for default options (skip unmapped only)
         [[nodiscard]] static bam_reader_options defaults() {

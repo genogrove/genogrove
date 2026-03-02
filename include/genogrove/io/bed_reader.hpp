@@ -87,9 +87,19 @@ namespace genogrove::io {
         bed_entry(std::string chrom, gdt::interval interval) : chrom(std::move(chrom)), interval(interval) {}
     };
 
+    /**
+     * @brief Configuration options for the BED reader.
+     */
+    struct bed_reader_options {
+        bool skip_invalid_lines = false;    ///< Skip invalid lines instead of throwing
+
+        [[nodiscard]] static bed_reader_options defaults() { return {}; }
+    };
+
     class bed_reader : public file_reader<bed_entry> {
     public:
-        bed_reader(const std::filesystem::path& path);
+        explicit bed_reader(const std::filesystem::path& path);
+        bed_reader(const std::filesystem::path& path, const bed_reader_options& options);
 
         // Non-copyable (owns raw BGZF* resource)
         bed_reader(const bed_reader&) = delete;
@@ -98,7 +108,8 @@ namespace genogrove::io {
         // Movable
         bed_reader(bed_reader&& other) noexcept
             : bgzf_file(other.bgzf_file), line_num(other.line_num),
-              error_message(std::move(other.error_message)) {
+              error_message(std::move(other.error_message)),
+              options_(other.options_) {
             other.bgzf_file = nullptr;
         }
         bed_reader& operator=(bed_reader&& other) noexcept {
@@ -107,6 +118,7 @@ namespace genogrove::io {
                 bgzf_file = other.bgzf_file;
                 line_num = other.line_num;
                 error_message = std::move(other.error_message);
+                options_ = other.options_;
                 other.bgzf_file = nullptr;
             }
             return *this;
@@ -122,6 +134,7 @@ namespace genogrove::io {
         BGZF* bgzf_file;
         size_t line_num;
         std::string error_message;
+        bed_reader_options options_;
 
         // Helper functions for parsing BED fields
         bool parse_score(bed_entry& entry, const std::string& score_str);

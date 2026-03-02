@@ -68,7 +68,10 @@ namespace genogrove::io {
     // ==========================================
 
     gff_reader::gff_reader(const std::filesystem::path& fpath)
-        : bgzf_file(nullptr), line_num(0) {
+        : gff_reader(fpath, gff_reader_options::defaults()) {}
+
+    gff_reader::gff_reader(const std::filesystem::path& fpath, const gff_reader_options& options)
+        : bgzf_file(nullptr), line_num(0), options_(options) {
         // note this handles both raw and gzipped files
         bgzf_file = bgzf_open(fpath.c_str(), "r");
         if(!bgzf_file) {
@@ -230,111 +233,125 @@ namespace genogrove::io {
     }
 
     bool gff_reader::read_next(gff_entry& entry) {
-        kstring_t str = {0, 0, nullptr};
-        int ret = bgzf_getline(bgzf_file, '\n', &str);
-        if(ret < 0) {
-            if(str.s) free(str.s);
-            return false;
-        }
-        std::string line(str.s);
-        free(str.s);
-        line_num++;
-
-        // skip empty lines, comments, and directives (lines starting with #)
-        while(line.empty() || line[0] == '#') {
-            kstring_t str2 = {0, 0, nullptr};
-            ret = bgzf_getline(bgzf_file, '\n', &str2);
+        while (true) {
+            kstring_t str = {0, 0, nullptr};
+            int ret = bgzf_getline(bgzf_file, '\n', &str);
             if(ret < 0) {
-                if (str2.s) free(str2.s);
-                return false;
+                if(str.s) free(str.s);
+                if(ret < -1) {
+                    throw std::runtime_error("I/O error reading file at line " + std::to_string(line_num + 1));
+                }
+                return false; // EOF
             }
-            line = std::string(str2.s);
-            free(str2.s);
+            std::string line(str.s);
+            free(str.s);
             line_num++;
-        }
 
-        // parse the line
-        std::stringstream ss(line);
-        std::string seqid,source, type, start_str, end_str, score_str, strand_str, phase_str, attributes_str;
-
-        try {
-            if (!(ss >> seqid >> source >> type >> start_str >> end_str >> score_str >> strand_str >> phase_str)) {
-                error_message = "Invalid GFF line format at line " + std::to_string(line_num);
-                return false;
+            // skip empty lines, comments, and directives (lines starting with #)
+            while(line.empty() || line[0] == '#') {
+                kstring_t str2 = {0, 0, nullptr};
+                ret = bgzf_getline(bgzf_file, '\n', &str2);
+                if(ret < 0) {
+                    if (str2.s) free(str2.s);
+                    if(ret < -1) {
+                        throw std::runtime_error("I/O error reading file at line " + std::to_string(line_num + 1));
+                    }
+                    return false; // EOF
+                }
+                line = std::string(str2.s);
+                free(str2.s);
+                line_num++;
             }
 
-            // Read the rest of the line as attributes
-            std::getline(ss >> std::ws, attributes_str);
+            // parse the line
+            std::stringstream ss(line);
+            std::string seqid, source, type, start_str, end_str, score_str, strand_str, phase_str, attributes_str;
 
-            // Validate start and end are integers
-            if(start_str.empty() || end_str.empty() ||
-               !std::all_of(start_str.begin(), start_str.end(), is_digit) ||
-               !std::all_of(end_str.begin(), end_str.end(), is_digit)) {
-                error_message = "Invalid coordinate format at line " + std::to_string(line_num);
-                return false;
-            }
+            try {
+                if (!(ss >> seqid >> source >> type >> start_str >> end_str >> score_str >> strand_str >> phase_str)) {
+                    error_message = "Invalid GFF line format at line " + std::to_string(line_num);
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
+                }
 
-            // Parse coordinates (GFF is 1-based inclusive, convert to 0-based half-open)
-            size_t start = std::stoul(start_str) - 1;  // Convert to 0-based
-            size_t end = std::stoul(end_str);          // End is already exclusive after -1 conversion
+                // Read the rest of the line as attributes
+                std::getline(ss >> std::ws, attributes_str);
 
-            if (start >= end) {
-                error_message = "Start coordinate is greater than or equal to end coordinate at line " + std::to_string(line_num);
-                return false;
-            }
+                // Validate start and end are integers
+                if(start_str.empty() || end_str.empty() ||
+                   !std::all_of(start_str.begin(), start_str.end(), is_digit) ||
+                   !std::all_of(end_str.begin(), end_str.end(), is_digit)) {
+                    error_message = "Invalid coordinate format at line " + std::to_string(line_num);
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
+                }
 
-            entry.seqid = seqid;
-            entry.source = source;
-            entry.type = type;
-            entry.interval = gdt::interval(start, end);
+                // Parse coordinates (GFF is 1-based inclusive, convert to 0-based half-open)
+                size_t start = std::stoul(start_str) - 1;  // Convert to 0-based
+                size_t end = std::stoul(end_str);          // End is already exclusive after -1 conversion
 
-            // Parse score
-            if (score_str != ".") {
-                try {
-                    entry.score = std::stod(score_str);
-                } catch (...) {
+                if (start >= end) {
+                    error_message = "Start coordinate is greater than or equal to end coordinate at line " + std::to_string(line_num);
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
+                }
+
+                entry.seqid = seqid;
+                entry.source = source;
+                entry.type = type;
+                entry.interval = gdt::interval(start, end);
+
+                // Parse score
+                if (score_str != ".") {
+                    try {
+                        entry.score = std::stod(score_str);
+                    } catch (...) {
+                        entry.score = std::nullopt;
+                    }
+                } else {
                     entry.score = std::nullopt;
                 }
-            } else {
-                entry.score = std::nullopt;
-            }
 
-            // Parse strand
-            if (strand_str.size() == 1 && (strand_str[0] == '+' || strand_str[0] == '-' ||
-                                            strand_str[0] == '.' || strand_str[0] == '?')) {
-                entry.strand = strand_str[0];
-            } else {
-                entry.strand = std::nullopt;
-            }
+                // Parse strand
+                if (strand_str.size() == 1 && (strand_str[0] == '+' || strand_str[0] == '-' ||
+                                                strand_str[0] == '.' || strand_str[0] == '?')) {
+                    entry.strand = strand_str[0];
+                } else {
+                    entry.strand = std::nullopt;
+                }
 
-            // Parse phase
-            if (phase_str != ".") {
-                try {
-                    int phase = std::stoi(phase_str);
-                    if (phase >= 0 && phase <= 2) {
-                        entry.phase = phase;
-                    } else {
+                // Parse phase
+                if (phase_str != ".") {
+                    try {
+                        int phase = std::stoi(phase_str);
+                        if (phase >= 0 && phase <= 2) {
+                            entry.phase = phase;
+                        } else {
+                            entry.phase = std::nullopt;
+                        }
+                    } catch (...) {
                         entry.phase = std::nullopt;
                     }
-                } catch (...) {
+                } else {
                     entry.phase = std::nullopt;
                 }
-            } else {
-                entry.phase = std::nullopt;
-            }
 
-            // Parse attributes and detect format
-            if (!attributes_str.empty()) {
-                entry.format = parse_attributes(attributes_str, entry.attributes);
-            } else {
-                entry.attributes.clear();
-                entry.format = gff_format::UNKNOWN;
-            }
+                // Parse attributes and detect format
+                if (!attributes_str.empty()) {
+                    entry.format = parse_attributes(attributes_str, entry.attributes);
+                } else {
+                    entry.attributes.clear();
+                    entry.format = gff_format::UNKNOWN;
+                }
 
-            return true;
-        } catch (const std::exception&) {
-            error_message = "Failed to parse line at " + std::to_string(line_num) + ": " + line;
-            return false;
+                return true;
+            } catch (std::runtime_error&) {
+                throw; // re-throw our own exceptions
+            } catch (const std::exception&) {
+                error_message = "Failed to parse line at " + std::to_string(line_num) + ": " + line;
+                if (options_.skip_invalid_lines) continue;
+                throw std::runtime_error(error_message);
+            }
         }
     }
 

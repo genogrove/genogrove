@@ -161,7 +161,9 @@ namespace genogrove::io {
 
             // Parse the alignment into sam_entry
             if (!parse_alignment(alignment_, entry)) {
-                return false;
+                error_message_ = "Failed to parse alignment record at record " + std::to_string(record_num_);
+                if (options_.skip_invalid_records) continue;
+                throw std::runtime_error(error_message_);
             }
 
             return true;
@@ -169,8 +171,7 @@ namespace genogrove::io {
 
         // Check for error vs EOF
         if (ret < -1) {
-            error_message_ = "Error reading alignment record";
-            return false;
+            throw std::runtime_error("I/O error reading alignment record");
         }
 
         at_eof_ = true;
