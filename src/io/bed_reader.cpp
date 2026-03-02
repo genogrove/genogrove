@@ -40,7 +40,7 @@ namespace genogrove::io {
         : bed_reader(fpath, bed_reader_options::defaults()) {}
 
     bed_reader::bed_reader(const std::filesystem::path& fpath, const bed_reader_options& options)
-        : line_num(0), bgzf_file(nullptr), options_(options) {
+        : bgzf_file(nullptr), line_num(0), options_(options) {
         // note this handles both raw and gzipped files
         bgzf_file = bgzf_open(fpath.c_str(), "r"); // open file
         if(!bgzf_file) {
