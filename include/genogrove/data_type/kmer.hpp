@@ -71,7 +71,7 @@ namespace genogrove::data_type {
             /**
              * @brief Default constructor creating an empty k-mer (k=0).
              */
-            kmer();
+            constexpr kmer() : encoding(0), k(0) {}
 
             /**
              * @brief Construct a k-mer from a DNA sequence string.
@@ -105,7 +105,10 @@ namespace genogrove::data_type {
              * @param other K-mer to compare against
              * @return true if this k-mer is less than other
              */
-            bool operator<(const kmer& other) const;
+            constexpr bool operator<(const kmer& other) const {
+                if (k != other.k) return k < other.k;
+                return encoding < other.encoding;
+            }
 
             /**
              * @brief Greater-than comparison based on encoding value.
@@ -113,7 +116,10 @@ namespace genogrove::data_type {
              * @param other K-mer to compare against
              * @return true if this k-mer is greater than other
              */
-            bool operator>(const kmer& other) const;
+            constexpr bool operator>(const kmer& other) const {
+                if (k != other.k) return k > other.k;
+                return encoding > other.encoding;
+            }
 
             /**
              * @brief Equality comparison (encoding and k must both match).
@@ -121,7 +127,9 @@ namespace genogrove::data_type {
              * @param other K-mer to compare against
              * @return true if both encoding and k are equal
              */
-            bool operator==(const kmer& other) const;
+            constexpr bool operator==(const kmer& other) const {
+                return k == other.k && encoding == other.encoding;
+            }
 
             /**
              * @brief Indicates this is a k-mer type (enables type-specific operations).
@@ -150,7 +158,9 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            [[nodiscard]] static bool is_overlapping(const kmer& a, const kmer& b);
+            [[nodiscard]] static constexpr bool is_overlapping(const kmer& a, const kmer& b) {
+                return a.k == b.k && a.encoding == b.encoding;
+            }
 
             /**
              * @brief Aggregate multiple k-mers.
@@ -181,14 +191,14 @@ namespace genogrove::data_type {
              *
              * @return The encoded k-mer as a 64-bit integer
              */
-            uint64_t get_encoding() const;
+            constexpr uint64_t get_encoding() const { return encoding; }
 
             /**
              * @brief Get the k-mer length.
              *
              * @return The value of k (1-32)
              */
-            uint8_t get_k() const;
+            constexpr uint8_t get_k() const { return k; }
 
             /**
              * @brief Serialize the k-mer to an output stream.
@@ -224,7 +234,10 @@ namespace genogrove::data_type {
              * @param encoding 2-bit encoding (0-3)
              * @return Nucleotide character (A, C, G, or T)
              */
-            static char decode_base(uint8_t encoding);
+            static constexpr char decode_base(uint8_t encoding) {
+                constexpr char bases[] = {'A', 'C', 'G', 'T'};
+                return bases[encoding & 0x03];
+            }
 
             /**
              * @brief Check if a sequence contains only valid nucleotides.

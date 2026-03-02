@@ -64,9 +64,9 @@ namespace genogrove::data_type {
     class genomic_coordinate {
         public:
             /**
-             * @brief Default constructor creating an invalid coordinate (strand='*', start=0, end=0).
+             * @brief Default constructor creating an invalid coordinate (strand='.', start=0, end=0).
              */
-            genomic_coordinate();
+            constexpr genomic_coordinate() : strand('.'), start(0), end(0) {}
 
             /**
              * @brief Construct a genomic coordinate with specified strand and position.
@@ -77,7 +77,8 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed on strand value or coordinate validity
              */
-            genomic_coordinate(char strand, std::size_t start, std::size_t end);
+            constexpr genomic_coordinate(char strand, std::size_t start, std::size_t end)
+                : strand(strand), start(start), end(end) {}
 
             ~genomic_coordinate() = default;
 
@@ -89,7 +90,20 @@ namespace genogrove::data_type {
              * @param other Coordinate to compare against
              * @return true if this coordinate is less than other
              */
-            bool operator<(const genomic_coordinate& other) const;
+            constexpr bool operator<(const genomic_coordinate& other) const {
+                if (start != other.start) return start < other.start;
+                if (end != other.end) return end < other.end;
+                if (strand != other.strand) {
+                    if (strand == '*') return true;
+                    if (other.strand == '*') return false;
+                    if (strand == '.') return true;
+                    if (other.strand == '.') return false;
+                    if (strand == '+') return true;
+                    if (other.strand == '+') return false;
+                    return false;
+                }
+                return false;
+            }
 
             /**
              * @brief Greater-than comparison using coordinate-first sorting.
@@ -97,7 +111,9 @@ namespace genogrove::data_type {
              * @param other Coordinate to compare against
              * @return true if this coordinate is greater than other
              */
-            bool operator>(const genomic_coordinate& other) const;
+            constexpr bool operator>(const genomic_coordinate& other) const {
+                return other < *this;
+            }
 
             /**
              * @brief Equality comparison (all three components must match).
@@ -105,7 +121,9 @@ namespace genogrove::data_type {
              * @param other Coordinate to compare against
              * @return true if strand, start, and end are all equal
              */
-            bool operator==(const genomic_coordinate& other) const;
+            constexpr bool operator==(const genomic_coordinate& other) const {
+                return strand == other.strand && start == other.start && end == other.end;
+            }
 
             /**
              * @brief Indicates this is an interval type (enables interval-aware operations).
@@ -131,7 +149,11 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            [[nodiscard]] static bool is_overlapping(const genomic_coordinate& a, const genomic_coordinate& b);
+            [[nodiscard]] static constexpr bool is_overlapping(const genomic_coordinate& a, const genomic_coordinate& b) {
+                if (a.start > b.end || b.start > a.end) return false;
+                if (a.strand == '*' || b.strand == '*') return true;
+                return a.strand == b.strand;
+            }
 
             /**
              * @brief Aggregate multiple coordinates into a bounding coordinate.
@@ -168,21 +190,21 @@ namespace genogrove::data_type {
              *
              * @return Strand character ('+', '-', '.', or '*')
              */
-            char get_strand() const;
+            constexpr char get_strand() const { return strand; }
 
             /**
              * @brief Get the start position (0-based, inclusive).
              *
              * @return Start position
              */
-            std::size_t get_start() const;
+            constexpr std::size_t get_start() const { return start; }
 
             /**
              * @brief Get the end position (0-based, exclusive).
              *
              * @return End position
              */
-            std::size_t get_end() const;
+            constexpr std::size_t get_end() const { return end; }
 
             /**
              * @brief Set the strand indicator.
@@ -191,7 +213,7 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed
              */
-            void set_strand(char strand);
+            constexpr void set_strand(char strand) { this->strand = strand; }
 
             /**
              * @brief Set the start position.
@@ -200,7 +222,7 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed
              */
-            void set_start(std::size_t start);
+            constexpr void set_start(std::size_t start) { this->start = start; }
 
             /**
              * @brief Set the end position.
@@ -209,7 +231,7 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed
              */
-            void set_end(std::size_t end);
+            constexpr void set_end(std::size_t end) { this->end = end; }
 
             /**
              * @brief Serialize the genomic coordinate to an output stream.

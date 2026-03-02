@@ -11,6 +11,7 @@
 #define DATATYPE_INTERVAL_HPP
 
 // Standard
+#include <algorithm>
 #include <cstddef>
 #include <iostream>
 #include <string>
@@ -58,7 +59,7 @@ namespace genogrove::data_type {
             /**
              * @brief Default constructor creating an empty interval [0, 0).
              */
-            interval();
+            constexpr interval() : start(std::string::npos), end(std::string::npos) {}
 
             /**
              * @brief Construct an interval with specified start and end positions.
@@ -68,7 +69,7 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed on coordinate validity (start <= end)
              */
-            interval(size_t start, size_t end);
+            constexpr interval(size_t start, size_t end) : start(start), end(end) {}
 
             ~interval() = default;
 
@@ -81,7 +82,12 @@ namespace genogrove::data_type {
              * @param other Interval to compare against
              * @return true if this interval is less than other
              */
-            bool operator<(const interval& other) const;
+            constexpr bool operator<(const interval& other) const {
+                if (start == other.start) {
+                    return end < other.end;
+                }
+                return start < other.start;
+            }
 
             /**
              * @brief Greater-than comparison based on start position, then end position.
@@ -89,7 +95,12 @@ namespace genogrove::data_type {
              * @param other Interval to compare against
              * @return true if this interval is greater than other
              */
-            bool operator>(const interval& other) const;
+            constexpr bool operator>(const interval& other) const {
+                if (start == other.start) {
+                    return end > other.end;
+                }
+                return start > other.start;
+            }
 
             /**
              * @brief Equality comparison (both start and end must match).
@@ -97,7 +108,9 @@ namespace genogrove::data_type {
              * @param other Interval to compare against
              * @return true if start and end positions are both equal
              */
-            bool operator==(const interval& other) const;
+            constexpr bool operator==(const interval& other) const {
+                return start == other.start && end == other.end;
+            }
 
             /**
              * @brief Indicates this is an interval type (enables interval-aware operations).
@@ -121,7 +134,10 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept
              */
-            [[nodiscard]] static bool is_overlapping(const interval& a, const interval& b);
+            [[nodiscard]] static constexpr bool is_overlapping(const interval& a, const interval& b) {
+                interval intvl = {std::max(a.start, b.start), std::min(a.end, b.end)};
+                return intvl.start <= intvl.end;
+            }
 
             /**
              * @brief Aggregate multiple intervals into a bounding interval.
@@ -157,7 +173,7 @@ namespace genogrove::data_type {
              *
              * @return Start position
              */
-            size_t get_start() const;
+            constexpr size_t get_start() const { return start; }
 
             /**
              * @brief Set the start position.
@@ -166,14 +182,14 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed
              */
-            void set_start(size_t start);
+            constexpr void set_start(size_t start) { this->start = start; }
 
             /**
              * @brief Get the end position (0-based, exclusive).
              *
              * @return End position
              */
-            size_t get_end() const;
+            constexpr size_t get_end() const { return end; }
 
             /**
              * @brief Set the end position.
@@ -182,7 +198,7 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed
              */
-            void set_end(size_t end);
+            constexpr void set_end(size_t end) { this->end = end; }
 
             /**
              * @brief Serialize the interval to an output stream.
