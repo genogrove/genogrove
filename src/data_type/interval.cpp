@@ -6,7 +6,7 @@
 
 namespace genogrove::data_type {
 
-    interval interval::aggregate(const std::vector<interval>& intervals) {
+    interval interval::aggregate(std::span<const interval> intervals) {
         if (intervals.empty()) {
             return interval{};
         }

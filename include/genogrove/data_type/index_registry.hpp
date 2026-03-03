@@ -13,6 +13,7 @@
 // Standard
 #include <bitset>
 #include <cstdint>
+#include <string_view>
 #include <unordered_map>
 #include <stdexcept>
 #include <optional>
@@ -41,7 +42,7 @@ namespace genogrove::data_type {
             /*
              * @brief checks if given key has already been registered
              */
-            bool is_registered(const std::string& key) const;
+            bool is_registered(std::string_view key) const;
 
             /*
              * @brief retrieves the key for a given index (if present)
@@ -53,7 +54,7 @@ namespace genogrove::data_type {
              * @brief retrieves the index for a given key (if present)
              * @return std::nullopt if the key is not in the registry
              */
-            std::optional<uint8_t> value_lookup(const std::string& key) const;
+            std::optional<uint8_t> value_lookup(std::string_view key) const;
 
         private:
             std::unordered_map<std::string, uint8_t> registry;

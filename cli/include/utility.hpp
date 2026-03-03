@@ -11,10 +11,11 @@
 
 // Standard
 #include <string>
+#include <string_view>
 
 namespace util {
     std::string get_time();
-    std::string get_log(std::string subcall);
+    std::string get_log(std::string_view subcall);
 
 }
 

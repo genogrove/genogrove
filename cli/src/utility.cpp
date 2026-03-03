@@ -43,8 +43,10 @@ std::string util::get_time() {
     return ss.str();
 }
 
-std::string util::get_log(std::string subcall){
-    std::string logentry = "[GENOGROVE " + get_time() +" " + subcall + " ]";
+std::string util::get_log(std::string_view subcall){
+    std::string logentry = "[GENOGROVE " + get_time() + " ";
+    logentry += subcall;
+    logentry += " ]";
     return logentry;
 }
 

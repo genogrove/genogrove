@@ -11,6 +11,8 @@
 
 // standard
 #include <any>
+#include <concepts>
+#include <string_view>
 #include <typeindex>
 #include <functional>
 #include <memory>
@@ -38,7 +40,7 @@ namespace genogrove::data_type {
             /*
              * @brief
              */
-            template<typename T>
+            template<typename T> requires std::copy_constructible<T>
             static void register_type() {
                 std::type_index type_index = typeid(T);
                 std::string type_name = typeid(T).name();
@@ -66,7 +68,7 @@ namespace genogrove::data_type {
             }
 
             // cast a type back from the registered function
-            template<typename T>
+            template<typename T> requires std::copy_constructible<T>
             static T cast(const std::shared_ptr<any_base>& obj) {
                 std::string type_name = typeid(T).name();
                 // check if the type has been registered
@@ -96,7 +98,7 @@ namespace genogrove::data_type {
              * @brief Reset te TypeRegistry
              */
             static void reset();
-            static std::shared_ptr<any_base> create(const std::string& type_name);
+            static std::shared_ptr<any_base> create(std::string_view type_name);
 
         private:
             type_registry() = default;

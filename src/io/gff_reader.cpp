@@ -53,7 +53,7 @@ namespace genogrove::io {
         return get_attribute("biotype");
     }
 
-    std::optional<std::string> gff_entry::get_attribute(const std::string& key) const {
+    std::optional<std::string> gff_entry::get_attribute(std::string_view key) const {
         auto it = attributes.find(key);
         if (it != attributes.end()) {
             return it->second;
@@ -148,7 +148,7 @@ namespace genogrove::io {
     }
 
     gff_format gff_reader::parse_attributes(const std::string& attr_string,
-        std::map<std::string, std::string>& attributes) {
+        std::map<std::string, std::string, std::less<>>& attributes) {
         attributes.clear();
 
         // Detect format: GFF3 uses '=' and ';', GTF uses ' "' and '";'

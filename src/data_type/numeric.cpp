@@ -7,7 +7,7 @@
 
 namespace genogrove::data_type {
 
-    numeric numeric::aggregate(const std::vector<numeric>& values) {
+    numeric numeric::aggregate(std::span<const numeric> values) {
         if (values.empty()) {
             return numeric{};
         }

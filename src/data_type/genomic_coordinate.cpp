@@ -6,7 +6,7 @@
 namespace genogrove::data_type {
 
     // Static aggregate method
-    genomic_coordinate genomic_coordinate::aggregate(const std::vector<genomic_coordinate>& coords) {
+    genomic_coordinate genomic_coordinate::aggregate(std::span<const genomic_coordinate> coords) {
         if (coords.empty()) {
             return genomic_coordinate(); // Default: '.', 0, 0
         }

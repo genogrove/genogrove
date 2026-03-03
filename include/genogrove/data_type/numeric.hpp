@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <iostream>
 #include <limits>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -142,7 +143,7 @@ namespace genogrove::data_type {
              * @note Required by key_type_base concept for internal node construction
              * @throws std::runtime_error if values is empty (in debug builds)
              */
-            [[nodiscard]] static numeric aggregate(const std::vector<numeric>& values);
+            [[nodiscard]] static numeric aggregate(std::span<const numeric> values);
 
             /**
              * @brief Convert the numeric value to string representation.
