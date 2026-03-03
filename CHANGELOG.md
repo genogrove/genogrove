@@ -9,9 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Rename `is_overlapping()` → `overlaps()`** (**breaking**): Renamed the static overlap predicate on all key types (`interval`, `genomic_coordinate`, `numeric`, `kmer`) and in the `key_type_base` concept to `overlaps()` for idiomatic C++ naming. The `is_` prefix is reserved for single-object state checks; `overlaps(a, b)` reads naturally as a two-argument relationship predicate ([#151](https://github.com/genogrove/genogrove/issues/151))
+- **Decouple I/O entry types from `gdt::interval`** (**breaking**): Replaced `gdt::interval interval` field in `bed_entry`, `gff_entry`, and `sam_entry` with plain `size_t start` and `size_t end` fields. Readers now store raw format-native coordinates (0-based half-open) without depending on the grove's key type. Users must construct `gdt::interval(entry.start, entry.end - 1)` when inserting into a grove. CLI handlers updated accordingly ([#153](https://github.com/genogrove/genogrove/issues/153))
 
 ### Fixed
 - **Documentation: interval uses closed coordinates, not half-open**: Fixed docstrings in `interval` and `genomic_coordinate` that incorrectly described the coordinate system as half-open `[start, end)`. The implementation and tests use closed intervals `[start, end]` where the overlap condition is `max(a.start, b.start) <= min(a.end, b.end)` ([#153](https://github.com/genogrove/genogrove/issues/153))
+
+### Removed
+- **Deleted unused `file_entry.hpp`**: Removed the legacy `file_entry` struct from the CLI, which was never used outside a commented-out reference in `index.cpp` ([#153](https://github.com/genogrove/genogrove/issues/153))
 
 ## [0.16.0] - 2026-03-01
 

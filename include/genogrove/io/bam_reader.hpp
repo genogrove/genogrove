@@ -21,13 +21,12 @@
 
 // genogrove
 #include <genogrove/io/file_reader.hpp>
-#include <genogrove/data_type/all.hpp>
+
+#include <utility>
 
 // htslib
 #include <htslib/sam.h>
 #include <htslib/hts.h>
-
-namespace gdt = genogrove::data_type;
 
 namespace genogrove::io {
 
@@ -234,7 +233,8 @@ namespace genogrove::io {
     struct sam_entry {
         std::string qname;              ///< Query template NAME (read name)
         std::string chrom;              ///< Reference sequence name (RNAME)
-        gdt::interval interval;         ///< Genomic interval computed from POS + CIGAR
+        size_t start = 0;              ///< 0-based start position (from POS)
+        size_t end = 0;                ///< 0-based exclusive end position (from POS + CIGAR)
         alignment_flags flags;          ///< Bitwise FLAG
         uint8_t mapq;                   ///< Mapping quality (0-255)
         cigar_string cigar;             ///< CIGAR string (alignment operations)
@@ -418,7 +418,7 @@ namespace genogrove::io {
         bool parse_alignment(const bam1_t* b, sam_entry& entry);
 
         /// Compute reference interval from position and CIGAR
-        gdt::interval compute_interval(int64_t pos, const bam1_t* b) const;
+        std::pair<size_t, size_t> compute_interval(int64_t pos, const bam1_t* b) const;
 
         /// Parse CIGAR string from bam1_t
         cigar_string parse_cigar(const bam1_t* b) const;

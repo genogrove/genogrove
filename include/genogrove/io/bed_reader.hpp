@@ -17,12 +17,9 @@
 
 // genogrove
 #include <genogrove/io/file_reader.hpp>
-#include <genogrove/data_type/all.hpp>
 
 // htslib
 #include <htslib/bgzf.h>
-
-namespace gdt = genogrove::data_type;
 
 namespace genogrove::io {
     struct rgb_color {
@@ -69,7 +66,8 @@ namespace genogrove::io {
      */
     struct bed_entry {
         std::string chrom;
-        gdt::interval interval;
+        size_t start = 0;   ///< 0-based start position (BED chromStart)
+        size_t end = 0;     ///< 0-based exclusive end position (BED chromEnd)
 
         // optional BED fields (for BED4+)
         std::optional<std::string> name;
@@ -84,7 +82,8 @@ namespace genogrove::io {
         std::optional<block_info> blocks;
 
         bed_entry() = default;
-        bed_entry(std::string chrom, gdt::interval interval) : chrom(std::move(chrom)), interval(interval) {}
+        bed_entry(std::string chrom, size_t start, size_t end)
+            : chrom(std::move(chrom)), start(start), end(end) {}
     };
 
     /**

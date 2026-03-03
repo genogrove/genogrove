@@ -13,8 +13,6 @@
 #include <stdexcept>
 #include <cstring>
 
-namespace gdt = genogrove::data_type;
-
 namespace genogrove::io {
 
     bam_reader::bam_reader(const std::filesystem::path& path)
@@ -203,10 +201,13 @@ namespace genogrove::io {
 
         // Compute interval from position and CIGAR
         if (c.flag & BAM_FUNMAP) {
-            // Unmapped read - set empty interval
-            entry.interval = gdt::interval(0, 0);
+            // Unmapped read - set empty coordinates
+            entry.start = 0;
+            entry.end = 0;
         } else {
-            entry.interval = compute_interval(c.pos, b);
+            auto [iv_start, iv_end] = compute_interval(c.pos, b);
+            entry.start = iv_start;
+            entry.end = iv_end;
         }
 
         // Sequence (SEQ)
@@ -252,7 +253,7 @@ namespace genogrove::io {
         return true;
     }
 
-    gdt::interval bam_reader::compute_interval(int64_t pos, const bam1_t* b) const {
+    std::pair<size_t, size_t> bam_reader::compute_interval(int64_t pos, const bam1_t* b) const {
         // Calculate reference length consumed by CIGAR
         uint32_t* cigar = bam_get_cigar(b);
         uint32_t n_cigar = b->core.n_cigar;
@@ -274,8 +275,8 @@ namespace genogrove::io {
             ref_len = 1;  // Minimum interval size
         }
 
-        return gdt::interval(static_cast<size_t>(pos),
-                            static_cast<size_t>(pos + ref_len));
+        return {static_cast<size_t>(pos),
+                static_cast<size_t>(pos + ref_len)};
     }
 
     cigar_string bam_reader::parse_cigar(const bam1_t* b) const {

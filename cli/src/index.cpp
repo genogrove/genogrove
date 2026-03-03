@@ -52,7 +52,7 @@ void index::execute(const cxxopts::ParseResult& args) {
     //
     // // create the grove
     // ggs::grove<ggt::interval, int> grove(args["order"].as<int>());
-    // file_entry entry;
+    //
     //
     // // stop the time
     // auto start_insertion = std::chrono::steady_clock::now();

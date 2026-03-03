@@ -9,8 +9,6 @@
 // htslib
 #include <htslib/kstring.h>
 
-namespace gdt = genogrove::data_type;
-
 #include <cstdint>
 
 namespace genogrove::io {
@@ -364,7 +362,8 @@ namespace genogrove::io {
                     throw std::runtime_error(error_message);
                 }
                 entry.chrom = chrom;
-                entry.interval = gdt::interval(start_num, end_num);
+                entry.start = start_num;
+        entry.end = end_num;
 
                 // Parse optional BED fields (BED4+)
                 std::string name_str, score_str, strand_str;
