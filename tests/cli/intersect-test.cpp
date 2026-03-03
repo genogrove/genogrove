@@ -124,8 +124,9 @@ TEST_F(CLIIntersectTest, GroveIntersectNoOverlaps) {
     // Insert an interval that won't overlap with any query entries
     gio::bed_entry entry;
     entry.chrom = "chr3";
-    entry.interval = gdt::interval(10000, 20000);
-    grove.insert_data(entry.chrom, entry.interval, entry);
+    entry.start = 10000;
+    entry.end = 20000;
+    grove.insert_data(entry.chrom, gdt::interval(entry.start, entry.end - 1), entry);
 
     std::ostringstream output;
     handlers::bed::grove_intersect(grove, query_path.string(), output);

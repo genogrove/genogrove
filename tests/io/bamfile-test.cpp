@@ -18,10 +18,8 @@
 // genogrove
 #include <genogrove/io/bam_reader.hpp>
 #include <genogrove/io/filetype_detector.hpp>
-#include <genogrove/data_type/interval.hpp>
 
 namespace fs = std::filesystem;
-namespace gdt = genogrove::data_type;
 namespace gio = genogrove::io;
 
 // ==========================================
@@ -89,8 +87,8 @@ TEST_F(BamReaderTest, VerifyFirstAlignment) {
 
     EXPECT_EQ(entry.qname, "read001");
     EXPECT_EQ(entry.chrom, "chr1");
-    EXPECT_EQ(entry.interval.get_start(), 999);  // 0-based (SAM POS is 1-based)
-    EXPECT_EQ(entry.interval.get_end(), 1049);   // 50M CIGAR
+    EXPECT_EQ(entry.start, 999);  // 0-based (SAM POS is 1-based)
+    EXPECT_EQ(entry.end, 1049);   // 50M CIGAR
     EXPECT_EQ(entry.mapq, 60);
     EXPECT_FALSE(entry.flags.is_reverse());
     EXPECT_TRUE(entry.flags.is_paired());
@@ -161,7 +159,7 @@ TEST_F(BamReaderTest, ParseComplexCigar) {
 
     // Interval should be computed from reference-consuming operations only
     // 30M + 10M = 40 reference bases (insertion doesn't consume reference)
-    EXPECT_EQ(it->interval.get_end() - it->interval.get_start(), 40);
+    EXPECT_EQ(it->end - it->start, 40);
 }
 
 TEST_F(BamReaderTest, ParseCigarWithDeletion) {
@@ -189,7 +187,7 @@ TEST_F(BamReaderTest, ParseCigarWithDeletion) {
     EXPECT_EQ(it->cigar[2].length, 25);
 
     // Interval: 25M + 5D + 25M = 55 reference bases
-    EXPECT_EQ(it->interval.get_end() - it->interval.get_start(), 55);
+    EXPECT_EQ(it->end - it->start, 55);
 }
 
 TEST_F(BamReaderTest, ParseCigarWithSkip) {
@@ -212,7 +210,7 @@ TEST_F(BamReaderTest, ParseCigarWithSkip) {
     EXPECT_EQ(it->cigar[2].op, gio::cigar_op::MATCH);
 
     // Interval: 20M + 100N + 30M = 150 reference bases
-    EXPECT_EQ(it->interval.get_end() - it->interval.get_start(), 150);
+    EXPECT_EQ(it->end - it->start, 150);
 }
 
 TEST_F(BamReaderTest, ParseCigarWithSoftClipping) {
@@ -235,7 +233,7 @@ TEST_F(BamReaderTest, ParseCigarWithSoftClipping) {
     EXPECT_EQ(it->cigar[2].op, gio::cigar_op::SOFT_CLIP);
 
     // Interval: only 30M consumes reference
-    EXPECT_EQ(it->interval.get_end() - it->interval.get_start(), 30);
+    EXPECT_EQ(it->end - it->start, 30);
 }
 
 // ==========================================
@@ -248,7 +246,7 @@ TEST_F(BamReaderTest, IntervalStartIsZeroBased) {
 
     // First read: POS=1000 in SAM (1-based) -> 999 in 0-based
     ASSERT_TRUE(reader.read_next(entry));
-    EXPECT_EQ(entry.interval.get_start(), 999);
+    EXPECT_EQ(entry.start, 999);
 }
 
 // ==========================================
@@ -740,9 +738,9 @@ TEST_F(BamReaderTest, BamFileContentMatchesSam) {
             << "Mismatch at index " << i;
         EXPECT_EQ(sam_entries[i].chrom, bam_entries[i].chrom)
             << "Mismatch at index " << i;
-        EXPECT_EQ(sam_entries[i].interval.get_start(), bam_entries[i].interval.get_start())
+        EXPECT_EQ(sam_entries[i].start, bam_entries[i].start)
             << "Mismatch at index " << i;
-        EXPECT_EQ(sam_entries[i].interval.get_end(), bam_entries[i].interval.get_end())
+        EXPECT_EQ(sam_entries[i].end, bam_entries[i].end)
             << "Mismatch at index " << i;
         EXPECT_EQ(sam_entries[i].flags.value(), bam_entries[i].flags.value())
             << "Mismatch at index " << i;
@@ -765,8 +763,8 @@ TEST_F(BamReaderTest, BamFileVerifyFirstAlignment) {
 
     EXPECT_EQ(entry.qname, "read001");
     EXPECT_EQ(entry.chrom, "chr1");
-    EXPECT_EQ(entry.interval.get_start(), 999);  // 0-based
-    EXPECT_EQ(entry.interval.get_end(), 1049);   // 50M CIGAR
+    EXPECT_EQ(entry.start, 999);  // 0-based
+    EXPECT_EQ(entry.end, 1049);   // 50M CIGAR
     EXPECT_EQ(entry.mapq, 60);
 }
 

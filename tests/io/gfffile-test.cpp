@@ -17,10 +17,8 @@
 // genogrove
 #include <genogrove/io/filetype_detector.hpp>
 #include <genogrove/io/gff_reader.hpp>
-#include <genogrove/data_type/interval.hpp>
 
 namespace fs = std::filesystem;
-namespace gdt = genogrove::data_type;
 namespace gio = genogrove::io;
 
 // ==========================================
@@ -80,8 +78,8 @@ TEST_F(gfffileTest, readGFF3Format) {
     EXPECT_EQ(entries[0].seqid, "chr1");
     EXPECT_EQ(entries[0].source, "HAVANA");
     EXPECT_EQ(entries[0].type, "gene");
-    EXPECT_EQ(entries[0].interval.get_start(), 999);  // 1000 in GFF is 999 in 0-based
-    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].start, 999);  // 1000 in GFF is 999 in 0-based
+    EXPECT_EQ(entries[0].end, 2000);
     EXPECT_FALSE(entries[0].score.has_value());
     ASSERT_TRUE(entries[0].strand.has_value());
     EXPECT_EQ(entries[0].strand.value(), '+');
@@ -93,8 +91,8 @@ TEST_F(gfffileTest, readGFF3Format) {
     // Second entry - exon
     EXPECT_EQ(entries[1].seqid, "chr1");
     EXPECT_EQ(entries[1].type, "exon");
-    EXPECT_EQ(entries[1].interval.get_start(), 999);
-    EXPECT_EQ(entries[1].interval.get_end(), 1500);
+    EXPECT_EQ(entries[1].start, 999);
+    EXPECT_EQ(entries[1].end, 1500);
     EXPECT_EQ(entries[1].attributes.at("ID"), "exon1");
     EXPECT_EQ(entries[1].attributes.at("Parent"), "gene1");
 
@@ -131,8 +129,8 @@ TEST_F(gfffileTest, readGTFFormat) {
     EXPECT_EQ(entries[0].seqid, "chr1");
     EXPECT_EQ(entries[0].source, "HAVANA");
     EXPECT_EQ(entries[0].type, "gene");
-    EXPECT_EQ(entries[0].interval.get_start(), 999);
-    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].start, 999);
+    EXPECT_EQ(entries[0].end, 2000);
     EXPECT_EQ(entries[0].attributes.at("gene_id"), "ENSG00000001");
     EXPECT_EQ(entries[0].attributes.at("gene_name"), "TEST1");
     EXPECT_EQ(entries[0].attributes.at("gene_biotype"), "protein_coding");
@@ -361,10 +359,9 @@ TEST_F(gfffileTest, intervalObjectCreation) {
 
     // Verify interval object is properly created
     // GFF uses 1-based inclusive coordinates, converted to 0-based half-open
-    gdt::interval& intvl = entry.interval;
-    EXPECT_EQ(intvl.get_start(), 999);   // 1000 - 1
-    EXPECT_EQ(intvl.get_end(), 2000);    // 2000 stays the same
-    EXPECT_EQ(intvl.get_end() - intvl.get_start(), 1001);
+    EXPECT_EQ(entry.start, 999);   // 1000 - 1
+    EXPECT_EQ(entry.end, 2000);    // 2000 stays the same
+    EXPECT_EQ(entry.end - entry.start, 1001);
 }
 
 // ==========================================
@@ -392,8 +389,8 @@ TEST_F(gfffileTest, readGzippedGFF3Format) {
     // First entry
     EXPECT_EQ(entries[0].seqid, "chr1");
     EXPECT_EQ(entries[0].type, "gene");
-    EXPECT_EQ(entries[0].interval.get_start(), 999);
-    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].start, 999);
+    EXPECT_EQ(entries[0].end, 2000);
     EXPECT_EQ(entries[0].attributes.at("ID"), "gene1");
 
     // Second entry

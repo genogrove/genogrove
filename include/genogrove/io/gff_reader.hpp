@@ -17,12 +17,9 @@
 
 // genogrove
 #include <genogrove/io/file_reader.hpp>
-#include <genogrove/data_type/all.hpp>
 
 // htslib
 #include <htslib/bgzf.h>
-
-namespace gdt = genogrove::data_type;
 
 namespace genogrove::io {
 
@@ -37,7 +34,8 @@ namespace genogrove::io {
         std::string seqid;              // chromosome/contig name
         std::string source;             // source of the feature
         std::string type;               // feature type (gene, exon, CDS, etc.)
-        gdt::interval interval;         // start and end positions (converted to 0-based)
+        size_t start = 0;              // 0-based start position (converted from 1-based GFF)
+        size_t end = 0;                // 0-based exclusive end position
         std::optional<double> score;    // score (if not '.')
         std::optional<char> strand;     // strand (+, -, ., or ?)
         std::optional<int> phase;       // phase for CDS features (0, 1, or 2)
@@ -46,8 +44,8 @@ namespace genogrove::io {
 
 
         gff_entry() : format(gff_format::UNKNOWN) {}
-        gff_entry(std::string seqid, gdt::interval interval, std::string type)
-            : seqid(std::move(seqid)), interval(interval), type(std::move(type)), format(gff_format::UNKNOWN) {}
+        gff_entry(std::string seqid, size_t start, size_t end, std::string type)
+            : seqid(std::move(seqid)), start(start), end(end), type(std::move(type)), format(gff_format::UNKNOWN) {}
 
         // GTF-specific helper methods
         // Returns the value of the gene_id attribute (GTF standard)

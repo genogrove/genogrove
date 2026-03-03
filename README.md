@@ -38,7 +38,7 @@ namespace gdt = genogrove::data_type;
 ggs::grove<gdt::interval, gio::bed_entry> grove;
 gio::bed_reader reader("regions.bed");
 for (const auto& entry : reader) {
-    grove.insert_data(entry.chrom, entry.interval, entry);
+    grove.insert_data(entry.chrom, gdt::interval(entry.start, entry.end - 1), entry);
 }
 
 // Query overlapping intervals
@@ -46,7 +46,7 @@ gdt::interval query(1000, 2000);
 auto results = grove.intersect(query, "chr1");
 for (auto* key : results.get_keys()) {
     auto& data = key->get_data();
-    // data.chrom, data.interval, data.name, ...
+    // data.chrom, data.start, data.end, data.name, ...
 }
 ```
 

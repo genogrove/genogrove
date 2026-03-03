@@ -17,10 +17,8 @@
 // genogrove
 #include <genogrove/io/filetype_detector.hpp>
 #include <genogrove/io/bed_reader.hpp>
-#include <genogrove/data_type/interval.hpp>
 
 namespace fs = std::filesystem;
-namespace gdt = genogrove::data_type;
 namespace gio = genogrove::io;
 
 // ==========================================
@@ -83,21 +81,21 @@ TEST_F(bedfileTest, readBED3Format) {
 
     // First entry
     EXPECT_EQ(entries[0].chrom, "chr1");
-    EXPECT_EQ(entries[0].interval.get_start(), 1000);
-    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].start, 1000);
+    EXPECT_EQ(entries[0].end, 2000);
     EXPECT_FALSE(entries[0].name.has_value());
     EXPECT_FALSE(entries[0].score.has_value());
     EXPECT_FALSE(entries[0].strand.has_value());
 
     // Second entry
     EXPECT_EQ(entries[1].chrom, "chr2");
-    EXPECT_EQ(entries[1].interval.get_start(), 5000);
-    EXPECT_EQ(entries[1].interval.get_end(), 6000);
+    EXPECT_EQ(entries[1].start, 5000);
+    EXPECT_EQ(entries[1].end, 6000);
 
     // Third entry
     EXPECT_EQ(entries[2].chrom, "chrX");
-    EXPECT_EQ(entries[2].interval.get_start(), 100);
-    EXPECT_EQ(entries[2].interval.get_end(), 500);
+    EXPECT_EQ(entries[2].start, 100);
+    EXPECT_EQ(entries[2].end, 500);
 }
 
 // ==========================================
@@ -116,8 +114,8 @@ TEST_F(bedfileTest, readBED6Format) {
 
     // First entry with optional fields
     EXPECT_EQ(entries[0].chrom, "chr1");
-    EXPECT_EQ(entries[0].interval.get_start(), 1000);
-    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].start, 1000);
+    EXPECT_EQ(entries[0].end, 2000);
     ASSERT_TRUE(entries[0].name.has_value());
     EXPECT_EQ(entries[0].name.value(), "feature1");
     ASSERT_TRUE(entries[0].score.has_value());
@@ -154,8 +152,8 @@ TEST_F(bedfileTest, readBED12Format) {
 
     // First entry - full BED12
     EXPECT_EQ(entries[0].chrom, "chr1");
-    EXPECT_EQ(entries[0].interval.get_start(), 1000);
-    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].start, 1000);
+    EXPECT_EQ(entries[0].end, 2000);
     ASSERT_TRUE(entries[0].name.has_value());
     EXPECT_EQ(entries[0].name.value(), "item1");
     ASSERT_TRUE(entries[0].score.has_value());
@@ -180,8 +178,8 @@ TEST_F(bedfileTest, readBED12Format) {
 
     // Second entry - with 3 blocks
     EXPECT_EQ(entries[1].chrom, "chr2");
-    EXPECT_EQ(entries[1].interval.get_start(), 5000);
-    EXPECT_EQ(entries[1].interval.get_end(), 8000);
+    EXPECT_EQ(entries[1].start, 5000);
+    EXPECT_EQ(entries[1].end, 8000);
     ASSERT_TRUE(entries[1].blocks.has_value());
     EXPECT_EQ(entries[1].blocks.value().count, 3);
 
@@ -374,11 +372,10 @@ TEST_F(bedfileTest, intervalObjectCreation) {
 
     ASSERT_TRUE(reader.read_next(entry));
 
-    // Verify interval object is properly created
-    gdt::interval& intvl = entry.interval;
-    EXPECT_EQ(intvl.get_start(), 1000);
-    EXPECT_EQ(intvl.get_end(), 2000);
-    EXPECT_EQ(intvl.get_end() - intvl.get_start(), 1000);
+    // Verify interval fields are properly set
+    EXPECT_EQ(entry.start, 1000);
+    EXPECT_EQ(entry.end, 2000);
+    EXPECT_EQ(entry.end - entry.start, 1000);
 }
 
 // ==========================================
@@ -405,21 +402,21 @@ TEST_F(bedfileTest, readGzippedBED3Format) {
 
     // First entry
     EXPECT_EQ(entries[0].chrom, "chr1");
-    EXPECT_EQ(entries[0].interval.get_start(), 1000);
-    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].start, 1000);
+    EXPECT_EQ(entries[0].end, 2000);
     EXPECT_FALSE(entries[0].name.has_value());
     EXPECT_FALSE(entries[0].score.has_value());
     EXPECT_FALSE(entries[0].strand.has_value());
 
     // Second entry
     EXPECT_EQ(entries[1].chrom, "chr2");
-    EXPECT_EQ(entries[1].interval.get_start(), 5000);
-    EXPECT_EQ(entries[1].interval.get_end(), 6000);
+    EXPECT_EQ(entries[1].start, 5000);
+    EXPECT_EQ(entries[1].end, 6000);
 
     // Third entry
     EXPECT_EQ(entries[2].chrom, "chrX");
-    EXPECT_EQ(entries[2].interval.get_start(), 100);
-    EXPECT_EQ(entries[2].interval.get_end(), 500);
+    EXPECT_EQ(entries[2].start, 100);
+    EXPECT_EQ(entries[2].end, 500);
 }
 
 TEST_F(bedfileTest, readGzippedBED6Format) {
@@ -434,8 +431,8 @@ TEST_F(bedfileTest, readGzippedBED6Format) {
 
     // First entry with optional fields
     EXPECT_EQ(entries[0].chrom, "chr1");
-    EXPECT_EQ(entries[0].interval.get_start(), 1000);
-    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].start, 1000);
+    EXPECT_EQ(entries[0].end, 2000);
     ASSERT_TRUE(entries[0].name.has_value());
     EXPECT_EQ(entries[0].name.value(), "feature1");
     ASSERT_TRUE(entries[0].score.has_value());
@@ -468,8 +465,8 @@ TEST_F(bedfileTest, readGzippedBED12Format) {
 
     // First entry - full BED12 from gzipped file
     EXPECT_EQ(entries[0].chrom, "chr1");
-    EXPECT_EQ(entries[0].interval.get_start(), 1000);
-    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].start, 1000);
+    EXPECT_EQ(entries[0].end, 2000);
     ASSERT_TRUE(entries[0].name.has_value());
     EXPECT_EQ(entries[0].name.value(), "item1");
     ASSERT_TRUE(entries[0].thickness.has_value());
@@ -520,18 +517,18 @@ TEST_F(bedfileTest, iteratorBasicIteration) {
 
     // Verify first entry
     EXPECT_EQ(entries[0].chrom, "chr1");
-    EXPECT_EQ(entries[0].interval.get_start(), 1000);
-    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].start, 1000);
+    EXPECT_EQ(entries[0].end, 2000);
 
     // Verify second entry
     EXPECT_EQ(entries[1].chrom, "chr2");
-    EXPECT_EQ(entries[1].interval.get_start(), 5000);
-    EXPECT_EQ(entries[1].interval.get_end(), 6000);
+    EXPECT_EQ(entries[1].start, 5000);
+    EXPECT_EQ(entries[1].end, 6000);
 
     // Verify third entry
     EXPECT_EQ(entries[2].chrom, "chrX");
-    EXPECT_EQ(entries[2].interval.get_start(), 100);
-    EXPECT_EQ(entries[2].interval.get_end(), 500);
+    EXPECT_EQ(entries[2].start, 100);
+    EXPECT_EQ(entries[2].end, 500);
 }
 
 TEST_F(bedfileTest, iteratorWithOptionalFields) {
@@ -622,8 +619,8 @@ TEST_F(bedfileTest, mixedBedFormatsNoStaleOptionals) {
 
     // First entry: BED12 — all optional fields present
     EXPECT_EQ(entries[0].chrom, "chr1");
-    EXPECT_EQ(entries[0].interval.get_start(), 1000);
-    EXPECT_EQ(entries[0].interval.get_end(), 2000);
+    EXPECT_EQ(entries[0].start, 1000);
+    EXPECT_EQ(entries[0].end, 2000);
     ASSERT_TRUE(entries[0].name.has_value());
     EXPECT_EQ(entries[0].name.value(), "item1");
     ASSERT_TRUE(entries[0].score.has_value());
@@ -636,8 +633,8 @@ TEST_F(bedfileTest, mixedBedFormatsNoStaleOptionals) {
 
     // Second entry: BED3 — ALL optional fields must be empty (not stale from BED12)
     EXPECT_EQ(entries[1].chrom, "chr2");
-    EXPECT_EQ(entries[1].interval.get_start(), 5000);
-    EXPECT_EQ(entries[1].interval.get_end(), 6000);
+    EXPECT_EQ(entries[1].start, 5000);
+    EXPECT_EQ(entries[1].end, 6000);
     EXPECT_FALSE(entries[1].name.has_value()) << "name should be reset for BED3 record";
     EXPECT_FALSE(entries[1].score.has_value()) << "score should be reset for BED3 record";
     EXPECT_FALSE(entries[1].strand.has_value()) << "strand should be reset for BED3 record";
@@ -647,8 +644,8 @@ TEST_F(bedfileTest, mixedBedFormatsNoStaleOptionals) {
 
     // Third entry: BED6 — only name/score/strand present, rest must be empty
     EXPECT_EQ(entries[2].chrom, "chr3");
-    EXPECT_EQ(entries[2].interval.get_start(), 3000);
-    EXPECT_EQ(entries[2].interval.get_end(), 4000);
+    EXPECT_EQ(entries[2].start, 3000);
+    EXPECT_EQ(entries[2].end, 4000);
     ASSERT_TRUE(entries[2].name.has_value());
     EXPECT_EQ(entries[2].name.value(), "feature3");
     ASSERT_TRUE(entries[2].score.has_value());

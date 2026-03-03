@@ -8,8 +8,6 @@
 // htslib
 #include <htslib/kstring.h>
 
-namespace gdt = genogrove::data_type;
-
 namespace genogrove::io {
     // Safe isdigit wrapper to avoid UB with signed char
     static auto is_digit = [](unsigned char c) { return std::isdigit(c) != 0; };
@@ -299,7 +297,8 @@ namespace genogrove::io {
                 entry.seqid = seqid;
                 entry.source = source;
                 entry.type = type;
-                entry.interval = gdt::interval(start, end);
+                entry.start = start;
+                entry.end = end;
 
                 // Parse score
                 if (score_str != ".") {
