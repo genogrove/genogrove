@@ -10,6 +10,7 @@
 #define GENOGROVE_DATA_TYPE_KEY_TYPE_BASE_HPP
 
 #include <cstddef>
+#include <span>
 #include <vector>
 #include <concepts>
 
@@ -23,7 +24,7 @@ namespace genogrove::data_type {
         { a > b } -> std::convertible_to<bool>;
         { a == b } -> std::convertible_to<bool>;
         { T::overlaps(a,b) } -> std::convertible_to<bool>;
-        { T::aggregate(std::vector<T>{}) } -> std::convertible_to<T>;
+        { T::aggregate(std::span<const T>{}) } -> std::convertible_to<T>;
         { a.to_string() } -> std::convertible_to<std::string>;
     };
 

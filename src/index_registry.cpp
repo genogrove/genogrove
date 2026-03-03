@@ -17,7 +17,7 @@ namespace genogrove::data_type {
         return idx.value();
     }
 
-    bool index_registry::is_registered(const std::string &key) const {
+    bool index_registry::is_registered(std::string_view key) const {
         return ggu::value_lookup(this->registry, key).has_value();
     }
 
@@ -25,7 +25,7 @@ namespace genogrove::data_type {
         return ggu::key_lookup(this->registry, value);
     }
 
-    std::optional<uint8_t> index_registry::value_lookup(const std::string &key) const {
+    std::optional<uint8_t> index_registry::value_lookup(std::string_view key) const {
         return ggu::value_lookup(this->registry, key);
     }
 }

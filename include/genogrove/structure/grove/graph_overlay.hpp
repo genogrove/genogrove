@@ -175,7 +175,7 @@ class graph_overlay {
     std::vector<gdt::key<key_type, data_type>*> get_neighbors_if(
         gdt::key<key_type, data_type>* source,
         Predicate predicate) const
-        requires (!std::is_void_v<edge_data_type>) {
+        requires (!std::is_void_v<edge_data_type> && std::predicate<Predicate, const edge_data_type&>) {
         std::vector<gdt::key<key_type, data_type>*> neighbors;
 
         auto it = adjacency.find(source);

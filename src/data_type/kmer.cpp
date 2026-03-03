@@ -33,7 +33,7 @@ namespace genogrove::data_type {
         }
     }
 
-    kmer kmer::aggregate(const std::vector<kmer>& kmers) {
+    kmer kmer::aggregate(std::span<const kmer> kmers) {
         if (kmers.empty()) {
             return kmer{};
         }

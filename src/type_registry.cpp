@@ -15,12 +15,12 @@ namespace genogrove::data_type {
         cast_functions.clear();
     }
 
-    std::shared_ptr<any_base> type_registry::create(const std::string& typeName) {
-        auto it = factory_functions.find(typeName);
+    std::shared_ptr<any_base> type_registry::create(std::string_view typeName) {
+        auto it = factory_functions.find(std::string(typeName));
         if(it != factory_functions.end()) {
             return it->second();
         }
-        throw std::runtime_error("Type not registered: " + typeName);
+        throw std::runtime_error("Type not registered: " + std::string(typeName));
     }
 }
 

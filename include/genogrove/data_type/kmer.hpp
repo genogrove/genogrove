@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -173,7 +174,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept for internal node construction
              */
-            [[nodiscard]] static kmer aggregate(const std::vector<kmer>& kmers);
+            [[nodiscard]] static kmer aggregate(std::span<const kmer> kmers);
 
             /**
              * @brief Convert the k-mer to its DNA sequence string.

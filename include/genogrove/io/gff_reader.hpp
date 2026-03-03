@@ -1,5 +1,5 @@
 /*
-* SPDX-License-Identifier: GPLv3
+ * SPDX-License-Identifier: GPLv3
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
@@ -11,6 +11,7 @@
 
 // standard
 #include <string>
+#include <string_view>
 #include <filesystem>
 #include <optional>
 #include <map>
@@ -39,7 +40,7 @@ namespace genogrove::io {
         std::optional<double> score;    // score (if not '.')
         std::optional<char> strand;     // strand (+, -, ., or ?)
         std::optional<int> phase;       // phase for CDS features (0, 1, or 2)
-        std::map<std::string, std::string> attributes;  // key-value pairs from column 9
+        std::map<std::string, std::string, std::less<>> attributes;  // key-value pairs from column 9
         gff_format format;              // detected format (GFF3 or GTF)
 
 
@@ -64,7 +65,7 @@ namespace genogrove::io {
         std::optional<std::string> get_gene_biotype() const;
 
         // Generic attribute getter with optional default value
-        std::optional<std::string> get_attribute(const std::string& key) const;
+        std::optional<std::string> get_attribute(std::string_view key) const;
 
         // Check if this entry is in GTF format
         bool is_gtf() const { return format == gff_format::GTF; }
@@ -124,7 +125,7 @@ namespace genogrove::io {
 
         // Helper to parse attributes (handles both GFF3 and GTF formats)
         // Returns the detected format
-        gff_format parse_attributes(const std::string& attr_string, std::map<std::string, std::string>& attributes);
+        gff_format parse_attributes(const std::string& attr_string, std::map<std::string, std::string, std::less<>>& attributes);
 
         // Validate GTF-specific requirements (gene_id and transcript_id for most features)
         bool validate_gtf_attributes(const gff_entry& entry);

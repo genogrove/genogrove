@@ -13,6 +13,7 @@
 // Standard
 #include <cstddef>
 #include <iostream>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -172,7 +173,7 @@ namespace genogrove::data_type {
              * @note Required by key_type_base concept for internal node construction
              * @throws std::runtime_error if coords is empty (in debug builds)
              */
-            [[nodiscard]] static genomic_coordinate aggregate(const std::vector<genomic_coordinate>& coords);
+            [[nodiscard]] static genomic_coordinate aggregate(std::span<const genomic_coordinate> coords);
 
             /**
              * @brief Convert coordinate to string representation.

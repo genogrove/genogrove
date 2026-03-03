@@ -26,6 +26,8 @@ namespace genogrove::utility {
      * @return Type of std::optional<key_type> - key_type if the key is found, else std::nullopt
      */
     template<typename AssocContainer, typename Value>
+        requires (std::ranges::input_range<AssocContainer>
+            && requires { typename AssocContainer::key_type; typename AssocContainer::mapped_type; })
     auto key_lookup(const AssocContainer& container, const Value& value)
     -> std::optional<typename AssocContainer::key_type> {
         auto it = genogrove::utility::ranges::find_if(container, [&](const auto &p) {
@@ -44,6 +46,8 @@ namespace genogrove::utility {
      * @return Type of std::optional<mapped_type> - mapped_type if the key is found, else std::nullopt
      */
     template<typename AssocContainer, typename Key>
+        requires (std::ranges::input_range<AssocContainer>
+            && requires { typename AssocContainer::key_type; typename AssocContainer::mapped_type; })
     auto value_lookup(const AssocContainer& container, const Key& key)
     -> std::optional<typename AssocContainer::mapped_type> {
         auto it = genogrove::utility::ranges::find(container, key, [](const auto &p) {

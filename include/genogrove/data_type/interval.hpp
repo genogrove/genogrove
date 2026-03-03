@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <iostream>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -156,7 +157,7 @@ namespace genogrove::data_type {
              * @note Required by key_type_base concept for internal node construction
              * @throws std::runtime_error if intervals is empty (in debug builds)
              */
-            [[nodiscard]] static interval aggregate(const std::vector<interval>& intervals);
+            [[nodiscard]] static interval aggregate(std::span<const interval> intervals);
 
             /**
              * @brief Convert interval to string representation.

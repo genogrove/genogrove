@@ -399,7 +399,8 @@ class grove {
      * @endcode
      */
     template<typename Predicate>
-    void link_if(const std::vector<gdt::key<key_type, data_type>*>& keys, Predicate predicate) {
+    void link_if(const std::vector<gdt::key<key_type, data_type>*>& keys, Predicate predicate)
+        requires std::invocable<Predicate, gdt::key<key_type, data_type>*, gdt::key<key_type, data_type>*> {
         using key_ptr = gdt::key<key_type, data_type>*;
         using result_type = std::invoke_result_t<Predicate, key_ptr, key_ptr>;
 
@@ -566,7 +567,7 @@ class grove {
     template<typename Container>
     std::vector<gdt::key<key_type, data_type>*> insert_data(std::string_view index,
         const Container& data, sorted_t, bulk_t)
-        requires (!std::is_void_v<data_type>) {
+        requires (!std::is_void_v<data_type> && std::ranges::input_range<Container>) {
         std::vector<gdt::key<key_type, data_type>*> inserted_keys;
         if (data.empty()) return inserted_keys;
 
@@ -664,7 +665,7 @@ class grove {
      */
     template<typename Container>
     std::vector<gdt::key<key_type, data_type>*> insert_data(std::string_view index, Container data, bulk_t)
-        requires (!std::is_void_v<data_type>) {
+        requires (!std::is_void_v<data_type> && std::ranges::input_range<Container>) {
         if (data.empty()) return {};
 
         // Sort the data (O(n log n))
@@ -892,7 +893,7 @@ class grove {
      * @return query_result containing all overlapping keys from the specified index
      * @note Returns empty result if index doesn't exist
      */
-    gdt::query_result<key_type, data_type> intersect(const key_type& query, const std::string& index) {
+    gdt::query_result<key_type, data_type> intersect(const key_type& query, std::string_view index) {
         gdt::query_result<key_type, data_type> result{query};
         node<key_type, data_type>* root = this->get_root(index);
 
@@ -1119,7 +1120,7 @@ class grove {
     template<typename Container>
     std::pair<node<key_type, data_type>*, std::vector<gdt::key<key_type, data_type>*>>
     build_tree_bottom_up(std::string_view index, const Container& data)
-        requires (!std::is_void_v<data_type>) {
+        requires (!std::is_void_v<data_type> && std::ranges::input_range<Container>) {
 
         std::vector<gdt::key<key_type, data_type>*> inserted_keys;
         if (data.empty()) {
