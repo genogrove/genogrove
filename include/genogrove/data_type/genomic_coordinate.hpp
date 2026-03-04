@@ -191,21 +191,21 @@ namespace genogrove::data_type {
              *
              * @return Strand character ('+', '-', '.', or '*')
              */
-            constexpr char get_strand() const { return strand; }
+            constexpr char get_strand() const noexcept { return strand; }
 
             /**
              * @brief Get the start position (0-based, inclusive).
              *
              * @return Start position
              */
-            constexpr std::size_t get_start() const { return start; }
+            constexpr std::size_t get_start() const noexcept { return start; }
 
             /**
              * @brief Get the end position (0-based, inclusive).
              *
              * @return End position
              */
-            constexpr std::size_t get_end() const { return end; }
+            constexpr std::size_t get_end() const noexcept { return end; }
 
             /**
              * @brief Set the strand indicator.
@@ -214,7 +214,7 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed
              */
-            constexpr void set_strand(char strand) { this->strand = strand; }
+            constexpr void set_strand(char strand) noexcept { this->strand = strand; }
 
             /**
              * @brief Set the start position.
@@ -223,7 +223,7 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed
              */
-            constexpr void set_start(std::size_t start) { this->start = start; }
+            constexpr void set_start(std::size_t start) noexcept { this->start = start; }
 
             /**
              * @brief Set the end position.
@@ -232,7 +232,7 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed
              */
-            constexpr void set_end(std::size_t end) { this->end = end; }
+            constexpr void set_end(std::size_t end) noexcept { this->end = end; }
 
             /**
              * @brief Serialize the genomic coordinate to an output stream.

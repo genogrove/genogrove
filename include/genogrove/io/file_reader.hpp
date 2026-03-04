@@ -82,10 +82,6 @@ namespace genogrove::io {
             return reader_ == other.reader_;
         }
 
-        bool operator!=(const file_reader_iterator& other) const {
-            return !(*this == other);
-        }
-
     private:
         void advance() {
             if (!reader_ || at_end_) {

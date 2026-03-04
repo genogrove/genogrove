@@ -95,7 +95,7 @@ class node {
      * @brief Get the B+ tree order of this node
      * @return The order value (max children = order, max keys = order-1)
      */
-    int get_order() const {
+    int get_order() const noexcept {
         return this->order;
     }
 
@@ -149,7 +149,7 @@ class node {
      * @brief Get pointer to parent node
      * @return Pointer to parent node, or nullptr if this is root
      */
-    node* get_parent() const {
+    node* get_parent() const noexcept {
         return this->parent;
     }
 
@@ -175,7 +175,7 @@ class node {
      * @return Pointer to next leaf node, or nullptr if no next sibling
      * @note Only meaningful for leaf nodes that are chained together
      */
-    node* get_next() const {
+    node* get_next() const noexcept {
         return this->next;
     }
 
@@ -191,7 +191,7 @@ class node {
      * @brief Check if this node is a leaf
      * @return True if this is a leaf node, false if internal node
      */
-    bool get_is_leaf() const {
+    bool get_is_leaf() const noexcept {
         return this->is_leaf;
     }
 

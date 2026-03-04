@@ -175,7 +175,7 @@ namespace genogrove::data_type {
              *
              * @return Start position
              */
-            constexpr size_t get_start() const { return start; }
+            constexpr size_t get_start() const noexcept { return start; }
 
             /**
              * @brief Set the start position.
@@ -184,14 +184,14 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed
              */
-            constexpr void set_start(size_t start) { this->start = start; }
+            constexpr void set_start(size_t start) noexcept { this->start = start; }
 
             /**
              * @brief Get the end position (0-based, inclusive).
              *
              * @return End position
              */
-            constexpr size_t get_end() const { return end; }
+            constexpr size_t get_end() const noexcept { return end; }
 
             /**
              * @brief Set the end position.
@@ -200,7 +200,7 @@ namespace genogrove::data_type {
              *
              * @note No validation is performed
              */
-            constexpr void set_end(size_t end) { this->end = end; }
+            constexpr void set_end(size_t end) noexcept { this->end = end; }
 
             /**
              * @brief Serialize the interval to an output stream.
