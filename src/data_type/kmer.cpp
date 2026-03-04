@@ -1,6 +1,7 @@
 #include <genogrove/data_type/kmer.hpp>
 #include <stdexcept>
 #include <algorithm>
+#include <ranges>
 #include <cctype>
 
 namespace genogrove::data_type {
@@ -39,13 +40,7 @@ namespace genogrove::data_type {
         }
 
         // Return the maximum k-mer for B+ tree navigation
-        kmer max_kmer = kmers[0];
-        for (size_t i = 1; i < kmers.size(); ++i) {
-            if (kmers[i] > max_kmer) {
-                max_kmer = kmers[i];
-            }
-        }
-        return max_kmer;
+        return std::ranges::max(kmers);
     }
 
     std::string kmer::to_string() const {
@@ -93,7 +88,7 @@ namespace genogrove::data_type {
     }
 
     bool kmer::is_valid(std::string_view sequence) {
-        return std::all_of(sequence.begin(), sequence.end(), [](char c) {
+        return std::ranges::all_of(sequence, [](char c) {
             char upper = std::toupper(static_cast<unsigned char>(c));
             return upper == 'A' || upper == 'C' || upper == 'G' || upper == 'T';
         });

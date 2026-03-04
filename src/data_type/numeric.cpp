@@ -1,8 +1,7 @@
 #include <genogrove/data_type/numeric.hpp>
 
 // standard
-#include <algorithm>
-#include <limits>
+#include <ranges>
 #include <stdexcept>
 
 namespace genogrove::data_type {
@@ -14,11 +13,7 @@ namespace genogrove::data_type {
 
         // Return the maximum value as the aggregate for B+ tree navigation
         // Internal nodes use max value to guide search queries
-        int max_val = std::numeric_limits<int>::min();
-        for (const auto& n : values) {
-            max_val = std::max(max_val, n.value);
-        }
-        return numeric{max_val};
+        return std::ranges::max(values);
     }
 
     std::string numeric::to_string() const {

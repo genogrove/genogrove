@@ -45,7 +45,7 @@ namespace genogrove::data_type {
                 std::type_index type_index = typeid(T);
                 std::string type_name = typeid(T).name();
 
-                if(cast_functions.find(type_name) == cast_functions.end()) {
+                if(!cast_functions.contains(type_name)) {
                     cast_functions[type_name] = [](const std::shared_ptr<any_base>& obj) -> std::any {
                         auto castedObj = std::dynamic_pointer_cast<
                         any_type<typename std::remove_reference<T>::type>>(obj);
@@ -56,11 +56,11 @@ namespace genogrove::data_type {
                     };
                 }
 
-                if(type_names.find(type_index) == type_names.end()) {
+                if(!type_names.contains(type_index)) {
                     type_names[type_index] = typeid(T).name(); // store the type name
                 }
 
-                if(factory_functions.find(type_name) == factory_functions.end()) {
+                if(!factory_functions.contains(type_name)) {
                     factory_functions[type_name] = []() -> std::shared_ptr<any_base> {
                         return std::make_shared<any_type<T>>();
                     };
@@ -72,7 +72,7 @@ namespace genogrove::data_type {
             static T cast(const std::shared_ptr<any_base>& obj) {
                 std::string type_name = typeid(T).name();
                 // check if the type has been registered
-                if (cast_functions.find(type_name) == cast_functions.end()) {
+                if (!cast_functions.contains(type_name)) {
                     throw std::runtime_error("The type has not been registered");
                 }
 

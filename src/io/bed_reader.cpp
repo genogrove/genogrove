@@ -2,7 +2,7 @@
 
 // standard
 #include <algorithm>
-#include <cctype>
+#include <ranges>
 #include <sstream>
 #include <vector>
 
@@ -11,9 +11,12 @@
 
 #include <cstdint>
 
+// genogrove
+#include <genogrove/utility/char_utils.hpp>
+
+namespace ggu = genogrove::utility;
+
 namespace genogrove::io {
-    // Safe isdigit wrapper to avoid UB with signed char
-    static auto is_digit = [](unsigned char c) { return std::isdigit(c) != 0; };
 
     // Helper function to parse comma-separated integers into a vector
     static std::vector<size_t> parse_csv(const std::string& str) {
@@ -27,7 +30,7 @@ namespace genogrove::io {
             token.erase(token.find_last_not_of(" \t") + 1);
 
             if(token.empty()) { return {}; } // ERROR: return empty vector
-            if (!std::all_of(token.begin(), token.end(), is_digit)) {
+            if (!std::ranges::all_of(token, ggu::is_digit)) {
                 return {};
             }
             result.push_back(std::stoul(token));
@@ -75,8 +78,8 @@ namespace genogrove::io {
 
             // Validate coordinates are integers
             if (start.empty() || end.empty() ||
-                !std::all_of(start.begin(), start.end(), is_digit) ||
-                !std::all_of(end.begin(), end.end(), is_digit)) {
+                !std::ranges::all_of(start, ggu::is_digit) ||
+                !std::ranges::all_of(end, ggu::is_digit)) {
                     if(str.s) free(str.s);
                     bgzf_close(bgzf_file);
                     throw std::runtime_error("Invalid BED coordinates (non-integer) in " + fpath.string());
@@ -115,7 +118,7 @@ namespace genogrove::io {
     }
 
     bool bed_reader::parse_score(bed_entry& entry, const std::string& score_str) {
-        if (!std::all_of(score_str.begin(), score_str.end(), is_digit)) {
+        if (!std::ranges::all_of(score_str, ggu::is_digit)) {
             error_message = "Invalid score format (non-integer) at line ";
             error_message += std::to_string(line_num);
             return false;
@@ -153,12 +156,12 @@ namespace genogrove::io {
     bool bed_reader::parse_thickness(bed_entry& entry, const std::string& thick_start_str,
                                      const std::string& thick_end_str,
                                      size_t start_num, size_t end_num) {
-        if (!std::all_of(thick_start_str.begin(), thick_start_str.end(), is_digit)) {
+        if (!std::ranges::all_of(thick_start_str, ggu::is_digit)) {
             error_message = "Invalid thickStart format (non-integer) at line ";
             error_message += std::to_string(line_num);
             return false;
         }
-        if (!std::all_of(thick_end_str.begin(), thick_end_str.end(), is_digit)) {
+        if (!std::ranges::all_of(thick_end_str, ggu::is_digit)) {
             error_message = "Invalid thickEnd format (non-integer) at line ";
             error_message += std::to_string(line_num);
             return false;
@@ -221,7 +224,7 @@ namespace genogrove::io {
     bool bed_reader::parse_blocks(bed_entry& entry, const std::string& block_count_str,
                                   const std::string& block_sizes_str, const std::string& block_starts_str,
                                   size_t start_num, size_t end_num) {
-        if (!std::all_of(block_count_str.begin(), block_count_str.end(), is_digit)) {
+        if (!std::ranges::all_of(block_count_str, ggu::is_digit)) {
             error_message = "Invalid block count format (non-integer) at line ";
             error_message += std::to_string(line_num);
             return false;
@@ -337,8 +340,8 @@ namespace genogrove::io {
                 // validate integers
                 if(start.empty() ||
                     end.empty() ||
-                    !std::all_of(start.begin(), start.end(), is_digit) ||
-                    !std::all_of(end.begin(), end.end(), is_digit)) {
+                    !std::ranges::all_of(start, ggu::is_digit) ||
+                    !std::ranges::all_of(end, ggu::is_digit)) {
                     error_message = "Invalid coordinate format at line " + std::to_string(line_num);
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
