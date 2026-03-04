@@ -1,16 +1,19 @@
 #include <genogrove/io/gff_reader.hpp>
 
 // standard
-#include <sstream>
 #include <algorithm>
-#include <cctype>
+#include <ranges>
+#include <sstream>
 
 // htslib
 #include <htslib/kstring.h>
 
+// genogrove
+#include <genogrove/utility/char_utils.hpp>
+
+namespace ggu = genogrove::utility;
+
 namespace genogrove::io {
-    // Safe isdigit wrapper to avoid UB with signed char
-    static auto is_digit = [](unsigned char c) { return std::isdigit(c) != 0; };
 
     // ==========================================
     // gff_entry helper methods
@@ -105,8 +108,8 @@ namespace genogrove::io {
 
             // Validate coordinates are integers
             if (start_str.empty() || end_str.empty() ||
-                !std::all_of(start_str.begin(), start_str.end(), is_digit) ||
-                !std::all_of(end_str.begin(), end_str.end(), is_digit)) {
+                !std::ranges::all_of(start_str, ggu::is_digit) ||
+                !std::ranges::all_of(end_str, ggu::is_digit)) {
                 if (str.s) free(str.s);
                 bgzf_close(bgzf_file);
                 throw std::runtime_error("Invalid GFF coordinates (non-integer) in " + fpath.string());
@@ -277,8 +280,8 @@ namespace genogrove::io {
 
                 // Validate start and end are integers
                 if(start_str.empty() || end_str.empty() ||
-                   !std::all_of(start_str.begin(), start_str.end(), is_digit) ||
-                   !std::all_of(end_str.begin(), end_str.end(), is_digit)) {
+                   !std::ranges::all_of(start_str, ggu::is_digit) ||
+                   !std::ranges::all_of(end_str, ggu::is_digit)) {
                     error_message = "Invalid coordinate format at line " + std::to_string(line_num);
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);

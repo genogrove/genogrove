@@ -10,8 +10,10 @@
 #define GENOGROVE_STRUCTURE_NODE_HPP
 
 // standard
+#include <algorithm>
 #include <istream>
 #include <ostream>
+#include <ranges>
 #include <string_view>
 #include <vector>
 
@@ -208,11 +210,9 @@ class node {
      * @note This performs a linear search; consider using indexed insertion for bulk operations
      */
     void insert_key_ptr(gdt::key<key_type, data_type>* key_ptr) {
-        size_t i = 0;
-        while(i < this->keys.size() && key_ptr->get_value() > this->keys[i]->get_value()) {
-            i++;
-        }
-        this->keys.insert(this->keys.begin() + i, key_ptr);
+        auto it = std::ranges::lower_bound(this->keys, key_ptr->get_value(),
+            std::less{}, [](const auto* k) -> const key_type& { return k->get_value(); });
+        this->keys.insert(it, key_ptr);
     }
 
     /**

@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
+#include <ranges>
 #include <type_traits>
 #include <variant>
 
@@ -102,8 +103,8 @@ class graph_overlay {
         }
 
         auto& edges = it->second;
-        auto edge_it = std::find_if(edges.begin(), edges.end(),
-                                    [target](const edge& e) { return e.target == target; });
+        auto edge_it = std::ranges::find_if(edges,
+                                          [target](const edge& e) { return e.target == target; });
 
         if (edge_it != edges.end()) {
             edges.erase(edge_it);
@@ -202,8 +203,8 @@ class graph_overlay {
             return false;
         }
 
-        return std::any_of(it->second.begin(), it->second.end(),
-                          [target](const edge& e) { return e.target == target; });
+        return std::ranges::any_of(it->second,
+                                   [target](const edge& e) { return e.target == target; });
     }
 
     /*
