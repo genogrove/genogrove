@@ -181,6 +181,7 @@ class graph_overlay {
 
         auto it = adjacency.find(source);
         if (it != adjacency.end()) {
+            neighbors.reserve(it->second.size());
             for (const auto& e : it->second) {
                 if (predicate(e.metadata)) {
                     neighbors.push_back(e.target);

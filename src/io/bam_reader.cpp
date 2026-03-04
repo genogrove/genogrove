@@ -303,12 +303,13 @@ namespace genogrove::io {
         uint8_t* aux_end = b->data + b->l_data;
 
         while (aux < aux_end) {
+            // Each tag needs at least 3 bytes: 2-char name + 1-byte type
+            if (aux + 3 > aux_end) {
+                break;
+            }
+
             // Tag name (2 chars)
-            char tag[3];
-            tag[0] = static_cast<char>(aux[0]);
-            tag[1] = static_cast<char>(aux[1]);
-            tag[2] = '\0';
-            std::string key(tag);
+            std::string key(reinterpret_cast<const char*>(aux), 2);
 
             aux += 2;
             char type = static_cast<char>(*aux++);

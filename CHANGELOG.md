@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Deleted unused `file_entry.hpp`**: Removed the legacy `file_entry` struct from the CLI, which was never used outside a commented-out reference in `index.cpp` ([#153](https://github.com/genogrove/genogrove/issues/153))
 - **Remove legacy type erasure code**: Deleted `any_type.hpp`, `type_registry.hpp`, and `type_registry.cpp` — unused since the library moved from runtime type erasure to compile-time templates. Cleaned up dead includes from `key.hpp` and `query_result.hpp`
 
+### Performance
+- **Minor performance improvements**: Replaced `std::ostringstream` with `std::format` in `genomic_coordinate::to_string()`, added `reserve()` to `get_neighbors_if()`, simplified BAM tag key construction, and cached redundant `args.as<std::string>()` calls in CLI `intersect.cpp` ([#172](https://github.com/genogrove/genogrove/issues/172))
+
 ## [0.16.0] - 2026-03-01
 
 ### Fixed

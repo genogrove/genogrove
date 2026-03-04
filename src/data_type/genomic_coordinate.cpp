@@ -1,7 +1,7 @@
 #include <genogrove/data_type/genomic_coordinate.hpp>
 #include <algorithm>
+#include <format>
 #include <limits>
-#include <sstream>
 
 namespace genogrove::data_type {
 
@@ -41,9 +41,7 @@ namespace genogrove::data_type {
 
     // String conversion
     std::string genomic_coordinate::to_string() const {
-        std::ostringstream oss;
-        oss << strand << ":" << start << "-" << end;
-        return oss.str();
+        return std::format("{}:{}-{}", strand, start, end);
     }
 
     void genomic_coordinate::serialize(std::ostream& os) const {

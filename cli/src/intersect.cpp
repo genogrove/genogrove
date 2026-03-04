@@ -28,8 +28,9 @@ void intersect::validate(const cxxopts::ParseResult& args) {
         std::cerr << "Error: queryfile is required\n";
         exit(1);
     }
-    if(!std::filesystem::exists(args["queryfile"].as<std::string>())) {
-        std::cerr << "File does not exist: " << args["queryfile"].as<std::string>() << std::endl;
+    auto queryfile = args["queryfile"].as<std::string>();
+    if(!std::filesystem::exists(queryfile)) {
+        std::cerr << "File does not exist: " << queryfile << std::endl;
         exit(1);
     }
 
@@ -37,8 +38,9 @@ void intersect::validate(const cxxopts::ParseResult& args) {
         std::cerr << "Error: targetfile is required\n";
         exit(1);
     }
-    if(!std::filesystem::exists(args["targetfile"].as<std::string>())) {
-        std::cerr << "File does not exist: " << args["targetfile"].as<std::string>() << std::endl;
+    auto targetfile = args["targetfile"].as<std::string>();
+    if(!std::filesystem::exists(targetfile)) {
+        std::cerr << "File does not exist: " << targetfile << std::endl;
         exit(1);
     }
 
