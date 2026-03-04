@@ -46,7 +46,6 @@
  * - **index**: Index identifier management (e.g., chromosome names)
  * - **index_registry**: Global registry for managing index identifiers
  * - **data_registry**: Template registry for shared metadata (per-type singleton)
- * - **type_registry**: Type information registry system
  * - **serialization_traits**: Traits for type-specific serialization
  * - **constants**: Common constants and type definitions
  *

@@ -12,13 +12,10 @@
 // standard
 #include <vector>
 #include <istream>
-#include <typeindex>
 #include <type_traits>
 #include <variant>
 
 // genogrove
-#include <genogrove/data_type/any_type.hpp>
-#include <genogrove/data_type/type_registry.hpp>
 #include <genogrove/data_type/key_type_base.hpp>
 #include <genogrove/data_type/serialization_traits.hpp>
 

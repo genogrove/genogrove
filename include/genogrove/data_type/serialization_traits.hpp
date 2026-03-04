@@ -12,6 +12,7 @@
 
 #include <type_traits>
 #include <cassert>
+#include <cstdint>
 #include <istream>
 #include <ostream>
 #include <string>
