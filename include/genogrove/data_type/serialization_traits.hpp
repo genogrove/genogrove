@@ -156,8 +156,14 @@ struct serialization_traits<std::string> {
     static std::string deserialize(std::istream& is) {
         uint64_t length;
         is.read(reinterpret_cast<char*>(&length), sizeof(length));
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize string: stream error reading length");
+        }
         std::string value(length, '\0');
-        is.read(&value[0], length);
+        is.read(&value[0], static_cast<std::streamsize>(length));
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize string: stream error reading content");
+        }
         return value;
     }
 };

@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Adopt `std::span` for `aggregate()`** (**breaking**): Changed `aggregate()` signature on all key types (`interval`, `genomic_coordinate`, `numeric`, `kmer`) and in the `key_type_base` concept from `const std::vector<T>&` to `std::span<const T>`, allowing callers to pass any contiguous range without copying to a vector ([#116](https://github.com/genogrove/genogrove/issues/116))
 
 ### Fixed
+- **Validate stream state in structural deserializers**: Added `if(!is)` checks after every `is.read()` in `node::deserialize()`, `grove::deserialize()`, `data_registry::deserialize()`, and `serialization_traits<std::string>::deserialize()`, matching the existing pattern in leaf-level deserializers. Added B+ tree invariant bounds on `num_keys` and `num_children` in `node::deserialize()`. Added `order >= 3` validation to grove constructor ([#125](https://github.com/genogrove/genogrove/issues/125))
 - **Documentation: interval uses closed coordinates, not half-open**: Fixed docstrings in `interval` and `genomic_coordinate` that incorrectly described the coordinate system as half-open `[start, end)`. The implementation and tests use closed intervals `[start, end]` where the overlap condition is `max(a.start, b.start) <= min(a.end, b.end)` ([#153](https://github.com/genogrove/genogrove/issues/153))
 
 ### Removed

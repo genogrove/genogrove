@@ -393,10 +393,22 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize(std::istream& 
 
     // Read is_leaf flag
     is.read(reinterpret_cast<char*>(&n->is_leaf), sizeof(n->is_leaf));
+    if (!is) {
+        delete n;
+        throw std::runtime_error("Failed to deserialize node: stream error reading is_leaf");
+    }
 
     // Read number of keys
     size_t num_keys;
     is.read(reinterpret_cast<char*>(&num_keys), sizeof(num_keys));
+    if (!is) {
+        delete n;
+        throw std::runtime_error("Failed to deserialize node: stream error reading num_keys");
+    }
+    if (num_keys >= static_cast<size_t>(order)) {
+        delete n;
+        throw std::runtime_error("Failed to deserialize node: num_keys exceeds order");
+    }
 
     // Read each key
     n->keys.reserve(num_keys);
@@ -419,6 +431,14 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize(std::istream& 
     if (!n->is_leaf) {
         size_t num_children;
         is.read(reinterpret_cast<char*>(&num_children), sizeof(num_children));
+        if (!is) {
+            delete n;
+            throw std::runtime_error("Failed to deserialize node: stream error reading num_children");
+        }
+        if (num_children > static_cast<size_t>(order)) {
+            delete n;
+            throw std::runtime_error("Failed to deserialize node: num_children exceeds order");
+        }
 
         n->children.reserve(num_children);
         for (size_t i = 0; i < num_children; ++i) {

@@ -99,7 +99,11 @@ class grove {
      * @brief Construct a grove with specified order
      * @param order Determines the maximum number of k-1 keys and k children per node
      */
-    explicit grove(int order) : order(order) {}
+    explicit grove(int order) : order(order) {
+        if (order < 3) {
+            throw std::out_of_range("grove order must be >= 3");
+        }
+    }
 
     /**
      * @brief Construct a grove with default order of 3
@@ -1053,18 +1057,30 @@ class grove {
     [[nodiscard]] static grove deserialize(std::istream& is) {
         int order;
         is.read(reinterpret_cast<char*>(&order), sizeof(order));
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize grove: stream error reading order");
+        }
         grove g(order);
 
         size_t number_root_nodes;
         is.read(reinterpret_cast<char*>(&number_root_nodes), sizeof(number_root_nodes));
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize grove: stream error reading root node count");
+        }
 
         // Deserialize each root node
         for (size_t i = 0; i < number_root_nodes; ++i) {
             // Read index name
             size_t index_name_length;
             is.read(reinterpret_cast<char*>(&index_name_length), sizeof(index_name_length));
+            if (!is) {
+                throw std::runtime_error("Failed to deserialize grove: stream error reading index name length");
+            }
             std::string index_name(index_name_length, '\0');
             is.read(index_name.data(), static_cast<std::streamsize>(index_name_length));
+            if (!is) {
+                throw std::runtime_error("Failed to deserialize grove: stream error reading index name");
+            }
 
             // Deserialize the tree for this index
             node<key_type, data_type>* root = node<key_type, data_type>::deserialize(is, order);
@@ -1083,6 +1099,9 @@ class grove {
         // Read external keys count
         size_t external_count;
         is.read(reinterpret_cast<char*>(&external_count), sizeof(external_count));
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize grove: stream error reading external key count");
+        }
 
         // Read each external key - directly into external_key_storage
         for (size_t i = 0; i < external_count; ++i) {
