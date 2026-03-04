@@ -2,9 +2,8 @@
 
 // standard
 #include <chrono>
-#include <sstream>
-#include <iomanip>
 #include <ctime>
+#include <format>
 
 std::string util::get_time() {
     auto now = std::chrono::system_clock::now();
@@ -33,21 +32,17 @@ std::string util::get_time() {
     }
 #endif
 
-    std::stringstream ss;
     if (success) {
-        ss << std::put_time(&tm_buf, "%Y-%m-%d %H:%M:%S");
-    } else {
-        // final fallback: return epoch time as string if both conversions failed
-        ss << "TIMESTAMP_ERROR_" << now_c;
+        return std::format("{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}",
+            tm_buf.tm_year + 1900, tm_buf.tm_mon + 1, tm_buf.tm_mday,
+            tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec);
     }
-    return ss.str();
+    // final fallback: return epoch time as string if both conversions failed
+    return std::format("TIMESTAMP_ERROR_{}", now_c);
 }
 
 std::string util::get_log(std::string_view subcall){
-    std::string logentry = "[GENOGROVE " + get_time() + " ";
-    logentry += subcall;
-    logentry += " ]";
-    return logentry;
+    return std::format("[GENOGROVE {} {} ]", get_time(), subcall);
 }
 
 
