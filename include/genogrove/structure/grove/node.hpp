@@ -384,6 +384,10 @@ void node<key_type, data_type>::serialize(std::ostream& os) {
             child->serialize(os);
         }
     }
+
+    if (!os) {
+        throw std::runtime_error("Failed to serialize node: stream error");
+    }
 }
 
 template<typename key_type, typename data_type>

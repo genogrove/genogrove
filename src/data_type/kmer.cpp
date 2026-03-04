@@ -63,6 +63,9 @@ namespace genogrove::data_type {
     void kmer::serialize(std::ostream& os) const {
         os.write(reinterpret_cast<const char*>(&encoding), sizeof(encoding));
         os.write(reinterpret_cast<const char*>(&k), sizeof(k));
+        if (!os) {
+            throw std::runtime_error("Failed to serialize kmer: stream error");
+        }
     }
 
     kmer kmer::deserialize(std::istream& is) {

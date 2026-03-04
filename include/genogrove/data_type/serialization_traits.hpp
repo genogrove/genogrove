@@ -151,6 +151,9 @@ struct serialization_traits<std::string> {
         uint64_t length = value.length();
         os.write(reinterpret_cast<const char*>(&length), sizeof(length));
         os.write(value.data(), length);
+        if (!os) {
+            throw std::runtime_error("Failed to serialize string: stream error");
+        }
     }
 
     static std::string deserialize(std::istream& is) {

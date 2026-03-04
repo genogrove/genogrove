@@ -1045,6 +1045,10 @@ class grove {
         for (const auto& key : external_key_storage) {
             key.serialize(os);
         }
+
+        if (!os) {
+            throw std::runtime_error("Failed to serialize grove: stream error");
+        }
     }
 
     /**
