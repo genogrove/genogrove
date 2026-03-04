@@ -39,7 +39,6 @@ void index::validate(const cxxopts::ParseResult& args) {
 }
 
 void index::execute(const cxxopts::ParseResult& args) {
-    auto start_program = std::chrono::steady_clock::now();
     std::filesystem::path inputfile = args["inputfile"].as<std::string>();
     std::cout << "Indexing file: " << inputfile << "\n";
 
