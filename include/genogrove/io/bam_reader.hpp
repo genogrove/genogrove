@@ -13,6 +13,7 @@
 // standard
 #include <string>
 #include <filesystem>
+#include <format>
 #include <optional>
 #include <vector>
 #include <variant>
@@ -265,7 +266,7 @@ namespace genogrove::io {
         [[nodiscard]] std::string cigar_string_repr() const {
             std::string result;
             for (const auto& elem : cigar) {
-                result += std::to_string(elem.length) + elem.to_char();
+                result += std::format("{}{}", elem.length, elem.to_char());
             }
             return result.empty() ? "*" : result;
         }
