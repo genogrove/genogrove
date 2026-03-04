@@ -26,6 +26,9 @@ namespace genogrove::data_type {
     void interval::serialize(std::ostream& os) const {
         os.write(reinterpret_cast<const char*>(&this->start), sizeof(this->start));
         os.write(reinterpret_cast<const char*>(&this->end), sizeof(this->end));
+        if (!os) {
+            throw std::runtime_error("Failed to serialize interval: stream error");
+        }
     }
 
     interval interval::deserialize(std::istream& is) {

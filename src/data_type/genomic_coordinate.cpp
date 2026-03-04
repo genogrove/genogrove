@@ -48,6 +48,9 @@ namespace genogrove::data_type {
         os.write(reinterpret_cast<const char*>(&this->strand), sizeof(this->strand));
         os.write(reinterpret_cast<const char*>(&this->start), sizeof(this->start));
         os.write(reinterpret_cast<const char*>(&this->end), sizeof(this->end));
+        if (!os) {
+            throw std::runtime_error("Failed to serialize genomic_coordinate: stream error");
+        }
     }
 
     genomic_coordinate genomic_coordinate::deserialize(std::istream& is) {

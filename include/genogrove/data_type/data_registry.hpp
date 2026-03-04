@@ -174,6 +174,10 @@ class data_registry {
         for (const auto& entry : storage) {
             serializer<registry_data_type>::write(os, entry);
         }
+
+        if (!os) {
+            throw std::runtime_error("Failed to serialize data_registry: stream error");
+        }
     }
 
     /**

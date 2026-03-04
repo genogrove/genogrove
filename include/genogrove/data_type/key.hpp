@@ -257,6 +257,10 @@ namespace genogrove::data_type {
                 if constexpr(!std::is_void_v<data_type>) {
                     serializer<data_type>::write(os, this->data);
                 }
+
+                if (!os) {
+                    throw std::runtime_error("Failed to serialize key: stream error");
+                }
             }
 
             /**

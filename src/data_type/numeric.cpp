@@ -23,6 +23,9 @@ namespace genogrove::data_type {
 
     void numeric::serialize(std::ostream& os) const {
         os.write(reinterpret_cast<const char*>(&this->value), sizeof(this->value));
+        if (!os) {
+            throw std::runtime_error("Failed to serialize numeric: stream error");
+        }
     }
 
     numeric numeric::deserialize(std::istream& is) {
