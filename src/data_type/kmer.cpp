@@ -40,7 +40,7 @@ namespace genogrove::data_type {
         }
 
         // Return the maximum k-mer for B+ tree navigation
-        return std::ranges::max(kmers);
+        return std::ranges::max(kmers, [](const kmer& a, const kmer& b) { return a < b; });
     }
 
     std::string kmer::to_string() const {
