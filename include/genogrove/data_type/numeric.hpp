@@ -161,7 +161,7 @@ namespace genogrove::data_type {
              *
              * @return The wrapped integer value
              */
-            constexpr int get_value() const { return value; }
+            constexpr int get_value() const noexcept { return value; }
 
             /**
              * @brief Set the integer value.

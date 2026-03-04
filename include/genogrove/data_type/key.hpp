@@ -156,7 +156,7 @@ namespace genogrove::data_type {
              *
              * @return Const reference to the underlying key_type value
              */
-            [[nodiscard]] const key_type& get_value() const {
+            [[nodiscard]] const key_type& get_value() const noexcept {
                 return value;
             }
 
@@ -305,19 +305,6 @@ namespace genogrove::data_type {
                     } else {
                         return value == other.value && data == other.data;
                     }
-                }
-
-            /**
-             * @brief Inequality comparison operator.
-             *
-             * @param other Key to compare against
-             * @return true if keys are not equal
-             *
-             * @note Only available when key_type is equality-comparable
-             */
-            bool operator!=(const key& other) const
-                requires std::equality_comparable<key_type> {
-                    return !(*this == other);
                 }
 
         private:

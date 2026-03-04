@@ -75,7 +75,7 @@ namespace genogrove::data_type {
              *
              * @return The query value
              */
-            key_type get_query() const { return this->query; }
+            key_type get_query() const noexcept { return this->query; }
 
             /**
              * @brief Get all matching keys found by the query.

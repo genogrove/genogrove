@@ -11,11 +11,7 @@
 
 #include <cstddef>
 #include <span>
-#include <vector>
 #include <concepts>
-
-// #if __cplusplus >= 202002L
-// // C++20 with concepts
 
 namespace genogrove::data_type {
     template<typename T>
@@ -27,14 +23,6 @@ namespace genogrove::data_type {
         { T::aggregate(std::span<const T>{}) } -> std::convertible_to<T>;
         { a.to_string() } -> std::convertible_to<std::string>;
     };
-
-    // helper function for c++20 (with concept constraints)
-    template<key_type_base key_type>
-    constexpr bool is_key_type_base() {
-        return true;
-    }
 }
 
 #endif //GENOGROVE_DATA_TYPE_KEY_TYPE_BASE_HPP
-
-

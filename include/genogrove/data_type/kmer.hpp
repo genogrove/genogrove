@@ -192,14 +192,14 @@ namespace genogrove::data_type {
              *
              * @return The encoded k-mer as a 64-bit integer
              */
-            constexpr uint64_t get_encoding() const { return encoding; }
+            constexpr uint64_t get_encoding() const noexcept { return encoding; }
 
             /**
              * @brief Get the k-mer length.
              *
              * @return The value of k (1-32)
              */
-            constexpr uint8_t get_k() const { return k; }
+            constexpr uint8_t get_k() const noexcept { return k; }
 
             /**
              * @brief Serialize the k-mer to an output stream.
