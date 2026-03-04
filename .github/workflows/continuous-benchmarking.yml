@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -60,6 +63,7 @@ jobs:
             build/benchmarks/plots
 
       - name: Deploy custom benchmarks to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -68,6 +72,7 @@ jobs:
           keep_files: true
 
       - name: Store benchmark result
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: C++ Benchmark
@@ -75,13 +80,11 @@ jobs:
           output-file-path: build/benchmarks/benchmark_result.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
+          # Only keep the last 25 commits in the chart
+          max-items-in-chart: 25
           # Show alert with commit comment on detecting possible performance regression
           alert-threshold: '200%'
           comment-on-alert: true
           fail-on-alert: false
           alert-comment-cc-users: '@riasc'
           gh-repository: 'github.com/genogrove/genogrove'
-
-
-
-
