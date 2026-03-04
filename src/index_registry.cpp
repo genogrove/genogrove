@@ -1,5 +1,7 @@
 #include <genogrove/data_type/index_registry.hpp>
 
+#include <limits>
+
 namespace genogrove::data_type {
 
     index_registry &index_registry::instance() {
@@ -10,6 +12,9 @@ namespace genogrove::data_type {
     uint8_t index_registry::register_key(const std::string &key) {
         std::optional<uint8_t> idx = ggu::value_lookup(this->registry, key);
         if(!idx.has_value()) {
+            if (next_index == std::numeric_limits<uint8_t>::max()) {
+                throw std::runtime_error("index_registry: maximum capacity (255) exceeded");
+            }
             uint8_t new_index = this->next_index++;
             this->registry.insert({key, new_index});
             return new_index;

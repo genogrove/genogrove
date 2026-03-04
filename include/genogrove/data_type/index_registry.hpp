@@ -58,7 +58,7 @@ namespace genogrove::data_type {
 
         private:
             std::unordered_map<std::string, uint8_t> registry;
-            uint8_t next_index;
+            uint8_t next_index{0};
     };
 }
 
