@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Validate stream state in structural deserializers**: Added `if(!is)` checks after every `is.read()` in `node::deserialize()`, `grove::deserialize()`, `data_registry::deserialize()`, and `serialization_traits<std::string>::deserialize()`, matching the existing pattern in leaf-level deserializers. Added B+ tree invariant bounds on `num_keys` and `num_children` in `node::deserialize()`. Added `order >= 3` validation to grove constructor ([#125](https://github.com/genogrove/genogrove/issues/125))
 - **Documentation: interval uses closed coordinates, not half-open**: Fixed docstrings in `interval` and `genomic_coordinate` that incorrectly described the coordinate system as half-open `[start, end)`. The implementation and tests use closed intervals `[start, end]` where the overlap condition is `max(a.start, b.start) <= min(a.end, b.end)` ([#153](https://github.com/genogrove/genogrove/issues/153))
+- **Benchmark CI malformed JSON**: Replaced `--benchmark_format=json | tee` with `--benchmark_out=` + `--benchmark_out_format=json` so console progress lines don't corrupt the JSON output file ([#199](https://github.com/genogrove/genogrove/pull/199))
 
 ### Removed
 - **Deleted unused `file_entry.hpp`**: Removed the legacy `file_entry` struct from the CLI, which was never used outside a commented-out reference in `index.cpp` ([#153](https://github.com/genogrove/genogrove/issues/153))

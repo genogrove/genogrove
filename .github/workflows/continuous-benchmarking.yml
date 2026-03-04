@@ -40,7 +40,7 @@ jobs:
       - name: Run benchmarks
         run: |
           cd build/benchmarks
-          ./genogrove_benchmarks --benchmark_format=json | tee benchmark_result.json
+          ./genogrove_benchmarks --benchmark_out=benchmark_result.json --benchmark_out_format=json
           cd ../..
 
       - name: Set up Python for visualizations
