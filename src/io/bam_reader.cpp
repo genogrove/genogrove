@@ -333,30 +333,55 @@ namespace genogrove::io {
                     value = static_cast<int64_t>(*aux++);
                     break;
 
-                case 's':  // int16_t
-                    value = static_cast<int64_t>(*reinterpret_cast<int16_t*>(aux));
-                    aux += 2;
+                case 's': {  // int16_t
+                    int16_t val;
+                    size_t available = static_cast<size_t>(aux_end - aux);
+                    if (available < sizeof(val)) return result;
+                    std::memcpy(&val, aux, sizeof(val));
+                    value = static_cast<int64_t>(val);
+                    aux += sizeof(val);
                     break;
+                }
 
-                case 'S':  // uint16_t
-                    value = static_cast<int64_t>(*reinterpret_cast<uint16_t*>(aux));
-                    aux += 2;
+                case 'S': {  // uint16_t
+                    uint16_t val;
+                    size_t available = static_cast<size_t>(aux_end - aux);
+                    if (available < sizeof(val)) return result;
+                    std::memcpy(&val, aux, sizeof(val));
+                    value = static_cast<int64_t>(val);
+                    aux += sizeof(val);
                     break;
+                }
 
-                case 'i':  // int32_t
-                    value = static_cast<int64_t>(*reinterpret_cast<int32_t*>(aux));
-                    aux += 4;
+                case 'i': {  // int32_t
+                    int32_t val;
+                    size_t available = static_cast<size_t>(aux_end - aux);
+                    if (available < sizeof(val)) return result;
+                    std::memcpy(&val, aux, sizeof(val));
+                    value = static_cast<int64_t>(val);
+                    aux += sizeof(val);
                     break;
+                }
 
-                case 'I':  // uint32_t
-                    value = static_cast<int64_t>(*reinterpret_cast<uint32_t*>(aux));
-                    aux += 4;
+                case 'I': {  // uint32_t
+                    uint32_t val;
+                    size_t available = static_cast<size_t>(aux_end - aux);
+                    if (available < sizeof(val)) return result;
+                    std::memcpy(&val, aux, sizeof(val));
+                    value = static_cast<int64_t>(val);
+                    aux += sizeof(val);
                     break;
+                }
 
-                case 'f':  // float
-                    value = *reinterpret_cast<float*>(aux);
-                    aux += 4;
+                case 'f': {  // float
+                    float val;
+                    size_t available = static_cast<size_t>(aux_end - aux);
+                    if (available < sizeof(val)) return result;
+                    std::memcpy(&val, aux, sizeof(val));
+                    value = val;
+                    aux += sizeof(val);
                     break;
+                }
 
                 case 'Z':  // Printable string
                 case 'H':  // Hex string
@@ -369,58 +394,85 @@ namespace genogrove::io {
 
                 case 'B':  // Array
                 {
+                    // Need 1 byte (array_type) + 4 bytes (count) before reading either
+                    size_t available = static_cast<size_t>(aux_end - aux);
+                    if (available < sizeof(char) + sizeof(uint32_t)) return result;
                     char array_type = static_cast<char>(*aux++);
-                    uint32_t count = *reinterpret_cast<uint32_t*>(aux);
-                    aux += 4;
+                    uint32_t count;
+                    std::memcpy(&count, aux, sizeof(count));
+                    aux += sizeof(count);
+
+                    // Validate array payload fits in remaining data before allocating
+                    auto check_array_bounds = [&](size_t elem_size) -> size_t {
+                        if (count > SIZE_MAX / elem_size) return 0;  // overflow
+                        size_t bytes_needed = static_cast<size_t>(count) * elem_size;
+                        size_t remaining = static_cast<size_t>(aux_end - aux);
+                        if (remaining < bytes_needed) return 0;
+                        return bytes_needed;
+                    };
 
                     switch (array_type) {
                         case 'c': {
+                            size_t bytes_needed = check_array_bounds(sizeof(int8_t));
+                            if (count > 0 && bytes_needed == 0) return result;
                             std::vector<int8_t> arr(count);
-                            std::memcpy(arr.data(), aux, count * sizeof(int8_t));
+                            std::memcpy(arr.data(), aux, bytes_needed);
                             value = std::move(arr);
-                            aux += count * sizeof(int8_t);
+                            aux += bytes_needed;
                             break;
                         }
                         case 'C': {
+                            size_t bytes_needed = check_array_bounds(sizeof(uint8_t));
+                            if (count > 0 && bytes_needed == 0) return result;
                             std::vector<uint8_t> arr(count);
-                            std::memcpy(arr.data(), aux, count * sizeof(uint8_t));
+                            std::memcpy(arr.data(), aux, bytes_needed);
                             value = std::move(arr);
-                            aux += count * sizeof(uint8_t);
+                            aux += bytes_needed;
                             break;
                         }
                         case 's': {
+                            size_t bytes_needed = check_array_bounds(sizeof(int16_t));
+                            if (count > 0 && bytes_needed == 0) return result;
                             std::vector<int16_t> arr(count);
-                            std::memcpy(arr.data(), aux, count * sizeof(int16_t));
+                            std::memcpy(arr.data(), aux, bytes_needed);
                             value = std::move(arr);
-                            aux += count * sizeof(int16_t);
+                            aux += bytes_needed;
                             break;
                         }
                         case 'S': {
+                            size_t bytes_needed = check_array_bounds(sizeof(uint16_t));
+                            if (count > 0 && bytes_needed == 0) return result;
                             std::vector<uint16_t> arr(count);
-                            std::memcpy(arr.data(), aux, count * sizeof(uint16_t));
+                            std::memcpy(arr.data(), aux, bytes_needed);
                             value = std::move(arr);
-                            aux += count * sizeof(uint16_t);
+                            aux += bytes_needed;
                             break;
                         }
                         case 'i': {
+                            size_t bytes_needed = check_array_bounds(sizeof(int32_t));
+                            if (count > 0 && bytes_needed == 0) return result;
                             std::vector<int32_t> arr(count);
-                            std::memcpy(arr.data(), aux, count * sizeof(int32_t));
+                            std::memcpy(arr.data(), aux, bytes_needed);
                             value = std::move(arr);
-                            aux += count * sizeof(int32_t);
+                            aux += bytes_needed;
                             break;
                         }
                         case 'I': {
+                            size_t bytes_needed = check_array_bounds(sizeof(uint32_t));
+                            if (count > 0 && bytes_needed == 0) return result;
                             std::vector<uint32_t> arr(count);
-                            std::memcpy(arr.data(), aux, count * sizeof(uint32_t));
+                            std::memcpy(arr.data(), aux, bytes_needed);
                             value = std::move(arr);
-                            aux += count * sizeof(uint32_t);
+                            aux += bytes_needed;
                             break;
                         }
                         case 'f': {
+                            size_t bytes_needed = check_array_bounds(sizeof(float));
+                            if (count > 0 && bytes_needed == 0) return result;
                             std::vector<float> arr(count);
-                            std::memcpy(arr.data(), aux, count * sizeof(float));
+                            std::memcpy(arr.data(), aux, bytes_needed);
                             value = std::move(arr);
-                            aux += count * sizeof(float);
+                            aux += bytes_needed;
                             break;
                         }
                         default:
