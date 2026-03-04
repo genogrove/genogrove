@@ -190,6 +190,9 @@ class data_registry {
         // Read entry count
         uint64_t count;
         is.read(reinterpret_cast<char*>(&count), sizeof(count));
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize data_registry: stream error reading count");
+        }
 
         // Read each entry
         inst.storage.reserve(count);
