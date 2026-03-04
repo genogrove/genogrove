@@ -151,6 +151,6 @@ template <typename T> class any_type : public any_base {
         return std::make_shared<any_type<T>>(data);
     }
 };
-}; // namespace genogrove::data_type
+} // namespace genogrove::data_type
 
 #endif // GENOGROVE_ANYTYPE_HPP

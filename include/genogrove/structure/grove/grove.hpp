@@ -41,10 +41,10 @@ namespace genogrove::structure {
     struct bulk_t {};
 
     /// Global constant for sorted insertion dispatch
-    inline static constexpr sorted_t sorted{};
+    inline constexpr sorted_t sorted{};
 
     /// Global constant for bulk insertion dispatch
-    inline static constexpr bulk_t bulk{};
+    inline constexpr bulk_t bulk{};
 
     namespace detail {
         // Type trait to detect if a type is std::optional
