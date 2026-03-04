@@ -40,25 +40,28 @@ namespace genogrove::io {
             throw std::runtime_error("Failed to read header from: " + path.string());
         }
 
-        // Cache header text
-        if (header_->text) {
-            header_text_ = std::string(header_->text, header_->l_text);
-        }
+        // Wrap in try/catch: if std::string/vector operations throw (e.g. bad_alloc),
+        // the constructor hasn't completed so the destructor won't run — clean up manually.
+        try {
+            // Cache header text
+            if (header_->text) {
+                header_text_ = std::string(header_->text, header_->l_text);
+            }
 
-        // Cache reference names
-        ref_names_.reserve(header_->n_targets);
-        for (int i = 0; i < header_->n_targets; ++i) {
-            ref_names_.emplace_back(header_->target_name[i]);
-        }
+            // Cache reference names
+            ref_names_.reserve(header_->n_targets);
+            for (int i = 0; i < header_->n_targets; ++i) {
+                ref_names_.emplace_back(header_->target_name[i]);
+            }
 
-        // Allocate reusable alignment structure
-        alignment_ = bam_init1();
-        if (!alignment_) {
-            bam_hdr_destroy(header_);
-            hts_close(sam_file_);
-            header_ = nullptr;
-            sam_file_ = nullptr;
-            throw std::runtime_error("Failed to allocate alignment structure");
+            // Allocate reusable alignment structure
+            alignment_ = bam_init1();
+            if (!alignment_) {
+                throw std::runtime_error("Failed to allocate alignment structure");
+            }
+        } catch (...) {
+            cleanup();
+            throw;
         }
     }
 

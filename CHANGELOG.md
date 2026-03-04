@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Benchmark CI malformed JSON**: Replaced `--benchmark_format=json | tee` with `--benchmark_out=` + `--benchmark_out_format=json` so console progress lines don't corrupt the JSON output file ([#199](https://github.com/genogrove/genogrove/pull/199))
 - **Benchmark CI improvements**: Limited chart history to last 25 commits and enabled benchmark runs on PRs (without storing results) for validation ([#201](https://github.com/genogrove/genogrove/pull/201))
 - **Deduplicate CI triggers**: Restricted `push` trigger to `main` only in `ci-ubuntu.yml` and `ci-macos.yml`, keeping `pull_request` for PRs — eliminates duplicate CI runs on every PR push ([#202](https://github.com/genogrove/genogrove/pull/202))
+- **Fix resource leaks in IO reader constructors**: Wrapped throwing sections of `bam_reader`, `bed_reader`, and `gff_reader` constructors in try/catch to prevent htslib handle and kstring leaks if `std::string`/`std::vector` operations throw `std::bad_alloc` ([#129](https://github.com/genogrove/genogrove/issues/129))
 
 ### Removed
 - **Deleted unused `file_entry.hpp`**: Removed the legacy `file_entry` struct from the CLI, which was never used outside a commented-out reference in `index.cpp` ([#153](https://github.com/genogrove/genogrove/issues/153))

@@ -83,64 +83,67 @@ namespace genogrove::io {
         // Store start position
         int64_t start_pos = bgzf_tell(bgzf_file);
         kstring_t str = {0, 0, nullptr};
-        int ret;
-        bool found_data = false;
 
-        // Iterate until we find a data line or EOF
-        while ((ret = bgzf_getline(bgzf_file, '\n', &str)) >= 0) {
-            std::string line(str.s);
+        // Wrap validation in try/catch: std::string(str.s) can throw bad_alloc
+        // after bgzf_getline allocated str.s, leaking both str.s and bgzf_file.
+        try {
+            int ret;
+            bool found_data = false;
 
-            // Skip empty lines and comments/directives (matches read_next logic)
-            if (line.empty() || line[0] == '#') {
-                continue;
+            // Iterate until we find a data line or EOF
+            while ((ret = bgzf_getline(bgzf_file, '\n', &str)) >= 0) {
+                std::string line(str.s);
+
+                // Skip empty lines and comments/directives (matches read_next logic)
+                if (line.empty() || line[0] == '#') {
+                    continue;
+                }
+
+                // Attempt to parse the first data line found
+                std::stringstream ss(line);
+                std::string seqid, source, type, start_str, end_str, score_str, strand_str, phase_str;
+
+                // Check for minimal GFF columns (8 required + attributes)
+                if (!(ss >> seqid >> source >> type >> start_str >> end_str >> score_str >> strand_str >> phase_str)) {
+                    throw std::runtime_error("Invalid GFF header/format in " + fpath.string());
+                }
+
+                // Validate coordinates are integers
+                if (start_str.empty() || end_str.empty() ||
+                    !std::ranges::all_of(start_str, ggu::is_digit) ||
+                    !std::ranges::all_of(end_str, ggu::is_digit)) {
+                    throw std::runtime_error("Invalid GFF coordinates (non-integer) in " + fpath.string());
+                }
+
+                // Validate start < end (GFF is 1-based inclusive, so convert to 0-based)
+                size_t start_num = std::stoul(start_str) - 1;  // Convert to 0-based
+                size_t end_num = std::stoul(end_str);          // End becomes exclusive
+
+                if (start_num >= end_num) {
+                    throw std::runtime_error("Invalid GFF coordinates (start >= end) in " + fpath.string());
+                }
+
+                found_data = true;
+                break; // Valid line found, stop scanning
             }
 
-            // Attempt to parse the first data line found
-            std::stringstream ss(line);
-            std::string seqid, source, type, start_str, end_str, score_str, strand_str, phase_str;
+            free(str.s);
+            str.s = nullptr;
 
-            // Check for minimal GFF columns (8 required + attributes)
-            if (!(ss >> seqid >> source >> type >> start_str >> end_str >> score_str >> strand_str >> phase_str)) {
-                if (str.s) free(str.s);
-                bgzf_close(bgzf_file);
-                throw std::runtime_error("Invalid GFF header/format in " + fpath.string());
+            // Ensure that we found at least one valid GFF line
+            if (!found_data) {
+                throw std::runtime_error("No valid GFF data found in " + fpath.string());
             }
 
-            // Validate coordinates are integers
-            if (start_str.empty() || end_str.empty() ||
-                !std::ranges::all_of(start_str, ggu::is_digit) ||
-                !std::ranges::all_of(end_str, ggu::is_digit)) {
-                if (str.s) free(str.s);
-                bgzf_close(bgzf_file);
-                throw std::runtime_error("Invalid GFF coordinates (non-integer) in " + fpath.string());
+            // Reset file pointer to the beginning for standard reading
+            if (bgzf_seek(bgzf_file, start_pos, SEEK_SET) < 0) {
+                throw std::runtime_error("Failed to seek back to start of file: " + fpath.string());
             }
-
-            // Validate start < end (GFF is 1-based inclusive, so convert to 0-based)
-            size_t start_num = std::stoul(start_str) - 1;  // Convert to 0-based
-            size_t end_num = std::stoul(end_str);          // End becomes exclusive
-
-            if (start_num >= end_num) {
-                if (str.s) free(str.s);
-                bgzf_close(bgzf_file);
-                throw std::runtime_error("Invalid GFF coordinates (start >= end) in " + fpath.string());
-            }
-
-            found_data = true;
-            break; // Valid line found, stop scanning
-        }
-
-        if (str.s) free(str.s);
-
-        // Ensure that we found at least one valid GFF line
-        if (!found_data) {
+        } catch (...) {
+            free(str.s);
             bgzf_close(bgzf_file);
-            throw std::runtime_error("No valid GFF data found in " + fpath.string());
-        }
-
-        // Reset file pointer to the beginning for standard reading
-        if (bgzf_seek(bgzf_file, start_pos, SEEK_SET) < 0) {
-            bgzf_close(bgzf_file);
-            throw std::runtime_error("Failed to seek back to start of file: " + fpath.string());
+            bgzf_file = nullptr;
+            throw;
         }
     }
 
