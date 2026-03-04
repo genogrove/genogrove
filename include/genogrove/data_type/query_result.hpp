@@ -12,11 +12,8 @@
 
 // Standard
 #include <vector>
-#include <memory>
-#include <unordered_map>
 
 // genogrove
-#include <genogrove/data_type/any_type.hpp>
 #include <genogrove/data_type/key.hpp>
 
 namespace genogrove::data_type {
