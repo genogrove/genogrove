@@ -100,8 +100,8 @@ class grove {
      * @param order Determines the maximum number of k-1 keys and k children per node
      */
     explicit grove(int order) : order(order) {
-        if (order < 3) {
-            throw std::out_of_range("grove order must be >= 3");
+        if (order < 2) {
+            throw std::out_of_range("grove order must be >= 2");
         }
     }
 
