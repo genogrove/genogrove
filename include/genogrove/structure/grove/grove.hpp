@@ -637,13 +637,13 @@ class grove {
                     new_root->add_child(current_node, 0);
                     new_root->set_is_leaf(false);
                     current_node->set_parent(new_root);
-                    split_node(new_root, 0);
+                    split_node(new_root, 0, index);
                     this->root_nodes[std::string(index)] = new_root;
                     current_node = this->get_rightmost_node(index);
                 } else {
                     // Internal node overflow
                     int child_index = current_node->get_parent()->get_children().size() - 1;
-                    split_node(current_node->get_parent(), child_index);
+                    split_node(current_node->get_parent(), child_index, index);
                     current_node = this->get_rightmost_node(index);
                 }
             }
@@ -705,7 +705,7 @@ class grove {
         if(root == nullptr) {
             root = this->insert_root(index);
         }
-        auto* key_ptr = insert_iter(root, key);
+        auto* key_ptr = insert_iter(root, key, index);
         if(key_ptr == nullptr) {
             throw std::runtime_error("Failed to insert key into tree");
         }
@@ -714,7 +714,7 @@ class grove {
             new_root->add_child(root, 0);
             new_root->set_is_leaf(false);
             root->set_parent(new_root);
-            split_node(new_root, 0);
+            split_node(new_root, 0, index);
             root = new_root;
             this->root_nodes[std::string(index)] = root; // update the root node in the map
         }
@@ -725,10 +725,12 @@ class grove {
      * @brief Recursively insert a key into the tree starting from a given node
      * @param node The node to start insertion from
      * @param key The key object to insert
+     * @param index The index name, forwarded to split_node() for rightmost cache updates
      * @return Pointer to the inserted key in the tree, or nullptr on failure
      * @note This is a helper function for insert(); handles recursive traversal and leaf insertion
      */
-    gdt::key<key_type, data_type>* insert_iter(node<key_type, data_type>* node, gdt::key<key_type, data_type>& key) {
+    gdt::key<key_type, data_type>* insert_iter(node<key_type, data_type>* node, gdt::key<key_type, data_type>& key,
+                                               std::string_view index) {
         if(!node) {
             throw std::runtime_error("Null node passed to insert_iter");
         }
@@ -742,9 +744,9 @@ class grove {
                   key.get_value() > node->get_keys()[child_index]->get_value()) {
                 child_index++;
             }
-            auto* key_ptr = insert_iter(node->get_child(child_index), key);
+            auto* key_ptr = insert_iter(node->get_child(child_index), key, index);
             if(node->get_child(child_index)->get_keys().size() == this->order) {
-                split_node(node, child_index);
+                split_node(node, child_index, index);
             }
             return key_ptr;
         }
@@ -754,10 +756,11 @@ class grove {
      * @brief Split an overflowing node by creating a new sibling and redistributing keys
      * @param parent The parent node whose child will be split
      * @param index The index of the child node to split within the parent
+     * @param index_name The grove index name (e.g., chromosome) for O(1) rightmost cache update
      * @note Splits keys at midpoint, promotes separator to parent, links leaf nodes if applicable
      * @note Automatically updates rightmost_nodes cache when splitting leaf nodes
      */
-    void split_node(node<key_type, data_type>* parent, int index) {
+    void split_node(node<key_type, data_type>* parent, int index, std::string_view index_name) {
         node<key_type, data_type>* child = parent->get_child(index);
         node<key_type, data_type>* new_child = new node<key_type, data_type>(this->order);
         new_child->set_parent(parent);
@@ -781,12 +784,10 @@ class grove {
             new_child->set_next(child->get_next());
             child->set_next(new_child);
 
-            // Update rightmost node cache if the split leaf was the rightmost
-            for(auto& [key, rightmost_node] : this->rightmost_nodes) {
-                if(rightmost_node == child) {
-                    this->rightmost_nodes[key] = new_child;
-                    break;
-                }
+            // Update rightmost node cache if the split leaf was the rightmost (O(1) lookup)
+            if (auto it = this->rightmost_nodes.find(index_name);
+                it != this->rightmost_nodes.end() && it->second == child) {
+                it->second = new_child;
             }
         } else {
             // === INTERNAL NODE SPLIT ===
@@ -872,13 +873,13 @@ class grove {
                     new_root->add_child(overflow_node, 0);
                     new_root->set_is_leaf(false);
                     overflow_node->set_parent(new_root);
-                    split_node(new_root, 0);
+                    split_node(new_root, 0, index);
                     this->root_nodes[std::string(index)] = new_root;
                     break;
                 } else {
                     auto* parent_node = overflow_node->get_parent();
                     int child_index = static_cast<int>(parent_node->get_children().size()) - 1;
-                    split_node(parent_node, child_index);
+                    split_node(parent_node, child_index, index);
                     overflow_node = parent_node;
                 }
             }
