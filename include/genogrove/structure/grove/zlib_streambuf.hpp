@@ -75,11 +75,18 @@ private:
         do {
             zs_.avail_out = static_cast<uInt>(out_buf_.size());
             zs_.next_out = reinterpret_cast<Bytef*>(out_buf_.data());
-            deflate(&zs_, flush);
+            int ret = deflate(&zs_, flush);
+            if (ret != Z_OK && ret != Z_STREAM_END) {
+                throw std::runtime_error("deflate failed: " + std::string(zs_.msg ? zs_.msg : "unknown error"));
+            }
             auto have = out_buf_.size() - zs_.avail_out;
             if (have > 0) {
                 sink_.write(out_buf_.data(), static_cast<std::streamsize>(have));
+                if (!sink_) {
+                    throw std::runtime_error("Failed to write compressed data to stream");
+                }
             }
+            if (ret == Z_STREAM_END) break;
         } while (zs_.avail_out == 0);
 
         setp(in_buf_.data(), in_buf_.data() + in_buf_.size());
