@@ -15,7 +15,6 @@
 #include <deque>
 #include <algorithm>
 #include <functional>
-#include <limits>
 #include <optional>
 #include <queue>
 
@@ -1076,12 +1075,12 @@ class grove {
         os.write(reinterpret_cast<const char*>(&this->fill_factor), sizeof(this->fill_factor));
 
         // write the root nodes
-        size_t number_root_nodes = this->root_nodes.size();
+        uint32_t number_root_nodes = static_cast<uint32_t>(this->root_nodes.size());
         os.write(reinterpret_cast<const char*>(&number_root_nodes), sizeof(number_root_nodes));
 
         // serialize the root nodes
         for(auto& [key, root] : this->root_nodes) {
-            size_t index_name_length = key.size();
+            uint32_t index_name_length = static_cast<uint32_t>(key.size());
             os.write(reinterpret_cast<const char*>(&index_name_length), sizeof(index_name_length));
             os.write(key.c_str(), index_name_length);
             root->serialize(os);
@@ -1089,7 +1088,7 @@ class grove {
         // note: we don't serialize rightmost nodes - and rather calculate them quickly when deserializing
 
         // Write external keys count
-        size_t external_count = external_key_storage.size();
+        uint32_t external_count = static_cast<uint32_t>(external_key_storage.size());
         os.write(reinterpret_cast<const char*>(&external_count), sizeof(external_count));
 
         // Write each external key
@@ -1122,22 +1121,19 @@ class grove {
         }
         grove g(order, fill_factor);
 
-        size_t number_root_nodes;
+        uint32_t number_root_nodes;
         is.read(reinterpret_cast<char*>(&number_root_nodes), sizeof(number_root_nodes));
         if (!is) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading root node count");
         }
 
         // Deserialize each root node
-        for (size_t i = 0; i < number_root_nodes; ++i) {
+        for (uint32_t i = 0; i < number_root_nodes; ++i) {
             // Read index name
-            size_t index_name_length;
+            uint32_t index_name_length;
             is.read(reinterpret_cast<char*>(&index_name_length), sizeof(index_name_length));
             if (!is) {
                 throw std::runtime_error("Failed to deserialize grove: stream error reading index name length");
-            }
-            if (index_name_length > static_cast<size_t>(std::numeric_limits<std::streamsize>::max())) {
-                throw std::runtime_error("Failed to deserialize grove: index name length exceeds streamsize limit");
             }
             std::string index_name(index_name_length, '\0');
             is.read(index_name.data(), static_cast<std::streamsize>(index_name_length));
@@ -1158,14 +1154,14 @@ class grove {
         }
 
         // Read external keys count
-        size_t external_count;
+        uint32_t external_count;
         is.read(reinterpret_cast<char*>(&external_count), sizeof(external_count));
         if (!is) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading external key count");
         }
 
         // Read each external key - directly into external_key_storage
-        for (size_t i = 0; i < external_count; ++i) {
+        for (uint32_t i = 0; i < external_count; ++i) {
             g.external_key_storage.push_back(gdt::key<key_type, data_type>::deserialize(is));
         }
 

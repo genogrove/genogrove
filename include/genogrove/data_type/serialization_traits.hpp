@@ -14,7 +14,6 @@
 #include <cassert>
 #include <cstdint>
 #include <istream>
-#include <limits>
 #include <ostream>
 #include <string>
 #include <concepts>
@@ -149,7 +148,7 @@ struct serialization_traits {
 template<>
 struct serialization_traits<std::string> {
     static void serialize(std::ostream& os, const std::string& value) {
-        uint64_t length = value.length();
+        uint32_t length = static_cast<uint32_t>(value.length());
         os.write(reinterpret_cast<const char*>(&length), sizeof(length));
         os.write(value.data(), length);
         if (!os) {
@@ -158,13 +157,10 @@ struct serialization_traits<std::string> {
     }
 
     static std::string deserialize(std::istream& is) {
-        uint64_t length;
+        uint32_t length;
         is.read(reinterpret_cast<char*>(&length), sizeof(length));
         if (!is) {
             throw std::runtime_error("Failed to deserialize string: stream error reading length");
-        }
-        if (length > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
-            throw std::runtime_error("Failed to deserialize string: length exceeds streamsize limit");
         }
         std::string value(length, '\0');
         is.read(&value[0], static_cast<std::streamsize>(length));

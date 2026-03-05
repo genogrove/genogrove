@@ -362,12 +362,10 @@ namespace genogrove::structure {
 
 template<typename key_type, typename data_type>
 void node<key_type, data_type>::serialize(std::ostream& os) {
-    // Write is_leaf flag
-    os.write(reinterpret_cast<const char*>(&is_leaf), sizeof(is_leaf));
-
-    // Write number of keys
-    size_t num_keys = keys.size();
-    os.write(reinterpret_cast<const char*>(&num_keys), sizeof(num_keys));
+    // Pack is_leaf into high bit of key count (saves 5B per node vs separate bool + size_t)
+    uint32_t packed = static_cast<uint32_t>(keys.size());
+    if (is_leaf) packed |= 0x80000000u;
+    os.write(reinterpret_cast<const char*>(&packed), sizeof(packed));
 
     // Write each key
     for (const auto* key_ptr : keys) {
@@ -382,7 +380,7 @@ void node<key_type, data_type>::serialize(std::ostream& os) {
 
     // If not leaf, serialize children
     if (!is_leaf) {
-        size_t num_children = children.size();
+        uint32_t num_children = static_cast<uint32_t>(children.size());
         os.write(reinterpret_cast<const char*>(&num_children), sizeof(num_children));
 
         for (auto* child : children) {
@@ -402,28 +400,23 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize(
     // Create new node
     auto* n = new node<key_type, data_type>(order);
 
-    // Read is_leaf flag
-    is.read(reinterpret_cast<char*>(&n->is_leaf), sizeof(n->is_leaf));
+    // Unpack is_leaf from high bit + key count from low 31 bits
+    uint32_t packed;
+    is.read(reinterpret_cast<char*>(&packed), sizeof(packed));
     if (!is) {
         delete n;
-        throw std::runtime_error("Failed to deserialize node: stream error reading is_leaf");
+        throw std::runtime_error("Failed to deserialize node: stream error reading packed header");
     }
-
-    // Read number of keys
-    size_t num_keys;
-    is.read(reinterpret_cast<char*>(&num_keys), sizeof(num_keys));
-    if (!is) {
-        delete n;
-        throw std::runtime_error("Failed to deserialize node: stream error reading num_keys");
-    }
-    if (num_keys >= static_cast<size_t>(order)) {
+    n->is_leaf = (packed & 0x80000000u) != 0;
+    uint32_t num_keys = packed & 0x7FFFFFFFu;
+    if (num_keys >= static_cast<uint32_t>(order)) {
         delete n;
         throw std::runtime_error("Failed to deserialize node: num_keys exceeds order");
     }
 
     // Read each key directly into grove's deque for stable pointer addresses
     n->keys.reserve(num_keys);
-    for (size_t i = 0; i < num_keys; ++i) {
+    for (uint32_t i = 0; i < num_keys; ++i) {
         key_type key_value = key_type::deserialize(is);
 
         if constexpr (std::is_void_v<data_type>) {
@@ -437,19 +430,19 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize(
 
     // If not leaf, deserialize children
     if (!n->is_leaf) {
-        size_t num_children;
+        uint32_t num_children;
         is.read(reinterpret_cast<char*>(&num_children), sizeof(num_children));
         if (!is) {
             delete n;
             throw std::runtime_error("Failed to deserialize node: stream error reading num_children");
         }
-        if (num_children > static_cast<size_t>(order)) {
+        if (num_children > static_cast<uint32_t>(order)) {
             delete n;
             throw std::runtime_error("Failed to deserialize node: num_children exceeds order");
         }
 
         n->children.reserve(num_children);
-        for (size_t i = 0; i < num_children; ++i) {
+        for (uint32_t i = 0; i < num_children; ++i) {
             auto* child = node<key_type, data_type>::deserialize(is, order, key_storage);
             child->parent = n;
             n->children.push_back(child);
