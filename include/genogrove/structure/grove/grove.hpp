@@ -29,6 +29,17 @@ namespace gdt = genogrove::data_type;
 
 namespace genogrove::structure {
     /**
+     * @brief Transparent hash for std::string keys, enabling lookup with std::string_view
+     *        without allocating a temporary std::string.
+     */
+    struct string_hash {
+        using is_transparent = void;
+        size_t operator()(std::string_view sv) const noexcept {
+            return std::hash<std::string_view>{}(sv);
+        }
+    };
+
+    /**
      * @brief Tag type for dispatching to sorted insertion algorithm
      * @note Use this when inserting data that is already sorted for optimal performance
      * @see grove::insert_data(std::string_view, key_type, data_type, sorted_t)
@@ -450,7 +461,7 @@ class grove {
      * @brief Get map of all root nodes indexed by their string keys
      * @return Unordered map from index names (e.g., chromosome names) to root node pointers
      */
-    std::unordered_map<std::string, node<key_type, data_type>*> get_root_nodes() const {
+    std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>> get_root_nodes() const {
         return this->root_nodes;
     }
 
@@ -459,7 +470,7 @@ class grove {
      * @param root_nodes New map of root nodes to use
      * @note This deletes all existing root nodes and clears rightmost node cache
      */
-    void set_root_nodes(std::unordered_map<std::string, node<key_type, data_type>*> root_nodes) {
+    void set_root_nodes(std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>> root_nodes) {
         for(auto& [_, root] : this->root_nodes) {
             delete root;
         }
@@ -474,7 +485,7 @@ class grove {
      * @note Used for optimized sorted insertion
      */
     node<key_type, data_type>* get_rightmost_node(std::string_view key) {
-        return ggu::value_lookup(this->rightmost_nodes, std::string(key)).value_or(nullptr);
+        return ggu::value_lookup(this->rightmost_nodes, key).value_or(nullptr);
     }
 
     /**
@@ -493,7 +504,7 @@ class grove {
      * @return Pointer to root node, or nullptr if index doesn't exist
      */
     node<key_type, data_type>* get_root(std::string_view key) {
-        return ggu::value_lookup(this->root_nodes, std::string(key)).value_or(nullptr);
+        return ggu::value_lookup(this->root_nodes, key).value_or(nullptr);
     }
 
     /**
@@ -1303,10 +1314,10 @@ class grove {
     int order;
 
     /// Map from index names (e.g., chromosome names) to their root nodes
-    std::unordered_map<std::string, node<key_type, data_type>*> root_nodes;
+    std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>> root_nodes;
 
     /// Cache of rightmost leaf nodes for each index (used for sorted insertion optimization)
-    std::unordered_map<std::string, node<key_type, data_type>*> rightmost_nodes;
+    std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>> rightmost_nodes;
 
     /// Deque storage for all indexed keys; provides stable pointers and better cache locality than individual allocations
     std::deque<gdt::key<key_type, data_type>> key_storage;

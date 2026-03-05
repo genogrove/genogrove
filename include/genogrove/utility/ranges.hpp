@@ -12,7 +12,6 @@
 #include <ranges>
 #include <algorithm>
 #include <optional>
-#include <type_traits>
 
 namespace genogrove::utility {
     namespace ranges = std::ranges;
@@ -52,7 +51,7 @@ namespace genogrove::utility {
     auto value_lookup(const AssocContainer& container, const Key& key)
     -> std::optional<typename AssocContainer::mapped_type> {
         auto do_find = [&]() {
-            if constexpr (std::is_same_v<Key, typename AssocContainer::key_type>) {
+            if constexpr (requires { container.find(key); }) {
                 return container.find(key);
             } else {
                 return container.find(typename AssocContainer::key_type(key));
