@@ -969,6 +969,34 @@ TYPED_TEST_P(grove_typed_test, serialization_multiple_indices) {
         << "Second index should have correct data after deserialization";
 }
 
+TYPED_TEST_P(grove_typed_test, serialization_fill_factor) {
+    // Create grove with non-default fill_factor
+    const int order = 10;
+    gst::grove<TypeParam, int> g(order, 0.75f);
+
+    auto data = this->generate_test_data(25);
+    for (const auto& [key, value] : data) {
+        g.insert_data("chr1", key, value, gst::sorted);
+    }
+
+    // Serialize
+    std::stringstream ss;
+    g.serialize(ss);
+
+    // Deserialize and verify fill_factor survived the round-trip
+    auto restored = gst::grove<TypeParam, int>::deserialize(ss);
+    EXPECT_FLOAT_EQ(restored.get_fill_factor(), 0.75f)
+        << "fill_factor should be preserved through serialization";
+    EXPECT_EQ(restored.get_order(), order)
+        << "order should be preserved through serialization";
+
+    // Verify data is queryable
+    auto expectation = this->create_overlapping_query(data);
+    auto results = restored.intersect(expectation.query, "chr1");
+    EXPECT_EQ(results.get_keys().size(), expectation.expected_indices.size())
+        << "Deserialized grove should return same query results";
+}
+
 TYPED_TEST_P(grove_typed_test, internal_node_split_invariants) {
     // Order 3 forces internal node splits after ~6 keys (max 2 keys/node)
     gst::grove<TypeParam, int> small_grove(3);
@@ -1149,6 +1177,7 @@ REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     serialization,
     serialization_empty_grove,
     serialization_multiple_indices,
+    serialization_fill_factor,
     internal_node_split_invariants,
     internal_node_split_regular_insert,
     sorted_insert_packs_leaves,
