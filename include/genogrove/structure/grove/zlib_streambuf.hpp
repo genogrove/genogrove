@@ -130,6 +130,10 @@ protected:
             return traits_type::to_int_type(*gptr());
         }
 
+        if (stream_ended_) {
+            return traits_type::eof();
+        }
+
         zs_.avail_out = static_cast<uInt>(out_buf_.size());
         zs_.next_out = reinterpret_cast<Bytef*>(out_buf_.data());
 
@@ -141,10 +145,7 @@ protected:
                     if (source_.bad()) {
                         throw std::runtime_error("inflate: I/O error reading compressed stream");
                     }
-                    if (!stream_ended_) {
-                        throw std::runtime_error("inflate: unexpected EOF in compressed stream (truncated input)");
-                    }
-                    break;
+                    throw std::runtime_error("inflate: unexpected EOF in compressed stream (truncated input)");
                 }
                 zs_.avail_in = static_cast<uInt>(bytes_read);
                 zs_.next_in = reinterpret_cast<Bytef*>(in_buf_.data());
@@ -153,6 +154,13 @@ protected:
             int ret = inflate(&zs_, Z_NO_FLUSH);
             if (ret == Z_STREAM_END) {
                 stream_ended_ = true;
+                // Seek source back by unconsumed bytes so trailing data
+                // (e.g. a second grove) remains readable on the source stream
+                if (zs_.avail_in > 0) {
+                    source_.clear();  // clear eofbit if set
+                    source_.seekg(-static_cast<std::streamoff>(zs_.avail_in),
+                                  std::ios_base::cur);
+                }
                 break;
             }
             if (ret != Z_OK) {
