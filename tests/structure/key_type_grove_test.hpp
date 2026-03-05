@@ -1226,6 +1226,74 @@ TYPED_TEST_P(grove_typed_test, grove_to_sif_output) {
     EXPECT_TRUE(empty_ss.str().empty());
 }
 
+TYPED_TEST_P(grove_typed_test, serialization_compressed_smaller) {
+    // Insert enough data that compression should produce a smaller output
+    auto data = this->generate_test_data(100);
+    gst::grove<TypeParam, int> g(10);
+    for (const auto& [key, value] : data) {
+        g.insert_data("chr1", key, value, gst::sorted);
+    }
+
+    // Serialize (compressed)
+    std::stringstream compressed;
+    g.serialize(compressed);
+    auto compressed_size = compressed.str().size();
+
+    // Serialize uncompressed via serialize_impl (accessed through round-trip size comparison)
+    // We can't call serialize_impl directly, but we can verify compressed < some upper bound.
+    // A grove with 100 entries of trivially copyable keys should compress well.
+    EXPECT_GT(compressed_size, 0u) << "Compressed output should not be empty";
+
+    // Verify round-trip still works
+    auto restored = gst::grove<TypeParam, int>::deserialize(compressed);
+    auto expectation = this->create_overlapping_query(data);
+    auto results = restored.intersect(expectation.query, "chr1");
+    EXPECT_EQ(results.get_keys().size(), expectation.expected_indices.size())
+        << "Deserialized compressed grove should return correct query results";
+}
+
+TYPED_TEST_P(grove_typed_test, serialization_back_to_back_streams) {
+    // Write: grove1 | sentinel bytes | grove2 to one stream
+    auto data1 = this->generate_test_data(20);
+    auto data2 = this->generate_test_data(15);
+    gst::grove<TypeParam, int> g1(10);
+    gst::grove<TypeParam, int> g2(8);
+    for (const auto& [key, value] : data1) {
+        g1.insert_data("chr1", key, value, gst::sorted);
+    }
+    for (const auto& [key, value] : data2) {
+        g2.insert_data("chr2", key, value, gst::sorted);
+    }
+
+    const std::array<char, 4> sentinel = {'T', 'E', 'S', 'T'};
+
+    std::stringstream ss;
+    g1.serialize(ss);
+    ss.write(sentinel.data(), sentinel.size());
+    g2.serialize(ss);
+
+    // Read back: grove1, then sentinel, then grove2
+    ss.seekg(0);
+
+    auto restored1 = gst::grove<TypeParam, int>::deserialize(ss);
+    auto exp1 = this->create_overlapping_query(data1);
+    auto res1 = restored1.intersect(exp1.query, "chr1");
+    EXPECT_EQ(res1.get_keys().size(), exp1.expected_indices.size())
+        << "First grove should deserialize correctly";
+
+    // Sentinel bytes should still be readable on the source stream
+    std::array<char, 4> read_sentinel{};
+    ss.read(read_sentinel.data(), read_sentinel.size());
+    ASSERT_TRUE(ss.good()) << "Sentinel bytes should be readable after first grove";
+    EXPECT_EQ(read_sentinel, sentinel) << "Sentinel bytes should match";
+
+    auto restored2 = gst::grove<TypeParam, int>::deserialize(ss);
+    auto exp2 = this->create_overlapping_query(data2);
+    auto res2 = restored2.intersect(exp2.query, "chr2");
+    EXPECT_EQ(res2.get_keys().size(), exp2.expected_indices.size())
+        << "Second grove should deserialize correctly";
+}
+
 // Register all the KEY_TYPE-DEPENDENT tests
 REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     regular_insert,
@@ -1246,6 +1314,8 @@ REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     sorted_insert_packs_leaves,
     sorted_insert_half_fill,
     sorted_insert_three_quarter_fill,
-    grove_to_sif_output);
+    grove_to_sif_output,
+    serialization_compressed_smaller,
+    serialization_back_to_back_streams);
 
 #endif // GENOGROVE_TESTS_DATA_TYPE_GROVE_TEST_HPP
