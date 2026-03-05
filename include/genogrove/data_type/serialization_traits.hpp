@@ -14,6 +14,7 @@
 #include <cassert>
 #include <cstdint>
 #include <istream>
+#include <limits>
 #include <ostream>
 #include <string>
 #include <concepts>
@@ -161,6 +162,9 @@ struct serialization_traits<std::string> {
         is.read(reinterpret_cast<char*>(&length), sizeof(length));
         if (!is) {
             throw std::runtime_error("Failed to deserialize string: stream error reading length");
+        }
+        if (length > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
+            throw std::runtime_error("Failed to deserialize string: length exceeds streamsize limit");
         }
         std::string value(length, '\0');
         is.read(&value[0], static_cast<std::streamsize>(length));
