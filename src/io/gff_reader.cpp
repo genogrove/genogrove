@@ -3,13 +3,14 @@
 // standard
 #include <algorithm>
 #include <ranges>
-#include <sstream>
+#include <charconv>
 
 // htslib
 #include <htslib/kstring.h>
 
 // genogrove
 #include <genogrove/utility/char_utils.hpp>
+#include <genogrove/utility/tokenizer.hpp>
 
 namespace ggu = genogrove::utility;
 
@@ -93,6 +94,7 @@ namespace genogrove::io {
             // Iterate until we find a data line or EOF
             while ((ret = bgzf_getline(bgzf_file, '\n', &str)) >= 0) {
                 std::string line(str.s);
+                if (!line.empty() && line.back() == '\r') line.pop_back();
 
                 // Skip empty lines and comments/directives (matches read_next logic)
                 if (line.empty() || line[0] == '#') {
@@ -100,24 +102,40 @@ namespace genogrove::io {
                 }
 
                 // Attempt to parse the first data line found
-                std::stringstream ss(line);
-                std::string seqid, source, type, start_str, end_str, score_str, strand_str, phase_str;
+                std::string_view line_sv(line);
+                size_t fpos = 0;
+                auto seqid_f = ggu::next_field(line_sv, fpos);
+                auto source_f = ggu::next_field(line_sv, fpos);
+                auto type_f = ggu::next_field(line_sv, fpos);
+                auto start_f = ggu::next_field(line_sv, fpos);
+                auto end_f = ggu::next_field(line_sv, fpos);
+                auto score_f = ggu::next_field(line_sv, fpos);
+                auto strand_f = ggu::next_field(line_sv, fpos);
+                auto phase_f = ggu::next_field(line_sv, fpos);
 
                 // Check for minimal GFF columns (8 required + attributes)
-                if (!(ss >> seqid >> source >> type >> start_str >> end_str >> score_str >> strand_str >> phase_str)) {
+                if (!seqid_f || !source_f || !type_f || !start_f || !end_f ||
+                    !score_f || !strand_f || !phase_f) {
                     throw std::runtime_error("Invalid GFF header/format in " + fpath.string());
                 }
 
                 // Validate coordinates are integers
-                if (start_str.empty() || end_str.empty() ||
-                    !std::ranges::all_of(start_str, ggu::is_digit) ||
-                    !std::ranges::all_of(end_str, ggu::is_digit)) {
+                if (start_f->empty() || end_f->empty() ||
+                    !std::ranges::all_of(*start_f, ggu::is_digit) ||
+                    !std::ranges::all_of(*end_f, ggu::is_digit)) {
                     throw std::runtime_error("Invalid GFF coordinates (non-integer) in " + fpath.string());
                 }
 
                 // Validate start < end (GFF is 1-based inclusive, so convert to 0-based)
-                size_t start_num = std::stoul(start_str) - 1;  // Convert to 0-based
-                size_t end_num = std::stoul(end_str);          // End becomes exclusive
+                size_t start_num = 0;
+                size_t end_num = 0;
+                auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
+                auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
+                if (ec1 != std::errc{} || ec2 != std::errc{}) {
+                    throw std::runtime_error("Invalid GFF coordinates (out of range) in " + fpath.string());
+                }
+                start_num -= 1;  // Convert to 0-based
+                // End becomes exclusive (no change needed)
 
                 if (start_num >= end_num) {
                     throw std::runtime_error("Invalid GFF coordinates (start >= end) in " + fpath.string());
@@ -157,54 +175,63 @@ namespace genogrove::io {
         std::map<std::string, std::string, std::less<>>& attributes) {
         attributes.clear();
 
+        std::string_view sv(attr_string);
+        size_t pos = 0;
+
         // Detect format: GFF3 uses '=' and ';', GTF uses ' "' and '";'
         if (attr_string.find(" \"") != std::string::npos) {
             // GTF format: key "value"; key "value";
-            std::istringstream stream(attr_string);
-            std::string token;
-
-            while (std::getline(stream, token, ';')) {
+            while (auto token_sv = ggu::next_field(sv, pos, ';')) {
                 // Trim whitespace
-                token.erase(0, token.find_first_not_of(" \t"));
-                token.erase(token.find_last_not_of(" \t") + 1);
-
-                if (token.empty()) continue;
+                auto trimmed = *token_sv;
+                if (auto p = trimmed.find_first_not_of(" \t"); p != std::string_view::npos) {
+                    trimmed = trimmed.substr(p);
+                } else {
+                    continue;
+                }
+                if (auto p = trimmed.find_last_not_of(" \t"); p != std::string_view::npos) {
+                    trimmed = trimmed.substr(0, p + 1);
+                }
+                if (trimmed.empty()) continue;
 
                 // Find first space to split key and value
-                size_t space_pos = token.find(' ');
-                if (space_pos == std::string::npos) continue;
+                size_t space_pos = trimmed.find(' ');
+                if (space_pos == std::string_view::npos) continue;
 
-                std::string key = token.substr(0, space_pos);
-                std::string value = token.substr(space_pos + 1);
+                std::string key(trimmed.substr(0, space_pos));
+                std::string value(trimmed.substr(space_pos + 1));
 
                 // Remove quotes from value
                 if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
                     value = value.substr(1, value.size() - 2);
                 }
 
-                attributes[key] = value;
+                attributes[std::move(key)] = std::move(value);
             }
             return gff_format::GTF;
         } else {
             // GFF3 format: key=value;key=value
-            std::istringstream stream(attr_string);
-            std::string token;
-
-            while (std::getline(stream, token, ';')) {
+            while (auto token_sv = ggu::next_field(sv, pos, ';')) {
                 // Trim whitespace
-                token.erase(0, token.find_first_not_of(" \t"));
-                token.erase(token.find_last_not_of(" \t") + 1);
-
-                if (token.empty()) continue;
+                auto trimmed = *token_sv;
+                if (auto p = trimmed.find_first_not_of(" \t"); p != std::string_view::npos) {
+                    trimmed = trimmed.substr(p);
+                } else {
+                    continue;
+                }
+                if (auto p = trimmed.find_last_not_of(" \t"); p != std::string_view::npos) {
+                    trimmed = trimmed.substr(0, p + 1);
+                }
+                if (trimmed.empty()) continue;
 
                 // Find '=' to split key and value
-                size_t eq_pos = token.find('=');
-                if (eq_pos == std::string::npos) continue;
+                size_t eq_pos = trimmed.find('=');
+                if (eq_pos == std::string_view::npos) continue;
 
-                std::string key = token.substr(0, eq_pos);
-                std::string value = token.substr(eq_pos + 1);
+                std::string key(trimmed.substr(0, eq_pos));
+                std::string value(trimmed.substr(eq_pos + 1));
 
-                attributes[key] = value;
+                attributes[std::move(key)] = std::move(value);
             }
             return gff_format::GFF3;
         }
@@ -249,6 +276,7 @@ namespace genogrove::io {
             }
             std::string line(str.s);
             free(str.s);
+            if (!line.empty() && line.back() == '\r') line.pop_back();
             line_num++;
 
             // skip empty lines, comments, and directives (lines starting with #)
@@ -264,35 +292,60 @@ namespace genogrove::io {
                 }
                 line = std::string(str2.s);
                 free(str2.s);
+                if (!line.empty() && line.back() == '\r') line.pop_back();
                 line_num++;
             }
 
             // parse the line
-            std::stringstream ss(line);
-            std::string seqid, source, type, start_str, end_str, score_str, strand_str, phase_str, attributes_str;
+            std::string_view line_sv(line);
+            size_t fpos = 0;
+
+            auto seqid_f = ggu::next_field(line_sv, fpos);
+            auto source_f = ggu::next_field(line_sv, fpos);
+            auto type_f = ggu::next_field(line_sv, fpos);
+            auto start_f = ggu::next_field(line_sv, fpos);
+            auto end_f = ggu::next_field(line_sv, fpos);
+            auto score_f = ggu::next_field(line_sv, fpos);
+            auto strand_f = ggu::next_field(line_sv, fpos);
+            auto phase_f = ggu::next_field(line_sv, fpos);
 
             try {
-                if (!(ss >> seqid >> source >> type >> start_str >> end_str >> score_str >> strand_str >> phase_str)) {
+                if (!seqid_f || !source_f || !type_f || !start_f || !end_f ||
+                    !score_f || !strand_f || !phase_f) {
                     error_message = "Invalid GFF line format at line " + std::to_string(line_num);
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
                 // Read the rest of the line as attributes
-                std::getline(ss >> std::ws, attributes_str);
+                std::string attributes_str;
+                if (fpos < line_sv.size()) {
+                    auto attr_sv = line_sv.substr(fpos);
+                    if (auto p = attr_sv.find_first_not_of(" \t"); p != std::string_view::npos) {
+                        attributes_str = std::string(attr_sv.substr(p));
+                    }
+                }
 
                 // Validate start and end are integers
-                if(start_str.empty() || end_str.empty() ||
-                   !std::ranges::all_of(start_str, ggu::is_digit) ||
-                   !std::ranges::all_of(end_str, ggu::is_digit)) {
+                if(start_f->empty() || end_f->empty() ||
+                   !std::ranges::all_of(*start_f, ggu::is_digit) ||
+                   !std::ranges::all_of(*end_f, ggu::is_digit)) {
                     error_message = "Invalid coordinate format at line " + std::to_string(line_num);
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
                 // Parse coordinates (GFF is 1-based inclusive, convert to 0-based half-open)
-                size_t start = std::stoul(start_str) - 1;  // Convert to 0-based
-                size_t end = std::stoul(end_str);          // End is already exclusive after -1 conversion
+                size_t start = 0;
+                size_t end = 0;
+                auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start);
+                auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end);
+                if (ec1 != std::errc{} || ec2 != std::errc{}) {
+                    error_message = "Coordinate out of range at line " + std::to_string(line_num);
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
+                }
+                start -= 1;  // Convert to 0-based
 
                 if (start >= end) {
                     error_message = "Start coordinate is greater than or equal to end coordinate at line " + std::to_string(line_num);
@@ -300,16 +353,16 @@ namespace genogrove::io {
                     throw std::runtime_error(error_message);
                 }
 
-                entry.seqid = seqid;
-                entry.source = source;
-                entry.type = type;
+                entry.seqid = std::string(*seqid_f);
+                entry.source = std::string(*source_f);
+                entry.type = std::string(*type_f);
                 entry.start = start;
                 entry.end = end;
 
                 // Parse score
-                if (score_str != ".") {
+                if (*score_f != ".") {
                     try {
-                        entry.score = std::stod(score_str);
+                        entry.score = std::stod(std::string(*score_f));
                     } catch (...) {
                         entry.score = std::nullopt;
                     }
@@ -318,23 +371,20 @@ namespace genogrove::io {
                 }
 
                 // Parse strand
-                if (strand_str.size() == 1 && (strand_str[0] == '+' || strand_str[0] == '-' ||
-                                                strand_str[0] == '.' || strand_str[0] == '?')) {
-                    entry.strand = strand_str[0];
+                if (strand_f->size() == 1 && ((*strand_f)[0] == '+' || (*strand_f)[0] == '-' ||
+                                                (*strand_f)[0] == '.' || (*strand_f)[0] == '?')) {
+                    entry.strand = (*strand_f)[0];
                 } else {
                     entry.strand = std::nullopt;
                 }
 
                 // Parse phase
-                if (phase_str != ".") {
-                    try {
-                        int phase = std::stoi(phase_str);
-                        if (phase >= 0 && phase <= 2) {
-                            entry.phase = phase;
-                        } else {
-                            entry.phase = std::nullopt;
-                        }
-                    } catch (...) {
+                if (*phase_f != ".") {
+                    int phase = 0;
+                    auto [pp, ecp] = std::from_chars(phase_f->data(), phase_f->data() + phase_f->size(), phase);
+                    if (ecp == std::errc{} && phase >= 0 && phase <= 2) {
+                        entry.phase = phase;
+                    } else {
                         entry.phase = std::nullopt;
                     }
                 } else {

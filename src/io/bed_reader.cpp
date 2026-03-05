@@ -3,16 +3,16 @@
 // standard
 #include <algorithm>
 #include <ranges>
-#include <sstream>
+#include <charconv>
+#include <cstdint>
 #include <vector>
 
 // htslib
 #include <htslib/kstring.h>
 
-#include <cstdint>
-
 // genogrove
 #include <genogrove/utility/char_utils.hpp>
+#include <genogrove/utility/tokenizer.hpp>
 
 namespace ggu = genogrove::utility;
 
@@ -21,19 +21,26 @@ namespace genogrove::io {
     // Helper function to parse comma-separated integers into a vector
     static std::vector<size_t> parse_csv(const std::string& str) {
         std::vector<size_t> result;
-        std::stringstream ss(str);
-        std::string token;
+        std::string_view sv(str);
+        size_t pos = 0;
 
-        while (std::getline(ss, token, ',')) {
+        while (auto field = ggu::next_field(sv, pos, ',')) {
             // trim leading/trailing whitespaces
-            token.erase(0, token.find_first_not_of(" \t"));
-            token.erase(token.find_last_not_of(" \t") + 1);
+            auto trimmed = *field;
+            auto start = trimmed.find_first_not_of(" \t");
+            if (start == std::string_view::npos) { return {}; }
+            trimmed = trimmed.substr(start);
+            auto end = trimmed.find_last_not_of(" \t");
+            trimmed = trimmed.substr(0, end + 1);
 
-            if(token.empty()) { return {}; } // ERROR: return empty vector
-            if (!std::ranges::all_of(token, ggu::is_digit)) {
+            if(trimmed.empty()) { return {}; } // ERROR: return empty vector
+            if (!std::ranges::all_of(trimmed, ggu::is_digit)) {
                 return {};
             }
-            result.push_back(std::stoul(token));
+            size_t val = 0;
+            auto [ptr, ec] = std::from_chars(trimmed.data(), trimmed.data() + trimmed.size(), val);
+            if (ec != std::errc{}) { return {}; }
+            result.push_back(val);
         }
         return result;
     }
@@ -63,6 +70,7 @@ namespace genogrove::io {
             // Iterate until we find a data line or EOF
             while ((ret = bgzf_getline(bgzf_file, '\n', &str)) >= 0) {
                 std::string line(str.s);
+                if (!line.empty() && line.back() == '\r') line.pop_back();
 
                 // Skip empty or commented lines (matches read_next logic)
                 if (line.empty() || line[0] == '#') {
@@ -70,23 +78,28 @@ namespace genogrove::io {
                 }
 
                 // Attempt to parse the first data line found
-                std::stringstream ss(line);
-                std::string chrom, start, end;
+                std::string_view line_sv(line);
+                size_t fpos = 0;
+                auto chrom_f = ggu::next_field(line_sv, fpos);
+                auto start_f = ggu::next_field(line_sv, fpos);
+                auto end_f = ggu::next_field(line_sv, fpos);
 
                 // Check for minimal BED3 columns
-                if (!(ss >> chrom >> start >> end)) {
+                if (!chrom_f || !start_f || !end_f) {
                     throw std::runtime_error("Invalid BED header/format in " + fpath.string());
                 }
 
                 // Validate coordinates are integers
-                if (start.empty() || end.empty() ||
-                    !std::ranges::all_of(start, ggu::is_digit) ||
-                    !std::ranges::all_of(end, ggu::is_digit)) {
+                if (start_f->empty() || end_f->empty() ||
+                    !std::ranges::all_of(*start_f, ggu::is_digit) ||
+                    !std::ranges::all_of(*end_f, ggu::is_digit)) {
                     throw std::runtime_error("Invalid BED coordinates (non-integer) in " + fpath.string());
                 }
                 // validate start < end
-                size_t start_num = std::stoul(start);
-                size_t end_num = std::stoul(end);
+                size_t start_num = 0;
+                size_t end_num = 0;
+                std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
+                std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
                 if(start_num >= end_num) {
                     throw std::runtime_error("Invalid BED coordinates (start > end) in " + fpath.string());
                 }
@@ -312,6 +325,7 @@ namespace genogrove::io {
             }
             std::string line(str.s);
             free(str.s);
+            if (!line.empty() && line.back() == '\r') line.pop_back();
             line_num++;
 
             // skip empty or commented lines
@@ -327,36 +341,41 @@ namespace genogrove::io {
                 }
                 line = std::string(str2.s);
                 free(str2.s);
+                if (!line.empty() && line.back() == '\r') line.pop_back();
                 line_num++;
             }
 
             // parse the line
-            std::stringstream ss(line);
-            std::string chrom, start, end;
+            std::string_view line_sv(line);
+            size_t fpos = 0;
+
+            auto chrom_f = ggu::next_field(line_sv, fpos);
+            auto start_f = ggu::next_field(line_sv, fpos);
+            auto end_f = ggu::next_field(line_sv, fpos);
+
             try {
-                if (!(ss >> chrom >> start >> end)) {
+                if (!chrom_f || !start_f || !end_f) {
                     error_message = "Invalid line format at line " + std::to_string(line_num);
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
                 // validate integers
-                if(start.empty() ||
-                    end.empty() ||
-                    !std::ranges::all_of(start, ggu::is_digit) ||
-                    !std::ranges::all_of(end, ggu::is_digit)) {
+                if(start_f->empty() ||
+                    end_f->empty() ||
+                    !std::ranges::all_of(*start_f, ggu::is_digit) ||
+                    !std::ranges::all_of(*end_f, ggu::is_digit)) {
                     error_message = "Invalid coordinate format at line " + std::to_string(line_num);
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
                 // validate and create interval object
-                size_t start_num;
-                size_t end_num;
-                try {
-                    start_num = std::stoul(start);
-                    end_num = std::stoul(end);
-                } catch(std::exception&) {
+                size_t start_num = 0;
+                size_t end_num = 0;
+                auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
+                auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
+                if (ec1 != std::errc{} || ec2 != std::errc{}) {
                     error_message = "Coordinate out of range at line " + std::to_string(line_num);
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
@@ -367,41 +386,54 @@ namespace genogrove::io {
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
-                entry.chrom = chrom;
+                entry.chrom = std::string(*chrom_f);
                 entry.start = start_num;
-        entry.end = end_num;
+                entry.end = end_num;
 
                 // Parse optional BED fields (BED4+)
-                std::string name_str, score_str, strand_str;
-                std::string thick_start_str, thick_end_str, item_rgb_str;
-                std::string block_count_str, block_sizes_str, block_starts_str;
-
                 bool parse_ok = true;
 
                 // BED4: name
-                if (ss >> name_str) {
-                    entry.name = name_str;
+                if (auto name_f = ggu::next_field(line_sv, fpos)) {
+                    entry.name = std::string(*name_f);
 
                     // BED5: score
-                    if (ss >> score_str) {
-                        if (!parse_score(entry, score_str)) { parse_ok = false; }
+                    if (auto score_f = ggu::next_field(line_sv, fpos)) {
+                        if (!parse_score(entry, std::string(*score_f))) { parse_ok = false; }
 
                         // BED6: strand
-                        if (parse_ok && (ss >> strand_str)) {
-                            if (!parse_strand(entry, strand_str)) { parse_ok = false; }
+                        if (parse_ok) {
+                            if (auto strand_f = ggu::next_field(line_sv, fpos)) {
+                                if (!parse_strand(entry, std::string(*strand_f))) { parse_ok = false; }
 
-                            // BED12: additional fields
-                            if (parse_ok && (ss >> thick_start_str >> thick_end_str >> item_rgb_str)) {
-                                if (!parse_thickness(entry, thick_start_str, thick_end_str,
-                                                     start_num, end_num)) {
-                                    parse_ok = false;
-                                }
-                                if (parse_ok && !parse_rgb(entry, item_rgb_str)) { parse_ok = false; }
+                                // BED12: additional fields
+                                if (parse_ok) {
+                                    auto thick_start_f = ggu::next_field(line_sv, fpos);
+                                    auto thick_end_f = ggu::next_field(line_sv, fpos);
+                                    auto item_rgb_f = ggu::next_field(line_sv, fpos);
+                                    if (thick_start_f && thick_end_f && item_rgb_f) {
+                                        if (!parse_thickness(entry, std::string(*thick_start_f),
+                                                             std::string(*thick_end_f),
+                                                             start_num, end_num)) {
+                                            parse_ok = false;
+                                        }
+                                        if (parse_ok && !parse_rgb(entry, std::string(*item_rgb_f))) {
+                                            parse_ok = false;
+                                        }
 
-                                if (parse_ok && (ss >> block_count_str >> block_sizes_str >> block_starts_str)) {
-                                    if (!parse_blocks(entry, block_count_str, block_sizes_str,
-                                                     block_starts_str, start_num, end_num)) {
-                                        parse_ok = false;
+                                        if (parse_ok) {
+                                            auto block_count_f = ggu::next_field(line_sv, fpos);
+                                            auto block_sizes_f = ggu::next_field(line_sv, fpos);
+                                            auto block_starts_f = ggu::next_field(line_sv, fpos);
+                                            if (block_count_f && block_sizes_f && block_starts_f) {
+                                                if (!parse_blocks(entry, std::string(*block_count_f),
+                                                                 std::string(*block_sizes_f),
+                                                                 std::string(*block_starts_f),
+                                                                 start_num, end_num)) {
+                                                    parse_ok = false;
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
