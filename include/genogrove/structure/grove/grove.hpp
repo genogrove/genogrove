@@ -23,6 +23,7 @@
 #include <genogrove/data_type/query_result.hpp>
 #include <genogrove/structure/grove/node.hpp>
 #include <genogrove/structure/grove/graph_overlay.hpp>
+#include <genogrove/structure/grove/zlib_streambuf.hpp>
 
 namespace ggu = genogrove::utility;
 namespace gdt = genogrove::data_type;
@@ -1063,106 +1064,101 @@ class grove {
     }
 
     /**
-     * @brief Serialize the grove to a binary output stream
-     * @param os Output stream to write binary data to
-     * @note Writes order, number of root nodes, then each root (index name + tree structure)
-     * @note Also writes external (graph-only) keys
-     * @note Rightmost nodes are NOT serialized; they are recalculated during deserialization
+     * @brief Serialize the grove to a zlib-compressed binary output stream
+     * @param os Output stream to write compressed data to
+     * @note The output is always zlib-compressed
      */
     void serialize(std::ostream& os) {
+        detail::deflate_streambuf zbuf(os);
+        std::ostream zos(&zbuf);
+
         // write the order and fill factor
-        os.write(reinterpret_cast<const char*>(&this->order), sizeof(this->order));
-        os.write(reinterpret_cast<const char*>(&this->fill_factor), sizeof(this->fill_factor));
+        zos.write(reinterpret_cast<const char*>(&this->order), sizeof(this->order));
+        zos.write(reinterpret_cast<const char*>(&this->fill_factor), sizeof(this->fill_factor));
 
         // write the root nodes
         uint32_t number_root_nodes = static_cast<uint32_t>(this->root_nodes.size());
-        os.write(reinterpret_cast<const char*>(&number_root_nodes), sizeof(number_root_nodes));
+        zos.write(reinterpret_cast<const char*>(&number_root_nodes), sizeof(number_root_nodes));
 
-        // serialize the root nodes
         for(auto& [key, root] : this->root_nodes) {
             uint32_t index_name_length = static_cast<uint32_t>(key.size());
-            os.write(reinterpret_cast<const char*>(&index_name_length), sizeof(index_name_length));
-            os.write(key.c_str(), index_name_length);
-            root->serialize(os);
+            zos.write(reinterpret_cast<const char*>(&index_name_length), sizeof(index_name_length));
+            zos.write(key.c_str(), index_name_length);
+            root->serialize(zos);
         }
-        // note: we don't serialize rightmost nodes - and rather calculate them quickly when deserializing
 
-        // Write external keys count
+        // Write external keys
         uint32_t external_count = static_cast<uint32_t>(external_key_storage.size());
-        os.write(reinterpret_cast<const char*>(&external_count), sizeof(external_count));
-
-        // Write each external key
+        zos.write(reinterpret_cast<const char*>(&external_count), sizeof(external_count));
         for (const auto& key : external_key_storage) {
-            key.serialize(os);
+            key.serialize(zos);
         }
 
-        if (!os) {
+        if (!zos) {
             throw std::runtime_error("Failed to serialize grove: stream error");
         }
+
+        zbuf.finish();
     }
 
     /**
-     * @brief Deserialize a grove from a binary input stream
-     * @param is Input stream to read binary data from
+     * @brief Deserialize a grove from a zlib-compressed binary input stream
+     * @param is Input stream to read compressed data from
      * @return Deserialized grove object
-     * @note Reads order and root nodes; recalculates rightmost nodes and leaf links after loading
-     * @note Also reads external (graph-only) keys
+     * @note The input must be zlib-compressed
      */
     [[nodiscard]] static grove deserialize(std::istream& is) {
+        detail::inflate_streambuf zbuf(is);
+        std::istream zis(&zbuf);
+
         int order;
-        is.read(reinterpret_cast<char*>(&order), sizeof(order));
-        if (!is) {
+        zis.read(reinterpret_cast<char*>(&order), sizeof(order));
+        if (!zis) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading order");
         }
         float fill_factor;
-        is.read(reinterpret_cast<char*>(&fill_factor), sizeof(fill_factor));
-        if (!is) {
+        zis.read(reinterpret_cast<char*>(&fill_factor), sizeof(fill_factor));
+        if (!zis) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading fill_factor");
         }
         grove g(order, fill_factor);
 
         uint32_t number_root_nodes;
-        is.read(reinterpret_cast<char*>(&number_root_nodes), sizeof(number_root_nodes));
-        if (!is) {
+        zis.read(reinterpret_cast<char*>(&number_root_nodes), sizeof(number_root_nodes));
+        if (!zis) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading root node count");
         }
 
         // Deserialize each root node
         for (uint32_t i = 0; i < number_root_nodes; ++i) {
-            // Read index name
             uint32_t index_name_length;
-            is.read(reinterpret_cast<char*>(&index_name_length), sizeof(index_name_length));
-            if (!is) {
+            zis.read(reinterpret_cast<char*>(&index_name_length), sizeof(index_name_length));
+            if (!zis) {
                 throw std::runtime_error("Failed to deserialize grove: stream error reading index name length");
             }
             std::string index_name(index_name_length, '\0');
-            is.read(index_name.data(), static_cast<std::streamsize>(index_name_length));
-            if (!is) {
+            zis.read(index_name.data(), static_cast<std::streamsize>(index_name_length));
+            if (!zis) {
                 throw std::runtime_error("Failed to deserialize grove: stream error reading index name");
             }
 
-            // Deserialize the tree for this index (keys go directly into grove's deque)
             node<key_type, data_type>* root = node<key_type, data_type>::deserialize(
-                is, order, g.key_storage);
+                zis, order, g.key_storage);
 
-            // Link leaf nodes and find rightmost
             node<key_type, data_type>* rightmost = g.link_leaves_and_find_rightmost(root);
 
-            // Store root and rightmost
             g.root_nodes[index_name] = root;
             g.rightmost_nodes[index_name] = rightmost;
         }
 
-        // Read external keys count
+        // Read external keys
         uint32_t external_count;
-        is.read(reinterpret_cast<char*>(&external_count), sizeof(external_count));
-        if (!is) {
+        zis.read(reinterpret_cast<char*>(&external_count), sizeof(external_count));
+        if (!zis) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading external key count");
         }
-
-        // Read each external key - directly into external_key_storage
         for (uint32_t i = 0; i < external_count; ++i) {
-            g.external_key_storage.push_back(gdt::key<key_type, data_type>::deserialize(is));
+            g.external_key_storage.push_back(gdt::key<key_type, data_type>::deserialize(zis));
         }
 
         return g;

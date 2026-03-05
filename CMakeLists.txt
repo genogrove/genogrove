@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 project(genogrove VERSION 0.16.0)
 
 find_package(PkgConfig REQUIRED)
+find_package(ZLIB REQUIRED)
 pkg_check_modules(HTSLIB REQUIRED htslib)
 
 # export compile commands for IDEs
@@ -43,7 +44,7 @@ target_include_directories(genogrove
         $<INSTALL_INTERFACE:include>
         ${HTSLIB_INCLUDE_DIRS}
 )
-target_link_libraries(genogrove PUBLIC ${HTSLIB_LIBRARIES})
+target_link_libraries(genogrove PUBLIC ${HTSLIB_LIBRARIES} ZLIB::ZLIB)
 target_link_directories(genogrove PUBLIC ${HTSLIB_LIBRARY_DIRS})
 
 # Set RPATH for runtime library discovery
