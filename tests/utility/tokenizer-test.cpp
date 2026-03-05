@@ -68,22 +68,22 @@ TEST(tokenizer, empty_fields_consecutive_delimiters) {
 }
 
 TEST(tokenizer, trailing_delimiter) {
+    // Trailing delimiter does NOT produce an extra empty field —
+    // matches std::getline behavior and avoids breaking parse_csv
+    // for BED12 block fields with trailing commas (e.g. "100,200,")
     std::string_view line = "a\tb\t";
     size_t pos = 0;
 
     auto f1 = ggu::next_field(line, pos);
     auto f2 = ggu::next_field(line, pos);
     auto f3 = ggu::next_field(line, pos);
-    auto f4 = ggu::next_field(line, pos);
 
     ASSERT_TRUE(f1.has_value());
     ASSERT_TRUE(f2.has_value());
-    ASSERT_TRUE(f3.has_value());
-    EXPECT_FALSE(f4.has_value());
+    EXPECT_FALSE(f3.has_value());
 
     EXPECT_EQ(*f1, "a");
     EXPECT_EQ(*f2, "b");
-    EXPECT_EQ(*f3, "");
 }
 
 TEST(tokenizer, custom_delimiter_comma) {
