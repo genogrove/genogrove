@@ -13,8 +13,10 @@
 // Standard
 #include <bitset>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 #include <stdexcept>
 #include <optional>
 #include <iostream>
@@ -58,6 +60,7 @@ namespace genogrove::data_type {
 
         private:
             std::unordered_map<std::string, uint8_t> registry;
+            std::vector<std::string> reverse_registry;
             uint8_t next_index{0};
     };
 }

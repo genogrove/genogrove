@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Remove legacy type erasure code**: Deleted `any_type.hpp`, `type_registry.hpp`, and `type_registry.cpp` — unused since the library moved from runtime type erasure to compile-time templates. Cleaned up dead includes from `key.hpp` and `query_result.hpp`
 
 ### Performance
+- **Fix O(n) linear scan in `value_lookup()`**: Replaced `std::ranges::find` with `container.find()` in the generic `value_lookup()` utility, giving O(1) amortized lookups on `unordered_map` (previously O(n)). Added a reverse lookup vector to `index_registry` so `key_lookup()` is O(1) instead of O(n) linear scan ([#164](https://github.com/genogrove/genogrove/issues/164))
 - **Minor performance improvements**: Replaced `std::ostringstream` with `std::format` in `genomic_coordinate::to_string()`, added `reserve()` to `get_neighbors_if()`, simplified BAM tag key construction, and cached redundant `args.as<std::string>()` calls in CLI `intersect.cpp` ([#172](https://github.com/genogrove/genogrove/issues/172))
 
 ## [0.16.0] - 2026-03-01

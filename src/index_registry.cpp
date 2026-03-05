@@ -17,6 +17,7 @@ namespace genogrove::data_type {
             }
             uint8_t new_index = this->next_index++;
             this->registry.insert({key, new_index});
+            this->reverse_registry.push_back(key);
             return new_index;
         }
         return idx.value();
@@ -27,7 +28,10 @@ namespace genogrove::data_type {
     }
 
     std::optional<std::string> index_registry::key_lookup(uint8_t value) const {
-        return ggu::key_lookup(this->registry, value);
+        if (value < reverse_registry.size()) {
+            return reverse_registry[value];
+        }
+        return std::nullopt;
     }
 
     std::optional<uint8_t> index_registry::value_lookup(std::string_view key) const {
