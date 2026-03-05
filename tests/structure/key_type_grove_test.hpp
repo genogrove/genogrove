@@ -1048,6 +1048,93 @@ TYPED_TEST_P(grove_typed_test, internal_node_split_regular_insert) {
     }
 }
 
+TYPED_TEST_P(grove_typed_test, sorted_insert_packs_leaves) {
+    // Use a separate grove with default fill_factor (1.0)
+    const int order = 10;
+    gst::grove<TypeParam, int> g(order);
+
+    auto data = this->generate_test_data(50);
+    for (const auto& [key, value] : data) {
+        g.insert_data("chr1", key, value, gst::sorted);
+    }
+
+    // Walk the leaf chain: all leaves except the last should be fully packed
+    auto* n = g.get_root("chr1");
+    ASSERT_NE(n, nullptr);
+    while (!n->get_is_leaf()) {
+        n = n->get_children()[0];
+    }
+
+    int leaf_count = 0;
+    while (n->get_next() != nullptr) {
+        EXPECT_EQ(n->get_keys().size(), static_cast<size_t>(order - 1))
+            << "Leaf " << leaf_count << " should be fully packed with fill_factor=1.0";
+        n = n->get_next();
+        ++leaf_count;
+    }
+    EXPECT_GT(n->get_keys().size(), 0u) << "Last leaf should have at least one key";
+}
+
+TYPED_TEST_P(grove_typed_test, sorted_insert_half_fill) {
+    const int order = 10;
+    gst::grove<TypeParam, int> g(order, 0.5f);
+
+    auto data = this->generate_test_data(50);
+    for (const auto& [key, value] : data) {
+        g.insert_data("chr1", key, value, gst::sorted);
+    }
+
+    // Expected keys per non-last leaf: max(1, int((order-1) * 0.5)) = 4
+    const auto expected = static_cast<size_t>(
+        std::max(1, static_cast<int>((order - 1) * 0.5f)));
+
+    auto* n = g.get_root("chr1");
+    ASSERT_NE(n, nullptr);
+    while (!n->get_is_leaf()) {
+        n = n->get_children()[0];
+    }
+
+    int leaf_count = 0;
+    while (n->get_next() != nullptr) {
+        EXPECT_EQ(n->get_keys().size(), expected)
+            << "Leaf " << leaf_count << " should have " << expected
+            << " keys with fill_factor=0.5";
+        n = n->get_next();
+        ++leaf_count;
+    }
+    EXPECT_GT(n->get_keys().size(), 0u) << "Last leaf should have at least one key";
+}
+
+TYPED_TEST_P(grove_typed_test, sorted_insert_three_quarter_fill) {
+    const int order = 10;
+    gst::grove<TypeParam, int> g(order, 0.75f);
+
+    auto data = this->generate_test_data(50);
+    for (const auto& [key, value] : data) {
+        g.insert_data("chr1", key, value, gst::sorted);
+    }
+
+    // Expected keys per non-last leaf: max(1, int((order-1) * 0.75)) = 6
+    const auto expected = static_cast<size_t>(
+        std::max(1, static_cast<int>((order - 1) * 0.75f)));
+
+    auto* n = g.get_root("chr1");
+    ASSERT_NE(n, nullptr);
+    while (!n->get_is_leaf()) {
+        n = n->get_children()[0];
+    }
+
+    int leaf_count = 0;
+    while (n->get_next() != nullptr) {
+        EXPECT_EQ(n->get_keys().size(), expected)
+            << "Leaf " << leaf_count << " should have " << expected
+            << " keys with fill_factor=0.75";
+        n = n->get_next();
+        ++leaf_count;
+    }
+    EXPECT_GT(n->get_keys().size(), 0u) << "Last leaf should have at least one key";
+}
+
 // Register all the KEY_TYPE-DEPENDENT tests
 REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     regular_insert,
@@ -1063,6 +1150,9 @@ REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     serialization_empty_grove,
     serialization_multiple_indices,
     internal_node_split_invariants,
-    internal_node_split_regular_insert);
+    internal_node_split_regular_insert,
+    sorted_insert_packs_leaves,
+    sorted_insert_half_fill,
+    sorted_insert_three_quarter_fill);
 
 #endif // GENOGROVE_TESTS_DATA_TYPE_GROVE_TEST_HPP
