@@ -20,6 +20,7 @@
 #include <vector>
 #include <string>
 #include <optional>
+#include <queue>
 #include <random>
 #include <sstream>
 #include <unordered_map>
@@ -1163,6 +1164,68 @@ TYPED_TEST_P(grove_typed_test, sorted_insert_three_quarter_fill) {
     EXPECT_GT(n->get_keys().size(), 0u) << "Last leaf should have at least one key";
 }
 
+TYPED_TEST_P(grove_typed_test, grove_to_sif_output) {
+    auto data = this->generate_test_data(20);
+    for (const auto& [key, value] : data) {
+        this->grove.insert_data(this->get_default_index(), key, value, gst::sorted);
+    }
+
+    auto* root = this->grove.get_root(this->get_default_index());
+    ASSERT_NE(root, nullptr);
+
+    // Walk the tree to count expected links
+    size_t expected_nodelinks = 0;
+    size_t expected_leaflinks = 0;
+    {
+        std::queue<decltype(root)> q;
+        q.push(root);
+        while (!q.empty()) {
+            auto* n = q.front();
+            q.pop();
+            if (!n->get_is_leaf()) {
+                expected_nodelinks += n->get_children().size();
+                for (auto* child : n->get_children()) {
+                    q.push(child);
+                }
+            } else {
+                if (n->get_next()) ++expected_leaflinks;
+            }
+        }
+    }
+
+    // Generate SIF and parse lines
+    std::ostringstream ss;
+    this->grove.grove_to_sif(ss, root);
+    std::string output = ss.str();
+    EXPECT_FALSE(output.empty());
+
+    size_t actual_nodelinks = 0;
+    size_t actual_leaflinks = 0;
+    std::istringstream lines(output);
+    std::string line;
+    while (std::getline(lines, line)) {
+        if (line.find("nodelink") != std::string::npos) {
+            ++actual_nodelinks;
+        } else if (line.find("leaflink") != std::string::npos) {
+            ++actual_leaflinks;
+        } else if (line.find("keylink") != std::string::npos) {
+            // keylinks come from graph overlay — none expected without edges
+        } else {
+            FAIL() << "Unexpected SIF line: " << line;
+        }
+    }
+
+    EXPECT_EQ(actual_nodelinks, expected_nodelinks)
+        << "nodelink count should match parent-child edges in the tree";
+    EXPECT_EQ(actual_leaflinks, expected_leaflinks)
+        << "leaflink count should match leaf chain links";
+
+    // nullptr should produce empty output
+    std::ostringstream empty_ss;
+    this->grove.grove_to_sif(empty_ss, nullptr);
+    EXPECT_TRUE(empty_ss.str().empty());
+}
+
 // Register all the KEY_TYPE-DEPENDENT tests
 REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     regular_insert,
@@ -1182,6 +1245,7 @@ REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     internal_node_split_regular_insert,
     sorted_insert_packs_leaves,
     sorted_insert_half_fill,
-    sorted_insert_three_quarter_fill);
+    sorted_insert_three_quarter_fill,
+    grove_to_sif_output);
 
 #endif // GENOGROVE_TESTS_DATA_TYPE_GROVE_TEST_HPP
