@@ -1,45 +1,8 @@
 #include <genogrove/data_type/genomic_coordinate.hpp>
-#include <algorithm>
 #include <format>
-#include <limits>
 
 namespace genogrove::data_type {
 
-    // Static aggregate method
-    genomic_coordinate genomic_coordinate::aggregate(std::span<const genomic_coordinate> coords) {
-        if (coords.empty()) {
-            return genomic_coordinate(); // Default: '.', 0, 0
-        }
-
-        if (coords.size() == 1) {
-            return coords[0];
-        }
-
-        // Find min start and max end
-        std::size_t min_start = std::numeric_limits<std::size_t>::max();
-        std::size_t max_end = 0;
-        char result_strand = coords[0].strand;
-        bool mixed_strands = false;
-
-        for (const auto& coord : coords) {
-            min_start = std::min(min_start, coord.start);
-            max_end = std::max(max_end, coord.end);
-
-            // Check if all strands are the same
-            if (coord.strand != result_strand) {
-                mixed_strands = true;
-            }
-        }
-
-        // If strands are mixed, use '*' as wildcard for tree traversal
-        if (mixed_strands) {
-            result_strand = '*';
-        }
-
-        return genomic_coordinate(result_strand, min_start, max_end);
-    }
-
-    // String conversion
     std::string genomic_coordinate::to_string() const {
         return std::format("{}:{}-{}", strand, start, end);
     }

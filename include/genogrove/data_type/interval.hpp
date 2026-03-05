@@ -14,9 +14,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <iostream>
-#include <span>
 #include <string>
-#include <vector>
 
 namespace genogrove::data_type {
     /**
@@ -142,22 +140,19 @@ namespace genogrove::data_type {
             }
 
             /**
-             * @brief Aggregate multiple intervals into a bounding interval.
+             * @brief Aggregate two intervals into a bounding interval.
              *
-             * Returns an interval that represents the minimal bounding region:
-             * - Start: minimum start position across all intervals
-             * - End: maximum end position across all intervals
+             * Returns the minimal bounding interval encompassing both inputs.
              *
-             * The resulting interval may span gaps between non-overlapping intervals,
-             * as it represents the complete range covered by all inputs.
-             *
-             * @param intervals Vector of intervals to aggregate (must not be empty)
-             * @return Bounding interval representing the aggregate range
+             * @param a First interval
+             * @param b Second interval
+             * @return Bounding interval with min start and max end
              *
              * @note Required by key_type_base concept for internal node construction
-             * @throws std::runtime_error if intervals is empty (in debug builds)
              */
-            [[nodiscard]] static interval aggregate(std::span<const interval> intervals);
+            [[nodiscard]] static constexpr interval aggregate(const interval& a, const interval& b) {
+                return interval{std::min(a.start, b.start), std::max(a.end, b.end)};
+            }
 
             /**
              * @brief Convert interval to string representation.

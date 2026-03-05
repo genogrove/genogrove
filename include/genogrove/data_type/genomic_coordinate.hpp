@@ -11,11 +11,10 @@
 #define DATATYPE_GENOMICCOORDINATE_HPP
 
 // Standard
+#include <algorithm>
 #include <cstddef>
 #include <iostream>
-#include <span>
 #include <string>
-#include <vector>
 
 namespace genogrove::data_type {
     /**
@@ -157,23 +156,24 @@ namespace genogrove::data_type {
             }
 
             /**
-             * @brief Aggregate multiple coordinates into a bounding coordinate.
+             * @brief Aggregate two coordinates into a bounding coordinate.
              *
-             * Returns a coordinate that represents the minimal bounding region:
+             * Returns the minimal bounding coordinate encompassing both inputs:
              * - Start: minimum start position
              * - End: maximum end position
              * - Strand: '*' (wildcard) if strands differ, otherwise common strand
              *
-             * Using wildcard for mixed strands enables efficient tree traversal while
-             * preserving strand information when all coordinates share the same strand.
-             *
-             * @param coords Vector of coordinates to aggregate (must not be empty)
-             * @return Bounding coordinate representing the aggregate range
+             * @param a First coordinate
+             * @param b Second coordinate
+             * @return Bounding coordinate with min start, max end, and merged strand
              *
              * @note Required by key_type_base concept for internal node construction
-             * @throws std::runtime_error if coords is empty (in debug builds)
              */
-            [[nodiscard]] static genomic_coordinate aggregate(std::span<const genomic_coordinate> coords);
+            [[nodiscard]] static constexpr genomic_coordinate aggregate(
+                    const genomic_coordinate& a, const genomic_coordinate& b) {
+                char s = (a.strand == b.strand) ? a.strand : '*';
+                return genomic_coordinate{s, std::min(a.start, b.start), std::max(a.end, b.end)};
+            }
 
             /**
              * @brief Convert coordinate to string representation.

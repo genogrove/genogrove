@@ -203,30 +203,19 @@ TEST(kmerTest, overlapDifferentK) {
     EXPECT_FALSE(gdt::kmer::overlaps(k1, k2));
 }
 
-TEST(kmerTest, aggregateSingle) {
-    std::vector<gdt::kmer> kmers = {gdt::kmer("ACGT")};
+TEST(kmerTest, aggregateReturnsMax) {
+    gdt::kmer a{"AAAA"};
+    gdt::kmer b{"TTTT"};
 
-    gdt::kmer result = gdt::kmer::aggregate(kmers);
-    EXPECT_EQ(result.to_string(), "ACGT");
-}
-
-TEST(kmerTest, aggregateMultiple) {
-    std::vector<gdt::kmer> kmers = {
-        gdt::kmer("AAAA"),
-        gdt::kmer("TTTT"),
-        gdt::kmer("ACGT")
-    };
-
-    // Aggregate returns maximum k-mer
-    gdt::kmer result = gdt::kmer::aggregate(kmers);
+    gdt::kmer result = gdt::kmer::aggregate(a, b);
     EXPECT_EQ(result.to_string(), "TTTT");
 }
 
-TEST(kmerTest, aggregateEmpty) {
-    std::vector<gdt::kmer> kmers = {};
+TEST(kmerTest, aggregateIdentical) {
+    gdt::kmer a{"ACGT"};
 
-    gdt::kmer result = gdt::kmer::aggregate(kmers);
-    EXPECT_EQ(result.get_k(), 0);
+    gdt::kmer result = gdt::kmer::aggregate(a, a);
+    EXPECT_EQ(result.to_string(), "ACGT");
 }
 
 TEST(kmerTest, toString) {

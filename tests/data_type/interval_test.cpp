@@ -171,61 +171,30 @@ TEST(intervalTest, overlapPartialOverlap) {
     EXPECT_FALSE(gdt::interval::overlaps(intvl1, intvl4)); // [10,25] does not overlap [30,50]
 }
 
-TEST(intervalTest, aggregateSingle) {
-    std::vector<gdt::interval> intervals = {
-        gdt::interval{10, 20}
-    };
+TEST(intervalTest, aggregatePairwise) {
+    gdt::interval a{10, 30};
+    gdt::interval b{20, 50};
 
-    gdt::interval result = gdt::interval::aggregate(intervals);
-    EXPECT_EQ(result.get_start(), 10);
-    EXPECT_EQ(result.get_end(), 20);
-}
-
-TEST(intervalTest, aggregateMultiple) {
-    std::vector<gdt::interval> intervals = {
-        gdt::interval{10, 20},
-        gdt::interval{30, 40},
-        gdt::interval{50, 60}
-    };
-
-    // Aggregate returns bounding interval
-    gdt::interval result = gdt::interval::aggregate(intervals);
-    EXPECT_EQ(result.get_start(), 10);  // Minimum start
-    EXPECT_EQ(result.get_end(), 60);    // Maximum end
-}
-
-TEST(intervalTest, aggregateOverlapping) {
-    std::vector<gdt::interval> intervals = {
-        gdt::interval{10, 30},
-        gdt::interval{20, 40},
-        gdt::interval{35, 50}
-    };
-
-    gdt::interval result = gdt::interval::aggregate(intervals);
+    gdt::interval result = gdt::interval::aggregate(a, b);
     EXPECT_EQ(result.get_start(), 10);
     EXPECT_EQ(result.get_end(), 50);
 }
 
-TEST(intervalTest, aggregateUnsorted) {
-    std::vector<gdt::interval> intervals = {
-        gdt::interval{50, 60},
-        gdt::interval{10, 20},
-        gdt::interval{30, 40}
-    };
+TEST(intervalTest, aggregateDisjoint) {
+    gdt::interval a{10, 20};
+    gdt::interval b{50, 60};
 
-    // Aggregate should work regardless of order
-    gdt::interval result = gdt::interval::aggregate(intervals);
+    gdt::interval result = gdt::interval::aggregate(a, b);
     EXPECT_EQ(result.get_start(), 10);
     EXPECT_EQ(result.get_end(), 60);
 }
 
-TEST(intervalTest, aggregateEmpty) {
-    std::vector<gdt::interval> intervals = {};
+TEST(intervalTest, aggregateIdentical) {
+    gdt::interval a{10, 20};
 
-    gdt::interval result = gdt::interval::aggregate(intervals);
-    // Empty aggregate returns default interval
-    EXPECT_EQ(result.get_start(), std::string::npos);
-    EXPECT_EQ(result.get_end(), std::string::npos);
+    gdt::interval result = gdt::interval::aggregate(a, a);
+    EXPECT_EQ(result.get_start(), 10);
+    EXPECT_EQ(result.get_end(), 20);
 }
 
 TEST(intervalTest, toString) {
