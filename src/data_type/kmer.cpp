@@ -1,6 +1,7 @@
 #include <genogrove/data_type/kmer.hpp>
-#include <stdexcept>
+#include <algorithm>
 #include <cctype>
+#include <stdexcept>
 
 namespace genogrove::data_type {
 
