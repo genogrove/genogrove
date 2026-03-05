@@ -110,16 +110,20 @@ class grove {
      * @brief Construct a grove with specified order
      * @param order Determines the maximum number of k-1 keys and k children per node
      */
-    explicit grove(int order) : order(order) {
+    explicit grove(int order, float fill_factor = 1.0f)
+        : order(order), fill_factor(fill_factor) {
         if (order < 2) {
             throw std::out_of_range("grove order must be >= 2");
+        }
+        if (fill_factor < 0.5f || fill_factor > 1.0f) {
+            throw std::out_of_range("grove fill_factor must be in [0.5, 1.0]");
         }
     }
 
     /**
      * @brief Construct a grove with default order of 3
      */
-    grove() : order(3) {}
+    grove() : order(3), fill_factor(1.0f) {}
 
     /**
      * @brief Destructor that cleans up all tree nodes
@@ -458,6 +462,25 @@ class grove {
     }
 
     /**
+     * @brief Get the fill factor for sorted insertion splits
+     * @return Fill factor in [0.5, 1.0]
+     */
+    float get_fill_factor() const noexcept {
+        return this->fill_factor;
+    }
+
+    /**
+     * @brief Set the fill factor for sorted insertion splits
+     * @param fill_factor Value in [0.5, 1.0]; 1.0 packs nodes fully, 0.5 is classic mid-split
+     */
+    void set_fill_factor(float fill_factor) {
+        if (fill_factor < 0.5f || fill_factor > 1.0f) {
+            throw std::out_of_range("grove fill_factor must be in [0.5, 1.0]");
+        }
+        this->fill_factor = fill_factor;
+    }
+
+    /**
      * @brief Get map of all root nodes indexed by their string keys
      * @return Unordered map from index names (e.g., chromosome names) to root node pointers
      */
@@ -637,13 +660,13 @@ class grove {
                     new_root->add_child(current_node, 0);
                     new_root->set_is_leaf(false);
                     current_node->set_parent(new_root);
-                    split_node(new_root, 0, index);
+                    split_node(new_root, 0, index, sorted_mid());
                     this->root_nodes[std::string(index)] = new_root;
                     current_node = this->get_rightmost_node(index);
                 } else {
                     // Internal node overflow
                     int child_index = current_node->get_parent()->get_children().size() - 1;
-                    split_node(current_node->get_parent(), child_index, index);
+                    split_node(current_node->get_parent(), child_index, index, sorted_mid());
                     current_node = this->get_rightmost_node(index);
                 }
             }
@@ -714,7 +737,7 @@ class grove {
             new_root->add_child(root, 0);
             new_root->set_is_leaf(false);
             root->set_parent(new_root);
-            split_node(new_root, 0, index);
+            split_node(new_root, 0, index, default_mid());
             root = new_root;
             this->root_nodes[std::string(index)] = root; // update the root node in the map
         }
@@ -746,7 +769,7 @@ class grove {
             }
             auto* key_ptr = insert_iter(node->get_child(child_index), key, index);
             if(node->get_child(child_index)->get_keys().size() == this->order) {
-                split_node(node, child_index, index);
+                split_node(node, child_index, index, default_mid());
             }
             return key_ptr;
         }
@@ -754,17 +777,34 @@ class grove {
 
     /**
      * @brief Split an overflowing node by creating a new sibling and redistributing keys
+     * @brief Compute the default (classic) midpoint for node splits
+     * @return Midpoint index for balanced splits during regular insertion
+     */
+    int default_mid() const noexcept {
+        return (this->order + 2 - 1) / 2;
+    }
+
+    /**
+     * @brief Compute the midpoint for sorted insertion splits based on fill_factor
+     * @return Midpoint index that packs the left node according to fill_factor
+     */
+    int sorted_mid() const noexcept {
+        return std::max(1, static_cast<int>((this->order - 1) * this->fill_factor));
+    }
+
+    /**
      * @param parent The parent node whose child will be split
      * @param index The index of the child node to split within the parent
      * @param index_name The grove index name (e.g., chromosome) for O(1) rightmost cache update
+     * @param mid The split position — use default_mid() for regular inserts, sorted_mid() for sorted
      * @note Splits keys at midpoint, promotes separator to parent, links leaf nodes if applicable
      * @note Automatically updates rightmost_nodes cache when splitting leaf nodes
      */
-    void split_node(node<key_type, data_type>* parent, int index, std::string_view index_name) {
+    void split_node(node<key_type, data_type>* parent, int index,
+                    std::string_view index_name, int mid) {
         node<key_type, data_type>* child = parent->get_child(index);
         node<key_type, data_type>* new_child = new node<key_type, data_type>(this->order);
         new_child->set_parent(parent);
-        int mid = (this->order + 2 - 1) / 2;
 
         new_child->set_is_leaf(child->get_is_leaf());
 
@@ -872,13 +912,13 @@ class grove {
                     new_root->add_child(overflow_node, 0);
                     new_root->set_is_leaf(false);
                     overflow_node->set_parent(new_root);
-                    split_node(new_root, 0, index);
+                    split_node(new_root, 0, index, sorted_mid());
                     this->root_nodes[std::string(index)] = new_root;
                     break;
                 } else {
                     auto* parent_node = overflow_node->get_parent();
                     int child_index = static_cast<int>(parent_node->get_children().size()) - 1;
-                    split_node(parent_node, child_index, index);
+                    split_node(parent_node, child_index, index, sorted_mid());
                     overflow_node = parent_node;
                 }
             }
@@ -1032,8 +1072,9 @@ class grove {
      * @note Rightmost nodes are NOT serialized; they are recalculated during deserialization
      */
     void serialize(std::ostream& os) {
-        // write the order of the tree
+        // write the order and fill factor
         os.write(reinterpret_cast<const char*>(&this->order), sizeof(this->order));
+        os.write(reinterpret_cast<const char*>(&this->fill_factor), sizeof(this->fill_factor));
 
         // write the root nodes
         size_t number_root_nodes = this->root_nodes.size();
@@ -1075,7 +1116,12 @@ class grove {
         if (!is) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading order");
         }
-        grove g(order);
+        float fill_factor;
+        is.read(reinterpret_cast<char*>(&fill_factor), sizeof(fill_factor));
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize grove: stream error reading fill_factor");
+        }
+        grove g(order, fill_factor);
 
         size_t number_root_nodes;
         is.read(reinterpret_cast<char*>(&number_root_nodes), sizeof(number_root_nodes));
@@ -1312,6 +1358,9 @@ class grove {
 
     /// Maximum number of keys per node (B+ tree order/capacity)
     int order;
+
+    /// Fill factor for sorted insertion splits (0.5–1.0); controls how full the left node is after a split
+    float fill_factor;
 
     /// Map from index names (e.g., chromosome names) to their root nodes
     std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>> root_nodes;
