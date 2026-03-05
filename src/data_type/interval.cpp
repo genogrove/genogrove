@@ -1,23 +1,10 @@
 #include <genogrove/data_type/interval.hpp>
 
 // standard
-#include <algorithm>
-#include <ranges>
 #include <stdexcept>
 #include <string>
 
 namespace genogrove::data_type {
-
-    interval interval::aggregate(std::span<const interval> intervals) {
-        if (intervals.empty()) {
-            return interval{};
-        }
-
-        auto min_start = std::ranges::min(intervals, {}, &interval::get_start).get_start();
-        auto max_end   = std::ranges::max(intervals, {}, &interval::get_end).get_end();
-        return interval{min_start, max_end};
-    }
-
 
     std::string interval::to_string() const {
         return "[" + std::to_string(this->start) + "," + std::to_string(this->end) + "]";

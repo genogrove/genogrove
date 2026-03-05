@@ -13,9 +13,7 @@
 #include <cstddef>
 #include <iostream>
 #include <limits>
-#include <span>
 #include <string>
-#include <vector>
 
 namespace genogrove::data_type {
     /**
@@ -131,19 +129,20 @@ namespace genogrove::data_type {
             }
 
             /**
-             * @brief Aggregate multiple numeric values.
+             * @brief Aggregate two numerics by returning the maximum.
              *
-             * Returns the maximum value to enable proper B+ tree navigation.
              * Internal nodes store the maximum value in their subtree, allowing
              * search operations to correctly traverse to child nodes.
              *
-             * @param values Vector of numeric values to aggregate (must not be empty)
-             * @return Numeric containing the maximum value
+             * @param a First numeric
+             * @param b Second numeric
+             * @return The greater of the two values
              *
              * @note Required by key_type_base concept for internal node construction
-             * @throws std::runtime_error if values is empty (in debug builds)
              */
-            [[nodiscard]] static numeric aggregate(std::span<const numeric> values);
+            [[nodiscard]] static constexpr numeric aggregate(const numeric& a, const numeric& b) {
+                return (a > b) ? a : b;
+            }
 
             /**
              * @brief Convert the numeric value to string representation.

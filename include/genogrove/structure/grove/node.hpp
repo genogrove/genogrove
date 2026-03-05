@@ -244,13 +244,11 @@ class node {
      * - genomic_coordinate: Returns bounding coordinate with wildcard strand
      */
     key_type calc_parent_key() {
-        // create vector of reference intervals with reserved capacity
-        std::vector<key_type> values;
-        values.reserve(this->keys.size());
-        for(size_t i = 0; i < this->keys.size(); i++) {
-            values.push_back(this->keys[i]->get_value());
+        key_type result = this->keys[0]->get_value();
+        for (size_t i = 1; i < this->keys.size(); ++i) {
+            result = key_type::aggregate(result, this->keys[i]->get_value());
         }
-        return key_type::aggregate(values);
+        return result;
     }
 
     // =========================================================================

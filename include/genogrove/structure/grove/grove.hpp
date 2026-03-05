@@ -797,12 +797,11 @@ class grove {
 
             // Compute parent separator covering the full left subtree (keys[0..mid])
             // BEFORE modifying the child, so child[mid]'s range is included
-            std::vector<key_type> left_subtree_keys;
-            left_subtree_keys.reserve(static_cast<size_t>(mid) + 1);
-            for (size_t i = 0; i <= static_cast<size_t>(mid); ++i) {
-                left_subtree_keys.push_back(child->get_keys()[i]->get_value());
+            key_type parent_separator = child->get_keys()[0]->get_value();
+            for (size_t i = 1; i <= static_cast<size_t>(mid); ++i) {
+                parent_separator = key_type::aggregate(parent_separator,
+                    child->get_keys()[i]->get_value());
             }
-            key_type parent_separator = key_type::aggregate(left_subtree_keys);
             gdt::key<key_type, data_type> parent_key{parent_separator};
             auto* parent_key_ptr = allocate_key(parent_key);
 

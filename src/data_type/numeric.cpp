@@ -1,21 +1,9 @@
 #include <genogrove/data_type/numeric.hpp>
 
 // standard
-#include <algorithm>
-#include <ranges>
 #include <stdexcept>
 
 namespace genogrove::data_type {
-
-    numeric numeric::aggregate(std::span<const numeric> values) {
-        if (values.empty()) {
-            return numeric{};
-        }
-
-        // Return the maximum value as the aggregate for B+ tree navigation
-        // Internal nodes use max value to guide search queries
-        return std::ranges::max(values, [](const numeric& a, const numeric& b) { return a < b; });
-    }
 
     std::string numeric::to_string() const {
         return std::to_string(this->value);

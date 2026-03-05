@@ -1,8 +1,7 @@
 #include <genogrove/data_type/kmer.hpp>
-#include <stdexcept>
 #include <algorithm>
-#include <ranges>
 #include <cctype>
+#include <stdexcept>
 
 namespace genogrove::data_type {
 
@@ -32,15 +31,6 @@ namespace genogrove::data_type {
             uint64_t mask = (1ULL << (2 * k)) - 1;
             this->encoding = encoding & mask;
         }
-    }
-
-    kmer kmer::aggregate(std::span<const kmer> kmers) {
-        if (kmers.empty()) {
-            return kmer{};
-        }
-
-        // Return the maximum k-mer for B+ tree navigation
-        return std::ranges::max(kmers, [](const kmer& a, const kmer& b) { return a < b; });
     }
 
     std::string kmer::to_string() const {

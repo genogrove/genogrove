@@ -13,10 +13,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
-#include <span>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace genogrove::data_type {
     /**
@@ -164,17 +162,20 @@ namespace genogrove::data_type {
             }
 
             /**
-             * @brief Aggregate multiple k-mers.
+             * @brief Aggregate two k-mers by returning the maximum.
              *
-             * Returns the maximum k-mer (by encoding) to enable proper B+ tree navigation.
-             * All k-mers in the vector should have the same k value.
+             * Internal nodes store the maximum k-mer in their subtree for
+             * proper B+ tree navigation.
              *
-             * @param kmers Vector of k-mers to aggregate (must not be empty)
-             * @return K-mer with the maximum encoding value
+             * @param a First k-mer
+             * @param b Second k-mer
+             * @return The greater of the two k-mers
              *
              * @note Required by key_type_base concept for internal node construction
              */
-            [[nodiscard]] static kmer aggregate(std::span<const kmer> kmers);
+            [[nodiscard]] static constexpr kmer aggregate(const kmer& a, const kmer& b) {
+                return (a > b) ? a : b;
+            }
 
             /**
              * @brief Convert the k-mer to its DNA sequence string.

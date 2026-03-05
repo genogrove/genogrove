@@ -216,50 +216,33 @@ TEST(genomicCoordinateTest, overlapSameStrandIdentical) {
     EXPECT_TRUE(gdt::genomic_coordinate::overlaps(coord1, coord2));
 }
 
-TEST(genomicCoordinateTest, aggregateSingle) {
-    std::vector<gdt::genomic_coordinate> coords = {
-        gdt::genomic_coordinate('+', 10, 20)
-    };
+TEST(genomicCoordinateTest, aggregateSameStrand) {
+    gdt::genomic_coordinate a('+', 10, 20);
+    gdt::genomic_coordinate b('+', 15, 30);
 
-    gdt::genomic_coordinate result = gdt::genomic_coordinate::aggregate(coords);
+    gdt::genomic_coordinate result = gdt::genomic_coordinate::aggregate(a, b);
+    EXPECT_EQ(result.get_strand(), '+');
+    EXPECT_EQ(result.get_start(), 10);
+    EXPECT_EQ(result.get_end(), 30);
+}
+
+TEST(genomicCoordinateTest, aggregateMixedStrands) {
+    gdt::genomic_coordinate a('+', 10, 20);
+    gdt::genomic_coordinate b('-', 15, 30);
+
+    gdt::genomic_coordinate result = gdt::genomic_coordinate::aggregate(a, b);
+    EXPECT_EQ(result.get_strand(), '*');
+    EXPECT_EQ(result.get_start(), 10);
+    EXPECT_EQ(result.get_end(), 30);
+}
+
+TEST(genomicCoordinateTest, aggregateIdentical) {
+    gdt::genomic_coordinate a('+', 10, 20);
+
+    gdt::genomic_coordinate result = gdt::genomic_coordinate::aggregate(a, a);
     EXPECT_EQ(result.get_strand(), '+');
     EXPECT_EQ(result.get_start(), 10);
     EXPECT_EQ(result.get_end(), 20);
-}
-
-TEST(genomicCoordinateTest, aggregateMultipleSameStrand) {
-    std::vector<gdt::genomic_coordinate> coords = {
-        gdt::genomic_coordinate('+', 10, 20),
-        gdt::genomic_coordinate('+', 15, 30),
-        gdt::genomic_coordinate('+', 5, 25)
-    };
-
-    gdt::genomic_coordinate result = gdt::genomic_coordinate::aggregate(coords);
-    EXPECT_EQ(result.get_strand(), '+');
-    EXPECT_EQ(result.get_start(), 5);
-    EXPECT_EQ(result.get_end(), 30);
-}
-
-TEST(genomicCoordinateTest, aggregateMultipleMixedStrands) {
-    std::vector<gdt::genomic_coordinate> coords = {
-        gdt::genomic_coordinate('+', 10, 20),
-        gdt::genomic_coordinate('-', 15, 30),
-        gdt::genomic_coordinate('+', 5, 25)
-    };
-
-    gdt::genomic_coordinate result = gdt::genomic_coordinate::aggregate(coords);
-    EXPECT_EQ(result.get_strand(), '*'); // Mixed strands result in '.'
-    EXPECT_EQ(result.get_start(), 5);
-    EXPECT_EQ(result.get_end(), 30);
-}
-
-TEST(genomicCoordinateTest, aggregateEmpty) {
-    std::vector<gdt::genomic_coordinate> coords = {};
-
-    gdt::genomic_coordinate result = gdt::genomic_coordinate::aggregate(coords);
-    EXPECT_EQ(result.get_strand(), '.');
-    EXPECT_EQ(result.get_start(), 0);
-    EXPECT_EQ(result.get_end(), 0);
 }
 
 

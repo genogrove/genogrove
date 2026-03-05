@@ -101,43 +101,27 @@ TEST(numericTest, overlapDifferent) {
     EXPECT_FALSE(gdt::numeric::overlaps(n1, n2));
 }
 
-TEST(numericTest, aggregateSingle) {
-    std::vector<gdt::numeric> values = {gdt::numeric{42}};
+TEST(numericTest, aggregateReturnsMax) {
+    gdt::numeric a{10};
+    gdt::numeric b{30};
 
-    gdt::numeric result = gdt::numeric::aggregate(values);
-    EXPECT_EQ(result.get_value(), 42);
-}
-
-TEST(numericTest, aggregateMultiple) {
-    std::vector<gdt::numeric> values = {
-        gdt::numeric{30},
-        gdt::numeric{10},
-        gdt::numeric{20}
-    };
-
-    // Aggregate returns maximum value for B+ tree navigation
-    gdt::numeric result = gdt::numeric::aggregate(values);
+    gdt::numeric result = gdt::numeric::aggregate(a, b);
     EXPECT_EQ(result.get_value(), 30);
 }
 
 TEST(numericTest, aggregateWithNegative) {
-    std::vector<gdt::numeric> values = {
-        gdt::numeric{10},
-        gdt::numeric{-5},
-        gdt::numeric{20},
-        gdt::numeric{-10}
-    };
+    gdt::numeric a{-5};
+    gdt::numeric b{20};
 
-    // Aggregate returns maximum value for B+ tree navigation
-    gdt::numeric result = gdt::numeric::aggregate(values);
+    gdt::numeric result = gdt::numeric::aggregate(a, b);
     EXPECT_EQ(result.get_value(), 20);
 }
 
-TEST(numericTest, aggregateEmpty) {
-    std::vector<gdt::numeric> values = {};
+TEST(numericTest, aggregateIdentical) {
+    gdt::numeric a{42};
 
-    gdt::numeric result = gdt::numeric::aggregate(values);
-    EXPECT_EQ(result.get_value(), std::numeric_limits<int>::min());
+    gdt::numeric result = gdt::numeric::aggregate(a, a);
+    EXPECT_EQ(result.get_value(), 42);
 }
 
 TEST(numericTest, toString) {
