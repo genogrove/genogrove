@@ -15,6 +15,7 @@
 #include <deque>
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <queue>
 
@@ -1137,17 +1138,18 @@ class grove {
             if (!is) {
                 throw std::runtime_error("Failed to deserialize grove: stream error reading index name length");
             }
+            if (index_name_length > static_cast<size_t>(std::numeric_limits<std::streamsize>::max())) {
+                throw std::runtime_error("Failed to deserialize grove: index name length exceeds streamsize limit");
+            }
             std::string index_name(index_name_length, '\0');
             is.read(index_name.data(), static_cast<std::streamsize>(index_name_length));
             if (!is) {
                 throw std::runtime_error("Failed to deserialize grove: stream error reading index name");
             }
 
-            // Deserialize the tree for this index
-            node<key_type, data_type>* root = node<key_type, data_type>::deserialize(is, order);
-
-            // Move heap-allocated keys to grove's deque and fix pointers
-            g.rehome_keys(root);
+            // Deserialize the tree for this index (keys go directly into grove's deque)
+            node<key_type, data_type>* root = node<key_type, data_type>::deserialize(
+                is, order, g.key_storage);
 
             // Link leaf nodes and find rightmost
             node<key_type, data_type>* rightmost = g.link_leaves_and_find_rightmost(root);
@@ -1295,33 +1297,6 @@ class grove {
         return {current_layer[0], inserted_keys};
     }
 
-    /**
-     * @brief Move heap-allocated keys from deserialized nodes to grove's deque storage
-     * @param n Root node of the tree to process
-     * @note Recursively walks the tree and moves all keys to key_storage for stable pointers
-     * @note Called during deserialization to transfer ownership to the grove
-     */
-    void rehome_keys(node<key_type, data_type>* n) {
-        if (n == nullptr) return;
-
-        // Process keys in this node - move from heap to deque
-        auto& keys = n->get_keys();
-        for (size_t i = 0; i < keys.size(); ++i) {
-            // Copy key to deque
-            key_storage.push_back(*keys[i]);
-            // Delete heap-allocated key
-            delete keys[i];
-            // Update pointer to point to deque entry
-            keys[i] = &key_storage.back();
-        }
-
-        // Recursively process children (only for internal nodes)
-        if (!n->get_is_leaf()) {
-            for (auto* child : n->get_children()) {
-                rehome_keys(child);
-            }
-        }
-    }
 
     /**
      * @brief Link leaf nodes together and find the rightmost leaf

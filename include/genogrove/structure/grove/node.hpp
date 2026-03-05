@@ -11,6 +11,7 @@
 
 // standard
 #include <algorithm>
+#include <deque>
 #include <istream>
 #include <ostream>
 #include <ranges>
@@ -301,12 +302,17 @@ class node {
      * @brief Deserialize a node from an input stream
      * @param is Input stream to read serialized data from
      * @param order The B+ tree order to use for the deserialized node
+     * @param key_storage Deque to allocate keys into for stable pointer addresses
      * @return Pointer to the newly created and populated node
      *
      * Reads serialized node data from the stream and reconstructs the node
-     * structure, including keys and child relationships.
+     * structure, including keys and child relationships. Keys are placed directly
+     * into the provided deque (owned by the grove) rather than heap-allocated,
+     * ensuring pointer stability and single-owner semantics.
      */
-    [[nodiscard]] static node<key_type, data_type>* deserialize(std::istream& is, int order);
+    [[nodiscard]] static node<key_type, data_type>* deserialize(
+        std::istream& is, int order,
+        std::deque<gdt::key<key_type, data_type>>& key_storage);
 
     // =========================================================================
     // Debugging & Utilities
@@ -389,7 +395,9 @@ void node<key_type, data_type>::serialize(std::ostream& os) {
 }
 
 template<typename key_type, typename data_type>
-node<key_type, data_type>* node<key_type, data_type>::deserialize(std::istream& is, int order) {
+node<key_type, data_type>* node<key_type, data_type>::deserialize(
+        std::istream& is, int order,
+        std::deque<gdt::key<key_type, data_type>>& key_storage) {
     // Create new node
     auto* n = new node<key_type, data_type>(order);
 
@@ -412,21 +420,18 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize(std::istream& 
         throw std::runtime_error("Failed to deserialize node: num_keys exceeds order");
     }
 
-    // Read each key
+    // Read each key directly into grove's deque for stable pointer addresses
     n->keys.reserve(num_keys);
     for (size_t i = 0; i < num_keys; ++i) {
-        // Read key_type value (requires static deserialize method)
         key_type key_value = key_type::deserialize(is);
 
-        // Create key (with or without data)
-        gdt::key<key_type, data_type>* key_ptr;
         if constexpr (std::is_void_v<data_type>) {
-            key_ptr = new gdt::key<key_type, data_type>(key_value);
+            key_storage.emplace_back(key_value);
         } else {
             data_type data_value = gdt::serializer<data_type>::read(is);
-            key_ptr = new gdt::key<key_type, data_type>(key_value, data_value);
+            key_storage.emplace_back(key_value, data_value);
         }
-        n->keys.push_back(key_ptr);
+        n->keys.push_back(&key_storage.back());
     }
 
     // If not leaf, deserialize children
@@ -444,7 +449,7 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize(std::istream& 
 
         n->children.reserve(num_children);
         for (size_t i = 0; i < num_children; ++i) {
-            auto* child = node<key_type, data_type>::deserialize(is, order);
+            auto* child = node<key_type, data_type>::deserialize(is, order, key_storage);
             child->parent = n;
             n->children.push_back(child);
         }
