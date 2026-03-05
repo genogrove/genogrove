@@ -72,10 +72,11 @@ private:
         zs_.avail_in = static_cast<uInt>(pptr() - pbase());
         zs_.next_in = reinterpret_cast<Bytef*>(pbase());
 
+        int ret;
         do {
             zs_.avail_out = static_cast<uInt>(out_buf_.size());
             zs_.next_out = reinterpret_cast<Bytef*>(out_buf_.data());
-            int ret = deflate(&zs_, flush);
+            ret = deflate(&zs_, flush);
             if (ret != Z_OK && ret != Z_STREAM_END) {
                 throw std::runtime_error("deflate failed: " + std::string(zs_.msg ? zs_.msg : "unknown error"));
             }
@@ -86,8 +87,7 @@ private:
                     throw std::runtime_error("Failed to write compressed data to stream");
                 }
             }
-            if (ret == Z_STREAM_END) break;
-        } while (zs_.avail_out == 0);
+        } while (ret != Z_STREAM_END && (zs_.avail_out == 0 || flush == Z_FINISH));
 
         setp(in_buf_.data(), in_buf_.data() + in_buf_.size());
     }
@@ -137,13 +137,24 @@ protected:
             if (zs_.avail_in == 0) {
                 source_.read(in_buf_.data(), static_cast<std::streamsize>(in_buf_.size()));
                 auto bytes_read = source_.gcount();
-                if (bytes_read == 0) break;
+                if (bytes_read == 0) {
+                    if (source_.bad()) {
+                        throw std::runtime_error("inflate: I/O error reading compressed stream");
+                    }
+                    if (!stream_ended_) {
+                        throw std::runtime_error("inflate: unexpected EOF in compressed stream (truncated input)");
+                    }
+                    break;
+                }
                 zs_.avail_in = static_cast<uInt>(bytes_read);
                 zs_.next_in = reinterpret_cast<Bytef*>(in_buf_.data());
             }
 
             int ret = inflate(&zs_, Z_NO_FLUSH);
-            if (ret == Z_STREAM_END) break;
+            if (ret == Z_STREAM_END) {
+                stream_ended_ = true;
+                break;
+            }
             if (ret != Z_OK) {
                 throw std::runtime_error("inflate failed: " + std::string(zs_.msg ? zs_.msg : "unknown error"));
             }
@@ -164,6 +175,7 @@ private:
     std::array<char, buf_size> out_buf_{};
     z_stream zs_{};
     std::istream& source_;
+    bool stream_ended_ = false;
 };
 
 } // namespace genogrove::structure::detail
