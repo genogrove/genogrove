@@ -326,9 +326,10 @@ class node {
      * Outputs the string representation of each key in the node, separated
      * by the specified separator. Useful for debugging and visualization.
      */
-    void print_keys(std::ostream& os, std::string_view sep = "\t") {
-        for(size_t i = 0; i < this->keys.size(); ++i) {
-            os << this->keys[i]->get_value().to_string() << sep;
+    void print_keys(std::ostream& os, std::string_view sep = "\t") const {
+        for (size_t i = 0; i < this->keys.size(); ++i) {
+            if (i > 0) os << sep;
+            os << this->keys[i]->get_value().to_string();
         }
     }
 

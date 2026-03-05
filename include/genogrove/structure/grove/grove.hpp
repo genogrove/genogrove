@@ -1023,44 +1023,42 @@ class grove {
      * @brief Write the grove structure to a stream in SIF (Simple Interaction Format) for visualization
      * @param os Output stream to write to
      * @param root Root node of the tree to visualize
-     * @note Used for debugging and visualization; outputs node and leaf links in SIF format
+     * @note Used for debugging and visualization; outputs node links, leaf links, and key links in SIF format
      */
-    void grove_to_sif(std::ostream& os, node<key_type, data_type>* root) {
-        if(!root) { return; }
+    void grove_to_sif(std::ostream& os, node<key_type, data_type>* root) const {
+        if (!root) { return; }
         std::queue<node<key_type, data_type>*> q;
         q.push(root);
 
-        while(!q.empty()) {
-            // extract the node and remove from queue
-            node<key_type, data_type>* node = q.front();
+        while (!q.empty()) {
+            auto* current = q.front();
             q.pop();
-            if(!node->get_is_leaf()) {
-                // if not leaf add connected
-                for(auto child : node->get_children()) {
+            if (!current->get_is_leaf()) {
+                for (auto* child : current->get_children()) {
                     q.push(child);
                     os << "|";
-                    node->print_keys(os, "|");
-                    os << "\tnodelink\t|";
-                    child->print_keys(os,"|");
-                    os << "\n";
+                    current->print_keys(os, "|");
+                    os << "|\tnodelink\t|";
+                    child->print_keys(os, "|");
+                    os << "|\n";
                 }
             } else {
-                // if leaf print keys and link to next (if not nullptr)
-                if(node->get_next()) {
+                if (current->get_next()) {
                     os << "|";
-                    node->print_keys(os, "|");
-                    os << "\tleaflink\t|";
-                    node->get_next()->print_keys(os, "|");
-                    os << "\n";
+                    current->print_keys(os, "|");
+                    os << "|\tleaflink\t|";
+                    current->get_next()->print_keys(os, "|");
+                    os << "|\n";
                 }
 
-                // also print links to other keys
-                // for(auto key : node->get_keys()) {
-                //     auto neighbors = this->get_neighbors(key);
-                //     for(auto neighbor : neighbors) {
-                //         os << key->to_string() << "\tkeylink\t" << neighbor->to_string() << "\n";
-                //     }
-                // }
+                for (auto* key : current->get_keys()) {
+                    auto neighbors = graph_data.get_neighbors(key);
+                    for (auto* neighbor : neighbors) {
+                        os << key->get_value().to_string()
+                           << "\tkeylink\t"
+                           << neighbor->get_value().to_string() << "\n";
+                    }
+                }
             }
         }
     }
