@@ -2,7 +2,7 @@
 
 [![Ubuntu](https://img.shields.io/github/actions/workflow/status/genogrove/genogrove/ci-ubuntu.yml?branch=main&label=Ubuntu&style=flat)](https://github.com/genogrove/genogrove/actions/workflows/ci-ubuntu.yml)
 [![macOS](https://img.shields.io/github/actions/workflow/status/genogrove/genogrove/ci-macos.yml?branch=main&label=macOS&style=flat)](https://github.com/genogrove/genogrove/actions/workflows/ci-macos.yml)
-![Compilers](https://img.shields.io/badge/compilers-GCC%2012--14%20|%20Clang%2016--18%20|%20Apple%20Clang-informational)
+![Compilers](https://img.shields.io/badge/compilers-GCC%2013--14%20|%20Clang%2016--18%20|%20Apple%20Clang-informational)
 [![Release](https://img.shields.io/github/v/release/genogrove/genogrove)](https://github.com/genogrove/genogrove/releases/latest)
 ![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)
 [![Downloads](https://img.shields.io/github/downloads/genogrove/genogrove/total.svg)](https://github.com/genogrove/genogrove/releases)
@@ -52,17 +52,15 @@ for (auto* key : results.get_keys()) {
 
 ## Language Bindings
 
-| Language | Repository |
-|----------|------------|
-| Python | [pygenogrove](https://github.com/genogrove/pygenogrove) |
-| R | [genogrove-r](https://github.com/genogrove/genogrove-r) |
-| Rust | [genogrove-rs](https://github.com/genogrove/genogrove-rs) |
+- [pygenogrove](https://github.com/genogrove/pygenogrove) (python)
+- [genogrove-r](https://github.com/genogrove/genogrove-r) (R)
+- [genogrove-rs](https://github.com/genogrove/genogrove-rs) (Rust)
 
 ## Compiler Support
 
 | Platform | Compiler | Versions |
 |----------|----------|----------|
-| Ubuntu 24.04 | GCC | 12, 13, 14 |
+| Ubuntu 24.04 | GCC | 13, 14 |
 | Ubuntu 24.04 | Clang (LLVM) | 16, 17, 18 |
 | macOS 14 | Apple Clang | 15 (Xcode 15.4) |
 | macOS 15 | Apple Clang | 16 (Xcode 16.x) |
