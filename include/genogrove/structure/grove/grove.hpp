@@ -114,10 +114,10 @@ class grove {
     explicit grove(int order, float fill_factor = 1.0f)
         : order(order), fill_factor(fill_factor) {
         if (order < 2) {
-            throw std::out_of_range("grove order must be >= 2");
+            throw std::invalid_argument("grove order must be >= 2");
         }
         if (fill_factor < 0.5f || fill_factor > 1.0f) {
-            throw std::out_of_range("grove fill_factor must be in [0.5, 1.0]");
+            throw std::invalid_argument("grove fill_factor must be in [0.5, 1.0]");
         }
     }
 
@@ -455,10 +455,17 @@ class grove {
 
     /**
      * @brief Set the order (maximum capacity) of the grove
-     * @param order The new order value for the B+ tree
-     * @warning Changing order on an existing grove with data may cause undefined behavior
+     * @param order The new order value for the B+ tree (must be >= 2)
+     * @throws std::invalid_argument if order < 2
+     * @throws std::runtime_error if the grove already contains data
      */
     void set_order(int order) {
+        if (order < 2) {
+            throw std::invalid_argument("grove order must be >= 2");
+        }
+        if (!this->root_nodes.empty()) {
+            throw std::runtime_error("cannot change order on a populated grove");
+        }
         this->order = order;
     }
 
@@ -476,7 +483,7 @@ class grove {
      */
     void set_fill_factor(float fill_factor) {
         if (fill_factor < 0.5f || fill_factor > 1.0f) {
-            throw std::out_of_range("grove fill_factor must be in [0.5, 1.0]");
+            throw std::invalid_argument("grove fill_factor must be in [0.5, 1.0]");
         }
         this->fill_factor = fill_factor;
     }
@@ -631,18 +638,6 @@ class grove {
         }
 
         // Index has existing data - use rightmost-node append approach
-        // Runtime guard: verify precondition that all new keys are greater than existing max
-        const auto& max_existing_key = rightmost_node->get_keys().back()->get_value();
-        const auto& min_new_key = data.begin()->first;
-
-        if (!(min_new_key > max_existing_key)) {
-            throw std::runtime_error(
-                "Bulk insert precondition violated: all keys must be strictly greater "
-                "than existing keys in index '" + std::string(index) + "'. "
-                "Use individual insert() or insert_data() without bulk tag for unsorted insertion."
-            );
-        }
-
         // Perform rightmost-node append
         node<key_type, data_type>* current_node = rightmost_node;
         inserted_keys.reserve(data.size());

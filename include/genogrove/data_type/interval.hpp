@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 
 namespace genogrove::data_type {
@@ -65,10 +66,13 @@ namespace genogrove::data_type {
              *
              * @param start Starting position (0-based, inclusive)
              * @param end Ending position (0-based, inclusive)
-             *
-             * @note No validation is performed on coordinate validity (start <= end)
+             * @throws std::invalid_argument if start > end
              */
-            constexpr interval(size_t start, size_t end) : start(start), end(end) {}
+            constexpr interval(size_t start, size_t end) : start(start), end(end) {
+                if (start > end) {
+                    throw std::invalid_argument("interval: start must be <= end");
+                }
+            }
 
             ~interval() = default;
 
@@ -135,8 +139,7 @@ namespace genogrove::data_type {
              * @note Required by key_type_base concept
              */
             [[nodiscard]] static constexpr bool overlaps(const interval& a, const interval& b) {
-                interval intvl = {std::max(a.start, b.start), std::min(a.end, b.end)};
-                return intvl.start <= intvl.end;
+                return std::max(a.start, b.start) <= std::min(a.end, b.end);
             }
 
             /**

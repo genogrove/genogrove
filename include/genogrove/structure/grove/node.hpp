@@ -15,6 +15,7 @@
 #include <istream>
 #include <ostream>
 #include <ranges>
+#include <stdexcept>
 #include <string_view>
 #include <vector>
 
@@ -48,7 +49,7 @@ namespace genogrove::structure {
  *
  * @note Keys are NOT deleted in destructor as they're owned by the grove's deque
  * @note Only internal nodes delete their children; leaf nodes have no children to delete
- * @note The order must be at least 3 for proper B+ tree behavior
+ * @note The order must be at least 2
  */
 template <typename key_type, typename data_type = void>
 class node {
@@ -64,6 +65,9 @@ class node {
      */
     explicit node(int order)
         : order(order), keys{}, children{}, parent{nullptr}, next{nullptr}, is_leaf{false} {
+        if (order < 2) {
+            throw std::invalid_argument("B+ tree node order must be >= 2");
+        }
         // Reserve capacity upfront to avoid reallocations
         keys.reserve(order-1);
         children.reserve(order);
@@ -102,10 +106,14 @@ class node {
 
     /**
      * @brief Set the B+ tree order of this node
-     * @param k The new order value
+     * @param k The new order value (must be >= 2)
+     * @throws std::invalid_argument if k < 2
      * @note Changing order after construction may lead to inconsistent tree state
      */
     void set_order(int k) {
+        if (k < 2) {
+            throw std::invalid_argument("B+ tree node order must be >= 2");
+        }
         this->order = k;
     }
 
@@ -211,6 +219,9 @@ class node {
      * @note This performs a linear search; consider using indexed insertion for bulk operations
      */
     void insert_key_ptr(gdt::key<key_type, data_type>* key_ptr) {
+        if (key_ptr == nullptr) {
+            throw std::invalid_argument("insert_key_ptr: key_ptr must not be nullptr");
+        }
         auto it = std::ranges::lower_bound(this->keys, key_ptr->get_value(),
             std::less{}, [](const auto* k) -> const key_type& { return k->get_value(); });
         this->keys.insert(it, key_ptr);
@@ -219,15 +230,21 @@ class node {
     /**
      * @brief Insert a pre-allocated key pointer at specific index
      * @param key_ptr Pointer to key (already allocated by grove's deque)
-     * @param index Position to insert at (0-based)
+     * @param index Position to insert at (0-based, must be in [0, keys.size()])
+     * @throws std::out_of_range if index is out of bounds
      *
      * Directly inserts the key at the specified index without checking sort order.
      * Caller is responsible for ensuring the insertion maintains sorted order.
      *
      * @note Key must be allocated by grove before calling this
-     * @note No bounds checking - index must be valid (0 to keys.size())
      */
     void insert_key_ptr(gdt::key<key_type, data_type>* key_ptr, int index) {
+        if (key_ptr == nullptr) {
+            throw std::invalid_argument("insert_key_ptr: key_ptr must not be nullptr");
+        }
+        if (index < 0 || index > static_cast<int>(this->keys.size())) {
+            throw std::out_of_range("key index out of range");
+        }
         this->keys.insert(this->keys.begin() + index, key_ptr);
     }
 

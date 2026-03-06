@@ -50,6 +50,23 @@ TEST(genomicCoordinateTest, parameterizedConstructor) {
     EXPECT_EQ(coord3.get_end(), 200);
 }
 
+TEST(genomicCoordinateTest, constructorRejectsInvalidStrand) {
+    EXPECT_THROW(gdt::genomic_coordinate('Z', 100, 200), std::invalid_argument);
+    EXPECT_THROW(gdt::genomic_coordinate('x', 100, 200), std::invalid_argument);
+    EXPECT_THROW(gdt::genomic_coordinate('\0', 100, 200), std::invalid_argument);
+}
+
+TEST(genomicCoordinateTest, constructorRejectsInvertedInterval) {
+    EXPECT_THROW(gdt::genomic_coordinate('+', 200, 100), std::invalid_argument);
+}
+
+TEST(genomicCoordinateTest, constructorAcceptsAllValidStrands) {
+    EXPECT_NO_THROW(gdt::genomic_coordinate('+', 10, 20));
+    EXPECT_NO_THROW(gdt::genomic_coordinate('-', 10, 20));
+    EXPECT_NO_THROW(gdt::genomic_coordinate('.', 10, 20));
+    EXPECT_NO_THROW(gdt::genomic_coordinate('*', 10, 20));
+}
+
 TEST(genomicCoordinateTest, equalityOperator) {
     gdt::genomic_coordinate coord1('+', 20, 30);
     gdt::genomic_coordinate coord2('+', 20, 30);

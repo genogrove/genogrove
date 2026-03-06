@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 
 namespace genogrove::data_type {
@@ -74,11 +75,18 @@ namespace genogrove::data_type {
              * @param strand Strand indicator ('+', '-', '.', or '*')
              * @param start Starting position (0-based, inclusive)
              * @param end Ending position (0-based, inclusive)
-             *
-             * @note No validation is performed on strand value or coordinate validity
+             * @throws std::invalid_argument if strand is not one of '+', '-', '.', '*'
+             * @throws std::invalid_argument if start > end
              */
             constexpr genomic_coordinate(char strand, std::size_t start, std::size_t end)
-                : strand(strand), start(start), end(end) {}
+                : strand(strand), start(start), end(end) {
+                if (strand != '+' && strand != '-' && strand != '.' && strand != '*') {
+                    throw std::invalid_argument("genomic_coordinate: strand must be one of '+', '-', '.', '*'");
+                }
+                if (start > end) {
+                    throw std::invalid_argument("genomic_coordinate: start must be <= end");
+                }
+            }
 
             ~genomic_coordinate() = default;
 
