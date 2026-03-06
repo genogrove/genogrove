@@ -457,11 +457,14 @@ class grove {
      * @brief Set the order (maximum capacity) of the grove
      * @param order The new order value for the B+ tree (must be >= 2)
      * @throws std::invalid_argument if order < 2
-     * @warning Changing order on an existing grove with data may cause undefined behavior
+     * @throws std::runtime_error if the grove already contains data
      */
     void set_order(int order) {
         if (order < 2) {
             throw std::invalid_argument("grove order must be >= 2");
+        }
+        if (!this->root_nodes.empty()) {
+            throw std::runtime_error("cannot change order on a populated grove");
         }
         this->order = order;
     }

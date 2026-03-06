@@ -44,6 +44,18 @@ TEST(grovePreconditionTest, setOrderRejectsInvalid) {
     EXPECT_THROW(g.set_order(0), std::invalid_argument);
 }
 
+TEST(grovePreconditionTest, setOrderAllowedOnEmptyGrove) {
+    gst::grove<gdt::interval, int> g(10);
+    EXPECT_NO_THROW(g.set_order(5));
+    EXPECT_EQ(g.get_order(), 5);
+}
+
+TEST(grovePreconditionTest, setOrderRejectsPopulatedGrove) {
+    gst::grove<gdt::interval, int> g(10);
+    g.insert_data("chr1", gdt::interval{10, 20}, 1);
+    EXPECT_THROW(g.set_order(5), std::runtime_error);
+}
+
 TEST(grovePreconditionTest, setFillFactorRejectsInvalid) {
     gst::grove<gdt::interval, int> g(10);
     EXPECT_THROW(g.set_fill_factor(0.3f), std::invalid_argument);
@@ -74,6 +86,12 @@ TEST(nodePreconditionTest, insertKeyPtrRejectsOutOfBounds) {
     gdt::key<gdt::interval, int> k(gdt::interval{10, 20}, 1);
     EXPECT_THROW(n.insert_key_ptr(&k, -1), std::out_of_range);
     EXPECT_THROW(n.insert_key_ptr(&k, 1), std::out_of_range);
+}
+
+TEST(nodePreconditionTest, insertKeyPtrRejectsNull) {
+    gst::node<gdt::interval, int> n(10);
+    EXPECT_THROW(n.insert_key_ptr(nullptr), std::invalid_argument);
+    EXPECT_THROW(n.insert_key_ptr(nullptr, 0), std::invalid_argument);
 }
 
 // =============================================================================

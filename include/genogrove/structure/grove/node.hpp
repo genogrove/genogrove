@@ -49,7 +49,7 @@ namespace genogrove::structure {
  *
  * @note Keys are NOT deleted in destructor as they're owned by the grove's deque
  * @note Only internal nodes delete their children; leaf nodes have no children to delete
- * @note The order must be at least 3 for proper B+ tree behavior
+ * @note The order must be at least 2
  */
 template <typename key_type, typename data_type = void>
 class node {
@@ -219,6 +219,9 @@ class node {
      * @note This performs a linear search; consider using indexed insertion for bulk operations
      */
     void insert_key_ptr(gdt::key<key_type, data_type>* key_ptr) {
+        if (key_ptr == nullptr) {
+            throw std::invalid_argument("insert_key_ptr: key_ptr must not be nullptr");
+        }
         auto it = std::ranges::lower_bound(this->keys, key_ptr->get_value(),
             std::less{}, [](const auto* k) -> const key_type& { return k->get_value(); });
         this->keys.insert(it, key_ptr);
@@ -236,6 +239,9 @@ class node {
      * @note Key must be allocated by grove before calling this
      */
     void insert_key_ptr(gdt::key<key_type, data_type>* key_ptr, int index) {
+        if (key_ptr == nullptr) {
+            throw std::invalid_argument("insert_key_ptr: key_ptr must not be nullptr");
+        }
         if (index < 0 || index > static_cast<int>(this->keys.size())) {
             throw std::out_of_range("key index out of range");
         }
