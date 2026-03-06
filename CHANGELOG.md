@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Add precondition checks to public constructors and API boundaries**: Validate inputs at public API boundaries — `interval(start, end)` and `genomic_coordinate(strand, start, end)` reject inverted coordinates (`start > end`) and invalid strand characters; `node`/`grove` constructors and `set_order()` reject `order < 2`; `grove` constructor and `set_fill_factor()` reject out-of-range fill factors (now throw `std::invalid_argument` consistently); `node::insert_key_ptr(key, index)` bounds-checks the index; `query_result::add_key()` rejects null pointers. Fixed `interval::overlaps()` constructing a temporary interval with potentially inverted coordinates. Removed bulk insert sorted-precondition runtime check (caller's responsibility). Migrated `genomic_coordinate_grove_test` to the typed test pattern. ([#132](https://github.com/genogrove/genogrove/issues/132))
+
 ## [0.17.0] - 2026-03-05
 
 ### Refactored

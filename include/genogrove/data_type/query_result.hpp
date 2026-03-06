@@ -11,6 +11,7 @@
 #define GENOGROVE_DATA_TYPE_QUERY_RESULT_HPP
 
 // Standard
+#include <stdexcept>
 #include <vector>
 
 // genogrove
@@ -100,7 +101,12 @@ namespace genogrove::data_type {
              * @note This is primarily an internal method used during grove traversal
              * @note No ownership is transferred; the pointer is stored as-is
              */
-            void add_key(key<key_type, data_type>* key) { this->keys.push_back(key); }
+            void add_key(key<key_type, data_type>* key) {
+                if (key == nullptr) {
+                    throw std::invalid_argument("query_result::add_key: key must not be nullptr");
+                }
+                this->keys.push_back(key);
+            }
 
         private:
             key_type query;                              ///< The original query (stored by value)

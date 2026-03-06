@@ -45,6 +45,15 @@ TEST(intervalTest, parameterizedConstructor) {
     EXPECT_EQ(intvl3.get_end(), 2000);
 }
 
+TEST(intervalTest, constructorRejectsInvertedInterval) {
+    EXPECT_THROW(gdt::interval(200, 100), std::invalid_argument);
+    EXPECT_THROW(gdt::interval(10, 5), std::invalid_argument);
+}
+
+TEST(intervalTest, constructorAcceptsEqualStartEnd) {
+    EXPECT_NO_THROW(gdt::interval(100, 100));
+}
+
 TEST(intervalTest, equalityOperator) {
     gdt::interval intvl1(20, 30);
     gdt::interval intvl2(20, 30);

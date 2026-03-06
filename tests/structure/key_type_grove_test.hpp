@@ -874,30 +874,6 @@ TYPED_TEST_P(grove_typed_test, bulk_insert_multiple_indices) {
         << "Second index query should find expected results";
 }
 
-TYPED_TEST_P(grove_typed_test, bulk_insert_precondition_violation) {
-    // Insert initial data to an index
-    auto initial_data = this->generate_test_data(3);
-    auto keys1 = this->grove.insert_data(this->get_default_index(),
-        initial_data, gst::sorted, gst::bulk);
-    ASSERT_EQ(keys1.size(), 3) << "Should insert initial 3 keys";
-
-    // Try to insert data that violates the precondition (not strictly greater than existing max)
-    // We'll use the first item from initial_data which is definitely not > max
-    std::vector<std::pair<TypeParam, int>> invalid_data;
-    invalid_data.push_back(initial_data[0]); // This is less than the max
-
-    // Should throw runtime_error due to precondition violation
-    EXPECT_THROW(
-        this->grove.insert_data(this->get_default_index(), invalid_data, gst::sorted, gst::bulk),
-        std::runtime_error
-    ) << "Bulk insert with keys not strictly greater than existing max should throw";
-
-    // Verify original data is still intact
-    auto expectation = this->create_overlapping_query(initial_data);
-    auto results = this->grove.intersect(expectation.query, this->get_default_index());
-    EXPECT_TRUE(this->verify_query_results(results, initial_data, expectation.expected_indices))
-        << "Original data should remain intact after failed bulk insert";
-}
 
 TYPED_TEST_P(grove_typed_test, serialization) {
     // Insert data into grove
@@ -1304,7 +1280,6 @@ REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     bulk_insert_large_dataset,
     bulk_insert_append_mode,
     bulk_insert_multiple_indices,
-    bulk_insert_precondition_violation,
     serialization,
     serialization_empty_grove,
     serialization_multiple_indices,
