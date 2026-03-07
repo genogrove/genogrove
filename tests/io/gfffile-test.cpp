@@ -31,6 +31,9 @@ protected:
     fs::path gff3_path;
     fs::path gtf_path;
     fs::path invalid_gff_path;
+    fs::path invalid_score_path;
+    fs::path invalid_strand_path;
+    fs::path invalid_phase_path;
     fs::path gff3_path_gz;
     fs::path gtf_path_gz;
 
@@ -39,6 +42,9 @@ protected:
         gff3_path = test_data_dir / "test_gff3.gff";
         gtf_path = test_data_dir / "test.gtf";
         invalid_gff_path = test_data_dir / "test_invalid.gff";
+        invalid_score_path = test_data_dir / "test_invalid_score.gff";
+        invalid_strand_path = test_data_dir / "test_invalid_strand.gff";
+        invalid_phase_path = test_data_dir / "test_invalid_phase.gff";
         gff3_path_gz = test_data_dir / "test_gff3.gff.gz";
         gtf_path_gz = test_data_dir / "test.gtf.gz";
     }
@@ -239,6 +245,75 @@ TEST_F(gfffileTest, skipInvalidLines) {
     EXPECT_EQ(entries.size(), 1);
     EXPECT_EQ(entries[0].seqid, "chr1");
     // Error message should be set for the skipped line
+    EXPECT_FALSE(reader.get_error_message().empty());
+}
+
+TEST_F(gfffileTest, invalidScoreThrows) {
+    gio::gff_reader reader(invalid_score_path);
+    gio::gff_entry entry;
+
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.seqid, "chr1");
+
+    EXPECT_THROW(reader.read_next(entry), std::runtime_error);
+}
+
+TEST_F(gfffileTest, invalidScoreSkipped) {
+    gio::gff_reader reader(invalid_score_path, {.skip_invalid_lines = true});
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    EXPECT_EQ(entries.size(), 1);
+    EXPECT_EQ(entries[0].seqid, "chr1");
+    EXPECT_FALSE(reader.get_error_message().empty());
+}
+
+TEST_F(gfffileTest, invalidStrandThrows) {
+    gio::gff_reader reader(invalid_strand_path);
+    gio::gff_entry entry;
+
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.seqid, "chr1");
+
+    EXPECT_THROW(reader.read_next(entry), std::runtime_error);
+}
+
+TEST_F(gfffileTest, invalidStrandSkipped) {
+    gio::gff_reader reader(invalid_strand_path, {.skip_invalid_lines = true});
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    EXPECT_EQ(entries.size(), 1);
+    EXPECT_EQ(entries[0].seqid, "chr1");
+    EXPECT_FALSE(reader.get_error_message().empty());
+}
+
+TEST_F(gfffileTest, invalidPhaseThrows) {
+    gio::gff_reader reader(invalid_phase_path);
+    gio::gff_entry entry;
+
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.seqid, "chr1");
+
+    EXPECT_THROW(reader.read_next(entry), std::runtime_error);
+}
+
+TEST_F(gfffileTest, invalidPhaseSkipped) {
+    gio::gff_reader reader(invalid_phase_path, {.skip_invalid_lines = true});
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    EXPECT_EQ(entries.size(), 1);
+    EXPECT_EQ(entries[0].seqid, "chr1");
     EXPECT_FALSE(reader.get_error_message().empty());
 }
 
