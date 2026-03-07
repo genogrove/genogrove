@@ -1,4 +1,5 @@
 #include <genogrove/io/gff_reader.hpp>
+#include <genogrove/io/kstring_guard.hpp>
 
 // standard
 #include <algorithm>
@@ -89,9 +90,8 @@ namespace genogrove::io {
         // Store start position
         int64_t start_pos = bgzf_tell(bgzf_file);
         kstring_t str = {0, 0, nullptr};
+        kstring_guard guard{str};
 
-        // Wrap validation in try/catch: std::string(str.s) can throw bad_alloc
-        // after bgzf_getline allocated str.s, leaking both str.s and bgzf_file.
         try {
             int ret;
             bool found_data = false;
@@ -150,9 +150,6 @@ namespace genogrove::io {
                 break; // Valid line found, stop scanning
             }
 
-            free(str.s);
-            str.s = nullptr;
-
             // Ensure that we found at least one valid GFF line
             if (!found_data) {
                 throw std::runtime_error("No valid GFF data found in " + fpath.string());
@@ -163,7 +160,6 @@ namespace genogrove::io {
                 throw std::runtime_error("Failed to seek back to start of file: " + fpath.string());
             }
         } catch (...) {
-            free(str.s);
             bgzf_close(bgzf_file);
             bgzf_file = nullptr;
             throw;
@@ -244,33 +240,34 @@ namespace genogrove::io {
 
     bool gff_reader::read_next(gff_entry& entry) {
         while (true) {
-            kstring_t str = {0, 0, nullptr};
-            int ret = bgzf_getline(bgzf_file, '\n', &str);
-            if(ret < 0) {
-                if(str.s) free(str.s);
-                if(ret < -1) {
-                    throw std::runtime_error("I/O error reading file at line " + std::to_string(line_num + 1));
+            std::string line;
+            {
+                kstring_t str = {0, 0, nullptr};
+                kstring_guard guard{str};
+                int ret = bgzf_getline(bgzf_file, '\n', &str);
+                if(ret < 0) {
+                    if(ret < -1) {
+                        throw std::runtime_error("I/O error reading file at line " + std::to_string(line_num + 1));
+                    }
+                    return false; // EOF
                 }
-                return false; // EOF
+                line = std::string(str.s);
             }
-            std::string line(str.s);
-            free(str.s);
             if (!line.empty() && line.back() == '\r') line.pop_back();
             line_num++;
 
             // skip empty lines, comments, and directives (lines starting with #)
             while(line.empty() || line[0] == '#') {
                 kstring_t str2 = {0, 0, nullptr};
-                ret = bgzf_getline(bgzf_file, '\n', &str2);
+                kstring_guard guard2{str2};
+                int ret = bgzf_getline(bgzf_file, '\n', &str2);
                 if(ret < 0) {
-                    if (str2.s) free(str2.s);
                     if(ret < -1) {
                         throw std::runtime_error("I/O error reading file at line " + std::to_string(line_num + 1));
                     }
                     return false; // EOF
                 }
                 line = std::string(str2.s);
-                free(str2.s);
                 if (!line.empty() && line.back() == '\r') line.pop_back();
                 line_num++;
             }
