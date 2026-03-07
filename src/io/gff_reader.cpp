@@ -2,8 +2,11 @@
 
 // standard
 #include <algorithm>
-#include <ranges>
+#include <cerrno>
 #include <charconv>
+#include <clocale>
+#include <cstdlib>
+#include <ranges>
 
 // htslib
 #include <htslib/kstring.h>
@@ -335,30 +338,27 @@ namespace genogrove::io {
                 entry.start = start;
                 entry.end = end;
 
-                // Parse score
+                // Parse score (locale-independent via strtod_l)
                 if (*score_f != ".") {
                     std::string score_str(*score_f);
-                    size_t pos = 0;
-                    try {
-                        double score_val = std::stod(score_str, &pos);
-                        if (pos != score_str.size()) {
-                            error_message = "Invalid score value '" + score_str +
-                                            "' at line " + std::to_string(line_num);
-                            if (options_.skip_invalid_lines) continue;
-                            throw std::runtime_error(error_message);
-                        }
-                        entry.score = score_val;
-                    } catch (const std::invalid_argument&) {
-                        error_message = "Invalid score value '" + score_str +
-                                        "' at line " + std::to_string(line_num);
-                        if (options_.skip_invalid_lines) continue;
-                        throw std::runtime_error(error_message);
-                    } catch (const std::out_of_range&) {
+                    const char* begin = score_str.c_str();
+                    char* end_ptr = nullptr;
+                    errno = 0;
+                    static locale_t c_locale = newlocale(LC_ALL_MASK, "C", nullptr);
+                    double score_val = strtod_l(begin, &end_ptr, c_locale);
+                    if (errno == ERANGE) {
                         error_message = "Score value out of range '" + score_str +
                                         "' at line " + std::to_string(line_num);
                         if (options_.skip_invalid_lines) continue;
                         throw std::runtime_error(error_message);
                     }
+                    if (end_ptr == begin || end_ptr != begin + score_str.size()) {
+                        error_message = "Invalid score value '" + score_str +
+                                        "' at line " + std::to_string(line_num);
+                        if (options_.skip_invalid_lines) continue;
+                        throw std::runtime_error(error_message);
+                    }
+                    entry.score = score_val;
                 } else {
                     entry.score = std::nullopt;
                 }
