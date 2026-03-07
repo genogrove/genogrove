@@ -17,6 +17,8 @@ namespace genogrove::io {
 
 struct kstring_guard {
     kstring_t& ks;
+
+    explicit kstring_guard(kstring_t& k) : ks(k) {}
     ~kstring_guard() { free(ks.s); ks.s = nullptr; }
 
     kstring_guard(const kstring_guard&) = delete;
