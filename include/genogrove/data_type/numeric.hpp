@@ -60,7 +60,11 @@ namespace genogrove::data_type {
     class numeric {
         public:
             /**
-             * @brief Default constructor creating a numeric with value 0.
+             * @brief Default constructor initializing to INT_MIN.
+             *
+             * Uses the minimum representable value as a sentinel so that
+             * max-based aggregation in internal nodes works correctly:
+             * any real value will be greater than the default.
              */
             constexpr numeric() : value(std::numeric_limits<int>::min()) {}
 
