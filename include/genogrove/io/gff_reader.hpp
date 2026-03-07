@@ -126,9 +126,6 @@ namespace genogrove::io {
         // Helper to parse attributes (handles both GFF3 and GTF formats)
         // Returns the detected format
         gff_format parse_attributes(const std::string& attr_string, std::map<std::string, std::string, std::less<>>& attributes);
-
-        // Validate GTF-specific requirements (gene_id and transcript_id for most features)
-        bool validate_gtf_attributes(const gff_entry& entry);
     };
 
 }
