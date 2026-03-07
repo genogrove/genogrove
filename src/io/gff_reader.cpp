@@ -337,16 +337,28 @@ namespace genogrove::io {
 
                 // Parse score
                 if (*score_f != ".") {
-                    double score_val = 0.0;
-                    auto [ps, ecs] = std::from_chars(score_f->data(),
-                                                     score_f->data() + score_f->size(), score_val);
-                    if (ecs != std::errc{} || ps != score_f->data() + score_f->size()) {
-                        error_message = "Invalid score value '" + std::string(*score_f) +
+                    std::string score_str(*score_f);
+                    size_t pos = 0;
+                    try {
+                        double score_val = std::stod(score_str, &pos);
+                        if (pos != score_str.size()) {
+                            error_message = "Invalid score value '" + score_str +
+                                            "' at line " + std::to_string(line_num);
+                            if (options_.skip_invalid_lines) continue;
+                            throw std::runtime_error(error_message);
+                        }
+                        entry.score = score_val;
+                    } catch (const std::invalid_argument&) {
+                        error_message = "Invalid score value '" + score_str +
+                                        "' at line " + std::to_string(line_num);
+                        if (options_.skip_invalid_lines) continue;
+                        throw std::runtime_error(error_message);
+                    } catch (const std::out_of_range&) {
+                        error_message = "Score value out of range '" + score_str +
                                         "' at line " + std::to_string(line_num);
                         if (options_.skip_invalid_lines) continue;
                         throw std::runtime_error(error_message);
                     }
-                    entry.score = score_val;
                 } else {
                     entry.score = std::nullopt;
                 }
