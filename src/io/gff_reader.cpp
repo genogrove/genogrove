@@ -2,8 +2,11 @@
 
 // standard
 #include <algorithm>
-#include <ranges>
+#include <cerrno>
 #include <charconv>
+#include <clocale>
+#include <cstdlib>
+#include <ranges>
 
 // htslib
 #include <htslib/kstring.h>
@@ -32,11 +35,13 @@ namespace genogrove::io {
         auto exon_num_str = get_attribute("exon_number");
         if (!exon_num_str) return std::nullopt;
 
-        try {
-            return std::stoi(*exon_num_str);
-        } catch (...) {
+        int value = 0;
+        auto [ptr, ec] = std::from_chars(exon_num_str->data(),
+                                         exon_num_str->data() + exon_num_str->size(), value);
+        if (ec != std::errc{} || ptr != exon_num_str->data() + exon_num_str->size()) {
             return std::nullopt;
         }
+        return value;
     }
 
     std::optional<std::string> gff_entry::get_gene_name() const {
@@ -237,32 +242,6 @@ namespace genogrove::io {
         }
     }
 
-    bool gff_reader::validate_gtf_attributes(const gff_entry& entry) {
-        // GTF2 specification requires gene_id for all features
-        // transcript_id is required for transcript-level and below (exon, CDS, etc.)
-        // gene and transcript features may not have transcript_id
-
-        if (!entry.get_gene_id().has_value()) {
-            error_message = "GTF validation failed at line " + std::to_string(line_num) +
-                           ": missing required 'gene_id' attribute";
-            return false;
-        }
-
-        // Transcript-level features (exon, CDS, start_codon, stop_codon, UTR) require transcript_id
-        if (entry.type == "exon" || entry.type == "CDS" ||
-            entry.type == "start_codon" || entry.type == "stop_codon" ||
-            entry.type == "UTR" || entry.type == "5UTR" || entry.type == "3UTR") {
-
-            if (!entry.get_transcript_id().has_value()) {
-                error_message = "GTF validation failed at line " + std::to_string(line_num) +
-                               ": feature '" + entry.type + "' requires 'transcript_id' attribute";
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     bool gff_reader::read_next(gff_entry& entry) {
         while (true) {
             kstring_t str = {0, 0, nullptr};
@@ -359,13 +338,27 @@ namespace genogrove::io {
                 entry.start = start;
                 entry.end = end;
 
-                // Parse score
+                // Parse score (locale-independent via strtod_l)
                 if (*score_f != ".") {
-                    try {
-                        entry.score = std::stod(std::string(*score_f));
-                    } catch (...) {
-                        entry.score = std::nullopt;
+                    std::string score_str(*score_f);
+                    const char* begin = score_str.c_str();
+                    char* end_ptr = nullptr;
+                    errno = 0;
+                    static locale_t c_locale = newlocale(LC_ALL_MASK, "C", nullptr);
+                    double score_val = strtod_l(begin, &end_ptr, c_locale);
+                    if (errno == ERANGE) {
+                        error_message = "Score value out of range '" + score_str +
+                                        "' at line " + std::to_string(line_num);
+                        if (options_.skip_invalid_lines) continue;
+                        throw std::runtime_error(error_message);
                     }
+                    if (end_ptr == begin || end_ptr != begin + score_str.size()) {
+                        error_message = "Invalid score value '" + score_str +
+                                        "' at line " + std::to_string(line_num);
+                        if (options_.skip_invalid_lines) continue;
+                        throw std::runtime_error(error_message);
+                    }
+                    entry.score = score_val;
                 } else {
                     entry.score = std::nullopt;
                 }
@@ -375,18 +368,26 @@ namespace genogrove::io {
                                                 (*strand_f)[0] == '.' || (*strand_f)[0] == '?')) {
                     entry.strand = (*strand_f)[0];
                 } else {
-                    entry.strand = std::nullopt;
+                    error_message = "Invalid strand value '" + std::string(*strand_f) +
+                                    "' at line " + std::to_string(line_num) +
+                                    " (expected '+', '-', '.', or '?')";
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
                 }
 
                 // Parse phase
                 if (*phase_f != ".") {
                     int phase = 0;
                     auto [pp, ecp] = std::from_chars(phase_f->data(), phase_f->data() + phase_f->size(), phase);
-                    if (ecp == std::errc{} && phase >= 0 && phase <= 2) {
-                        entry.phase = phase;
-                    } else {
-                        entry.phase = std::nullopt;
+                    if (ecp != std::errc{} || pp != phase_f->data() + phase_f->size() ||
+                        phase < 0 || phase > 2) {
+                        error_message = "Invalid phase value '" + std::string(*phase_f) +
+                                        "' at line " + std::to_string(line_num) +
+                                        " (expected 0, 1, 2, or '.')";
+                        if (options_.skip_invalid_lines) continue;
+                        throw std::runtime_error(error_message);
                     }
+                    entry.phase = phase;
                 } else {
                     entry.phase = std::nullopt;
                 }
