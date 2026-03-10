@@ -222,3 +222,34 @@ TEST(numericTest, serializationMultiple) {
     EXPECT_EQ(n3, restored3);
     EXPECT_EQ(n4, restored4);
 }
+
+// =============================================================================
+// Serialization error paths
+// =============================================================================
+
+TEST(numericTest, deserializeFromEmptyStream) {
+    std::stringstream ss;
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::numeric::deserialize(ss);
+    }, std::runtime_error);
+}
+
+TEST(numericTest, deserializeFromTruncatedStream) {
+    gdt::numeric original(42);
+    std::stringstream ss;
+    original.serialize(ss);
+
+    // Truncate: keep only part of the data
+    std::string data = ss.str();
+    std::stringstream truncated(data.substr(0, sizeof(int) / 2));
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::numeric::deserialize(truncated);
+    }, std::runtime_error);
+}
+
+TEST(numericTest, serializeToFailedStream) {
+    gdt::numeric n(42);
+    std::stringstream ss;
+    ss.setstate(std::ios::failbit);
+    EXPECT_THROW(n.serialize(ss), std::runtime_error);
+}

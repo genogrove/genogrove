@@ -204,6 +204,13 @@ TEST_F(filetypeDetectorTest, singleByteFileShouldReturnNone) {
     fs::remove(single_byte_file);
 }
 
+TEST_F(filetypeDetectorTest, nonExistentFileThrows) {
+    gio::filetype_detector detector;
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = detector.detect_filetype("/nonexistent/path/file.bed");
+    }, std::runtime_error);
+}
+
 TEST_F(filetypeDetectorTest, fileWithWrongExtensionButCorrectMagicBytes) {
     // Create a gzipped file with .txt extension
     fs::path misnamed_file = test_data_dir / "test_misnamed.txt";

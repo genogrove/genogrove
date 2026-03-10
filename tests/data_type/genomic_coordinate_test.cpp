@@ -402,3 +402,34 @@ TEST(genomicCoordinateTest, serializationAllStrands) {
     EXPECT_EQ(coord_unstranded, restored3);
     EXPECT_EQ(coord_wildcard, restored4);
 }
+
+// =============================================================================
+// Serialization error paths
+// =============================================================================
+
+TEST(genomicCoordinateTest, deserializeFromEmptyStream) {
+    std::stringstream ss;
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::genomic_coordinate::deserialize(ss);
+    }, std::runtime_error);
+}
+
+TEST(genomicCoordinateTest, deserializeFromTruncatedStream) {
+    gdt::genomic_coordinate original('+', 100, 200);
+    std::stringstream ss;
+    original.serialize(ss);
+
+    // Truncate: keep only the strand byte
+    std::string data = ss.str();
+    std::stringstream truncated(data.substr(0, 1));
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::genomic_coordinate::deserialize(truncated);
+    }, std::runtime_error);
+}
+
+TEST(genomicCoordinateTest, serializeToFailedStream) {
+    gdt::genomic_coordinate coord('+', 10, 20);
+    std::stringstream ss;
+    ss.setstate(std::ios::failbit);
+    EXPECT_THROW(coord.serialize(ss), std::runtime_error);
+}

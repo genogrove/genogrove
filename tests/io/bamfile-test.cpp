@@ -582,6 +582,40 @@ TEST_F(BamReaderTest, FileNotFound) {
     }, std::runtime_error);
 }
 
+TEST_F(BamReaderTest, EmptySamFileHeaderOnly) {
+    // Create a SAM file with a valid header but no records
+    fs::path empty_sam = test_data_dir / "test_empty_records.sam";
+    {
+        std::ofstream out(empty_sam);
+        out << "@HD\tVN:1.6\tSO:coordinate\n";
+        out << "@SQ\tSN:chr1\tLN:1000000\n";
+    }
+
+    gio::bam_reader reader(empty_sam);
+    gio::sam_entry entry;
+
+    EXPECT_FALSE(reader.read_next(entry));
+    EXPECT_FALSE(reader.has_next());
+
+    // Iteration should produce zero entries
+    gio::bam_reader reader2(empty_sam);
+    int count = 0;
+    for ([[maybe_unused]] const auto& e : reader2) {
+        count++;
+    }
+    EXPECT_EQ(count, 0);
+
+    fs::remove(empty_sam);
+}
+
+TEST_F(BamReaderTest, ErrorMessageEmptyAfterSuccessfulRead) {
+    gio::bam_reader reader(sam_path);
+
+    for ([[maybe_unused]] const auto& entry : reader) {}
+
+    EXPECT_TRUE(reader.get_error_message().empty());
+}
+
 // ==========================================
 // Move Semantics Tests
 // ==========================================

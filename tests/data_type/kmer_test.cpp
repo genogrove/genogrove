@@ -344,3 +344,34 @@ TEST(kmerTest, roundTripLongerSequences) {
         EXPECT_EQ(k.to_string(), seq) << "Failed for sequence: " << seq;
     }
 }
+
+// =============================================================================
+// Serialization error paths
+// =============================================================================
+
+TEST(kmerTest, deserializeFromEmptyStream) {
+    std::stringstream ss;
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::kmer::deserialize(ss);
+    }, std::runtime_error);
+}
+
+TEST(kmerTest, deserializeFromTruncatedStream) {
+    gdt::kmer original("ACGTACGT");
+    std::stringstream ss;
+    original.serialize(ss);
+
+    // Truncate: keep only part of the data
+    std::string data = ss.str();
+    std::stringstream truncated(data.substr(0, 1));
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::kmer::deserialize(truncated);
+    }, std::runtime_error);
+}
+
+TEST(kmerTest, serializeToFailedStream) {
+    gdt::kmer k("ACGT");
+    std::stringstream ss;
+    ss.setstate(std::ios::failbit);
+    EXPECT_THROW(k.serialize(ss), std::runtime_error);
+}
