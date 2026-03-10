@@ -472,5 +472,7 @@ TEST_F(DataRegistryTest, SerializeToFailedStream) {
 
 TEST_F(DataRegistryTest, DeserializeFromEmptyStream) {
     std::stringstream ss;
-    EXPECT_THROW(gdt::data_registry<int>::deserialize(ss), std::runtime_error);
+    EXPECT_THROW({
+        [[maybe_unused]] auto& result = gdt::data_registry<int>::deserialize(ss);
+    }, std::runtime_error);
 }
