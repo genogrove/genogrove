@@ -402,3 +402,51 @@ TEST(genomicCoordinateTest, serializationAllStrands) {
     EXPECT_EQ(coord_unstranded, restored3);
     EXPECT_EQ(coord_wildcard, restored4);
 }
+
+// =============================================================================
+// Constructor validation
+// =============================================================================
+
+TEST(genomicCoordinateTest, constructorRejectsInvalidStrand) {
+    EXPECT_THROW(gdt::genomic_coordinate('Z', 10, 20), std::invalid_argument);
+    EXPECT_THROW(gdt::genomic_coordinate('x', 10, 20), std::invalid_argument);
+    EXPECT_THROW(gdt::genomic_coordinate('0', 10, 20), std::invalid_argument);
+}
+
+TEST(genomicCoordinateTest, constructorRejectsInvertedRange) {
+    EXPECT_THROW(gdt::genomic_coordinate('+', 200, 100), std::invalid_argument);
+}
+
+TEST(genomicCoordinateTest, constructorAcceptsAllValidStrands) {
+    EXPECT_NO_THROW(gdt::genomic_coordinate('+', 10, 20));
+    EXPECT_NO_THROW(gdt::genomic_coordinate('-', 10, 20));
+    EXPECT_NO_THROW(gdt::genomic_coordinate('.', 10, 20));
+    EXPECT_NO_THROW(gdt::genomic_coordinate('*', 10, 20));
+}
+
+// =============================================================================
+// Serialization error paths
+// =============================================================================
+
+TEST(genomicCoordinateTest, deserializeFromEmptyStream) {
+    std::stringstream ss;
+    EXPECT_THROW(gdt::genomic_coordinate::deserialize(ss), std::runtime_error);
+}
+
+TEST(genomicCoordinateTest, deserializeFromTruncatedStream) {
+    gdt::genomic_coordinate original('+', 100, 200);
+    std::stringstream ss;
+    original.serialize(ss);
+
+    // Truncate: keep only the strand byte
+    std::string data = ss.str();
+    std::stringstream truncated(data.substr(0, 1));
+    EXPECT_THROW(gdt::genomic_coordinate::deserialize(truncated), std::runtime_error);
+}
+
+TEST(genomicCoordinateTest, serializeToFailedStream) {
+    gdt::genomic_coordinate coord('+', 10, 20);
+    std::stringstream ss;
+    ss.setstate(std::ios::failbit);
+    EXPECT_THROW(coord.serialize(ss), std::runtime_error);
+}

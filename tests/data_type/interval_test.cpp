@@ -341,3 +341,42 @@ TEST(intervalTest, serializationMultiple) {
     EXPECT_EQ(intvl2, restored2);
     EXPECT_EQ(intvl3, restored3);
 }
+
+// =============================================================================
+// Constructor validation
+// =============================================================================
+
+TEST(intervalTest, constructorRejectsInvertedRange) {
+    EXPECT_THROW(gdt::interval(200, 100), std::invalid_argument);
+}
+
+TEST(intervalTest, constructorAcceptsEqualStartEnd) {
+    EXPECT_NO_THROW(gdt::interval(100, 100));
+}
+
+// =============================================================================
+// Serialization error paths
+// =============================================================================
+
+TEST(intervalTest, deserializeFromEmptyStream) {
+    std::stringstream ss;
+    EXPECT_THROW(gdt::interval::deserialize(ss), std::runtime_error);
+}
+
+TEST(intervalTest, deserializeFromTruncatedStream) {
+    gdt::interval original(100, 200);
+    std::stringstream ss;
+    original.serialize(ss);
+
+    // Truncate: keep only part of the data
+    std::string data = ss.str();
+    std::stringstream truncated(data.substr(0, sizeof(size_t) / 2));
+    EXPECT_THROW(gdt::interval::deserialize(truncated), std::runtime_error);
+}
+
+TEST(intervalTest, serializeToFailedStream) {
+    gdt::interval intvl(10, 20);
+    std::stringstream ss;
+    ss.setstate(std::ios::failbit);
+    EXPECT_THROW(intvl.serialize(ss), std::runtime_error);
+}

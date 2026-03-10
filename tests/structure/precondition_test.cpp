@@ -95,6 +95,48 @@ TEST(nodePreconditionTest, insertKeyPtrRejectsNull) {
 }
 
 // =============================================================================
+// Node child operations
+// =============================================================================
+
+TEST(nodePreconditionTest, addChildRejectsOutOfRange) {
+    gst::node<gdt::interval, int> parent(10);
+    gst::node<gdt::interval, int> child(10);
+    EXPECT_THROW(parent.add_child(&child, -1), std::out_of_range);
+    EXPECT_THROW(parent.add_child(&child, 1), std::out_of_range);
+}
+
+TEST(nodePreconditionTest, addChildAcceptsValidIndex) {
+    gst::node<gdt::interval, int> parent(10);
+    gst::node<gdt::interval, int> child(10);
+    EXPECT_NO_THROW(parent.add_child(&child, 0));
+}
+
+TEST(nodePreconditionTest, getChildRejectsOutOfRange) {
+    gst::node<gdt::interval, int> n(10);
+    EXPECT_THROW(n.get_child(0), std::out_of_range);
+    EXPECT_THROW(n.get_child(-1), std::out_of_range);
+}
+
+TEST(nodePreconditionTest, getChildReturnsValidChild) {
+    gst::node<gdt::interval, int> parent(10);
+    gst::node<gdt::interval, int> child(10);
+    parent.add_child(&child, 0);
+    EXPECT_EQ(parent.get_child(0), &child);
+}
+
+// =============================================================================
+// Grove intersect with non-existent index
+// =============================================================================
+
+TEST(grovePreconditionTest, intersectNonExistentIndexReturnsEmpty) {
+    gst::grove<gdt::interval, int> g(10);
+    g.insert_data("chr1", gdt::interval{10, 20}, 1);
+
+    auto result = g.intersect(gdt::interval{10, 20}, "chrX");
+    EXPECT_EQ(result.size(), 0);
+}
+
+// =============================================================================
 // query_result preconditions
 // =============================================================================
 

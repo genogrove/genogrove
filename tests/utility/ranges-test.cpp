@@ -25,3 +25,15 @@ TEST(ranges, empty)
     EXPECT_EQ(genogrove::utility::key_lookup(map, uint8_t(2)), "b");
     EXPECT_EQ(genogrove::utility::key_lookup(map, uint8_t(3)), "c");
 }
+
+TEST(ranges, valueLookupNonExistentKey)
+{
+    std::unordered_map<std::string, uint8_t> map = {{"a", 1}, {"b", 2}};
+    EXPECT_EQ(genogrove::utility::value_lookup(map, "z"), std::nullopt);
+}
+
+TEST(ranges, keyLookupNonExistentValue)
+{
+    std::unordered_map<std::string, uint8_t> map = {{"a", 1}, {"b", 2}};
+    EXPECT_EQ(genogrove::utility::key_lookup(map, uint8_t(99)), std::nullopt);
+}

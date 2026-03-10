@@ -458,3 +458,19 @@ TEST_F(DataRegistryTest, CombinedRegistryAndGroveSerialization) {
     ASSERT_EQ(chr2_results.get_keys().size(), 1);
     EXPECT_EQ(*restored_reg.get(chr2_results.get_keys()[0]->get_data()), "SampleC_heart");
 }
+
+// --- Serialization error path tests ---
+
+TEST_F(DataRegistryTest, SerializeToFailedStream) {
+    auto& reg = gdt::data_registry<int>::instance();
+    reg.register_data(42);
+
+    std::stringstream ss;
+    ss.setstate(std::ios::failbit);
+    EXPECT_THROW(reg.serialize(ss), std::runtime_error);
+}
+
+TEST_F(DataRegistryTest, DeserializeFromEmptyStream) {
+    std::stringstream ss;
+    EXPECT_THROW(gdt::data_registry<int>::deserialize(ss), std::runtime_error);
+}
