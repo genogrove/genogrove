@@ -107,8 +107,9 @@ TEST(nodePreconditionTest, addChildRejectsOutOfRange) {
 
 TEST(nodePreconditionTest, addChildAcceptsValidIndex) {
     gst::node<gdt::interval, int> parent(10);
-    gst::node<gdt::interval, int> child(10);
-    EXPECT_NO_THROW(parent.add_child(&child, 0));
+    auto* child = new gst::node<gdt::interval, int>(10);
+    EXPECT_NO_THROW(parent.add_child(child, 0));
+    // parent's destructor will delete child (is_leaf defaults to false)
 }
 
 TEST(nodePreconditionTest, getChildRejectsOutOfRange) {
@@ -119,9 +120,10 @@ TEST(nodePreconditionTest, getChildRejectsOutOfRange) {
 
 TEST(nodePreconditionTest, getChildReturnsValidChild) {
     gst::node<gdt::interval, int> parent(10);
-    gst::node<gdt::interval, int> child(10);
-    parent.add_child(&child, 0);
-    EXPECT_EQ(parent.get_child(0), &child);
+    auto* child = new gst::node<gdt::interval, int>(10);
+    parent.add_child(child, 0);
+    EXPECT_EQ(parent.get_child(0), child);
+    // parent's destructor will delete child
 }
 
 // =============================================================================
