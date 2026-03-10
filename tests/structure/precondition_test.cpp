@@ -133,7 +133,7 @@ TEST(grovePreconditionTest, intersectNonExistentIndexReturnsEmpty) {
     g.insert_data("chr1", gdt::interval{10, 20}, 1);
 
     auto result = g.intersect(gdt::interval{10, 20}, "chrX");
-    EXPECT_EQ(result.size(), 0);
+    EXPECT_EQ(result.get_keys().size(), 0);
 }
 
 // =============================================================================

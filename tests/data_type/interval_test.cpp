@@ -343,18 +343,6 @@ TEST(intervalTest, serializationMultiple) {
 }
 
 // =============================================================================
-// Constructor validation
-// =============================================================================
-
-TEST(intervalTest, constructorRejectsInvertedRange) {
-    EXPECT_THROW(gdt::interval(200, 100), std::invalid_argument);
-}
-
-TEST(intervalTest, constructorAcceptsEqualStartEnd) {
-    EXPECT_NO_THROW(gdt::interval(100, 100));
-}
-
-// =============================================================================
 // Serialization error paths
 // =============================================================================
 

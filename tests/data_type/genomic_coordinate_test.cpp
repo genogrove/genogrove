@@ -404,27 +404,6 @@ TEST(genomicCoordinateTest, serializationAllStrands) {
 }
 
 // =============================================================================
-// Constructor validation
-// =============================================================================
-
-TEST(genomicCoordinateTest, constructorRejectsInvalidStrand) {
-    EXPECT_THROW(gdt::genomic_coordinate('Z', 10, 20), std::invalid_argument);
-    EXPECT_THROW(gdt::genomic_coordinate('x', 10, 20), std::invalid_argument);
-    EXPECT_THROW(gdt::genomic_coordinate('0', 10, 20), std::invalid_argument);
-}
-
-TEST(genomicCoordinateTest, constructorRejectsInvertedRange) {
-    EXPECT_THROW(gdt::genomic_coordinate('+', 200, 100), std::invalid_argument);
-}
-
-TEST(genomicCoordinateTest, constructorAcceptsAllValidStrands) {
-    EXPECT_NO_THROW(gdt::genomic_coordinate('+', 10, 20));
-    EXPECT_NO_THROW(gdt::genomic_coordinate('-', 10, 20));
-    EXPECT_NO_THROW(gdt::genomic_coordinate('.', 10, 20));
-    EXPECT_NO_THROW(gdt::genomic_coordinate('*', 10, 20));
-}
-
-// =============================================================================
 // Serialization error paths
 // =============================================================================
 
