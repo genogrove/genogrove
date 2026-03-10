@@ -348,7 +348,9 @@ TEST(intervalTest, serializationMultiple) {
 
 TEST(intervalTest, deserializeFromEmptyStream) {
     std::stringstream ss;
-    EXPECT_THROW(gdt::interval::deserialize(ss), std::runtime_error);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::interval::deserialize(ss);
+    }, std::runtime_error);
 }
 
 TEST(intervalTest, deserializeFromTruncatedStream) {
@@ -359,7 +361,9 @@ TEST(intervalTest, deserializeFromTruncatedStream) {
     // Truncate: keep only part of the data
     std::string data = ss.str();
     std::stringstream truncated(data.substr(0, sizeof(size_t) / 2));
-    EXPECT_THROW(gdt::interval::deserialize(truncated), std::runtime_error);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::interval::deserialize(truncated);
+    }, std::runtime_error);
 }
 
 TEST(intervalTest, serializeToFailedStream) {

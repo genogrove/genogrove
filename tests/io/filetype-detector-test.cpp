@@ -206,7 +206,9 @@ TEST_F(filetypeDetectorTest, singleByteFileShouldReturnNone) {
 
 TEST_F(filetypeDetectorTest, nonExistentFileThrows) {
     gio::filetype_detector detector;
-    EXPECT_THROW(detector.detect_filetype("/nonexistent/path/file.bed"), std::runtime_error);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = detector.detect_filetype("/nonexistent/path/file.bed");
+    }, std::runtime_error);
 }
 
 TEST_F(filetypeDetectorTest, fileWithWrongExtensionButCorrectMagicBytes) {

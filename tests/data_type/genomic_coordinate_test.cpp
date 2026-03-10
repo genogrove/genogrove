@@ -409,7 +409,9 @@ TEST(genomicCoordinateTest, serializationAllStrands) {
 
 TEST(genomicCoordinateTest, deserializeFromEmptyStream) {
     std::stringstream ss;
-    EXPECT_THROW(gdt::genomic_coordinate::deserialize(ss), std::runtime_error);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::genomic_coordinate::deserialize(ss);
+    }, std::runtime_error);
 }
 
 TEST(genomicCoordinateTest, deserializeFromTruncatedStream) {
@@ -420,7 +422,9 @@ TEST(genomicCoordinateTest, deserializeFromTruncatedStream) {
     // Truncate: keep only the strand byte
     std::string data = ss.str();
     std::stringstream truncated(data.substr(0, 1));
-    EXPECT_THROW(gdt::genomic_coordinate::deserialize(truncated), std::runtime_error);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::genomic_coordinate::deserialize(truncated);
+    }, std::runtime_error);
 }
 
 TEST(genomicCoordinateTest, serializeToFailedStream) {

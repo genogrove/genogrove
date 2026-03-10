@@ -351,7 +351,9 @@ TEST(kmerTest, roundTripLongerSequences) {
 
 TEST(kmerTest, deserializeFromEmptyStream) {
     std::stringstream ss;
-    EXPECT_THROW(gdt::kmer::deserialize(ss), std::runtime_error);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::kmer::deserialize(ss);
+    }, std::runtime_error);
 }
 
 TEST(kmerTest, deserializeFromTruncatedStream) {
@@ -362,7 +364,9 @@ TEST(kmerTest, deserializeFromTruncatedStream) {
     // Truncate: keep only part of the data
     std::string data = ss.str();
     std::stringstream truncated(data.substr(0, 1));
-    EXPECT_THROW(gdt::kmer::deserialize(truncated), std::runtime_error);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::kmer::deserialize(truncated);
+    }, std::runtime_error);
 }
 
 TEST(kmerTest, serializeToFailedStream) {

@@ -229,7 +229,9 @@ TEST(numericTest, serializationMultiple) {
 
 TEST(numericTest, deserializeFromEmptyStream) {
     std::stringstream ss;
-    EXPECT_THROW(gdt::numeric::deserialize(ss), std::runtime_error);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::numeric::deserialize(ss);
+    }, std::runtime_error);
 }
 
 TEST(numericTest, deserializeFromTruncatedStream) {
@@ -240,7 +242,9 @@ TEST(numericTest, deserializeFromTruncatedStream) {
     // Truncate: keep only part of the data
     std::string data = ss.str();
     std::stringstream truncated(data.substr(0, sizeof(int) / 2));
-    EXPECT_THROW(gdt::numeric::deserialize(truncated), std::runtime_error);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::numeric::deserialize(truncated);
+    }, std::runtime_error);
 }
 
 TEST(numericTest, serializeToFailedStream) {
