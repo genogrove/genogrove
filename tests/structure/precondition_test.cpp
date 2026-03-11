@@ -10,6 +10,9 @@
 // Google Test
 #include <gtest/gtest.h>
 
+// Standard
+#include <type_traits>
+
 // genogrove
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/data_type/query_result.hpp>
@@ -136,6 +139,54 @@ TEST(grovePreconditionTest, intersectNonExistentIndexReturnsEmpty) {
 
     auto result = g.intersect(gdt::interval{10, 20}, "chrX");
     EXPECT_EQ(result.get_keys().size(), 0);
+}
+
+// =============================================================================
+// query_result preconditions
+// =============================================================================
+
+// =============================================================================
+// Rule of Five: node and grove are non-copyable, movable
+// =============================================================================
+
+TEST(ruleOfFiveTest, nodeIsNotCopyable) {
+    static_assert(!std::is_copy_constructible_v<gst::node<gdt::interval, int>>);
+    static_assert(!std::is_copy_assignable_v<gst::node<gdt::interval, int>>);
+}
+
+TEST(ruleOfFiveTest, nodeIsMoveConstructible) {
+    static_assert(std::is_nothrow_move_constructible_v<gst::node<gdt::interval, int>>);
+}
+
+TEST(ruleOfFiveTest, nodeIsMoveAssignable) {
+    static_assert(std::is_nothrow_move_assignable_v<gst::node<gdt::interval, int>>);
+}
+
+TEST(ruleOfFiveTest, groveIsNotCopyable) {
+    static_assert(!std::is_copy_constructible_v<gst::grove<gdt::interval, int>>);
+    static_assert(!std::is_copy_assignable_v<gst::grove<gdt::interval, int>>);
+}
+
+TEST(ruleOfFiveTest, groveIsMoveConstructible) {
+    static_assert(std::is_nothrow_move_constructible_v<gst::grove<gdt::interval, int>>);
+}
+
+TEST(ruleOfFiveTest, groveIsMoveAssignable) {
+    static_assert(std::is_nothrow_move_assignable_v<gst::grove<gdt::interval, int>>);
+}
+
+TEST(ruleOfFiveTest, groveMoveTransfersOwnership) {
+    gst::grove<gdt::interval, int> g1(10);
+    g1.insert_data("chr1", gdt::interval{10, 20}, 1);
+
+    gst::grove<gdt::interval, int> g2(std::move(g1));
+
+    // g2 should have the data
+    auto result = g2.intersect(gdt::interval{10, 20}, "chr1");
+    EXPECT_EQ(result.get_keys().size(), 1);
+
+    // g1 should be empty (moved-from)
+    EXPECT_EQ(g1.get_root_nodes().size(), 0);
 }
 
 // =============================================================================

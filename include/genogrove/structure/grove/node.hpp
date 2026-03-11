@@ -92,6 +92,39 @@ class node {
         }
     }
 
+    // Non-copyable: children are owned raw pointers, shallow copy causes double-free
+    node(const node&) = delete;
+    node& operator=(const node&) = delete;
+
+    // Movable: transfer ownership of children, leave source empty
+    node(node&& other) noexcept
+        : order(other.order), keys(std::move(other.keys)),
+          children(std::move(other.children)), parent(other.parent),
+          next(other.next), is_leaf(other.is_leaf) {
+        other.parent = nullptr;
+        other.next = nullptr;
+    }
+
+    node& operator=(node&& other) noexcept {
+        if (this != &other) {
+            // Delete existing children
+            if (!is_leaf) {
+                for (auto* child : children) {
+                    delete child;
+                }
+            }
+            order = other.order;
+            keys = std::move(other.keys);
+            children = std::move(other.children);
+            parent = other.parent;
+            next = other.next;
+            is_leaf = other.is_leaf;
+            other.parent = nullptr;
+            other.next = nullptr;
+        }
+        return *this;
+    }
+
     // =========================================================================
     // Accessors & Mutators
     // =========================================================================

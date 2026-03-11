@@ -137,6 +137,14 @@ class grove {
         }
     }
 
+    // Non-copyable: root_nodes are owned raw pointers, shallow copy causes double-free
+    grove(const grove&) = delete;
+    grove& operator=(const grove&) = delete;
+
+    // Movable: container moves leave source empty, so source destructor deletes nothing
+    grove(grove&&) noexcept = default;
+    grove& operator=(grove&&) noexcept = default;
+
     /**
      * @brief Get reference to the graph overlay
      * @return Reference to the single graph for this grove
