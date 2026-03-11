@@ -507,7 +507,8 @@ class grove {
     /**
      * @brief Replace the grove's root nodes with a new set
      * @param root_nodes New map of root nodes to use
-     * @note This deletes all existing root nodes and clears rightmost node cache
+     * @note Deletes all existing tree nodes, clears key storage, graph overlay,
+     *       and rightmost node cache to prevent dangling pointers and memory leaks
      */
     void set_root_nodes(std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>> root_nodes) {
         for(auto& [_, root] : this->root_nodes) {
@@ -515,6 +516,9 @@ class grove {
         }
         this->root_nodes = std::move(root_nodes);
         this->rightmost_nodes.clear();
+        this->key_storage.clear();
+        this->external_key_storage.clear();
+        this->graph_data = graph_overlay<key_type, data_type, edge_data_type>{};
     }
 
     /**
