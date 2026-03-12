@@ -85,7 +85,8 @@ namespace genogrove::io {
     }
 
     bam_reader::bam_reader(bam_reader&& other) noexcept
-        : sam_file_(other.sam_file_)
+        : file_reader<bam_entry>(std::move(other))
+        , sam_file_(other.sam_file_)
         , header_(other.header_)
         , alignment_(other.alignment_)
         , options_(other.options_)
@@ -102,6 +103,7 @@ namespace genogrove::io {
 
     bam_reader& bam_reader::operator=(bam_reader&& other) noexcept {
         if (this != &other) {
+            file_reader<bam_entry>::operator=(std::move(other));
             cleanup();
 
             sam_file_ = other.sam_file_;
