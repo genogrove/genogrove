@@ -462,22 +462,6 @@ class grove {
     }
 
     /**
-     * @brief Set the order (maximum capacity) of the grove
-     * @param order The new order value for the B+ tree (must be >= 2)
-     * @throws std::invalid_argument if order < 2
-     * @throws std::runtime_error if the grove already contains data
-     */
-    void set_order(int order) {
-        if (order < 2) {
-            throw std::invalid_argument("grove order must be >= 2");
-        }
-        if (!this->root_nodes.empty()) {
-            throw std::runtime_error("cannot change order on a populated grove");
-        }
-        this->order = order;
-    }
-
-    /**
      * @brief Get the fill factor for sorted insertion splits
      * @return Fill factor in [0.5, 1.0]
      */
@@ -531,6 +515,7 @@ class grove {
         return ggu::value_lookup(this->rightmost_nodes, key).value_or(nullptr);
     }
 
+  private:
     /**
      * @brief Set the rightmost leaf node for a given index
      * @param key The index name (e.g., chromosome name)
@@ -569,6 +554,7 @@ class grove {
         return root;
     }
 
+  public:
     /**
      * @brief Insert a sorted data point into the grove using optimized sorted insertion
      * @param index The index name (e.g., chromosome name) where the data should be inserted
@@ -752,6 +738,7 @@ class grove {
         return key_ptr;
     }
 
+  private:
     /**
      * @brief Recursively insert a key into the tree starting from a given node
      * @param node The node to start insertion from
@@ -934,6 +921,7 @@ class grove {
         }
     }
 
+  public:
     /**
      * @brief Find all keys that overlap with the query across all indices
      * @param query The query key to search for (e.g., genomic interval)
@@ -967,6 +955,7 @@ class grove {
         return result;
     }
 
+  private:
     /**
      * @brief Recursively search the tree for keys that overlap with the query
      * @param node The current node being searched
@@ -1026,6 +1015,7 @@ class grove {
         }
     }
 
+  public:
     /**
      * @brief Write the grove structure to a stream in SIF (Simple Interaction Format) for visualization
      * @param os Output stream to write to

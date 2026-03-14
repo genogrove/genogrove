@@ -138,19 +138,6 @@ class node {
     }
 
     /**
-     * @brief Set the B+ tree order of this node
-     * @param k The new order value (must be >= 2)
-     * @throws std::invalid_argument if k < 2
-     * @note Changing order after construction may lead to inconsistent tree state
-     */
-    void set_order(int k) {
-        if (k < 2) {
-            throw std::invalid_argument("B+ tree node order must be >= 2");
-        }
-        this->order = k;
-    }
-
-    /**
      * @brief Get mutable reference to the keys vector
      * @return Reference to vector of key pointers
      * @note Keys are pointers to entries in grove's deque, not owned by node
@@ -165,7 +152,6 @@ class node {
      * @note Keys are owned by grove's deque, not by node - no deletion occurs
      */
     void set_keys(const std::vector<gdt::key<key_type, data_type>*>& keys) {
-        // Keys are owned by grove's deque, not by node - don't delete them
         this->keys = keys;
     }
 
@@ -204,15 +190,6 @@ class node {
     }
 
     /**
-     * @brief Set the next sibling pointer (for leaf node chaining)
-     * @param next Pointer to the next leaf node in sequence
-     * @note Only used for leaf nodes to enable efficient range traversal
-     */
-    void set_next(node<key_type, data_type>* next) {
-        this->next = next;
-    }
-
-    /**
      * @brief Get pointer to next sibling node
      * @return Pointer to next leaf node, or nullptr if no next sibling
      * @note Only meaningful for leaf nodes that are chained together
@@ -222,11 +199,12 @@ class node {
     }
 
     /**
-     * @brief Set whether this node is a leaf
-     * @param is_leaf True if this is a leaf node, false if internal node
+     * @brief Set the next sibling pointer (for leaf node chaining)
+     * @param next Pointer to the next leaf node in sequence
+     * @note Only used for leaf nodes to enable efficient range traversal
      */
-    void set_is_leaf(bool is_leaf) {
-        this->is_leaf = is_leaf;
+    void set_next(node<key_type, data_type>* next) {
+        this->next = next;
     }
 
     /**
@@ -235,6 +213,14 @@ class node {
      */
     bool get_is_leaf() const noexcept {
         return this->is_leaf;
+    }
+
+    /**
+     * @brief Set whether this node is a leaf
+     * @param is_leaf True if this is a leaf node, false if internal node
+     */
+    void set_is_leaf(bool is_leaf) {
+        this->is_leaf = is_leaf;
     }
 
     // =========================================================================
