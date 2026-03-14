@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Encapsulate grove and node internals**: Moved grove tree-manipulation methods (`set_rightmost_node()`, `get_root()`, `insert_root()`, `insert_iter()`, `split_node()`, `insert_data_sorted()`, `insert_sorted()`, `search_iter()`) to `private`. Removed `set_order()` from both `grove` and `node` — order is immutable after construction. ([#155](https://github.com/genogrove/genogrove/issues/155), [#227](https://github.com/genogrove/genogrove/pull/227))
 - **Forward base class in IO reader move operations**: `bed_reader`, `gff_reader`, and `bam_reader` move constructors and move assignment operators now invoke the `file_reader<EntryType>` base class move constructor/assignment, preventing silent state loss if the base ever gains data members. ([#148](https://github.com/genogrove/genogrove/issues/148), [#225](https://github.com/genogrove/genogrove/pull/225))
 
+### Fixed
+- **Complete `index_registry` singleton pattern**: Made constructor private and deleted copy/move operations to prevent bypassing the singleton, matching the `data_registry` pattern. ([#147](https://github.com/genogrove/genogrove/issues/147), [#228](https://github.com/genogrove/genogrove/pull/228))
+
 ### Changed
 - **`data_registry::get()` returns references instead of raw pointers** (**breaking**): `get()` now returns `const T&` / `T&` and throws `std::out_of_range` on invalid IDs instead of returning `nullptr`. Internal storage switched from `std::vector` to `std::deque` for reference stability across `register_data()` calls. Use `contains()` to check validity before calling `get()`. ([#143](https://github.com/genogrove/genogrove/issues/143), [#226](https://github.com/genogrove/genogrove/pull/226))
 
