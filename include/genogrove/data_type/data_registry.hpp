@@ -16,7 +16,7 @@
 #include <ostream>
 #include <stdexcept>
 #include <string>
-#include <vector>
+#include <deque>
 
 #include <genogrove/data_type/serialization_traits.hpp>
 
@@ -103,8 +103,6 @@ class data_registry {
      * @param id The ID returned from register_data
      * @return Const reference to the data
      * @throws std::out_of_range if ID is invalid
-     * @warning The returned reference is invalidated if register_data() triggers a reallocation.
-     *          Always call get() fresh rather than caching the reference across register_data() calls.
      */
     const registry_data_type& get(id_type id) const {
         if (id >= storage.size()) {
@@ -118,8 +116,6 @@ class data_registry {
      * @param id The ID returned from register_data
      * @return Mutable reference to the data
      * @throws std::out_of_range if ID is invalid
-     * @warning The returned reference is invalidated if register_data() triggers a reallocation.
-     *          Always call get() fresh rather than caching the reference across register_data() calls.
      */
     registry_data_type& get(id_type id) {
         if (id >= storage.size()) {
@@ -210,7 +206,6 @@ class data_registry {
         }
 
         // Read each entry
-        inst.storage.reserve(count);
         for (uint64_t i = 0; i < count; ++i) {
             inst.storage.push_back(serializer<registry_data_type>::read(is));
         }
@@ -222,7 +217,7 @@ class data_registry {
     data_registry() = default;
 
     /// Storage for registered data; index = ID
-    std::vector<registry_data_type> storage;
+    std::deque<registry_data_type> storage;
 };
 
 } // namespace genogrove::data_type
