@@ -36,6 +36,12 @@ namespace genogrove::data_type {
              * Singleton to make sure that only one instance of the registry is created
              */
             static index_registry& instance();
+
+            // Non-copyable, non-movable (singleton)
+            index_registry(const index_registry&) = delete;
+            index_registry& operator=(const index_registry&) = delete;
+            index_registry(index_registry&&) = delete;
+            index_registry& operator=(index_registry&&) = delete;
             /*
              * @brief registers a string as an index - does nothing if the
              */
@@ -59,6 +65,7 @@ namespace genogrove::data_type {
             std::optional<uint8_t> value_lookup(std::string_view key) const;
 
         private:
+            index_registry() = default;
             std::unordered_map<std::string, uint8_t> registry;
             std::vector<std::string> reverse_registry;
             uint8_t next_index{0};
