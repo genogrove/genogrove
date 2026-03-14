@@ -15,7 +15,8 @@
 #include <limits>
 #include <ostream>
 #include <stdexcept>
-#include <vector>
+#include <string>
+#include <deque>
 
 #include <genogrove/data_type/serialization_traits.hpp>
 
@@ -53,7 +54,7 @@ namespace genogrove::data_type {
  * g.insert_data("chr1", interval{100, 200}, sample_id, sorted);
  *
  * // Later: retrieve sample info by ID
- * const SampleInfo* info = sample_reg.get(sample_id);
+ * const SampleInfo& info = sample_reg.get(sample_id);
  * @endcode
  */
 template<typename registry_data_type>
@@ -100,21 +101,27 @@ class data_registry {
     /**
      * @brief Get data by ID (const version)
      * @param id The ID returned from register_data
-     * @return Pointer to the data, or nullptr if ID is invalid
+     * @return Const reference to the data
+     * @throws std::out_of_range if ID is invalid
      */
-    const registry_data_type* get(id_type id) const {
-        if (id >= storage.size()) return nullptr;
-        return &storage[id];
+    const registry_data_type& get(id_type id) const {
+        if (id >= storage.size()) {
+            throw std::out_of_range("data_registry::get(): invalid id " + std::to_string(id));
+        }
+        return storage[id];
     }
 
     /**
      * @brief Get data by ID (mutable version)
      * @param id The ID returned from register_data
-     * @return Pointer to the data, or nullptr if ID is invalid
+     * @return Mutable reference to the data
+     * @throws std::out_of_range if ID is invalid
      */
-    registry_data_type* get(id_type id) {
-        if (id >= storage.size()) return nullptr;
-        return &storage[id];
+    registry_data_type& get(id_type id) {
+        if (id >= storage.size()) {
+            throw std::out_of_range("data_registry::get(): invalid id " + std::to_string(id));
+        }
+        return storage[id];
     }
 
     /**
@@ -199,7 +206,6 @@ class data_registry {
         }
 
         // Read each entry
-        inst.storage.reserve(count);
         for (uint64_t i = 0; i < count; ++i) {
             inst.storage.push_back(serializer<registry_data_type>::read(is));
         }
@@ -211,7 +217,7 @@ class data_registry {
     data_registry() = default;
 
     /// Storage for registered data; index = ID
-    std::vector<registry_data_type> storage;
+    std::deque<registry_data_type> storage;
 };
 
 } // namespace genogrove::data_type
