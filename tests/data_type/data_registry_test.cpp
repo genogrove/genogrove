@@ -74,9 +74,8 @@ TEST_F(DataRegistryTest, BasicRegisterAndGet) {
 
     EXPECT_EQ(id, 0);
 
-    const SampleInfo* retrieved = reg.get(id);
-    ASSERT_NE(retrieved, nullptr);
-    EXPECT_EQ(*retrieved, sample);
+    const SampleInfo& retrieved = reg.get(id);
+    EXPECT_EQ(retrieved, sample);
 }
 
 TEST_F(DataRegistryTest, MultipleRegistrations) {
@@ -92,26 +91,26 @@ TEST_F(DataRegistryTest, MultipleRegistrations) {
     EXPECT_EQ(id3, 2);
 
     // Verify data can be retrieved correctly
-    EXPECT_EQ(reg.get(id1)->name, "sample1");
-    EXPECT_EQ(reg.get(id2)->name, "sample2");
-    EXPECT_EQ(reg.get(id3)->name, "sample3");
+    EXPECT_EQ(reg.get(id1).name, "sample1");
+    EXPECT_EQ(reg.get(id2).name, "sample2");
+    EXPECT_EQ(reg.get(id3).name, "sample3");
 }
 
-TEST_F(DataRegistryTest, InvalidIdReturnsNull) {
+TEST_F(DataRegistryTest, InvalidIdThrows) {
     auto& reg = gdt::data_registry<SampleInfo>::instance();
 
     // Empty registry - any ID is invalid
-    EXPECT_EQ(reg.get(0), nullptr);
-    EXPECT_EQ(reg.get(100), nullptr);
-    EXPECT_EQ(reg.get(gdt::data_registry<SampleInfo>::null_id), nullptr);
+    EXPECT_THROW(reg.get(0), std::out_of_range);
+    EXPECT_THROW(reg.get(100), std::out_of_range);
+    EXPECT_THROW(reg.get(gdt::data_registry<SampleInfo>::null_id), std::out_of_range);
 
     // Register one item
     reg.register_data({"sample1", "liver", 1});
 
     // ID 0 is now valid, others still invalid
-    EXPECT_NE(reg.get(0), nullptr);
-    EXPECT_EQ(reg.get(1), nullptr);
-    EXPECT_EQ(reg.get(100), nullptr);
+    EXPECT_NO_THROW(reg.get(0));
+    EXPECT_THROW(reg.get(1), std::out_of_range);
+    EXPECT_THROW(reg.get(100), std::out_of_range);
 }
 
 TEST_F(DataRegistryTest, ContainsMethod) {
@@ -158,8 +157,8 @@ TEST_F(DataRegistryTest, ClearMethod) {
     EXPECT_EQ(reg.size(), 0);
 
     // Old IDs should now be invalid
-    EXPECT_EQ(reg.get(0), nullptr);
-    EXPECT_EQ(reg.get(1), nullptr);
+    EXPECT_THROW(reg.get(0), std::out_of_range);
+    EXPECT_THROW(reg.get(1), std::out_of_range);
 }
 
 TEST_F(DataRegistryTest, ResetMethod) {
@@ -210,13 +209,12 @@ TEST_F(DataRegistryTest, MutableAccess) {
     auto id = reg.register_data({"sample1", "liver", 1});
 
     // Modify via mutable get
-    SampleInfo* info = reg.get(id);
-    ASSERT_NE(info, nullptr);
-    info->replicate = 42;
+    SampleInfo& info = reg.get(id);
+    info.replicate = 42;
 
     // Verify modification persists
-    const SampleInfo* retrieved = reg.get(id);
-    EXPECT_EQ(retrieved->replicate, 42);
+    const SampleInfo& retrieved = reg.get(id);
+    EXPECT_EQ(retrieved.replicate, 42);
 }
 
 TEST_F(DataRegistryTest, PrimitiveTypes) {
@@ -226,8 +224,8 @@ TEST_F(DataRegistryTest, PrimitiveTypes) {
     auto int_id = int_reg.register_data(42);
     auto str_id = str_reg.register_data("hello");
 
-    EXPECT_EQ(*int_reg.get(int_id), 42);
-    EXPECT_EQ(*str_reg.get(str_id), "hello");
+    EXPECT_EQ(int_reg.get(int_id), 42);
+    EXPECT_EQ(str_reg.get(str_id), "hello");
 }
 
 TEST_F(DataRegistryTest, MoveSemantics) {
@@ -238,7 +236,7 @@ TEST_F(DataRegistryTest, MoveSemantics) {
 
     // Original may be empty or in moved-from state
     // Retrieved value should be intact
-    EXPECT_EQ(*reg.get(id), "test_string");
+    EXPECT_EQ(reg.get(id), "test_string");
 }
 
 TEST_F(DataRegistryTest, NullIdConstant) {
@@ -285,9 +283,9 @@ TEST_F(DataRegistryTest, SerializeDeserializeInts) {
 
     // Verify restored data
     EXPECT_EQ(reg.size(), 3);
-    EXPECT_EQ(*reg.get(0), 10);
-    EXPECT_EQ(*reg.get(1), 20);
-    EXPECT_EQ(*reg.get(2), 30);
+    EXPECT_EQ(reg.get(0), 10);
+    EXPECT_EQ(reg.get(1), 20);
+    EXPECT_EQ(reg.get(2), 30);
 }
 
 TEST_F(DataRegistryTest, SerializeDeserializeStrings) {
@@ -310,9 +308,9 @@ TEST_F(DataRegistryTest, SerializeDeserializeStrings) {
 
     // Verify restored data
     EXPECT_EQ(reg.size(), 3);
-    EXPECT_EQ(*reg.get(0), "first");
-    EXPECT_EQ(*reg.get(1), "second");
-    EXPECT_EQ(*reg.get(2), "third with spaces");
+    EXPECT_EQ(reg.get(0), "first");
+    EXPECT_EQ(reg.get(1), "second");
+    EXPECT_EQ(reg.get(2), "third with spaces");
 }
 
 TEST_F(DataRegistryTest, SerializeDeserializeEmptyRegistry) {
@@ -354,9 +352,9 @@ TEST_F(DataRegistryTest, DeserializeReplacesExistingData) {
     gdt::data_registry<int>::deserialize(ss);
 
     EXPECT_EQ(reg.size(), 2);
-    EXPECT_EQ(*reg.get(0), 100);
-    EXPECT_EQ(*reg.get(1), 200);
-    EXPECT_EQ(reg.get(2), nullptr);  // Old ID 2 no longer valid
+    EXPECT_EQ(reg.get(0), 100);
+    EXPECT_EQ(reg.get(1), 200);
+    EXPECT_THROW(reg.get(2), std::out_of_range);  // Old ID 2 no longer valid
 }
 
 // --- Combined Registry + Grove Serialization Test ---
@@ -395,7 +393,7 @@ TEST_F(DataRegistryTest, CombinedRegistryAndGroveSerialization) {
 
     uint32_t stored_id = results.get_keys()[0]->get_data();
     EXPECT_EQ(stored_id, sample1_id);
-    EXPECT_EQ(*reg.get(stored_id), "SampleA_liver");
+    EXPECT_EQ(reg.get(stored_id), "SampleA_liver");
 
     // === Serialize both to the same stream ===
     std::stringstream ss;
@@ -418,11 +416,11 @@ TEST_F(DataRegistryTest, CombinedRegistryAndGroveSerialization) {
 
     // Verify registry is restored
     EXPECT_EQ(restored_reg.size(), 5);
-    EXPECT_EQ(*restored_reg.get(0), "SampleA_liver");
-    EXPECT_EQ(*restored_reg.get(1), "SampleB_brain");
-    EXPECT_EQ(*restored_reg.get(2), "SampleC_heart");
-    EXPECT_EQ(*restored_reg.get(3), "SampleD_kidney");
-    EXPECT_EQ(*restored_reg.get(4), "SampleE_lung");
+    EXPECT_EQ(restored_reg.get(0), "SampleA_liver");
+    EXPECT_EQ(restored_reg.get(1), "SampleB_brain");
+    EXPECT_EQ(restored_reg.get(2), "SampleC_heart");
+    EXPECT_EQ(restored_reg.get(3), "SampleD_kidney");
+    EXPECT_EQ(restored_reg.get(4), "SampleE_lung");
 
     // 2. Deserialize grove
     auto restored_grove = gs::grove<gdt::interval, uint32_t>::deserialize(ss);
@@ -435,28 +433,28 @@ TEST_F(DataRegistryTest, CombinedRegistryAndGroveSerialization) {
     gdt::interval query1(150, 250);
     auto results1 = restored_grove.intersect(query1, "chr1");
     ASSERT_EQ(results1.get_keys().size(), 1);
-    EXPECT_EQ(*restored_reg.get(results1.get_keys()[0]->get_data()), "SampleA_liver");
+    EXPECT_EQ(restored_reg.get(results1.get_keys()[0]->get_data()), "SampleA_liver");
 
     gdt::interval query2(350, 450);
     auto results2 = restored_grove.intersect(query2, "chr1");
     ASSERT_EQ(results2.get_keys().size(), 1);
-    EXPECT_EQ(*restored_reg.get(results2.get_keys()[0]->get_data()), "SampleB_brain");
+    EXPECT_EQ(restored_reg.get(results2.get_keys()[0]->get_data()), "SampleB_brain");
 
     gdt::interval query3(750, 850);
     auto results3 = restored_grove.intersect(query3, "chr1");
     ASSERT_EQ(results3.get_keys().size(), 1);
-    EXPECT_EQ(*restored_reg.get(results3.get_keys()[0]->get_data()), "SampleD_kidney");
+    EXPECT_EQ(restored_reg.get(results3.get_keys()[0]->get_data()), "SampleD_kidney");
 
     gdt::interval query4(950, 1050);
     auto results4 = restored_grove.intersect(query4, "chr1");
     ASSERT_EQ(results4.get_keys().size(), 1);
-    EXPECT_EQ(*restored_reg.get(results4.get_keys()[0]->get_data()), "SampleE_lung");
+    EXPECT_EQ(restored_reg.get(results4.get_keys()[0]->get_data()), "SampleE_lung");
 
     // Query chr2 as well
     gdt::interval query5(1050, 1150);
     auto chr2_results = restored_grove.intersect(query5, "chr2");
     ASSERT_EQ(chr2_results.get_keys().size(), 1);
-    EXPECT_EQ(*restored_reg.get(chr2_results.get_keys()[0]->get_data()), "SampleC_heart");
+    EXPECT_EQ(restored_reg.get(chr2_results.get_keys()[0]->get_data()), "SampleC_heart");
 }
 
 // --- Serialization error path tests ---

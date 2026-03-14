@@ -15,6 +15,7 @@
 #include <limits>
 #include <ostream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <genogrove/data_type/serialization_traits.hpp>
@@ -53,7 +54,7 @@ namespace genogrove::data_type {
  * g.insert_data("chr1", interval{100, 200}, sample_id, sorted);
  *
  * // Later: retrieve sample info by ID
- * const SampleInfo* info = sample_reg.get(sample_id);
+ * const SampleInfo& info = sample_reg.get(sample_id);
  * @endcode
  */
 template<typename registry_data_type>
@@ -100,21 +101,31 @@ class data_registry {
     /**
      * @brief Get data by ID (const version)
      * @param id The ID returned from register_data
-     * @return Pointer to the data, or nullptr if ID is invalid
+     * @return Const reference to the data
+     * @throws std::out_of_range if ID is invalid
+     * @warning The returned reference is invalidated if register_data() triggers a reallocation.
+     *          Always call get() fresh rather than caching the reference across register_data() calls.
      */
-    const registry_data_type* get(id_type id) const {
-        if (id >= storage.size()) return nullptr;
-        return &storage[id];
+    const registry_data_type& get(id_type id) const {
+        if (id >= storage.size()) {
+            throw std::out_of_range("data_registry::get(): invalid id " + std::to_string(id));
+        }
+        return storage[id];
     }
 
     /**
      * @brief Get data by ID (mutable version)
      * @param id The ID returned from register_data
-     * @return Pointer to the data, or nullptr if ID is invalid
+     * @return Mutable reference to the data
+     * @throws std::out_of_range if ID is invalid
+     * @warning The returned reference is invalidated if register_data() triggers a reallocation.
+     *          Always call get() fresh rather than caching the reference across register_data() calls.
      */
-    registry_data_type* get(id_type id) {
-        if (id >= storage.size()) return nullptr;
-        return &storage[id];
+    registry_data_type& get(id_type id) {
+        if (id >= storage.size()) {
+            throw std::out_of_range("data_registry::get(): invalid id " + std::to_string(id));
+        }
+        return storage[id];
     }
 
     /**
