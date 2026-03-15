@@ -302,6 +302,7 @@ namespace genogrove::io {
 
     bool bed_reader::read_next(bed_entry& entry) {
         while (true) {
+            error_message.clear();
             // Reset optional fields to avoid stale data from previous records
             entry.name.reset();
             entry.score.reset();
