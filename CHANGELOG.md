@@ -8,17 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Error-path test coverage**: Added 28 tests covering previously untested error paths — serialization/deserialization failure for all key types and `data_registry` (empty stream, truncated stream, failed stream), node `add_child`/`get_child` out-of-range, grove `intersect` on non-existent index, filetype detector on non-existent file, BAM reader empty SAM file and `get_error_message()` after iteration, and utility `value_lookup`/`key_lookup` for missing entries ([#137](https://github.com/genogrove/genogrove/issues/137), [#222](https://github.com/genogrove/genogrove/pull/222))
+- **Error-path test coverage**: Added 28 tests covering previously untested error paths — serialization/deserialization failure for all key types and `registry` (empty stream, truncated stream, failed stream), node `add_child`/`get_child` out-of-range, grove `intersect` on non-existent index, filetype detector on non-existent file, BAM reader empty SAM file and `get_error_message()` after iteration, and utility `value_lookup`/`key_lookup` for missing entries ([#137](https://github.com/genogrove/genogrove/issues/137), [#222](https://github.com/genogrove/genogrove/pull/222))
 
 ### Refactored
 - **Encapsulate grove and node internals**: Moved grove tree-manipulation methods (`set_rightmost_node()`, `get_root()`, `insert_root()`, `insert_iter()`, `split_node()`, `insert_data_sorted()`, `insert_sorted()`, `search_iter()`) to `private`. Removed `set_order()` from both `grove` and `node` — order is immutable after construction. ([#155](https://github.com/genogrove/genogrove/issues/155), [#227](https://github.com/genogrove/genogrove/pull/227))
 - **Forward base class in IO reader move operations**: `bed_reader`, `gff_reader`, and `bam_reader` move constructors and move assignment operators now invoke the `file_reader<EntryType>` base class move constructor/assignment, preventing silent state loss if the base ever gains data members. ([#148](https://github.com/genogrove/genogrove/issues/148), [#225](https://github.com/genogrove/genogrove/pull/225))
 
-### Fixed
-- **Complete `index_registry` singleton pattern**: Made constructor private and deleted copy/move operations to prevent bypassing the singleton, matching the `data_registry` pattern. ([#147](https://github.com/genogrove/genogrove/issues/147), [#228](https://github.com/genogrove/genogrove/pull/228))
+### Removed
+- **Remove unused `index` and `index_registry`**: Deleted `index.hpp`, `index_registry.hpp`, `index.cpp`, `index_registry.cpp`, and `index_test.cpp` — these classes were not used by the core library or any consumers. Closes [#147](https://github.com/genogrove/genogrove/issues/147). ([#229](https://github.com/genogrove/genogrove/pull/229))
+
+### Refactored
+- **Rename `data_registry` to `registry`**: With `index_registry` removed, the `data_` prefix is unnecessary. Renamed class, header, and test file. ([#229](https://github.com/genogrove/genogrove/pull/229))
 
 ### Changed
-- **`data_registry::get()` returns references instead of raw pointers** (**breaking**): `get()` now returns `const T&` / `T&` and throws `std::out_of_range` on invalid IDs instead of returning `nullptr`. Internal storage switched from `std::vector` to `std::deque` for reference stability across `register_data()` calls. Use `contains()` to check validity before calling `get()`. ([#143](https://github.com/genogrove/genogrove/issues/143), [#226](https://github.com/genogrove/genogrove/pull/226))
+- **`registry::get()` returns references instead of raw pointers** (**breaking**): `get()` now returns `const T&` / `T&` and throws `std::out_of_range` on invalid IDs instead of returning `nullptr`. Internal storage switched from `std::vector` to `std::deque` for reference stability across `register_data()` calls. Use `contains()` to check validity before calling `get()`. ([#143](https://github.com/genogrove/genogrove/issues/143), [#226](https://github.com/genogrove/genogrove/pull/226))
 
 ### Fixed
 - **`set_root_nodes()` now clears key storage, external keys, and graph overlay**: Previously only deleted tree nodes and cleared rightmost cache, leaving orphaned keys in `key_storage`/`external_key_storage` and dangling pointers in `graph_data`. ([#140](https://github.com/genogrove/genogrove/issues/140), [#224](https://github.com/genogrove/genogrove/pull/224))

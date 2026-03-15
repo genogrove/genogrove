@@ -16,7 +16,7 @@
 #include <limits>
 
 // Genogrove
-#include <genogrove/data_type/data_registry.hpp>
+#include <genogrove/data_type/registry.hpp>
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/structure/grove/grove.hpp>
 
@@ -43,31 +43,31 @@ class DataRegistryTest : public ::testing::Test {
   protected:
     void SetUp() override {
         // Reset registries before each test to ensure clean state
-        gdt::data_registry<SampleInfo>::reset();
-        gdt::data_registry<ExperimentInfo>::reset();
-        gdt::data_registry<int>::reset();
-        gdt::data_registry<std::string>::reset();
+        gdt::registry<SampleInfo>::reset();
+        gdt::registry<ExperimentInfo>::reset();
+        gdt::registry<int>::reset();
+        gdt::registry<std::string>::reset();
     }
 
     void TearDown() override {
         // Clean up after tests
-        gdt::data_registry<SampleInfo>::reset();
-        gdt::data_registry<ExperimentInfo>::reset();
-        gdt::data_registry<int>::reset();
-        gdt::data_registry<std::string>::reset();
+        gdt::registry<SampleInfo>::reset();
+        gdt::registry<ExperimentInfo>::reset();
+        gdt::registry<int>::reset();
+        gdt::registry<std::string>::reset();
     }
 };
 
 TEST_F(DataRegistryTest, SingletonAccess) {
-    auto& reg1 = gdt::data_registry<SampleInfo>::instance();
-    auto& reg2 = gdt::data_registry<SampleInfo>::instance();
+    auto& reg1 = gdt::registry<SampleInfo>::instance();
+    auto& reg2 = gdt::registry<SampleInfo>::instance();
 
     // Should be the same instance
     EXPECT_EQ(&reg1, &reg2);
 }
 
 TEST_F(DataRegistryTest, BasicRegisterAndGet) {
-    auto& reg = gdt::data_registry<SampleInfo>::instance();
+    auto& reg = gdt::registry<SampleInfo>::instance();
 
     SampleInfo sample{"sample1", "liver", 1};
     auto id = reg.register_data(sample);
@@ -79,7 +79,7 @@ TEST_F(DataRegistryTest, BasicRegisterAndGet) {
 }
 
 TEST_F(DataRegistryTest, MultipleRegistrations) {
-    auto& reg = gdt::data_registry<SampleInfo>::instance();
+    auto& reg = gdt::registry<SampleInfo>::instance();
 
     auto id1 = reg.register_data({"sample1", "liver", 1});
     auto id2 = reg.register_data({"sample2", "brain", 1});
@@ -97,12 +97,12 @@ TEST_F(DataRegistryTest, MultipleRegistrations) {
 }
 
 TEST_F(DataRegistryTest, InvalidIdThrows) {
-    auto& reg = gdt::data_registry<SampleInfo>::instance();
+    auto& reg = gdt::registry<SampleInfo>::instance();
 
     // Empty registry - any ID is invalid
     EXPECT_THROW(reg.get(0), std::out_of_range);
     EXPECT_THROW(reg.get(100), std::out_of_range);
-    EXPECT_THROW(reg.get(gdt::data_registry<SampleInfo>::null_id), std::out_of_range);
+    EXPECT_THROW(reg.get(gdt::registry<SampleInfo>::null_id), std::out_of_range);
 
     // Register one item
     reg.register_data({"sample1", "liver", 1});
@@ -114,7 +114,7 @@ TEST_F(DataRegistryTest, InvalidIdThrows) {
 }
 
 TEST_F(DataRegistryTest, ContainsMethod) {
-    auto& reg = gdt::data_registry<SampleInfo>::instance();
+    auto& reg = gdt::registry<SampleInfo>::instance();
 
     EXPECT_FALSE(reg.contains(0));
     EXPECT_FALSE(reg.contains(100));
@@ -123,11 +123,11 @@ TEST_F(DataRegistryTest, ContainsMethod) {
 
     EXPECT_TRUE(reg.contains(id));
     EXPECT_FALSE(reg.contains(1));
-    EXPECT_FALSE(reg.contains(gdt::data_registry<SampleInfo>::null_id));
+    EXPECT_FALSE(reg.contains(gdt::registry<SampleInfo>::null_id));
 }
 
 TEST_F(DataRegistryTest, SizeAndEmpty) {
-    auto& reg = gdt::data_registry<SampleInfo>::instance();
+    auto& reg = gdt::registry<SampleInfo>::instance();
 
     EXPECT_TRUE(reg.empty());
     EXPECT_EQ(reg.size(), 0);
@@ -144,7 +144,7 @@ TEST_F(DataRegistryTest, SizeAndEmpty) {
 }
 
 TEST_F(DataRegistryTest, ClearMethod) {
-    auto& reg = gdt::data_registry<SampleInfo>::instance();
+    auto& reg = gdt::registry<SampleInfo>::instance();
 
     reg.register_data({"sample1", "liver", 1});
     reg.register_data({"sample2", "brain", 1});
@@ -162,19 +162,19 @@ TEST_F(DataRegistryTest, ClearMethod) {
 }
 
 TEST_F(DataRegistryTest, ResetMethod) {
-    auto& reg = gdt::data_registry<SampleInfo>::instance();
+    auto& reg = gdt::registry<SampleInfo>::instance();
 
     reg.register_data({"sample1", "liver", 1});
     EXPECT_EQ(reg.size(), 1);
 
-    gdt::data_registry<SampleInfo>::reset();
+    gdt::registry<SampleInfo>::reset();
 
     EXPECT_TRUE(reg.empty());
 }
 
 TEST_F(DataRegistryTest, IndependentRegistriesPerType) {
-    auto& sample_reg = gdt::data_registry<SampleInfo>::instance();
-    auto& experiment_reg = gdt::data_registry<ExperimentInfo>::instance();
+    auto& sample_reg = gdt::registry<SampleInfo>::instance();
+    auto& experiment_reg = gdt::registry<ExperimentInfo>::instance();
 
     // Register in both registries
     auto liver_sample_id = sample_reg.register_data({
@@ -204,7 +204,7 @@ TEST_F(DataRegistryTest, IndependentRegistriesPerType) {
 }
 
 TEST_F(DataRegistryTest, MutableAccess) {
-    auto& reg = gdt::data_registry<SampleInfo>::instance();
+    auto& reg = gdt::registry<SampleInfo>::instance();
 
     auto id = reg.register_data({"sample1", "liver", 1});
 
@@ -218,8 +218,8 @@ TEST_F(DataRegistryTest, MutableAccess) {
 }
 
 TEST_F(DataRegistryTest, PrimitiveTypes) {
-    auto& int_reg = gdt::data_registry<int>::instance();
-    auto& str_reg = gdt::data_registry<std::string>::instance();
+    auto& int_reg = gdt::registry<int>::instance();
+    auto& str_reg = gdt::registry<std::string>::instance();
 
     auto int_id = int_reg.register_data(42);
     auto str_id = str_reg.register_data("hello");
@@ -229,7 +229,7 @@ TEST_F(DataRegistryTest, PrimitiveTypes) {
 }
 
 TEST_F(DataRegistryTest, MoveSemantics) {
-    auto& reg = gdt::data_registry<std::string>::instance();
+    auto& reg = gdt::registry<std::string>::instance();
 
     std::string original = "test_string";
     auto id = reg.register_data(std::move(original));
@@ -241,12 +241,12 @@ TEST_F(DataRegistryTest, MoveSemantics) {
 
 TEST_F(DataRegistryTest, NullIdConstant) {
     // null_id should be max uint32_t
-    EXPECT_EQ(gdt::data_registry<int>::null_id, std::numeric_limits<uint32_t>::max());
-    EXPECT_EQ(gdt::data_registry<SampleInfo>::null_id, std::numeric_limits<uint32_t>::max());
+    EXPECT_EQ(gdt::registry<int>::null_id, std::numeric_limits<uint32_t>::max());
+    EXPECT_EQ(gdt::registry<SampleInfo>::null_id, std::numeric_limits<uint32_t>::max());
 }
 
 TEST_F(DataRegistryTest, IdsAfterClearRestartFromZero) {
-    auto& reg = gdt::data_registry<SampleInfo>::instance();
+    auto& reg = gdt::registry<SampleInfo>::instance();
 
     auto id1 = reg.register_data({"sample1", "liver", 1});
     auto id2 = reg.register_data({"sample2", "brain", 1});
@@ -264,7 +264,7 @@ TEST_F(DataRegistryTest, IdsAfterClearRestartFromZero) {
 // --- Serialization Tests ---
 
 TEST_F(DataRegistryTest, SerializeDeserializeInts) {
-    auto& reg = gdt::data_registry<int>::instance();
+    auto& reg = gdt::registry<int>::instance();
 
     reg.register_data(10);
     reg.register_data(20);
@@ -279,7 +279,7 @@ TEST_F(DataRegistryTest, SerializeDeserializeInts) {
     EXPECT_TRUE(reg.empty());
 
     ss.seekg(0);
-    gdt::data_registry<int>::deserialize(ss);
+    gdt::registry<int>::deserialize(ss);
 
     // Verify restored data
     EXPECT_EQ(reg.size(), 3);
@@ -289,7 +289,7 @@ TEST_F(DataRegistryTest, SerializeDeserializeInts) {
 }
 
 TEST_F(DataRegistryTest, SerializeDeserializeStrings) {
-    auto& reg = gdt::data_registry<std::string>::instance();
+    auto& reg = gdt::registry<std::string>::instance();
 
     reg.register_data("first");
     reg.register_data("second");
@@ -304,7 +304,7 @@ TEST_F(DataRegistryTest, SerializeDeserializeStrings) {
     EXPECT_TRUE(reg.empty());
 
     ss.seekg(0);
-    gdt::data_registry<std::string>::deserialize(ss);
+    gdt::registry<std::string>::deserialize(ss);
 
     // Verify restored data
     EXPECT_EQ(reg.size(), 3);
@@ -314,7 +314,7 @@ TEST_F(DataRegistryTest, SerializeDeserializeStrings) {
 }
 
 TEST_F(DataRegistryTest, SerializeDeserializeEmptyRegistry) {
-    auto& reg = gdt::data_registry<int>::instance();
+    auto& reg = gdt::registry<int>::instance();
 
     // Serialize empty registry
     std::stringstream ss;
@@ -326,13 +326,13 @@ TEST_F(DataRegistryTest, SerializeDeserializeEmptyRegistry) {
 
     // Deserialize should restore empty state
     ss.seekg(0);
-    gdt::data_registry<int>::deserialize(ss);
+    gdt::registry<int>::deserialize(ss);
 
     EXPECT_TRUE(reg.empty());
 }
 
 TEST_F(DataRegistryTest, DeserializeReplacesExistingData) {
-    auto& reg = gdt::data_registry<int>::instance();
+    auto& reg = gdt::registry<int>::instance();
 
     // Initial state
     reg.register_data(100);
@@ -349,7 +349,7 @@ TEST_F(DataRegistryTest, DeserializeReplacesExistingData) {
 
     // Deserialize should replace all data
     ss.seekg(0);
-    gdt::data_registry<int>::deserialize(ss);
+    gdt::registry<int>::deserialize(ss);
 
     EXPECT_EQ(reg.size(), 2);
     EXPECT_EQ(reg.get(0), 100);
@@ -365,7 +365,7 @@ TEST_F(DataRegistryTest, CombinedRegistryAndGroveSerialization) {
     // This test demonstrates the pattern for serializing registry + grove together
     // to a single stream, allowing the entire data structure to be saved/loaded as one unit.
 
-    auto& reg = gdt::data_registry<std::string>::instance();
+    auto& reg = gdt::registry<std::string>::instance();
 
     // Register sample names in the registry
     uint32_t sample1_id = reg.register_data("SampleA_liver");
@@ -412,7 +412,7 @@ TEST_F(DataRegistryTest, CombinedRegistryAndGroveSerialization) {
     ss.seekg(0);
 
     // 1. Deserialize registry FIRST (would also work with initial reg)
-    auto& restored_reg = gdt::data_registry<std::string>::deserialize(ss);
+    auto& restored_reg = gdt::registry<std::string>::deserialize(ss);
 
     // Verify registry is restored
     EXPECT_EQ(restored_reg.size(), 5);
@@ -460,7 +460,7 @@ TEST_F(DataRegistryTest, CombinedRegistryAndGroveSerialization) {
 // --- Serialization error path tests ---
 
 TEST_F(DataRegistryTest, SerializeToFailedStream) {
-    auto& reg = gdt::data_registry<int>::instance();
+    auto& reg = gdt::registry<int>::instance();
     reg.register_data(42);
 
     std::stringstream ss;
@@ -471,6 +471,6 @@ TEST_F(DataRegistryTest, SerializeToFailedStream) {
 TEST_F(DataRegistryTest, DeserializeFromEmptyStream) {
     std::stringstream ss;
     EXPECT_THROW({
-        [[maybe_unused]] auto& result = gdt::data_registry<int>::deserialize(ss);
+        [[maybe_unused]] auto& result = gdt::registry<int>::deserialize(ss);
     }, std::runtime_error);
 }

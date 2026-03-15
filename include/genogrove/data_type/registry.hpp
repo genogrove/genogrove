@@ -7,8 +7,8 @@
  * See the LICENSE file in the root of the repository for more information.
  */
 
-#ifndef GENOGROVE_DATA_REGISTRY_HPP
-#define GENOGROVE_DATA_REGISTRY_HPP
+#ifndef GENOGROVE_REGISTRY_HPP
+#define GENOGROVE_REGISTRY_HPP
 
 #include <cstdint>
 #include <istream>
@@ -31,8 +31,7 @@ namespace genogrove::data_type {
  * Each type T gets its own singleton registry with independent ID space.
  * This reduces memory when many grove entries share the same metadata.
  *
- * @note Thread safety: Not thread-safe (matches existing registries like index_registry).
- *       Add mutex if concurrent access is needed.
+ * @note Thread safety: Not thread-safe. Add mutex if concurrent access is needed.
  * @note Singleton lifetime: Data persists for program duration. Call reset() in tests
  *       to clear state between test cases.
  *
@@ -46,7 +45,7 @@ namespace genogrove::data_type {
  * };
  *
  * // Register sample info
- * auto& sample_reg = data_registry<SampleInfo>::instance();
+ * auto& sample_reg = registry<SampleInfo>::instance();
  * uint32_t sample_id = sample_reg.register_data(SampleInfo{"sample1", "liver", 1});
  *
  * // Store ID in grove as the data_type
@@ -58,7 +57,7 @@ namespace genogrove::data_type {
  * @endcode
  */
 template<typename registry_data_type>
-class data_registry {
+class registry {
   public:
     /// Type used for registry IDs
     using id_type = uint32_t;
@@ -71,16 +70,16 @@ class data_registry {
      * @return Reference to the singleton registry instance
      * @note Uses Meyer's singleton pattern for thread-safe initialization
      */
-    static data_registry& instance() {
-        static data_registry inst;
+    static registry& instance() {
+        static registry inst;
         return inst;
     }
 
     // Disable copy and move
-    data_registry(const data_registry&) = delete;
-    data_registry& operator=(const data_registry&) = delete;
-    data_registry(data_registry&&) = delete;
-    data_registry& operator=(data_registry&&) = delete;
+    registry(const registry&) = delete;
+    registry& operator=(const registry&) = delete;
+    registry(registry&&) = delete;
+    registry& operator=(registry&&) = delete;
 
     /**
      * @brief Register data and return its ID
@@ -91,7 +90,7 @@ class data_registry {
      */
     id_type register_data(registry_data_type data) {
         if (storage.size() >= null_id) {
-            throw std::runtime_error("data_registry: maximum capacity reached");
+            throw std::runtime_error("registry: maximum capacity reached");
         }
         id_type id = static_cast<id_type>(storage.size());
         storage.push_back(std::move(data));
@@ -106,7 +105,7 @@ class data_registry {
      */
     const registry_data_type& get(id_type id) const {
         if (id >= storage.size()) {
-            throw std::out_of_range("data_registry::get(): invalid id " + std::to_string(id));
+            throw std::out_of_range("registry::get(): invalid id " + std::to_string(id));
         }
         return storage[id];
     }
@@ -119,7 +118,7 @@ class data_registry {
      */
     registry_data_type& get(id_type id) {
         if (id >= storage.size()) {
-            throw std::out_of_range("data_registry::get(): invalid id " + std::to_string(id));
+            throw std::out_of_range("registry::get(): invalid id " + std::to_string(id));
         }
         return storage[id];
     }
@@ -183,7 +182,7 @@ class data_registry {
         }
 
         if (!os) {
-            throw std::runtime_error("Failed to serialize data_registry: stream error");
+            throw std::runtime_error("Failed to serialize registry: stream error");
         }
     }
 
@@ -194,7 +193,7 @@ class data_registry {
      * @note Clears existing data before loading; all previous IDs become invalid
      * @note Loaded entries will have the same IDs as when serialized
      */
-    [[nodiscard]] static data_registry& deserialize(std::istream& is) {
+    [[nodiscard]] static registry& deserialize(std::istream& is) {
         auto& inst = instance();
         inst.clear();
 
@@ -202,7 +201,7 @@ class data_registry {
         uint64_t count;
         is.read(reinterpret_cast<char*>(&count), sizeof(count));
         if (!is) {
-            throw std::runtime_error("Failed to deserialize data_registry: stream error reading count");
+            throw std::runtime_error("Failed to deserialize registry: stream error reading count");
         }
 
         // Read each entry
@@ -214,7 +213,7 @@ class data_registry {
     }
 
   private:
-    data_registry() = default;
+    registry() = default;
 
     /// Storage for registered data; index = ID
     std::deque<registry_data_type> storage;
@@ -222,4 +221,4 @@ class data_registry {
 
 } // namespace genogrove::data_type
 
-#endif // GENOGROVE_DATA_REGISTRY_HPP
+#endif // GENOGROVE_REGISTRY_HPP
