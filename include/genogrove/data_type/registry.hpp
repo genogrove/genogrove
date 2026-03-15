@@ -32,7 +32,6 @@ namespace genogrove::data_type {
  * This reduces memory when many grove entries share the same metadata.
  *
  * @note Thread safety: Not thread-safe. Add mutex if concurrent access is needed.
- *       Add mutex if concurrent access is needed.
  * @note Singleton lifetime: Data persists for program duration. Call reset() in tests
  *       to clear state between test cases.
  *
