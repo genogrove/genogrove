@@ -239,8 +239,8 @@ namespace genogrove::io {
     }
 
     bool gff_reader::read_next(gff_entry& entry) {
-        error_message.clear();
         while (true) {
+            error_message.clear();
             std::string line;
             {
                 kstring_t str = {0, 0, nullptr};

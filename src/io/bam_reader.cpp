@@ -149,7 +149,6 @@ namespace genogrove::io {
     }
 
     bool bam_reader::read_next(sam_entry& entry) {
-        error_message_.clear();
         if (!sam_file_ || at_eof_) {
             return false;
         }
@@ -157,6 +156,7 @@ namespace genogrove::io {
         // Read records until we find one that passes filters
         int ret;
         while ((ret = sam_read1(sam_file_, header_, alignment_)) >= 0) {
+            error_message_.clear();
             record_num_++;
 
             if (should_skip(alignment_)) {
