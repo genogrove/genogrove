@@ -1,390 +1,8 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773543464365,
+  "lastUpdate": 1773545269523,
   "repoUrl": "https://github.com/genogrove/genogrove",
   "entries": {
     "C++ Benchmark": [
-      {
-        "commit": {
-          "author": {
-            "email": "richard.schaefer@northwestern.edu",
-            "name": "Richard A. Schäfer",
-            "username": "riasc"
-          },
-          "committer": {
-            "email": "noreply@github.com",
-            "name": "GitHub",
-            "username": "web-flow"
-          },
-          "distinct": true,
-          "id": "b930239bc469d8d7ed8a0e11fdfebd7b94e059c4",
-          "message": "Merge pull request #208 from genogrove/perf/replace-stringstream-tokenizer-167\n\nReplace std::stringstream with zero-copy tab tokenizer in BED/GFF readers",
-          "timestamp": "2026-03-04T20:32:54-06:00",
-          "tree_id": "91831b219abc903ac9de7f673032f34e772851ba",
-          "url": "https://github.com/genogrove/genogrove/commit/b930239bc469d8d7ed8a0e11fdfebd7b94e059c4"
-        },
-        "date": 1772678203216,
-        "tool": "googlecpp",
-        "benches": [
-          {
-            "name": "BM_grove_creation_unsorted/100/2",
-            "value": 41.04309335433738,
-            "unit": "us/iter",
-            "extra": "iterations: 17139\ncpu: 41.030582472723026 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/100/5",
-            "value": 9.345785702357693,
-            "unit": "us/iter",
-            "extra": "iterations: 71858\ncpu: 9.343029655709874 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/100/10",
-            "value": 6.2065155194377475,
-            "unit": "us/iter",
-            "extra": "iterations: 113825\ncpu: 6.205197900285524 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/100/15",
-            "value": 5.455530703598007,
-            "unit": "us/iter",
-            "extra": "iterations: 128454\ncpu: 5.455106684104816 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/100/20",
-            "value": 4.914829650312389,
-            "unit": "us/iter",
-            "extra": "iterations: 142184\ncpu: 4.914519516963933 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/100/25",
-            "value": 4.917002334502057,
-            "unit": "us/iter",
-            "extra": "iterations: 109231\ncpu: 4.916817368695703 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/100/30",
-            "value": 4.640460801474502,
-            "unit": "us/iter",
-            "extra": "iterations: 150822\ncpu: 4.640315623715373 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/500/2",
-            "value": 310.7804734278107,
-            "unit": "us/iter",
-            "extra": "iterations: 2258\ncpu: 310.7610890168289 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/500/5",
-            "value": 51.42299660766871,
-            "unit": "us/iter",
-            "extra": "iterations: 13560\ncpu: 51.418988126843566 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/500/10",
-            "value": 37.07227290015814,
-            "unit": "us/iter",
-            "extra": "iterations: 18930\ncpu: 37.06879107237192 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/500/15",
-            "value": 31.409915151788258,
-            "unit": "us/iter",
-            "extra": "iterations: 22169\ncpu: 31.408545175695785 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/500/20",
-            "value": 30.96474787636198,
-            "unit": "us/iter",
-            "extra": "iterations: 22485\ncpu: 30.962804313987178 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/500/25",
-            "value": 30.533865935114296,
-            "unit": "us/iter",
-            "extra": "iterations: 23056\ncpu: 30.532079805690426 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/500/30",
-            "value": 30.77332608983183,
-            "unit": "us/iter",
-            "extra": "iterations: 22687\ncpu: 30.771177767003135 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/1000/2",
-            "value": 715.6015224948783,
-            "unit": "us/iter",
-            "extra": "iterations: 978\ncpu: 715.5216758691216 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/1000/5",
-            "value": 134.34074634615237,
-            "unit": "us/iter",
-            "extra": "iterations: 5200\ncpu: 134.32195134615398 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/1000/10",
-            "value": 80.70748950224126,
-            "unit": "us/iter",
-            "extra": "iterations: 8478\ncpu: 80.69948443029008 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/1000/15",
-            "value": 71.17204194011566,
-            "unit": "us/iter",
-            "extra": "iterations: 9752\ncpu: 71.16343211648922 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/1000/20",
-            "value": 73.14211909005121,
-            "unit": "us/iter",
-            "extra": "iterations: 9539\ncpu: 73.13657207254401 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/1000/25",
-            "value": 68.55466518159757,
-            "unit": "us/iter",
-            "extra": "iterations: 10325\ncpu: 68.54808319612587 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/1000/30",
-            "value": 70.9019496454637,
-            "unit": "us/iter",
-            "extra": "iterations: 9731\ncpu: 70.89328445175187 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/5000/2",
-            "value": 4135.373349112519,
-            "unit": "us/iter",
-            "extra": "iterations: 169\ncpu: 4134.728917159763 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/5000/5",
-            "value": 985.3602766854024,
-            "unit": "us/iter",
-            "extra": "iterations: 712\ncpu: 985.1064396067402 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/5000/10",
-            "value": 672.2572107795964,
-            "unit": "us/iter",
-            "extra": "iterations: 1039\ncpu: 672.0499403272369 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/5000/15",
-            "value": 559.2180613545798,
-            "unit": "us/iter",
-            "extra": "iterations: 1255\ncpu: 559.1587219123505 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/5000/20",
-            "value": 548.7228337182418,
-            "unit": "us/iter",
-            "extra": "iterations: 1299\ncpu: 548.6927844495789 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/5000/25",
-            "value": 514.393242112994,
-            "unit": "us/iter",
-            "extra": "iterations: 1363\ncpu: 514.3675289801928 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted/5000/30",
-            "value": 498.27394868140254,
-            "unit": "us/iter",
-            "extra": "iterations: 1403\ncpu: 498.25547042052847 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted_BigO",
-            "value": null,
-            "unit": "ns/iter",
-            "extra": "iterations: undefined\ncpu: undefined ns\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_unsorted_RMS",
-            "unit": "undefined/iter",
-            "extra": "iterations: undefined\ncpu: undefined undefined\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/100/2",
-            "value": 31.336081280457577,
-            "unit": "us/iter",
-            "extra": "iterations: 22367\ncpu: 31.334573165824796 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/100/5",
-            "value": 9.828819754987782,
-            "unit": "us/iter",
-            "extra": "iterations: 71425\ncpu: 9.828502667133318 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/100/10",
-            "value": 7.891687405108733,
-            "unit": "us/iter",
-            "extra": "iterations: 90235\ncpu: 7.88647382944533 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/100/15",
-            "value": 6.242522565571813,
-            "unit": "us/iter",
-            "extra": "iterations: 113425\ncpu: 6.2421867048710595 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/100/20",
-            "value": 6.222501837579387,
-            "unit": "us/iter",
-            "extra": "iterations: 112104\ncpu: 6.222212293941338 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/100/25",
-            "value": 5.711125668492541,
-            "unit": "us/iter",
-            "extra": "iterations: 123038\ncpu: 5.710861034802243 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/100/30",
-            "value": 5.440304488199309,
-            "unit": "us/iter",
-            "extra": "iterations: 128849\ncpu: 5.439880356075722 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/500/2",
-            "value": 180.58826547988068,
-            "unit": "us/iter",
-            "extra": "iterations: 3876\ncpu: 180.5745203818362 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/500/5",
-            "value": 51.98678759482468,
-            "unit": "us/iter",
-            "extra": "iterations: 13446\ncpu: 51.98345760821056 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/500/10",
-            "value": 40.582192736466325,
-            "unit": "us/iter",
-            "extra": "iterations: 17402\ncpu: 40.58035582116995 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/500/15",
-            "value": 33.66262313505059,
-            "unit": "us/iter",
-            "extra": "iterations: 20644\ncpu: 33.6583640282889 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/500/20",
-            "value": 33.509521862115,
-            "unit": "us/iter",
-            "extra": "iterations: 20858\ncpu: 33.50726148240475 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/500/25",
-            "value": 30.85502088680462,
-            "unit": "us/iter",
-            "extra": "iterations: 22598\ncpu: 30.853269846889024 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/500/30",
-            "value": 30.06283389552003,
-            "unit": "us/iter",
-            "extra": "iterations: 23124\ncpu: 30.061339647120146 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/1000/2",
-            "value": 404.5770559400283,
-            "unit": "us/iter",
-            "extra": "iterations: 1734\ncpu: 404.55973587081917 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/1000/5",
-            "value": 111.17726233683669,
-            "unit": "us/iter",
-            "extra": "iterations: 6282\ncpu: 111.17219165870766 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/1000/10",
-            "value": 81.89294426074491,
-            "unit": "us/iter",
-            "extra": "iterations: 8468\ncpu: 81.88935285781781 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/1000/15",
-            "value": 68.83334931708801,
-            "unit": "us/iter",
-            "extra": "iterations: 10177\ncpu: 68.82946172742454 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/1000/20",
-            "value": 68.86724621324869,
-            "unit": "us/iter",
-            "extra": "iterations: 10101\ncpu: 68.86474844074895 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/1000/25",
-            "value": 63.04341271989283,
-            "unit": "us/iter",
-            "extra": "iterations: 11085\ncpu: 63.04100162381594 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/1000/30",
-            "value": 61.425556681054445,
-            "unit": "us/iter",
-            "extra": "iterations: 11353\ncpu: 61.42233700343547 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/5000/2",
-            "value": 2151.1038103975266,
-            "unit": "us/iter",
-            "extra": "iterations: 327\ncpu: 2150.8720672782943 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/5000/5",
-            "value": 658.7661433926892,
-            "unit": "us/iter",
-            "extra": "iterations: 1067\ncpu: 658.7274686035573 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/5000/10",
-            "value": 495.2314080622199,
-            "unit": "us/iter",
-            "extra": "iterations: 1414\ncpu: 495.19950353606896 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/5000/15",
-            "value": 389.3786068660109,
-            "unit": "us/iter",
-            "extra": "iterations: 1806\ncpu: 389.36352823920305 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/5000/20",
-            "value": 375.7297482555044,
-            "unit": "us/iter",
-            "extra": "iterations: 1863\ncpu: 375.7167037037024 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/5000/25",
-            "value": 340.07243058253545,
-            "unit": "us/iter",
-            "extra": "iterations: 2060\ncpu: 340.058189805824 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted/5000/30",
-            "value": 327.75556364490956,
-            "unit": "us/iter",
-            "extra": "iterations: 2129\ncpu: 327.73476890559016 us\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted_BigO",
-            "value": null,
-            "unit": "ns/iter",
-            "extra": "iterations: undefined\ncpu: undefined ns\nthreads: 1"
-          },
-          {
-            "name": "BM_grove_creation_sorted_RMS",
-            "unit": "undefined/iter",
-            "extra": "iterations: undefined\ncpu: undefined undefined\nthreads: 1"
-          }
-        ]
-      },
       {
         "commit": {
           "author": {
@@ -9539,6 +9157,388 @@ window.BENCHMARK_DATA = {
             "value": 190.97897782037404,
             "unit": "us/iter",
             "extra": "iterations: 3652\ncpu: 190.96934693318786 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted_BigO",
+            "value": null,
+            "unit": "ns/iter",
+            "extra": "iterations: undefined\ncpu: undefined ns\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted_RMS",
+            "unit": "undefined/iter",
+            "extra": "iterations: undefined\ncpu: undefined undefined\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "richard.schaefer@northwestern.edu",
+            "name": "Richard A. Schäfer",
+            "username": "riasc"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ba779294cba61f67e9ed0a470eca3ff1ddee9fca",
+          "message": "Merge pull request #233 from genogrove/fix/reader-error-message-semantics-158\n\nClear error_message at start of each read_next() across all readers",
+          "timestamp": "2026-03-14T23:23:53-04:00",
+          "tree_id": "e76be602314ec188015b6f4344327986fddf8678",
+          "url": "https://github.com/genogrove/genogrove/commit/ba779294cba61f67e9ed0a470eca3ff1ddee9fca"
+        },
+        "date": 1773545264383,
+        "tool": "googlecpp",
+        "benches": [
+          {
+            "name": "BM_grove_creation_unsorted/100/2",
+            "value": 32.92268008288116,
+            "unit": "us/iter",
+            "extra": "iterations: 19305\ncpu: 32.91434768194769 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/100/5",
+            "value": 7.558307196539009,
+            "unit": "us/iter",
+            "extra": "iterations: 91544\ncpu: 7.55801183037665 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/100/10",
+            "value": 5.092743548824279,
+            "unit": "us/iter",
+            "extra": "iterations: 136603\ncpu: 5.0917175171848355 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/100/15",
+            "value": 4.3399008433699615,
+            "unit": "us/iter",
+            "extra": "iterations: 160665\ncpu: 4.339597871347214 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/100/20",
+            "value": 3.925851655888637,
+            "unit": "us/iter",
+            "extra": "iterations: 178605\ncpu: 3.9255730746619664 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/100/25",
+            "value": 3.9039866216798185,
+            "unit": "us/iter",
+            "extra": "iterations: 178423\ncpu: 3.9038815231220165 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/100/30",
+            "value": 3.761362387407806,
+            "unit": "us/iter",
+            "extra": "iterations: 186847\ncpu: 3.7607116410753214 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/500/2",
+            "value": 274.52970700389403,
+            "unit": "us/iter",
+            "extra": "iterations: 2570\ncpu: 274.50612529182905 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/500/5",
+            "value": 43.011153949951854,
+            "unit": "us/iter",
+            "extra": "iterations: 16304\ncpu: 43.00684328999017 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/500/10",
+            "value": 30.03583153872644,
+            "unit": "us/iter",
+            "extra": "iterations: 23032\ncpu: 30.034227987148324 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/500/15",
+            "value": 25.558251987455076,
+            "unit": "us/iter",
+            "extra": "iterations: 27422\ncpu: 25.5559620377799 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/500/20",
+            "value": 25.8613956602372,
+            "unit": "us/iter",
+            "extra": "iterations: 26960\ncpu: 25.859156231454005 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/500/25",
+            "value": 25.08684581450031,
+            "unit": "us/iter",
+            "extra": "iterations: 27655\ncpu: 25.084075754836388 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/500/30",
+            "value": 24.708049493774357,
+            "unit": "us/iter",
+            "extra": "iterations: 28347\ncpu: 24.706827001093593 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/1000/2",
+            "value": 630.3249891989278,
+            "unit": "us/iter",
+            "extra": "iterations: 1111\ncpu: 630.2678505850587 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/1000/5",
+            "value": 120.72776506442928,
+            "unit": "us/iter",
+            "extra": "iterations: 5742\ncpu: 120.72011024033412 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/1000/10",
+            "value": 72.64051998766529,
+            "unit": "us/iter",
+            "extra": "iterations: 9731\ncpu: 72.63446048710291 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/1000/15",
+            "value": 62.56765834845577,
+            "unit": "us/iter",
+            "extra": "iterations: 11020\ncpu: 62.56418856624306 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/1000/20",
+            "value": 62.770560328318965,
+            "unit": "us/iter",
+            "extra": "iterations: 10965\ncpu: 62.767864569083606 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/1000/25",
+            "value": 59.658747332519,
+            "unit": "us/iter",
+            "extra": "iterations: 11434\ncpu: 59.65398128388988 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/1000/30",
+            "value": 61.344808388443056,
+            "unit": "us/iter",
+            "extra": "iterations: 11492\ncpu: 61.34134363035161 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/5000/2",
+            "value": 3640.061538860169,
+            "unit": "us/iter",
+            "extra": "iterations: 193\ncpu: 3639.8407927461203 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/5000/5",
+            "value": 898.6168847631671,
+            "unit": "us/iter",
+            "extra": "iterations: 781\ncpu: 898.5655928297077 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/5000/10",
+            "value": 623.9120828138787,
+            "unit": "us/iter",
+            "extra": "iterations: 1123\ncpu: 623.897154051646 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/5000/15",
+            "value": 518.6790436390801,
+            "unit": "us/iter",
+            "extra": "iterations: 1352\ncpu: 518.6350480769228 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/5000/20",
+            "value": 496.33508067940033,
+            "unit": "us/iter",
+            "extra": "iterations: 1413\ncpu: 496.3193793347469 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/5000/25",
+            "value": 462.8776882430981,
+            "unit": "us/iter",
+            "extra": "iterations: 1514\ncpu: 462.83426684280096 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted/5000/30",
+            "value": 450.4984344472849,
+            "unit": "us/iter",
+            "extra": "iterations: 1556\ncpu: 450.4411561696667 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted_BigO",
+            "value": null,
+            "unit": "ns/iter",
+            "extra": "iterations: undefined\ncpu: undefined ns\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_unsorted_RMS",
+            "unit": "undefined/iter",
+            "extra": "iterations: undefined\ncpu: undefined undefined\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/100/2",
+            "value": 25.48037404027261,
+            "unit": "us/iter",
+            "extra": "iterations: 27612\ncpu: 25.479171700709824 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/100/5",
+            "value": 6.084701355476354,
+            "unit": "us/iter",
+            "extra": "iterations: 115974\ncpu: 6.084398184075719 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/100/10",
+            "value": 4.723251025216317,
+            "unit": "us/iter",
+            "extra": "iterations: 157040\ncpu: 4.722971968925116 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/100/15",
+            "value": 3.968691844430062,
+            "unit": "us/iter",
+            "extra": "iterations: 167873\ncpu: 3.9684857183704203 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/100/20",
+            "value": 3.9744543054791377,
+            "unit": "us/iter",
+            "extra": "iterations: 183731\ncpu: 3.97432951434435 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/100/25",
+            "value": 3.7988563783835536,
+            "unit": "us/iter",
+            "extra": "iterations: 172481\ncpu: 3.7986110296206346 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/100/30",
+            "value": 3.859262188601564,
+            "unit": "us/iter",
+            "extra": "iterations: 188906\ncpu: 3.859250240860556 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/500/2",
+            "value": 149.14061491079423,
+            "unit": "us/iter",
+            "extra": "iterations: 4708\ncpu: 149.1292306711981 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/500/5",
+            "value": 31.016764632237976,
+            "unit": "us/iter",
+            "extra": "iterations: 22365\ncpu: 31.01637245696391 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/500/10",
+            "value": 23.717324882726185,
+            "unit": "us/iter",
+            "extra": "iterations: 28992\ncpu: 23.715026179635665 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/500/15",
+            "value": 20.830757395532782,
+            "unit": "us/iter",
+            "extra": "iterations: 32283\ncpu: 20.82824458693446 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/500/20",
+            "value": 20.84377269589649,
+            "unit": "us/iter",
+            "extra": "iterations: 33321\ncpu: 20.842359112871947 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/500/25",
+            "value": 19.663061442590482,
+            "unit": "us/iter",
+            "extra": "iterations: 35464\ncpu: 19.662469743965655 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/500/30",
+            "value": 19.236837157913044,
+            "unit": "us/iter",
+            "extra": "iterations: 35298\ncpu: 19.235361720210697 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/1000/2",
+            "value": 343.8203843503704,
+            "unit": "us/iter",
+            "extra": "iterations: 2032\ncpu: 343.81450049212634 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/1000/5",
+            "value": 66.7190109890132,
+            "unit": "us/iter",
+            "extra": "iterations: 10465\ncpu: 66.71349173435273 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/1000/10",
+            "value": 48.904881479975415,
+            "unit": "us/iter",
+            "extra": "iterations: 14757\ncpu: 48.90405909060121 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/1000/15",
+            "value": 43.685086713872685,
+            "unit": "us/iter",
+            "extra": "iterations: 16664\ncpu: 43.68073133701403 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/1000/20",
+            "value": 43.375731186049585,
+            "unit": "us/iter",
+            "extra": "iterations: 16517\ncpu: 43.373564509293494 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/1000/25",
+            "value": 41.29473917537546,
+            "unit": "us/iter",
+            "extra": "iterations: 17414\ncpu: 41.29046560238878 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/1000/30",
+            "value": 40.231791580593146,
+            "unit": "us/iter",
+            "extra": "iterations: 17911\ncpu: 40.228345765172186 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/5000/2",
+            "value": 1853.952148148134,
+            "unit": "us/iter",
+            "extra": "iterations: 378\ncpu: 1853.817756613751 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/5000/5",
+            "value": 410.7099435390004,
+            "unit": "us/iter",
+            "extra": "iterations: 1718\ncpu: 410.6764179278238 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/5000/10",
+            "value": 278.907294573626,
+            "unit": "us/iter",
+            "extra": "iterations: 2451\ncpu: 278.8824259485916 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/5000/15",
+            "value": 243.18942144554023,
+            "unit": "us/iter",
+            "extra": "iterations: 2947\ncpu: 243.17201085850024 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/5000/20",
+            "value": 227.7463473013816,
+            "unit": "us/iter",
+            "extra": "iterations: 2983\ncpu: 227.72229098223357 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/5000/25",
+            "value": 224.41583240049866,
+            "unit": "us/iter",
+            "extra": "iterations: 3216\ncpu: 224.40306187810782 us\nthreads: 1"
+          },
+          {
+            "name": "BM_grove_creation_sorted/5000/30",
+            "value": 211.22864071671702,
+            "unit": "us/iter",
+            "extra": "iterations: 3237\ncpu: 211.21074544331123 us\nthreads: 1"
           },
           {
             "name": "BM_grove_creation_sorted_BigO",
