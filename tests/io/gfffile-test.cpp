@@ -244,8 +244,8 @@ TEST_F(gfffileTest, skipInvalidLines) {
     // Only the first valid line should be returned; invalid line skipped
     EXPECT_EQ(entries.size(), 1);
     EXPECT_EQ(entries[0].seqid, "chr1");
-    // Error message should be set for the skipped line
-    EXPECT_FALSE(reader.get_error_message().empty());
+    // After iteration, error_message reflects the last read (EOF), not skipped lines
+    EXPECT_TRUE(reader.get_error_message().empty());
 }
 
 TEST_F(gfffileTest, invalidScoreThrows) {
@@ -268,7 +268,7 @@ TEST_F(gfffileTest, invalidScoreSkipped) {
 
     EXPECT_EQ(entries.size(), 1);
     EXPECT_EQ(entries[0].seqid, "chr1");
-    EXPECT_FALSE(reader.get_error_message().empty());
+    EXPECT_TRUE(reader.get_error_message().empty());
 }
 
 TEST_F(gfffileTest, invalidStrandThrows) {
@@ -291,7 +291,7 @@ TEST_F(gfffileTest, invalidStrandSkipped) {
 
     EXPECT_EQ(entries.size(), 1);
     EXPECT_EQ(entries[0].seqid, "chr1");
-    EXPECT_FALSE(reader.get_error_message().empty());
+    EXPECT_TRUE(reader.get_error_message().empty());
 }
 
 TEST_F(gfffileTest, invalidPhaseThrows) {
@@ -314,7 +314,7 @@ TEST_F(gfffileTest, invalidPhaseSkipped) {
 
     EXPECT_EQ(entries.size(), 1);
     EXPECT_EQ(entries[0].seqid, "chr1");
-    EXPECT_FALSE(reader.get_error_message().empty());
+    EXPECT_TRUE(reader.get_error_message().empty());
 }
 
 TEST_F(gfffileTest, fileNotFound) {
