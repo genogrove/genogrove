@@ -12,10 +12,8 @@
 #define GENOGROVE_DATA_TYPE_ALL_HPP
 
 #include <genogrove/data_type/constants.hpp>
-#include <genogrove/data_type/data_registry.hpp>
 #include <genogrove/data_type/genomic_coordinate.hpp>
-#include <genogrove/data_type/index.hpp>
-#include <genogrove/data_type/index_registry.hpp>
+#include <genogrove/data_type/registry.hpp>
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/data_type/key.hpp>
 #include <genogrove/data_type/key_type_base.hpp>
@@ -43,9 +41,7 @@
  * ## Type System Infrastructure
  * - **key_type_base**: C++20 concept defining requirements for key types
  *   (comparison operators, overlaps(), aggregate(), to_string())
- * - **index**: Index identifier management (e.g., chromosome names)
- * - **index_registry**: Global registry for managing index identifiers
- * - **data_registry**: Template registry for shared metadata (per-type singleton)
+ * - **registry**: Template registry for shared metadata (per-type singleton)
  * - **serialization_traits**: Traits for type-specific serialization
  * - **constants**: Common constants and type definitions
  *
