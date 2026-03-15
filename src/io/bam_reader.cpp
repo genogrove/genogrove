@@ -226,7 +226,7 @@ namespace genogrove::io {
         // Quality scores (QUAL)
         uint8_t* qual = bam_get_qual(b);
         entry.quality.clear();
-        if (qual[0] != 0xFF) {  // 0xFF means quality not stored
+        if (c.l_qseq > 0 && qual[0] != 0xFF) {  // 0xFF means quality not stored
             entry.quality.reserve(c.l_qseq);
             for (int i = 0; i < c.l_qseq; ++i) {
                 entry.quality += static_cast<char>(qual[i] + 33);  // Convert to ASCII
@@ -295,6 +295,7 @@ namespace genogrove::io {
             int op = bam_cigar_op(cigar[i]);
             uint32_t len = bam_cigar_oplen(cigar[i]);
 
+            if (op > 8) continue;  // skip invalid CIGAR ops
             result.emplace_back(static_cast<cigar_op>(op), len);
         }
 
@@ -323,15 +324,18 @@ namespace genogrove::io {
 
             switch (type) {
                 case 'A':  // Printable character
+                    if (aux >= aux_end) return result;
                     value = static_cast<char>(*aux++);
                     break;
 
                 case 'c':  // int8_t
+                    if (aux >= aux_end) return result;
                     value = static_cast<int64_t>(*reinterpret_cast<int8_t*>(aux));
                     aux += 1;
                     break;
 
                 case 'C':  // uint8_t
+                    if (aux >= aux_end) return result;
                     value = static_cast<int64_t>(*aux++);
                     break;
 
@@ -389,8 +393,13 @@ namespace genogrove::io {
                 case 'H':  // Hex string
                 {
                     const char* str = reinterpret_cast<const char*>(aux);
-                    value = std::string(str);
-                    aux += std::strlen(str) + 1;
+                    size_t remaining = static_cast<size_t>(aux_end - aux);
+                    const void* nul = std::memchr(str, '\0', remaining);
+                    if (!nul) return result;  // unterminated string
+                    size_t len = static_cast<size_t>(
+                        reinterpret_cast<const char*>(nul) - str);
+                    value = std::string(str, len);
+                    aux += len + 1;
                     break;
                 }
 
