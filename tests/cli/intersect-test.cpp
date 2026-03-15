@@ -180,69 +180,39 @@ TEST_F(CLIIntersectTest, ParseArgsWithOutputFile) {
 // ==========================================
 
 TEST_F(CLIIntersectTest, ValidateMissingQueryfile) {
-    EXPECT_EXIT(
-        {
-            auto args = parse_intersect_args({"intersect", "-t", target_path.string()});
-            subcalls::intersect isec;
-            isec.validate(args);
-        },
-        ::testing::ExitedWithCode(1),
-        "queryfile is required"
-    );
+    auto args = parse_intersect_args({"intersect", "-t", target_path.string()});
+    subcalls::intersect isec;
+    EXPECT_THROW(isec.validate(args), std::runtime_error);
 }
 
 TEST_F(CLIIntersectTest, ValidateMissingTargetfile) {
-    EXPECT_EXIT(
-        {
-            auto args = parse_intersect_args({"intersect", "-q", query_path.string()});
-            subcalls::intersect isec;
-            isec.validate(args);
-        },
-        ::testing::ExitedWithCode(1),
-        "targetfile is required"
-    );
+    auto args = parse_intersect_args({"intersect", "-q", query_path.string()});
+    subcalls::intersect isec;
+    EXPECT_THROW(isec.validate(args), std::runtime_error);
 }
 
 TEST_F(CLIIntersectTest, ValidateNonexistentQueryfile) {
-    EXPECT_EXIT(
-        {
-            auto args = parse_intersect_args({
-                "intersect", "-q", "/nonexistent/path.bed", "-t", target_path.string()
-            });
-            subcalls::intersect isec;
-            isec.validate(args);
-        },
-        ::testing::ExitedWithCode(1),
-        "File does not exist"
-    );
+    auto args = parse_intersect_args({
+        "intersect", "-q", "/nonexistent/path.bed", "-t", target_path.string()
+    });
+    subcalls::intersect isec;
+    EXPECT_THROW(isec.validate(args), std::runtime_error);
 }
 
 TEST_F(CLIIntersectTest, ValidateNonexistentTargetfile) {
-    EXPECT_EXIT(
-        {
-            auto args = parse_intersect_args({
-                "intersect", "-q", query_path.string(), "-t", "/nonexistent/path.bed"
-            });
-            subcalls::intersect isec;
-            isec.validate(args);
-        },
-        ::testing::ExitedWithCode(1),
-        "File does not exist"
-    );
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-t", "/nonexistent/path.bed"
+    });
+    subcalls::intersect isec;
+    EXPECT_THROW(isec.validate(args), std::runtime_error);
 }
 
 TEST_F(CLIIntersectTest, ValidateInvalidOrder) {
-    EXPECT_EXIT(
-        {
-            auto args = parse_intersect_args({
-                "intersect", "-q", query_path.string(), "-t", target_path.string(), "-k", "1"
-            });
-            subcalls::intersect isec;
-            isec.validate(args);
-        },
-        ::testing::ExitedWithCode(1),
-        "Order must be at least 2"
-    );
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-t", target_path.string(), "-k", "1"
+    });
+    subcalls::intersect isec;
+    EXPECT_THROW(isec.validate(args), std::runtime_error);
 }
 
 TEST_F(CLIIntersectTest, ValidateValidArgs) {

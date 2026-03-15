@@ -25,16 +25,11 @@ cxxopts::Options index::parse_args(int argc, char** argv) {
 
 void index::validate(const cxxopts::ParseResult& args) {
     if(!args.count("inputfile")) {
-        std::cerr << "Error: inputfile is required\n";
-        exit(1);
+        throw std::runtime_error("Error: inputfile is required");
     }
-    if(args.count("inputfile")) {
-        std::string inputfile = args["inputfile"].as<std::string>();
-        // check if the file exists
-        if(!std::filesystem::exists(inputfile)) {
-            std::cerr << "File does not exist: " << inputfile << "\n";
-            exit(1);
-        }
+    std::string inputfile = args["inputfile"].as<std::string>();
+    if(!std::filesystem::exists(inputfile)) {
+        throw std::runtime_error("Error: file does not exist: " + inputfile);
     }
 }
 
