@@ -74,8 +74,13 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    command->validate(subcallArgs);
-    command->execute(subcallArgs);
+    try {
+        command->validate(subcallArgs);
+        command->execute(subcallArgs);
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << "\n";
+        return 1;
+    }
     return 0;
 
 }

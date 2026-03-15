@@ -25,23 +25,19 @@ cxxopts::Options intersect::parse_args(int argc, char** argv) {
 
 void intersect::validate(const cxxopts::ParseResult& args) {
     if(!args.count("queryfile")) {
-        std::cerr << "Error: queryfile is required\n";
-        exit(1);
+        throw std::runtime_error("Error: queryfile is required");
     }
     auto queryfile = args["queryfile"].as<std::string>();
     if(!std::filesystem::exists(queryfile)) {
-        std::cerr << "File does not exist: " << queryfile << std::endl;
-        exit(1);
+        throw std::runtime_error("Error: file does not exist: " + queryfile);
     }
 
     if(!args.count("targetfile")) {
-        std::cerr << "Error: targetfile is required\n";
-        exit(1);
+        throw std::runtime_error("Error: targetfile is required");
     }
     auto targetfile = args["targetfile"].as<std::string>();
     if(!std::filesystem::exists(targetfile)) {
-        std::cerr << "File does not exist: " << targetfile << std::endl;
-        exit(1);
+        throw std::runtime_error("Error: file does not exist: " + targetfile);
     }
 
     if(args.count("outputfile")) {
@@ -50,8 +46,7 @@ void intersect::validate(const cxxopts::ParseResult& args) {
             std::filesystem::path outputfile_path(outputfile);
             auto parent = outputfile_path.parent_path();
             if(!parent.empty() && !std::filesystem::exists(parent)) {
-                std::cerr << "Parent directory does not exist: " << parent << std::endl;
-                exit(1);
+                throw std::runtime_error("Error: parent directory does not exist: " + parent.string());
             }
         }
     }
@@ -59,8 +54,7 @@ void intersect::validate(const cxxopts::ParseResult& args) {
     if(args.count("k")) {
         int k = args["k"].as<int>();
         if(k < 2) {
-            std::cerr << "Order must be at least 2" << std::endl;
-            exit(1);
+            throw std::runtime_error("Error: order must be at least 2");
         }
     }
 }
@@ -82,8 +76,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
         if(outputfile != "stdout") {
             output_file = std::make_unique<std::ofstream>(outputfile);
             if(!output_file->is_open()) {
-                std::cerr << "Error: Could not open output file: " << outputfile << std::endl;
-                exit(1);
+                throw std::runtime_error("Error: could not open output file: " + outputfile);
             }
             outputStream = output_file.get();
         }
@@ -98,16 +91,14 @@ void intersect::execute(const cxxopts::ParseResult& args) {
         case gio::filetype::BED:
             break;
         default:
-            std::cerr << "Error: Only BED format is currently supported for target files\n";
-            exit(1);
+            throw std::runtime_error("Error: only BED format is currently supported for target files");
     }
 
     switch(query_filetype) {
         case gio::filetype::BED:
             break;
         default:
-            std::cerr << "Error: Only BED format is currently supported for query files\n";
-            exit(1);
+            throw std::runtime_error("Error: only BED format is currently supported for query files");
     }
 
     // Create grove and populate with target file
