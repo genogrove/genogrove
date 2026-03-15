@@ -1009,8 +1009,8 @@ class grove {
                   !key_type::overlaps(node->get_keys()[i]->get_value(), query)) {
                 i++;
             }
-            if(node->get_children()[i] != nullptr) {
-                search_iter(node->get_children()[i], query, result);
+            if(node->get_child(i) != nullptr) {
+                search_iter(node->get_child(i), query, result);
             }
         }
     }
