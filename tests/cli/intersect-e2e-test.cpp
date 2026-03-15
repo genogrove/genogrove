@@ -169,7 +169,7 @@ TEST_F(CLIIntersectE2ETest, NonexistentQueryfile) {
         "isec -q /nonexistent/path.bed -t \"" + target_path.string() + "\""
     ));
     EXPECT_NE(result.exit_code, 0);
-    EXPECT_NE(result.output.find("File does not exist"), std::string::npos);
+    EXPECT_NE(result.output.find("file does not exist"), std::string::npos);
 }
 
 TEST_F(CLIIntersectE2ETest, NonexistentTargetfile) {
@@ -177,7 +177,7 @@ TEST_F(CLIIntersectE2ETest, NonexistentTargetfile) {
         "isec -q \"" + query_path.string() + "\" -t /nonexistent/path.bed"
     ));
     EXPECT_NE(result.exit_code, 0);
-    EXPECT_NE(result.output.find("File does not exist"), std::string::npos);
+    EXPECT_NE(result.output.find("file does not exist"), std::string::npos);
 }
 
 TEST_F(CLIIntersectE2ETest, InvalidOrder) {
@@ -185,7 +185,7 @@ TEST_F(CLIIntersectE2ETest, InvalidOrder) {
         "isec -q \"" + query_path.string() + "\" -t \"" + target_path.string() + "\" -k 1"
     ));
     EXPECT_NE(result.exit_code, 0);
-    EXPECT_NE(result.output.find("Order must be at least 2"), std::string::npos);
+    EXPECT_NE(result.output.find("order must be at least 2"), std::string::npos);
 }
 
 // ==========================================
