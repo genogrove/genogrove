@@ -149,6 +149,7 @@ namespace genogrove::io {
     }
 
     bool bam_reader::read_next(sam_entry& entry) {
+        error_message_.clear();
         if (!sam_file_ || at_eof_) {
             return false;
         }

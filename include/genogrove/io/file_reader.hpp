@@ -19,6 +19,8 @@ namespace genogrove::io {
     class file_reader_base {
     public:
         virtual bool has_next() = 0;
+        /// Returns the error message from the most recent read_next() call.
+        /// Cleared at the start of each read_next(); empty if the last read succeeded.
         virtual std::string get_error_message() const = 0;
         virtual size_t get_current_line() const = 0;
         virtual ~file_reader_base() = default;

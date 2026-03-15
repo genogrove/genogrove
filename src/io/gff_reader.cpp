@@ -239,6 +239,7 @@ namespace genogrove::io {
     }
 
     bool gff_reader::read_next(gff_entry& entry) {
+        error_message.clear();
         while (true) {
             std::string line;
             {
