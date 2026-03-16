@@ -511,7 +511,7 @@ class grove {
      * @return Pointer to rightmost leaf node, or nullptr if index doesn't exist
      * @note Used for optimized sorted insertion
      */
-    node<key_type, data_type>* get_rightmost_node(std::string_view key) {
+    node<key_type, data_type>* get_rightmost_node(std::string_view key) const {
         return ggu::value_lookup(this->rightmost_nodes, key).value_or(nullptr);
     }
 
@@ -531,7 +531,7 @@ class grove {
      * @param key The index name (e.g., chromosome name) to look up
      * @return Pointer to root node, or nullptr if index doesn't exist
      */
-    node<key_type, data_type>* get_root(std::string_view key) {
+    node<key_type, data_type>* get_root(std::string_view key) const {
         return ggu::value_lookup(this->root_nodes, key).value_or(nullptr);
     }
 
@@ -928,7 +928,7 @@ class grove {
      * @return query_result containing all overlapping keys from all indices
      * @note Searches all root nodes (all chromosomes/indices) in the grove
      */
-    gdt::query_result<key_type, data_type> intersect(const key_type& query) {
+    [[nodiscard]] gdt::query_result<key_type, data_type> intersect(const key_type& query) {
         gdt::query_result<key_type, data_type> result{query};
         // if index is not specified, all root nodes need to be checked
         for(const auto& [index, root] : this->get_root_nodes()) {
