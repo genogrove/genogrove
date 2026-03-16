@@ -567,7 +567,6 @@ protected:
         EXPECT_EQ(grove.vertex_count_with_edges(), key_count - 1);  // Vertices with outgoing edges
         EXPECT_EQ(grove.edge_count(), key_count - 1);
 
-        EXPECT_EQ(grove.edge_count(), key_count - 1);
         grove.clear();
         EXPECT_EQ(grove.edge_count(), 0);
         EXPECT_EQ(grove.graph_empty(), true);

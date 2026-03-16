@@ -13,6 +13,7 @@
 #include <vector>
 #include <algorithm>
 #include <ranges>
+#include <stdexcept>
 #include <type_traits>
 #include <variant>
 
@@ -72,6 +73,9 @@ class graph_overlay {
      */
     void add_edge(gdt::key<key_type, data_type>* source,
                   gdt::key<key_type, data_type>* target) {
+        if (!source || !target) {
+            throw std::invalid_argument("add_edge: source and target must not be null");
+        }
         adjacency[source].emplace_back(target);
     }
 
@@ -86,6 +90,9 @@ class graph_overlay {
                   gdt::key<key_type, data_type>* target,
                   M&& metadata)
         requires (!std::is_void_v<edge_data_type>) {
+        if (!source || !target) {
+            throw std::invalid_argument("add_edge: source and target must not be null");
+        }
         adjacency[source].emplace_back(target, std::forward<M>(metadata));
     }
 
@@ -124,6 +131,9 @@ class graph_overlay {
      */
     std::vector<gdt::key<key_type, data_type>*> get_neighbors(
         gdt::key<key_type, data_type>* source) const {
+        if (!source) {
+            throw std::invalid_argument("get_neighbors: source must not be null");
+        }
         std::vector<gdt::key<key_type, data_type>*> neighbors;
 
         auto it = adjacency.find(source);
