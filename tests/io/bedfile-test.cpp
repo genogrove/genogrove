@@ -76,6 +76,7 @@ TEST_F(bedfileTest, readBED3Format) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 3);
 
@@ -109,6 +110,7 @@ TEST_F(bedfileTest, readBED6Format) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 3);
 
@@ -147,6 +149,7 @@ TEST_F(bedfileTest, readBED12Format) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 3);
 
@@ -397,6 +400,7 @@ TEST_F(bedfileTest, readGzippedBED3Format) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 3);
 
@@ -426,6 +430,7 @@ TEST_F(bedfileTest, readGzippedBED6Format) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 3);
 
@@ -460,6 +465,7 @@ TEST_F(bedfileTest, readGzippedBED12Format) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 3);
 
@@ -512,6 +518,7 @@ TEST_F(bedfileTest, iteratorBasicIteration) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 3);
 
@@ -549,6 +556,7 @@ TEST_F(bedfileTest, iteratorWithOptionalFields) {
             EXPECT_EQ(entry.strand.value(), '+');
         }
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     EXPECT_EQ(count, 3);
 }
@@ -614,6 +622,7 @@ TEST_F(bedfileTest, mixedBedFormatsNoStaleOptionals) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 3);
 
@@ -664,6 +673,7 @@ TEST_F(bedfileTest, iteratorGzippedFile) {
     for (const auto& entry : reader) {
         chroms.push_back(entry.chrom);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(chroms.size(), 3);
     EXPECT_EQ(chroms[0], "chr1");
