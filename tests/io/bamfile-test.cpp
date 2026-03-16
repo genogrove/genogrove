@@ -62,6 +62,7 @@ TEST_F(BamReaderTest, ReadSamFile) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // We have 9 records in test.sam, but default options skip unmapped (read004)
     ASSERT_EQ(entries.size(), 8);
@@ -74,6 +75,7 @@ TEST_F(BamReaderTest, ReadSamFileIncludeAll) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // All 9 records including unmapped
     ASSERT_EQ(entries.size(), 9);
@@ -103,6 +105,7 @@ TEST_F(BamReaderTest, VerifyReverseStrandAlignment) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // Find the reverse strand read (read003)
     auto it = std::find_if(entries.begin(), entries.end(),
@@ -138,6 +141,7 @@ TEST_F(BamReaderTest, ParseComplexCigar) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // Find read002 with 30M10I10M CIGAR
     auto it = std::find_if(entries.begin(), entries.end(),
@@ -169,6 +173,7 @@ TEST_F(BamReaderTest, ParseCigarWithDeletion) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // Find read003 with 25M5D25M CIGAR
     auto it = std::find_if(entries.begin(), entries.end(),
@@ -197,6 +202,7 @@ TEST_F(BamReaderTest, ParseCigarWithSkip) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // Find read007 with 20M100N30M CIGAR (spliced alignment)
     auto it = std::find_if(entries.begin(), entries.end(),
@@ -220,6 +226,7 @@ TEST_F(BamReaderTest, ParseCigarWithSoftClipping) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // Find read006 with 10S30M10S CIGAR
     auto it = std::find_if(entries.begin(), entries.end(),
@@ -282,6 +289,7 @@ TEST_F(BamReaderTest, ParseCharacterTag) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // Find read003 which has XS:A:+ tag
     auto it = std::find_if(entries.begin(), entries.end(),
@@ -301,6 +309,7 @@ TEST_F(BamReaderTest, MultipleTags) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // Find read008 which has many tags
     auto it = std::find_if(entries.begin(), entries.end(),
@@ -341,6 +350,7 @@ TEST_F(BamReaderTest, NoMateInfoForUnpairedRead) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // Find read002 which is unpaired
     auto it = std::find_if(entries.begin(), entries.end(),
@@ -362,6 +372,7 @@ TEST_F(BamReaderTest, FlagMethods) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // Find unmapped read (read004)
     auto unmapped = std::find_if(entries.begin(), entries.end(),
@@ -397,6 +408,7 @@ TEST_F(BamReaderTest, FilterUnmappedReads) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // All entries should be mapped
     for (const auto& entry : entries) {
@@ -411,6 +423,7 @@ TEST_F(BamReaderTest, PrimaryOnlyFilter) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // All entries should be primary
     for (const auto& entry : entries) {
@@ -438,6 +451,7 @@ TEST_F(BamReaderTest, MapqFilter) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // All entries should have MAPQ >= 30
     for (const auto& entry : entries) {
@@ -515,6 +529,7 @@ TEST_F(BamReaderTest, IteratorBasicIteration) {
     for (const auto& entry : reader) {
         read_names.push_back(entry.qname);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     EXPECT_EQ(read_names.size(), 8);
     EXPECT_EQ(read_names[0], "read001");
@@ -603,6 +618,7 @@ TEST_F(BamReaderTest, EmptySamFileHeaderOnly) {
     for ([[maybe_unused]] const auto& e : reader2) {
         count++;
     }
+    EXPECT_TRUE(reader2.get_error_message().empty()) << "Unexpected error: " << reader2.get_error_message();
     EXPECT_EQ(count, 0);
 
     fs::remove(empty_sam);
@@ -743,6 +759,7 @@ TEST_F(BamReaderTest, ReadBamFile) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // Same as SAM: 9 records, default options skip unmapped (read004)
     ASSERT_EQ(entries.size(), 8);
@@ -755,6 +772,7 @@ TEST_F(BamReaderTest, BamFileContentMatchesSam) {
     for (const auto& entry : sam_reader) {
         sam_entries.push_back(entry);
     }
+    EXPECT_TRUE(sam_reader.get_error_message().empty()) << "Unexpected error: " << sam_reader.get_error_message();
 
     // Read all entries from BAM
     gio::bam_reader bam_reader(bam_path);
@@ -762,6 +780,7 @@ TEST_F(BamReaderTest, BamFileContentMatchesSam) {
     for (const auto& entry : bam_reader) {
         bam_entries.push_back(entry);
     }
+    EXPECT_TRUE(bam_reader.get_error_message().empty()) << "Unexpected error: " << bam_reader.get_error_message();
 
     // Should have same number of entries
     ASSERT_EQ(sam_entries.size(), bam_entries.size());
@@ -809,6 +828,7 @@ TEST_F(BamReaderTest, BamFileIncludeAll) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // All 9 records including unmapped
     ASSERT_EQ(entries.size(), 9);
@@ -821,6 +841,7 @@ TEST_F(BamReaderTest, BamFilePrimaryOnly) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // All entries should be primary
     for (const auto& entry : entries) {
@@ -854,6 +875,7 @@ TEST_F(BamReaderTest, BamFileCigarParsing) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     // Find read002 with 30M10I10M CIGAR
     auto it = std::find_if(entries.begin(), entries.end(),

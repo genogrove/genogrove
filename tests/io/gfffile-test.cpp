@@ -77,6 +77,7 @@ TEST_F(gfffileTest, readGFF3Format) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 4);
 
@@ -128,6 +129,7 @@ TEST_F(gfffileTest, readGTFFormat) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 4);
 
@@ -458,6 +460,7 @@ TEST_F(gfffileTest, readGzippedGFF3Format) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 4);
 
@@ -485,6 +488,7 @@ TEST_F(gfffileTest, readGzippedGTFFormat) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 4);
 
@@ -646,6 +650,7 @@ TEST_F(gfffileTest, iteratorBasicIteration) {
     for (const auto& entry : reader) {
         entries.push_back(entry);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 4);
 
@@ -683,6 +688,7 @@ TEST_F(gfffileTest, iteratorGTFFormat) {
             EXPECT_EQ(gene_id.value(), "ENSG00000001");
         }
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     EXPECT_EQ(count, 4);
 }
@@ -729,6 +735,7 @@ TEST_F(gfffileTest, iteratorGzippedFile) {
     for (const auto& entry : reader) {
         types.push_back(entry.type);
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(types.size(), 4);
     EXPECT_EQ(types[0], "gene");
@@ -750,4 +757,5 @@ TEST_F(gfffileTest, iteratorAccessAttributes) {
             ASSERT_TRUE(id.has_value());
         }
     }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 }
