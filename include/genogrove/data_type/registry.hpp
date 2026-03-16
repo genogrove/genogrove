@@ -88,7 +88,7 @@ class registry {
      * @throws std::runtime_error if registry has reached maximum capacity
      * @note Each call creates a new entry; no deduplication is performed
      */
-    id_type register_data(registry_data_type data) {
+    [[nodiscard]] id_type register_data(registry_data_type data) {
         if (storage.size() >= null_id) {
             throw std::runtime_error("registry: maximum capacity reached");
         }

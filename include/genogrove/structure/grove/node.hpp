@@ -147,6 +147,14 @@ class node {
     }
 
     /**
+     * @brief Get const reference to the keys vector
+     * @return Const reference to vector of key pointers
+     */
+    const std::vector<gdt::key<key_type, data_type>*>& get_keys() const {
+        return this->keys;
+    }
+
+    /**
      * @brief Set the keys vector
      * @param keys New vector of key pointers to assign
      * @note Keys are owned by grove's deque, not by node - no deletion occurs
@@ -161,6 +169,14 @@ class node {
      * @note Children are owned by this node and will be deleted in destructor
      */
     std::vector<node<key_type, data_type>*>& get_children() {
+        return this->children;
+    }
+
+    /**
+     * @brief Get const reference to the children vector
+     * @return Const reference to vector of child node pointers
+     */
+    const std::vector<node<key_type, data_type>*>& get_children() const {
         return this->children;
     }
 
@@ -315,6 +331,19 @@ class node {
      * @throws std::out_of_range if index is invalid
      */
     node* get_child(int index) {
+        if(index < 0 || index >= this->children.size()) {
+            throw std::out_of_range("child index out of range");
+        }
+        return this->children[index];
+    }
+
+    /**
+     * @brief Get child node at the specified index (const version)
+     * @param index Position of the child to retrieve (0-based)
+     * @return Pointer to the child node
+     * @throws std::out_of_range if index is invalid
+     */
+    node* get_child(int index) const {
         if(index < 0 || index >= this->children.size()) {
             throw std::out_of_range("child index out of range");
         }

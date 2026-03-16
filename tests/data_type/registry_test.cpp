@@ -14,6 +14,7 @@
 #include <sstream>
 #include <string>
 #include <limits>
+#include <tuple>
 
 // Genogrove
 #include <genogrove/data_type/registry.hpp>
@@ -105,7 +106,7 @@ TEST_F(DataRegistryTest, InvalidIdThrows) {
     EXPECT_THROW(reg.get(gdt::registry<SampleInfo>::null_id), std::out_of_range);
 
     // Register one item
-    reg.register_data({"sample1", "liver", 1});
+    std::ignore = reg.register_data({"sample1", "liver", 1});
 
     // ID 0 is now valid, others still invalid
     EXPECT_NO_THROW(reg.get(0));
@@ -132,22 +133,22 @@ TEST_F(DataRegistryTest, SizeAndEmpty) {
     EXPECT_TRUE(reg.empty());
     EXPECT_EQ(reg.size(), 0);
 
-    reg.register_data({"sample1", "liver", 1});
+    std::ignore = reg.register_data({"sample1", "liver", 1});
     EXPECT_FALSE(reg.empty());
     EXPECT_EQ(reg.size(), 1);
 
-    reg.register_data({"sample2", "brain", 1});
+    std::ignore = reg.register_data({"sample2", "brain", 1});
     EXPECT_EQ(reg.size(), 2);
 
-    reg.register_data({"sample3", "heart", 2});
+    std::ignore = reg.register_data({"sample3", "heart", 2});
     EXPECT_EQ(reg.size(), 3);
 }
 
 TEST_F(DataRegistryTest, ClearMethod) {
     auto& reg = gdt::registry<SampleInfo>::instance();
 
-    reg.register_data({"sample1", "liver", 1});
-    reg.register_data({"sample2", "brain", 1});
+    std::ignore = reg.register_data({"sample1", "liver", 1});
+    std::ignore = reg.register_data({"sample2", "brain", 1});
 
     EXPECT_EQ(reg.size(), 2);
 
@@ -164,7 +165,7 @@ TEST_F(DataRegistryTest, ClearMethod) {
 TEST_F(DataRegistryTest, ResetMethod) {
     auto& reg = gdt::registry<SampleInfo>::instance();
 
-    reg.register_data({"sample1", "liver", 1});
+    std::ignore = reg.register_data({"sample1", "liver", 1});
     EXPECT_EQ(reg.size(), 1);
 
     gdt::registry<SampleInfo>::reset();
@@ -266,9 +267,9 @@ TEST_F(DataRegistryTest, IdsAfterClearRestartFromZero) {
 TEST_F(DataRegistryTest, SerializeDeserializeInts) {
     auto& reg = gdt::registry<int>::instance();
 
-    reg.register_data(10);
-    reg.register_data(20);
-    reg.register_data(30);
+    std::ignore = reg.register_data(10);
+    std::ignore = reg.register_data(20);
+    std::ignore = reg.register_data(30);
 
     // Serialize
     std::stringstream ss;
@@ -291,9 +292,9 @@ TEST_F(DataRegistryTest, SerializeDeserializeInts) {
 TEST_F(DataRegistryTest, SerializeDeserializeStrings) {
     auto& reg = gdt::registry<std::string>::instance();
 
-    reg.register_data("first");
-    reg.register_data("second");
-    reg.register_data("third with spaces");
+    std::ignore = reg.register_data("first");
+    std::ignore = reg.register_data("second");
+    std::ignore = reg.register_data("third with spaces");
 
     // Serialize
     std::stringstream ss;
@@ -321,7 +322,7 @@ TEST_F(DataRegistryTest, SerializeDeserializeEmptyRegistry) {
     reg.serialize(ss);
 
     // Add some data (simulating different state)
-    reg.register_data(42);
+    std::ignore = reg.register_data(42);
     EXPECT_EQ(reg.size(), 1);
 
     // Deserialize should restore empty state
@@ -335,16 +336,16 @@ TEST_F(DataRegistryTest, DeserializeReplacesExistingData) {
     auto& reg = gdt::registry<int>::instance();
 
     // Initial state
-    reg.register_data(100);
-    reg.register_data(200);
+    std::ignore = reg.register_data(100);
+    std::ignore = reg.register_data(200);
 
     // Serialize
     std::stringstream ss;
     reg.serialize(ss);
 
     // Modify registry
-    reg.register_data(300);
-    reg.register_data(400);
+    std::ignore = reg.register_data(300);
+    std::ignore = reg.register_data(400);
     EXPECT_EQ(reg.size(), 4);
 
     // Deserialize should replace all data
@@ -461,7 +462,7 @@ TEST_F(DataRegistryTest, CombinedRegistryAndGroveSerialization) {
 
 TEST_F(DataRegistryTest, SerializeToFailedStream) {
     auto& reg = gdt::registry<int>::instance();
-    reg.register_data(42);
+    std::ignore = reg.register_data(42);
 
     std::stringstream ss;
     ss.setstate(std::ios::failbit);
