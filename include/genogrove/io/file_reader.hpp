@@ -30,7 +30,16 @@ namespace genogrove::io {
     template<typename EntryType>
     class file_reader;
 
-    // Iterator for file readers
+    /**
+     * @brief Input iterator for file readers
+     *
+     * @tparam EntryType The entry type produced by the reader (e.g., bed_entry, gff_entry, sam_entry)
+     *
+     * Single-pass input iterator (std::input_iterator_tag). The iterator holds a non-owning
+     * pointer to its parent file_reader — the reader must outlive all iterators obtained from it.
+     * Advancing past a read failure or EOF moves the iterator to the end position.
+     * Always check get_error_message() on the reader after the loop to distinguish EOF from error.
+     */
     template<typename EntryType>
     class file_reader_iterator {
     public:

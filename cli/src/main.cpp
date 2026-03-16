@@ -1,5 +1,6 @@
 // standard
 #include <iostream>
+#include <string_view>
 #include "cxxopts.hpp"
 
 // genogrove
@@ -10,10 +11,13 @@
 #include <subcalls/index.hpp>
 #include <subcalls/intersect.hpp>
 
-std::unique_ptr<subcalls::subcall> create_subcall(const std::string& subcall) {
-    if(subcall == "idx") {
+constexpr std::string_view CMD_INDEX = "idx";
+constexpr std::string_view CMD_INTERSECT = "isec";
+
+std::unique_ptr<subcalls::subcall> create_subcall(std::string_view subcall) {
+    if(subcall == CMD_INDEX) {
         return std::make_unique<subcalls::index>();
-    } else if(subcall == "isec") {
+    } else if(subcall == CMD_INTERSECT) {
         return std::make_unique<subcalls::intersect>();
     } else {
         return nullptr;
@@ -23,8 +27,8 @@ std::unique_ptr<subcalls::subcall> create_subcall(const std::string& subcall) {
 void print_general_help(const cxxopts::Options& options) {
     std::cout << options.help() << "\n";
     std::cout << "Available subcommands: \n";
-    std::cout << "\tidx:\t\tIndex an Interval File\n";
-    std::cout << "\tisec:\tSearch for interval overlaps in the index\n";
+    std::cout << "\t" << CMD_INDEX << ":\t\tIndex an Interval File\n";
+    std::cout << "\t" << CMD_INTERSECT << ":\tSearch for interval overlaps in the index\n";
     std::cout << "For more details on a subcommand, use the --help option with the subcommand.\n";
 }
 
