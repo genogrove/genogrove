@@ -20,7 +20,6 @@
 
 // genogrove-cli
 #include <subcalls/subcall.hpp>
-#include "utility.hpp"
 
 
 // CXXopts

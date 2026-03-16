@@ -20,7 +20,7 @@ TEST(version_test, version_numbers_set) {
     EXPECT_GE(genogrove_VERSION_PATCH, 0);
 }
 
-TEST(version_test, verion_numbers_match) {
+TEST(version_test, version_numbers_match) {
     EXPECT_EQ(genogrove_VERSION_MAJOR, EXPECTED_VERSION_MAJOR);
     EXPECT_EQ(genogrove_VERSION_MINOR, EXPECTED_VERSION_MINOR);
     EXPECT_EQ(genogrove_VERSION_PATCH, EXPECTED_VERSION_PATCH);

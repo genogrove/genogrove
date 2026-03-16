@@ -71,9 +71,6 @@ TEST(genomicCoordinateTest, equalityOperator) {
     gdt::genomic_coordinate coord1('+', 20, 30);
     gdt::genomic_coordinate coord2('+', 20, 30);
 
-    // std::cout << coord1.to_string() << "\n";
-    // std::cout << coord2.to_string() << "\n";
-
     // Test operator==
     EXPECT_TRUE(coord1 == coord2);
 
