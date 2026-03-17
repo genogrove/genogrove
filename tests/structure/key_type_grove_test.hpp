@@ -541,15 +541,20 @@ protected:
         EXPECT_EQ(grove.edge_count(), 0);
 
         grove.add_edge(keys[0], keys[1]);
-        grove.remove_edge(keys[0], keys[2]);
         grove.add_edge(keys[1], keys[2]);
 
         // check that edges have been inserted
-        EXPECT_EQ(grove.edge_count(), 3);
-
-        // remove one edge
-        grove.remove_edge(keys[0], keys[1]);
         EXPECT_EQ(grove.edge_count(), 2);
+
+        // remove non-existent edge — should be a no-op
+        EXPECT_FALSE(grove.remove_edge(keys[0], keys[2]));
+        EXPECT_EQ(grove.edge_count(), 2);
+
+        // remove existing edge
+        EXPECT_TRUE(grove.remove_edge(keys[0], keys[1]));
+        EXPECT_EQ(grove.edge_count(), 1);
+        EXPECT_FALSE(grove.has_edge(keys[0], keys[1]));
+        EXPECT_TRUE(grove.has_edge(keys[1], keys[2]));
    }
 
     void assert_clear_graph(size_t key_count) {
@@ -563,13 +568,18 @@ protected:
         for (size_t i = 0; i + 1 < keys.size(); ++i) {
             grove.add_edge(keys[i], keys[i + 1]);
         }
-        EXPECT_EQ(grove.vertex_count(), key_count);  // Total vertices (all keys)
-        EXPECT_EQ(grove.vertex_count_with_edges(), key_count - 1);  // Vertices with outgoing edges
         EXPECT_EQ(grove.edge_count(), key_count - 1);
+        EXPECT_FALSE(grove.graph_empty());
 
-        grove.clear();
+        grove.clear_graph();
         EXPECT_EQ(grove.edge_count(), 0);
-        EXPECT_EQ(grove.graph_empty(), true);
+        EXPECT_TRUE(grove.graph_empty());
+
+        // Indexed keys should still be queryable — clear_graph only removes edges
+        auto expect_ovlp = create_overlapping_query(data);
+        auto results = grove.intersect(expect_ovlp.query, get_default_index());
+        EXPECT_GT(results.get_keys().size(), 0)
+            << "Indexed keys should remain queryable after clear_graph()";
     }
 
     /**
@@ -1269,6 +1279,82 @@ TYPED_TEST_P(grove_typed_test, serialization_back_to_back_streams) {
         << "Second grove should deserialize correctly";
 }
 
+// =============================================================================
+// Graph overlay tests — verify graph operations for all key types (#176)
+// =============================================================================
+
+TYPED_TEST_P(grove_typed_test, graph_edge_creation) {
+    this->assert_edge_creation(10);
+}
+
+TYPED_TEST_P(grove_typed_test, graph_edge_removal) {
+    this->assert_edge_removal(5);
+}
+
+TYPED_TEST_P(grove_typed_test, graph_has_edge) {
+    auto data = this->generate_test_data(5);
+    auto keys = this->grove.insert_data(this->get_default_index(), data,
+        gst::sorted, gst::bulk);
+
+    this->grove.add_edge(keys[0], keys[1]);
+
+    EXPECT_TRUE(this->grove.has_edge(keys[0], keys[1]));
+    EXPECT_FALSE(this->grove.has_edge(keys[1], keys[0]));
+    EXPECT_FALSE(this->grove.has_edge(keys[0], keys[2]));
+}
+
+TYPED_TEST_P(grove_typed_test, graph_get_neighbors) {
+    auto data = this->generate_test_data(5);
+    auto keys = this->grove.insert_data(this->get_default_index(), data,
+        gst::sorted, gst::bulk);
+
+    // Create a fan-out from keys[0]
+    this->grove.add_edge(keys[0], keys[1]);
+    this->grove.add_edge(keys[0], keys[2]);
+    this->grove.add_edge(keys[0], keys[3]);
+
+    auto neighbors = this->grove.get_neighbors(keys[0]);
+    ASSERT_EQ(neighbors.size(), 3);
+
+    // Verify the actual neighbor pointers
+    auto contains = [&](auto* target) {
+        return std::find(neighbors.begin(), neighbors.end(), target) != neighbors.end();
+    };
+    EXPECT_TRUE(contains(keys[1]));
+    EXPECT_TRUE(contains(keys[2]));
+    EXPECT_TRUE(contains(keys[3]));
+
+    // keys[4] should have no neighbors
+    auto no_neighbors = this->grove.get_neighbors(keys[4]);
+    EXPECT_TRUE(no_neighbors.empty());
+}
+
+TYPED_TEST_P(grove_typed_test, graph_link_if) {
+    auto data = this->generate_test_data(10);
+    auto keys = this->grove.insert_data(this->get_default_index(), data,
+        gst::sorted, gst::bulk);
+
+    // link_if with always-true predicate should create a chain
+    this->grove.link_if(keys,
+        [](const auto& /*source*/, const auto& /*target*/) { return true; });
+
+    EXPECT_EQ(this->grove.edge_count(), 9);
+
+    // Verify the chain: keys[i] -> keys[i+1]
+    for (size_t i = 0; i + 1 < keys.size(); ++i) {
+        EXPECT_TRUE(this->grove.has_edge(keys[i], keys[i + 1]))
+            << "Edge " << i << " -> " << (i + 1) << " should exist";
+    }
+}
+
+TYPED_TEST_P(grove_typed_test, graph_cross_chromosome_edges) {
+    this->assert_cross_chromosome_edges();
+}
+
+TYPED_TEST_P(grove_typed_test, graph_clear) {
+    this->assert_clear_graph(10);
+}
+
 // Register all the KEY_TYPE-DEPENDENT tests
 REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     regular_insert,
@@ -1290,6 +1376,13 @@ REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     sorted_insert_three_quarter_fill,
     grove_to_sif_output,
     serialization_compressed_smaller,
-    serialization_back_to_back_streams);
+    serialization_back_to_back_streams,
+    graph_edge_creation,
+    graph_edge_removal,
+    graph_has_edge,
+    graph_get_neighbors,
+    graph_link_if,
+    graph_cross_chromosome_edges,
+    graph_clear);
 
 #endif // GENOGROVE_TESTS_DATA_TYPE_GROVE_TEST_HPP
