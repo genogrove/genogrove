@@ -427,6 +427,11 @@ namespace genogrove::io {
         /// Parse auxiliary tags from bam1_t
         sam_tags parse_tags(const bam1_t* b) const;
 
+        /// Parse a 'B'-type tag array, advancing aux past the consumed bytes
+        /// Returns false if the array is truncated or malformed
+        static bool parse_tag_array(const uint8_t*& aux, const uint8_t* aux_end,
+                                    sam_tag_value& value);
+
         /// Clean up htslib resources
         void cleanup();
     };

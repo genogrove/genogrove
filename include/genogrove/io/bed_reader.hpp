@@ -146,6 +146,10 @@ namespace genogrove::io {
         bool parse_blocks(bed_entry& entry, const std::string& block_count_str,
                         const std::string& block_sizes_str, const std::string& block_starts_str,
                         size_t start_num, size_t end_num);
+
+        // Parse optional BED fields (BED4 through BED12)
+        bool parse_optional_fields(std::string_view line_sv, size_t& fpos,
+                                   bed_entry& entry, size_t start_num, size_t end_num);
     };
 
 }

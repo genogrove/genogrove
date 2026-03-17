@@ -303,11 +303,51 @@ namespace genogrove::io {
         return result;
     }
 
+    // Template helper to parse a typed array from aux data
+    template<typename T>
+    static bool read_typed_array(const uint8_t*& aux, const uint8_t* aux_end,
+                                 uint32_t count, sam_tag_value& value) {
+        if (count > SIZE_MAX / sizeof(T)) return false;
+        size_t bytes_needed = static_cast<size_t>(count) * sizeof(T);
+        size_t remaining = static_cast<size_t>(aux_end - aux);
+        if (remaining < bytes_needed) return false;
+        std::vector<T> arr(count);
+        std::memcpy(arr.data(), aux, bytes_needed);
+        value = std::move(arr);
+        aux += bytes_needed;
+        return true;
+    }
+
+    bool bam_reader::parse_tag_array(const uint8_t*& aux, const uint8_t* aux_end,
+                                     sam_tag_value& value) {
+        // Need 1 byte (array_type) + 4 bytes (count)
+        size_t available = static_cast<size_t>(aux_end - aux);
+        if (available < sizeof(char) + sizeof(uint32_t)) return false;
+        char array_type = static_cast<char>(*aux++);
+        uint32_t count;
+        std::memcpy(&count, aux, sizeof(count));
+        aux += sizeof(count);
+
+        switch (array_type) {
+            case 'c': return read_typed_array<int8_t>(aux, aux_end, count, value);
+            case 'C': return read_typed_array<uint8_t>(aux, aux_end, count, value);
+            case 's': return read_typed_array<int16_t>(aux, aux_end, count, value);
+            case 'S': return read_typed_array<uint16_t>(aux, aux_end, count, value);
+            case 'i': return read_typed_array<int32_t>(aux, aux_end, count, value);
+            case 'I': return read_typed_array<uint32_t>(aux, aux_end, count, value);
+            case 'f': return read_typed_array<float>(aux, aux_end, count, value);
+            default:
+                // Unknown array type, skip to end
+                aux = aux_end;
+                return false;
+        }
+    }
+
     sam_tags bam_reader::parse_tags(const bam1_t* b) const {
         sam_tags result;
 
-        uint8_t* aux = bam_get_aux(b);
-        uint8_t* aux_end = b->data + b->l_data;
+        const uint8_t* aux = bam_get_aux(b);
+        const uint8_t* aux_end = b->data + b->l_data;
 
         while (aux < aux_end) {
             // Each tag needs at least 3 bytes: 2-char name + 1-byte type
@@ -331,7 +371,7 @@ namespace genogrove::io {
 
                 case 'c':  // int8_t
                     if (aux >= aux_end) return result;
-                    value = static_cast<int64_t>(*reinterpret_cast<int8_t*>(aux));
+                    value = static_cast<int64_t>(*reinterpret_cast<const int8_t*>(aux));
                     aux += 1;
                     break;
 
@@ -406,92 +446,7 @@ namespace genogrove::io {
 
                 case 'B':  // Array
                 {
-                    // Need 1 byte (array_type) + 4 bytes (count) before reading either
-                    size_t available = static_cast<size_t>(aux_end - aux);
-                    if (available < sizeof(char) + sizeof(uint32_t)) return result;
-                    char array_type = static_cast<char>(*aux++);
-                    uint32_t count;
-                    std::memcpy(&count, aux, sizeof(count));
-                    aux += sizeof(count);
-
-                    // Validate array payload fits in remaining data before allocating
-                    auto check_array_bounds = [&](size_t elem_size) -> size_t {
-                        if (count > SIZE_MAX / elem_size) return 0;  // overflow
-                        size_t bytes_needed = static_cast<size_t>(count) * elem_size;
-                        size_t remaining = static_cast<size_t>(aux_end - aux);
-                        if (remaining < bytes_needed) return 0;
-                        return bytes_needed;
-                    };
-
-                    switch (array_type) {
-                        case 'c': {
-                            size_t bytes_needed = check_array_bounds(sizeof(int8_t));
-                            if (count > 0 && bytes_needed == 0) return result;
-                            std::vector<int8_t> arr(count);
-                            std::memcpy(arr.data(), aux, bytes_needed);
-                            value = std::move(arr);
-                            aux += bytes_needed;
-                            break;
-                        }
-                        case 'C': {
-                            size_t bytes_needed = check_array_bounds(sizeof(uint8_t));
-                            if (count > 0 && bytes_needed == 0) return result;
-                            std::vector<uint8_t> arr(count);
-                            std::memcpy(arr.data(), aux, bytes_needed);
-                            value = std::move(arr);
-                            aux += bytes_needed;
-                            break;
-                        }
-                        case 's': {
-                            size_t bytes_needed = check_array_bounds(sizeof(int16_t));
-                            if (count > 0 && bytes_needed == 0) return result;
-                            std::vector<int16_t> arr(count);
-                            std::memcpy(arr.data(), aux, bytes_needed);
-                            value = std::move(arr);
-                            aux += bytes_needed;
-                            break;
-                        }
-                        case 'S': {
-                            size_t bytes_needed = check_array_bounds(sizeof(uint16_t));
-                            if (count > 0 && bytes_needed == 0) return result;
-                            std::vector<uint16_t> arr(count);
-                            std::memcpy(arr.data(), aux, bytes_needed);
-                            value = std::move(arr);
-                            aux += bytes_needed;
-                            break;
-                        }
-                        case 'i': {
-                            size_t bytes_needed = check_array_bounds(sizeof(int32_t));
-                            if (count > 0 && bytes_needed == 0) return result;
-                            std::vector<int32_t> arr(count);
-                            std::memcpy(arr.data(), aux, bytes_needed);
-                            value = std::move(arr);
-                            aux += bytes_needed;
-                            break;
-                        }
-                        case 'I': {
-                            size_t bytes_needed = check_array_bounds(sizeof(uint32_t));
-                            if (count > 0 && bytes_needed == 0) return result;
-                            std::vector<uint32_t> arr(count);
-                            std::memcpy(arr.data(), aux, bytes_needed);
-                            value = std::move(arr);
-                            aux += bytes_needed;
-                            break;
-                        }
-                        case 'f': {
-                            size_t bytes_needed = check_array_bounds(sizeof(float));
-                            if (count > 0 && bytes_needed == 0) return result;
-                            std::vector<float> arr(count);
-                            std::memcpy(arr.data(), aux, bytes_needed);
-                            value = std::move(arr);
-                            aux += bytes_needed;
-                            break;
-                        }
-                        default:
-                            // Unknown array type, skip to end
-                            aux = aux_end;
-                            continue;
-                    }
+                    if (!parse_tag_array(aux, aux_end, value)) return result;
                     break;
                 }
 
