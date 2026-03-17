@@ -254,7 +254,11 @@ namespace genogrove::io {
         }
 
         // Auxiliary tags
-        entry.tags = parse_tags(b);
+        bool aux_truncated = false;
+        entry.tags = parse_tags(b, aux_truncated);
+        if (aux_truncated) {
+            error_message_ = "Truncated auxiliary data at record " + std::to_string(record_num_);
+        }
 
         return true;
     }
@@ -343,8 +347,9 @@ namespace genogrove::io {
         }
     }
 
-    sam_tags bam_reader::parse_tags(const bam1_t* b) const {
+    sam_tags bam_reader::parse_tags(const bam1_t* b, bool& truncated) const {
         sam_tags result;
+        truncated = false;
 
         const uint8_t* aux = bam_get_aux(b);
         const uint8_t* aux_end = b->data + b->l_data;
@@ -352,6 +357,7 @@ namespace genogrove::io {
         while (aux < aux_end) {
             // Each tag needs at least 3 bytes: 2-char name + 1-byte type
             if (aux + 3 > aux_end) {
+                truncated = true;
                 break;
             }
 
@@ -365,25 +371,25 @@ namespace genogrove::io {
 
             switch (type) {
                 case 'A':  // Printable character
-                    if (aux >= aux_end) return result;
+                    if (aux >= aux_end) { truncated = true; return result; }
                     value = static_cast<char>(*aux++);
                     break;
 
                 case 'c':  // int8_t
-                    if (aux >= aux_end) return result;
+                    if (aux >= aux_end) { truncated = true; return result; }
                     value = static_cast<int64_t>(*reinterpret_cast<const int8_t*>(aux));
                     aux += 1;
                     break;
 
                 case 'C':  // uint8_t
-                    if (aux >= aux_end) return result;
+                    if (aux >= aux_end) { truncated = true; return result; }
                     value = static_cast<int64_t>(*aux++);
                     break;
 
                 case 's': {  // int16_t
                     int16_t val;
                     size_t available = static_cast<size_t>(aux_end - aux);
-                    if (available < sizeof(val)) return result;
+                    if (available < sizeof(val)) { truncated = true; return result; }
                     std::memcpy(&val, aux, sizeof(val));
                     value = static_cast<int64_t>(val);
                     aux += sizeof(val);
@@ -393,7 +399,7 @@ namespace genogrove::io {
                 case 'S': {  // uint16_t
                     uint16_t val;
                     size_t available = static_cast<size_t>(aux_end - aux);
-                    if (available < sizeof(val)) return result;
+                    if (available < sizeof(val)) { truncated = true; return result; }
                     std::memcpy(&val, aux, sizeof(val));
                     value = static_cast<int64_t>(val);
                     aux += sizeof(val);
@@ -403,7 +409,7 @@ namespace genogrove::io {
                 case 'i': {  // int32_t
                     int32_t val;
                     size_t available = static_cast<size_t>(aux_end - aux);
-                    if (available < sizeof(val)) return result;
+                    if (available < sizeof(val)) { truncated = true; return result; }
                     std::memcpy(&val, aux, sizeof(val));
                     value = static_cast<int64_t>(val);
                     aux += sizeof(val);
@@ -413,7 +419,7 @@ namespace genogrove::io {
                 case 'I': {  // uint32_t
                     uint32_t val;
                     size_t available = static_cast<size_t>(aux_end - aux);
-                    if (available < sizeof(val)) return result;
+                    if (available < sizeof(val)) { truncated = true; return result; }
                     std::memcpy(&val, aux, sizeof(val));
                     value = static_cast<int64_t>(val);
                     aux += sizeof(val);
@@ -423,7 +429,7 @@ namespace genogrove::io {
                 case 'f': {  // float
                     float val;
                     size_t available = static_cast<size_t>(aux_end - aux);
-                    if (available < sizeof(val)) return result;
+                    if (available < sizeof(val)) { truncated = true; return result; }
                     std::memcpy(&val, aux, sizeof(val));
                     value = val;
                     aux += sizeof(val);
@@ -436,7 +442,7 @@ namespace genogrove::io {
                     const char* str = reinterpret_cast<const char*>(aux);
                     size_t remaining = static_cast<size_t>(aux_end - aux);
                     const void* nul = std::memchr(str, '\0', remaining);
-                    if (!nul) return result;  // unterminated string
+                    if (!nul) { truncated = true; return result; }
                     size_t len = static_cast<size_t>(
                         reinterpret_cast<const char*>(nul) - str);
                     value = std::string(str, len);
@@ -446,12 +452,13 @@ namespace genogrove::io {
 
                 case 'B':  // Array
                 {
-                    if (!parse_tag_array(aux, aux_end, value)) return result;
+                    if (!parse_tag_array(aux, aux_end, value)) { truncated = true; return result; }
                     break;
                 }
 
                 default:
                     // Unknown type, try to skip (dangerous but best effort)
+                    truncated = true;
                     aux = aux_end;
                     continue;
             }

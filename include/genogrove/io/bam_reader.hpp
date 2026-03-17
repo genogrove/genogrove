@@ -425,7 +425,8 @@ namespace genogrove::io {
         cigar_string parse_cigar(const bam1_t* b) const;
 
         /// Parse auxiliary tags from bam1_t
-        sam_tags parse_tags(const bam1_t* b) const;
+        /// Sets truncated=true if aux data was malformed/incomplete
+        sam_tags parse_tags(const bam1_t* b, bool& truncated) const;
 
         /// Parse a 'B'-type tag array, advancing aux past the consumed bytes
         /// Returns false if the array is truncated or malformed
