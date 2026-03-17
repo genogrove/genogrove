@@ -6,6 +6,7 @@
 #include <ranges>
 #include <charconv>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 // htslib
@@ -20,7 +21,8 @@ namespace ggu = genogrove::utility;
 namespace genogrove::io {
 
     // Helper function to parse comma-separated integers into a vector
-    static std::vector<size_t> parse_csv(const std::string& str) {
+    // Returns nullopt on parse error to distinguish from genuinely empty input
+    static std::optional<std::vector<size_t>> parse_csv(const std::string& str) {
         std::vector<size_t> result;
         std::string_view sv(str);
         size_t pos = 0;
@@ -29,18 +31,18 @@ namespace genogrove::io {
             // trim leading/trailing whitespaces
             auto trimmed = *field;
             auto start = trimmed.find_first_not_of(" \t");
-            if (start == std::string_view::npos) { return {}; }
+            if (start == std::string_view::npos) { return std::nullopt; }
             trimmed = trimmed.substr(start);
             auto end = trimmed.find_last_not_of(" \t");
             trimmed = trimmed.substr(0, end + 1);
 
-            if(trimmed.empty()) { return {}; } // ERROR: return empty vector
+            if(trimmed.empty()) { return std::nullopt; }
             if (!std::ranges::all_of(trimmed, ggu::is_digit)) {
-                return {};
+                return std::nullopt;
             }
             size_t val = 0;
             auto [ptr, ec] = std::from_chars(trimmed.data(), trimmed.data() + trimmed.size(), val);
-            if (ec != std::errc{}) { return {}; }
+            if (ec != std::errc{}) { return std::nullopt; }
             result.push_back(val);
         }
         return result;
@@ -205,7 +207,13 @@ namespace genogrove::io {
     }
 
     bool bed_reader::parse_rgb(bed_entry& entry, const std::string& item_rgb_str) {
-        std::vector<size_t> rgb_values = parse_csv(item_rgb_str);
+        auto rgb_opt = parse_csv(item_rgb_str);
+        if (!rgb_opt) {
+            error_message = "Invalid RGB format (parse error) at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+        const auto& rgb_values = *rgb_opt;
 
         if (rgb_values.size() == 1) {
             if (rgb_values[0] == 0) {
@@ -257,19 +265,20 @@ namespace genogrove::io {
             return false;
         }
 
-        std::vector<size_t> block_sizes = parse_csv(block_sizes_str);
-        std::vector<size_t> block_starts = parse_csv(block_starts_str);
-
-        if(block_sizes.empty() && !block_sizes_str.empty()) {
+        auto block_sizes_opt = parse_csv(block_sizes_str);
+        if (!block_sizes_opt) {
             error_message = "Invalid block sizes format at line ";
             error_message += std::to_string(line_num);
             return false;
         }
-        if(block_starts.empty() && !block_starts_str.empty()) {
-            error_message = "Invalid block start format at line ";
+        auto block_starts_opt = parse_csv(block_starts_str);
+        if (!block_starts_opt) {
+            error_message = "Invalid block starts format at line ";
             error_message += std::to_string(line_num);
             return false;
         }
+        const auto& block_sizes = *block_sizes_opt;
+        const auto& block_starts = *block_starts_opt;
 
         if (block_count != static_cast<int>(block_sizes.size())) {
             error_message = "Block count mismatch with block sizes at line ";
