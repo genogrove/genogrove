@@ -171,15 +171,15 @@ namespace genogrove::io {
                 size_t space_pos = trimmed.find(' ');
                 if (space_pos == std::string_view::npos) continue;
 
-                std::string key(trimmed.substr(0, space_pos));
-                std::string value(trimmed.substr(space_pos + 1));
+                auto value_sv = trimmed.substr(space_pos + 1);
 
-                // Remove quotes from value
-                if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
-                    value = value.substr(1, value.size() - 2);
+                // Remove quotes from value before materializing
+                if (value_sv.size() >= 2 && value_sv.front() == '"' && value_sv.back() == '"') {
+                    value_sv = value_sv.substr(1, value_sv.size() - 2);
                 }
 
-                attributes[std::move(key)] = std::move(value);
+                attributes.emplace(std::string(trimmed.substr(0, space_pos)),
+                                   std::string(value_sv));
             }
             return gff_format::GTF;
         } else {
@@ -201,10 +201,8 @@ namespace genogrove::io {
                 size_t eq_pos = trimmed.find('=');
                 if (eq_pos == std::string_view::npos) continue;
 
-                std::string key(trimmed.substr(0, eq_pos));
-                std::string value(trimmed.substr(eq_pos + 1));
-
-                attributes[std::move(key)] = std::move(value);
+                attributes.emplace(std::string(trimmed.substr(0, eq_pos)),
+                                   std::string(trimmed.substr(eq_pos + 1)));
             }
             return gff_format::GFF3;
         }
