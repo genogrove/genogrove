@@ -1,5 +1,5 @@
 #include <genogrove/io/bed_reader.hpp>
-#include <genogrove/io/kstring_guard.hpp>
+#include <genogrove/io/bgzf_utils.hpp>
 
 // standard
 #include <algorithm>
@@ -8,9 +8,6 @@
 #include <cstdint>
 #include <optional>
 #include <vector>
-
-// htslib
-#include <htslib/kstring.h>
 
 // genogrove
 #include <genogrove/utility/char_utils.hpp>
@@ -58,63 +55,40 @@ namespace genogrove::io {
             throw std::runtime_error("Failed to open file: " + fpath.string());
         }
 
-        /* Check for valid bed file
-         * Note: This only checks first (data) line
-         * Subsequent lines (if they are invalid are caught by read_next) */
+        // Validate first data line
         int64_t start_pos = bgzf_tell(bgzf_file);
-        kstring_t str = {0, 0, nullptr};
-        kstring_guard guard{str};
+        size_t temp_line_num = 0;
 
         try {
-            int ret;
-            bool found_data = false;
-
-            // Iterate until we find a data line or EOF
-            while ((ret = bgzf_getline(bgzf_file, '\n', &str)) >= 0) {
-                std::string line(str.s);
-                if (!line.empty() && line.back() == '\r') line.pop_back();
-
-                // Skip empty or commented lines (matches read_next logic)
-                if (line.empty() || line[0] == '#') {
-                    continue;
-                }
-
-                // Attempt to parse the first data line found
-                std::string_view line_sv(line);
-                size_t fpos = 0;
-                auto chrom_f = ggu::next_field(line_sv, fpos);
-                auto start_f = ggu::next_field(line_sv, fpos);
-                auto end_f = ggu::next_field(line_sv, fpos);
-
-                // Check for minimal BED3 columns
-                if (!chrom_f || !start_f || !end_f) {
-                    throw std::runtime_error("Invalid BED header/format in " + fpath.string());
-                }
-
-                // Validate coordinates are integers
-                if (start_f->empty() || end_f->empty() ||
-                    !std::ranges::all_of(*start_f, ggu::is_digit) ||
-                    !std::ranges::all_of(*end_f, ggu::is_digit)) {
-                    throw std::runtime_error("Invalid BED coordinates (non-integer) in " + fpath.string());
-                }
-                // validate start < end
-                size_t start_num = 0;
-                size_t end_num = 0;
-                std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
-                std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
-                if(start_num >= end_num) {
-                    throw std::runtime_error("Invalid BED coordinates (start > end) in " + fpath.string());
-                }
-                found_data = true;
-                break; // Valid line found, stop scanning
-            }
-
-            // ensure that we found at least one valid BED line
-            if (!found_data) {
+            auto first_line = bgzf_next_data_line(bgzf_file, temp_line_num);
+            if (!first_line) {
                 throw std::runtime_error("No valid BED data found in " + fpath.string());
             }
 
-            // reset file pointer to the beginning for standard reading
+            std::string_view line_sv(*first_line);
+            size_t fpos = 0;
+            auto chrom_f = ggu::next_field(line_sv, fpos);
+            auto start_f = ggu::next_field(line_sv, fpos);
+            auto end_f = ggu::next_field(line_sv, fpos);
+
+            if (!chrom_f || !start_f || !end_f) {
+                throw std::runtime_error("Invalid BED header/format in " + fpath.string());
+            }
+
+            if (start_f->empty() || end_f->empty() ||
+                !std::ranges::all_of(*start_f, ggu::is_digit) ||
+                !std::ranges::all_of(*end_f, ggu::is_digit)) {
+                throw std::runtime_error("Invalid BED coordinates (non-integer) in " + fpath.string());
+            }
+
+            size_t start_num = 0;
+            size_t end_num = 0;
+            std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
+            std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
+            if (start_num >= end_num) {
+                throw std::runtime_error("Invalid BED coordinates (start > end) in " + fpath.string());
+            }
+
             if (bgzf_seek(bgzf_file, start_pos, SEEK_SET) < 0) {
                 throw std::runtime_error("Failed to seek back to start of file: " + fpath.string());
             }
@@ -372,37 +346,9 @@ namespace genogrove::io {
             entry.item_rgb.reset();
             entry.blocks.reset();
 
-            std::string line;
-            {
-                kstring_t str = {0, 0, nullptr};
-                kstring_guard guard{str};
-                int ret = bgzf_getline(bgzf_file, '\n', &str);
-                if(ret < 0) {
-                    if(ret < -1) {
-                        throw std::runtime_error("I/O error reading file at line " + std::to_string(line_num + 1));
-                    }
-                    return false; // EOF
-                }
-                line = std::string(str.s);
-            }
-            if (!line.empty() && line.back() == '\r') line.pop_back();
-            line_num++;
-
-            // skip empty or commented lines
-            while(line.empty() || line[0] == '#') {
-                kstring_t str2 = {0, 0, nullptr};
-                kstring_guard guard2{str2};
-                int ret = bgzf_getline(bgzf_file, '\n', &str2);
-                if(ret < 0) {
-                    if(ret < -1) {
-                        throw std::runtime_error("I/O error reading file at line " + std::to_string(line_num + 1));
-                    }
-                    return false; // EOF
-                }
-                line = std::string(str2.s);
-                if (!line.empty() && line.back() == '\r') line.pop_back();
-                line_num++;
-            }
+            auto line_opt = bgzf_next_data_line(bgzf_file, line_num);
+            if (!line_opt) return false;  // EOF
+            const std::string& line = *line_opt;
 
             // parse the line
             std::string_view line_sv(line);
@@ -468,21 +414,7 @@ namespace genogrove::io {
     }
 
     bool bed_reader::has_next() {
-        if (!bgzf_file) return false;
-
-        // Check if we're at EOF by peeking at the next character
-        int64_t current_pos = bgzf_tell(bgzf_file);
-        char peek_char;
-        int peek_result = bgzf_read(bgzf_file, &peek_char, 1);
-
-        // Restore position
-        int64_t seek_result = bgzf_seek(bgzf_file, current_pos, SEEK_SET);
-        if (seek_result < 0) {
-            return false;  // Seek failed, assume EOF
-        }
-
-        // If we couldn't read anything, we're at EOF
-        return peek_result > 0;
+        return bgzf_has_next(bgzf_file);
     }
 
     std::string bed_reader::get_error_message() const {

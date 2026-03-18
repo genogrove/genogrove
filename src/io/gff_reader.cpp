@@ -1,5 +1,5 @@
 #include <genogrove/io/gff_reader.hpp>
-#include <genogrove/io/kstring_guard.hpp>
+#include <genogrove/io/bgzf_utils.hpp>
 
 // standard
 #include <algorithm>
@@ -8,9 +8,6 @@
 #include <clocale>
 #include <cstdlib>
 #include <ranges>
-
-// htslib
-#include <htslib/kstring.h>
 
 // genogrove
 #include <genogrove/utility/char_utils.hpp>
@@ -86,76 +83,51 @@ namespace genogrove::io {
             throw std::runtime_error("Failed to open file: " + fpath.string());
         }
 
-        // Validate GFF file format
-        // Store start position
+        // Validate first data line
         int64_t start_pos = bgzf_tell(bgzf_file);
-        kstring_t str = {0, 0, nullptr};
-        kstring_guard guard{str};
+        size_t temp_line_num = 0;
 
         try {
-            int ret;
-            bool found_data = false;
-
-            // Iterate until we find a data line or EOF
-            while ((ret = bgzf_getline(bgzf_file, '\n', &str)) >= 0) {
-                std::string line(str.s);
-                if (!line.empty() && line.back() == '\r') line.pop_back();
-
-                // Skip empty lines and comments/directives (matches read_next logic)
-                if (line.empty() || line[0] == '#') {
-                    continue;
-                }
-
-                // Attempt to parse the first data line found
-                std::string_view line_sv(line);
-                size_t fpos = 0;
-                auto seqid_f = ggu::next_field(line_sv, fpos);
-                auto source_f = ggu::next_field(line_sv, fpos);
-                auto type_f = ggu::next_field(line_sv, fpos);
-                auto start_f = ggu::next_field(line_sv, fpos);
-                auto end_f = ggu::next_field(line_sv, fpos);
-                auto score_f = ggu::next_field(line_sv, fpos);
-                auto strand_f = ggu::next_field(line_sv, fpos);
-                auto phase_f = ggu::next_field(line_sv, fpos);
-
-                // Check for minimal GFF columns (8 required + attributes)
-                if (!seqid_f || !source_f || !type_f || !start_f || !end_f ||
-                    !score_f || !strand_f || !phase_f) {
-                    throw std::runtime_error("Invalid GFF header/format in " + fpath.string());
-                }
-
-                // Validate coordinates are integers
-                if (start_f->empty() || end_f->empty() ||
-                    !std::ranges::all_of(*start_f, ggu::is_digit) ||
-                    !std::ranges::all_of(*end_f, ggu::is_digit)) {
-                    throw std::runtime_error("Invalid GFF coordinates (non-integer) in " + fpath.string());
-                }
-
-                // Validate start < end (GFF is 1-based inclusive, so convert to 0-based)
-                size_t start_num = 0;
-                size_t end_num = 0;
-                auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
-                auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
-                if (ec1 != std::errc{} || ec2 != std::errc{}) {
-                    throw std::runtime_error("Invalid GFF coordinates (out of range) in " + fpath.string());
-                }
-                start_num -= 1;  // Convert to 0-based
-                // End becomes exclusive (no change needed)
-
-                if (start_num >= end_num) {
-                    throw std::runtime_error("Invalid GFF coordinates (start >= end) in " + fpath.string());
-                }
-
-                found_data = true;
-                break; // Valid line found, stop scanning
-            }
-
-            // Ensure that we found at least one valid GFF line
-            if (!found_data) {
+            auto first_line = bgzf_next_data_line(bgzf_file, temp_line_num);
+            if (!first_line) {
                 throw std::runtime_error("No valid GFF data found in " + fpath.string());
             }
 
-            // Reset file pointer to the beginning for standard reading
+            std::string_view line_sv(*first_line);
+            size_t fpos = 0;
+            auto seqid_f = ggu::next_field(line_sv, fpos);
+            auto source_f = ggu::next_field(line_sv, fpos);
+            auto type_f = ggu::next_field(line_sv, fpos);
+            auto start_f = ggu::next_field(line_sv, fpos);
+            auto end_f = ggu::next_field(line_sv, fpos);
+            auto score_f = ggu::next_field(line_sv, fpos);
+            auto strand_f = ggu::next_field(line_sv, fpos);
+            auto phase_f = ggu::next_field(line_sv, fpos);
+
+            if (!seqid_f || !source_f || !type_f || !start_f || !end_f ||
+                !score_f || !strand_f || !phase_f) {
+                throw std::runtime_error("Invalid GFF header/format in " + fpath.string());
+            }
+
+            if (start_f->empty() || end_f->empty() ||
+                !std::ranges::all_of(*start_f, ggu::is_digit) ||
+                !std::ranges::all_of(*end_f, ggu::is_digit)) {
+                throw std::runtime_error("Invalid GFF coordinates (non-integer) in " + fpath.string());
+            }
+
+            size_t start_num = 0;
+            size_t end_num = 0;
+            auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
+            auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
+            if (ec1 != std::errc{} || ec2 != std::errc{}) {
+                throw std::runtime_error("Invalid GFF coordinates (out of range) in " + fpath.string());
+            }
+            start_num -= 1;  // Convert to 0-based
+
+            if (start_num >= end_num) {
+                throw std::runtime_error("Invalid GFF coordinates (start >= end) in " + fpath.string());
+            }
+
             if (bgzf_seek(bgzf_file, start_pos, SEEK_SET) < 0) {
                 throw std::runtime_error("Failed to seek back to start of file: " + fpath.string());
             }
@@ -298,37 +270,9 @@ namespace genogrove::io {
     bool gff_reader::read_next(gff_entry& entry) {
         while (true) {
             error_message.clear();
-            std::string line;
-            {
-                kstring_t str = {0, 0, nullptr};
-                kstring_guard guard{str};
-                int ret = bgzf_getline(bgzf_file, '\n', &str);
-                if(ret < 0) {
-                    if(ret < -1) {
-                        throw std::runtime_error("I/O error reading file at line " + std::to_string(line_num + 1));
-                    }
-                    return false; // EOF
-                }
-                line = std::string(str.s);
-            }
-            if (!line.empty() && line.back() == '\r') line.pop_back();
-            line_num++;
-
-            // skip empty lines, comments, and directives (lines starting with #)
-            while(line.empty() || line[0] == '#') {
-                kstring_t str2 = {0, 0, nullptr};
-                kstring_guard guard2{str2};
-                int ret = bgzf_getline(bgzf_file, '\n', &str2);
-                if(ret < 0) {
-                    if(ret < -1) {
-                        throw std::runtime_error("I/O error reading file at line " + std::to_string(line_num + 1));
-                    }
-                    return false; // EOF
-                }
-                line = std::string(str2.s);
-                if (!line.empty() && line.back() == '\r') line.pop_back();
-                line_num++;
-            }
+            auto line_opt = bgzf_next_data_line(bgzf_file, line_num);
+            if (!line_opt) return false;  // EOF
+            const std::string& line = *line_opt;
 
             // parse the line
             std::string_view line_sv(line);
@@ -427,21 +371,7 @@ namespace genogrove::io {
     }
 
     bool gff_reader::has_next() {
-        if (!bgzf_file) return false;
-
-        // Check if we're at EOF by peeking at the next character
-        int64_t current_pos = bgzf_tell(bgzf_file);
-        char peek_char;
-        int peek_result = bgzf_read(bgzf_file, &peek_char, 1);
-
-        // Restore position
-        int64_t seek_result = bgzf_seek(bgzf_file, current_pos, SEEK_SET);
-        if (seek_result < 0) {
-            return false;  // Seek failed, assume EOF
-        }
-
-        // If we couldn't read anything, we're at EOF
-        return peek_result > 0;
+        return bgzf_has_next(bgzf_file);
     }
 
     std::string gff_reader::get_error_message() const {
