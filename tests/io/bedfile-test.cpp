@@ -323,6 +323,22 @@ TEST_F(bedfileTest, validationInvalidCoordinateRange) {
     fs::remove(temp_file);
 }
 
+TEST_F(bedfileTest, validationOverflowCoordinates) {
+    // Create a temporary file with a coordinate that overflows size_t
+    fs::path temp_file = test_data_dir / "temp_overflow_coords.bed";
+    std::ofstream out(temp_file);
+    out << "chr1\t99999999999999999999\t100\n";
+    out.close();
+
+    // Constructor should throw because coordinate overflows size_t
+    EXPECT_THROW({
+        gio::bed_reader reader(temp_file);
+    }, std::runtime_error);
+
+    // Clean up
+    fs::remove(temp_file);
+}
+
 TEST_F(bedfileTest, partialBED9Throws) {
     // 8 columns: thickStart and thickEnd present but itemRgb missing
     fs::path temp_file = test_data_dir / "temp_partial_bed9.bed";
