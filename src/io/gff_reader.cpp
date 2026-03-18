@@ -238,6 +238,63 @@ namespace genogrove::io {
         }
     }
 
+    bool gff_reader::parse_score(gff_entry& entry, std::string_view score_str) {
+        if (score_str == ".") {
+            entry.score = std::nullopt;
+            return true;
+        }
+
+        std::string score_s(score_str);
+        const char* begin = score_s.c_str();
+        char* end_ptr = nullptr;
+        errno = 0;
+        static locale_t c_locale = newlocale(LC_ALL_MASK, "C", nullptr);
+        double score_val = strtod_l(begin, &end_ptr, c_locale);
+        if (errno == ERANGE) {
+            error_message = "Score value out of range '" + score_s +
+                            "' at line " + std::to_string(line_num);
+            return false;
+        }
+        if (end_ptr == begin || end_ptr != begin + score_s.size()) {
+            error_message = "Invalid score value '" + score_s +
+                            "' at line " + std::to_string(line_num);
+            return false;
+        }
+        entry.score = score_val;
+        return true;
+    }
+
+    bool gff_reader::parse_strand(gff_entry& entry, std::string_view strand_str) {
+        if (strand_str.size() == 1 && (strand_str[0] == '+' || strand_str[0] == '-' ||
+                                        strand_str[0] == '.' || strand_str[0] == '?')) {
+            entry.strand = strand_str[0];
+            return true;
+        }
+        error_message = "Invalid strand value '" + std::string(strand_str) +
+                        "' at line " + std::to_string(line_num) +
+                        " (expected '+', '-', '.', or '?')";
+        return false;
+    }
+
+    bool gff_reader::parse_phase(gff_entry& entry, std::string_view phase_str) {
+        if (phase_str == ".") {
+            entry.phase = std::nullopt;
+            return true;
+        }
+
+        int phase = 0;
+        auto [pp, ecp] = std::from_chars(phase_str.data(), phase_str.data() + phase_str.size(), phase);
+        if (ecp != std::errc{} || pp != phase_str.data() + phase_str.size() ||
+            phase < 0 || phase > 2) {
+            error_message = "Invalid phase value '" + std::string(phase_str) +
+                            "' at line " + std::to_string(line_num) +
+                            " (expected 0, 1, 2, or '.')";
+            return false;
+        }
+        entry.phase = phase;
+        return true;
+    }
+
     bool gff_reader::read_next(gff_entry& entry) {
         while (true) {
             error_message.clear();
@@ -336,58 +393,18 @@ namespace genogrove::io {
                 entry.start = start;
                 entry.end = end;
 
-                // Parse score (locale-independent via strtod_l)
-                if (*score_f != ".") {
-                    std::string score_str(*score_f);
-                    const char* begin = score_str.c_str();
-                    char* end_ptr = nullptr;
-                    errno = 0;
-                    static locale_t c_locale = newlocale(LC_ALL_MASK, "C", nullptr);
-                    double score_val = strtod_l(begin, &end_ptr, c_locale);
-                    if (errno == ERANGE) {
-                        error_message = "Score value out of range '" + score_str +
-                                        "' at line " + std::to_string(line_num);
-                        if (options_.skip_invalid_lines) continue;
-                        throw std::runtime_error(error_message);
-                    }
-                    if (end_ptr == begin || end_ptr != begin + score_str.size()) {
-                        error_message = "Invalid score value '" + score_str +
-                                        "' at line " + std::to_string(line_num);
-                        if (options_.skip_invalid_lines) continue;
-                        throw std::runtime_error(error_message);
-                    }
-                    entry.score = score_val;
-                } else {
-                    entry.score = std::nullopt;
-                }
-
-                // Parse strand
-                if (strand_f->size() == 1 && ((*strand_f)[0] == '+' || (*strand_f)[0] == '-' ||
-                                                (*strand_f)[0] == '.' || (*strand_f)[0] == '?')) {
-                    entry.strand = (*strand_f)[0];
-                } else {
-                    error_message = "Invalid strand value '" + std::string(*strand_f) +
-                                    "' at line " + std::to_string(line_num) +
-                                    " (expected '+', '-', '.', or '?')";
+                // Parse score, strand, and phase
+                if (!parse_score(entry, *score_f)) {
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
-
-                // Parse phase
-                if (*phase_f != ".") {
-                    int phase = 0;
-                    auto [pp, ecp] = std::from_chars(phase_f->data(), phase_f->data() + phase_f->size(), phase);
-                    if (ecp != std::errc{} || pp != phase_f->data() + phase_f->size() ||
-                        phase < 0 || phase > 2) {
-                        error_message = "Invalid phase value '" + std::string(*phase_f) +
-                                        "' at line " + std::to_string(line_num) +
-                                        " (expected 0, 1, 2, or '.')";
-                        if (options_.skip_invalid_lines) continue;
-                        throw std::runtime_error(error_message);
-                    }
-                    entry.phase = phase;
-                } else {
-                    entry.phase = std::nullopt;
+                if (!parse_strand(entry, *strand_f)) {
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
+                }
+                if (!parse_phase(entry, *phase_f)) {
+                    if (options_.skip_invalid_lines) continue;
+                    throw std::runtime_error(error_message);
                 }
 
                 // Parse attributes and detect format

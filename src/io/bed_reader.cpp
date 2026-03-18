@@ -309,6 +309,58 @@ namespace genogrove::io {
         return true;
     }
 
+    bool bed_reader::parse_optional_fields(std::string_view line_sv, size_t& fpos,
+                                           bed_entry& entry, size_t start_num, size_t end_num) {
+        // BED4: name
+        auto name_f = ggu::next_field(line_sv, fpos);
+        if (!name_f) return true;  // BED3 — no optional fields
+        entry.name = std::string(*name_f);
+
+        // BED5: score
+        auto score_f = ggu::next_field(line_sv, fpos);
+        if (!score_f) return true;  // BED4
+        if (!parse_score(entry, std::string(*score_f))) return false;
+
+        // BED6: strand
+        auto strand_f = ggu::next_field(line_sv, fpos);
+        if (!strand_f) return true;  // BED5
+        if (!parse_strand(entry, std::string(*strand_f))) return false;
+
+        // BED9: thickStart, thickEnd, itemRgb (must appear as a complete group)
+        auto thick_start_f = ggu::next_field(line_sv, fpos);
+        auto thick_end_f = ggu::next_field(line_sv, fpos);
+        auto item_rgb_f = ggu::next_field(line_sv, fpos);
+        {
+            int present = thick_start_f.has_value() + thick_end_f.has_value() + item_rgb_f.has_value();
+            if (present == 0) return true;  // BED6
+            if (present != 3) {
+                error_message = "Incomplete BED9 fields (thickStart, thickEnd, itemRgb) at line ";
+                error_message += std::to_string(line_num);
+                return false;
+            }
+        }
+        if (!parse_thickness(entry, std::string(*thick_start_f),
+                             std::string(*thick_end_f), start_num, end_num)) return false;
+        if (!parse_rgb(entry, std::string(*item_rgb_f))) return false;
+
+        // BED12: blockCount, blockSizes, blockStarts (must appear as a complete group)
+        auto block_count_f = ggu::next_field(line_sv, fpos);
+        auto block_sizes_f = ggu::next_field(line_sv, fpos);
+        auto block_starts_f = ggu::next_field(line_sv, fpos);
+        {
+            int present = block_count_f.has_value() + block_sizes_f.has_value() + block_starts_f.has_value();
+            if (present == 0) return true;  // BED9
+            if (present != 3) {
+                error_message = "Incomplete BED12 fields (blockCount, blockSizes, blockStarts) at line ";
+                error_message += std::to_string(line_num);
+                return false;
+            }
+        }
+        return parse_blocks(entry, std::string(*block_count_f),
+                            std::string(*block_sizes_f),
+                            std::string(*block_starts_f), start_num, end_num);
+    }
+
     bool bed_reader::read_next(bed_entry& entry) {
         while (true) {
             error_message.clear();
@@ -397,58 +449,8 @@ namespace genogrove::io {
                 entry.start = start_num;
                 entry.end = end_num;
 
-                // Parse optional BED fields (BED4+)
-                bool parse_ok = true;
-
-                // BED4: name
-                if (auto name_f = ggu::next_field(line_sv, fpos)) {
-                    entry.name = std::string(*name_f);
-
-                    // BED5: score
-                    if (auto score_f = ggu::next_field(line_sv, fpos)) {
-                        if (!parse_score(entry, std::string(*score_f))) { parse_ok = false; }
-
-                        // BED6: strand
-                        if (parse_ok) {
-                            if (auto strand_f = ggu::next_field(line_sv, fpos)) {
-                                if (!parse_strand(entry, std::string(*strand_f))) { parse_ok = false; }
-
-                                // BED12: additional fields
-                                if (parse_ok) {
-                                    auto thick_start_f = ggu::next_field(line_sv, fpos);
-                                    auto thick_end_f = ggu::next_field(line_sv, fpos);
-                                    auto item_rgb_f = ggu::next_field(line_sv, fpos);
-                                    if (thick_start_f && thick_end_f && item_rgb_f) {
-                                        if (!parse_thickness(entry, std::string(*thick_start_f),
-                                                             std::string(*thick_end_f),
-                                                             start_num, end_num)) {
-                                            parse_ok = false;
-                                        }
-                                        if (parse_ok && !parse_rgb(entry, std::string(*item_rgb_f))) {
-                                            parse_ok = false;
-                                        }
-
-                                        if (parse_ok) {
-                                            auto block_count_f = ggu::next_field(line_sv, fpos);
-                                            auto block_sizes_f = ggu::next_field(line_sv, fpos);
-                                            auto block_starts_f = ggu::next_field(line_sv, fpos);
-                                            if (block_count_f && block_sizes_f && block_starts_f) {
-                                                if (!parse_blocks(entry, std::string(*block_count_f),
-                                                                 std::string(*block_sizes_f),
-                                                                 std::string(*block_starts_f),
-                                                                 start_num, end_num)) {
-                                                    parse_ok = false;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (!parse_ok) {
+                // Parse optional BED fields (BED4 through BED12)
+                if (!parse_optional_fields(line_sv, fpos, entry, start_num, end_num)) {
                     // error_message already set by parse_* helper
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);

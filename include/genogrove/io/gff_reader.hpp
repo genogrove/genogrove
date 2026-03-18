@@ -128,6 +128,11 @@ namespace genogrove::io {
         // Helper to parse attributes (handles both GFF3 and GTF formats)
         // Returns the detected format
         gff_format parse_attributes(const std::string& attr_string, std::map<std::string, std::string, std::less<>>& attributes);
+
+        // Helpers for parsing individual GFF fields
+        bool parse_score(gff_entry& entry, std::string_view score_str);
+        bool parse_strand(gff_entry& entry, std::string_view strand_str);
+        bool parse_phase(gff_entry& entry, std::string_view phase_str);
     };
 
 }

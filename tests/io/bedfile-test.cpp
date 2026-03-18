@@ -323,6 +323,76 @@ TEST_F(bedfileTest, validationInvalidCoordinateRange) {
     fs::remove(temp_file);
 }
 
+TEST_F(bedfileTest, partialBED9Throws) {
+    // 8 columns: thickStart and thickEnd present but itemRgb missing
+    fs::path temp_file = test_data_dir / "temp_partial_bed9.bed";
+    std::ofstream out(temp_file);
+    out << "chr1\t1000\t2000\tname1\t500\t+\t1200\t1800\n";
+    out.close();
+
+    gio::bed_reader reader(temp_file);
+    gio::bed_entry entry;
+    EXPECT_THROW(reader.read_next(entry), std::runtime_error);
+
+    fs::remove(temp_file);
+}
+
+TEST_F(bedfileTest, partialBED9SkipInvalid) {
+    // 7 columns: only thickStart present, thickEnd and itemRgb missing
+    fs::path temp_file = test_data_dir / "temp_partial_bed9_skip.bed";
+    std::ofstream out(temp_file);
+    out << "chr1\t1000\t2000\tname1\t500\t+\t1200\n";
+    out << "chr2\t3000\t4000\n";
+    out.close();
+
+    gio::bed_reader reader(temp_file, {.skip_invalid_lines = true});
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    // Only the valid BED3 line should be returned
+    ASSERT_EQ(entries.size(), 1);
+    EXPECT_EQ(entries[0].chrom, "chr2");
+
+    fs::remove(temp_file);
+}
+
+TEST_F(bedfileTest, partialBED12Throws) {
+    // 10 columns: blockCount present but blockSizes and blockStarts missing
+    fs::path temp_file = test_data_dir / "temp_partial_bed12.bed";
+    std::ofstream out(temp_file);
+    out << "chr1\t1000\t2000\tname1\t500\t+\t1200\t1800\t255,0,0\t2\n";
+    out.close();
+
+    gio::bed_reader reader(temp_file);
+    gio::bed_entry entry;
+    EXPECT_THROW(reader.read_next(entry), std::runtime_error);
+
+    fs::remove(temp_file);
+}
+
+TEST_F(bedfileTest, partialBED12SkipInvalid) {
+    // 11 columns: blockCount and blockSizes present but blockStarts missing
+    fs::path temp_file = test_data_dir / "temp_partial_bed12_skip.bed";
+    std::ofstream out(temp_file);
+    out << "chr1\t1000\t2000\tname1\t500\t+\t1200\t1800\t255,0,0\t2\t400,400\n";
+    out << "chr2\t3000\t4000\n";
+    out.close();
+
+    gio::bed_reader reader(temp_file, {.skip_invalid_lines = true});
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    // Only the valid BED3 line should be returned
+    ASSERT_EQ(entries.size(), 1);
+    EXPECT_EQ(entries[0].chrom, "chr2");
+
+    fs::remove(temp_file);
+}
+
 TEST_F(bedfileTest, validationEmptyFile) {
     // Create a temporary empty file
     fs::path temp_file = test_data_dir / "temp_empty.bed";
