@@ -178,8 +178,8 @@ namespace genogrove::io {
                     value_sv = value_sv.substr(1, value_sv.size() - 2);
                 }
 
-                attributes.emplace(std::string(trimmed.substr(0, space_pos)),
-                                   std::string(value_sv));
+                attributes.insert_or_assign(std::string(trimmed.substr(0, space_pos)),
+                                           std::string(value_sv));
             }
             return gff_format::GTF;
         } else {
@@ -201,8 +201,8 @@ namespace genogrove::io {
                 size_t eq_pos = trimmed.find('=');
                 if (eq_pos == std::string_view::npos) continue;
 
-                attributes.emplace(std::string(trimmed.substr(0, eq_pos)),
-                                   std::string(trimmed.substr(eq_pos + 1)));
+                attributes.insert_or_assign(std::string(trimmed.substr(0, eq_pos)),
+                                           std::string(trimmed.substr(eq_pos + 1)));
             }
             return gff_format::GFF3;
         }
