@@ -269,7 +269,7 @@ namespace genogrove::io {
         while (true) {
             error_message.clear();
             auto line_opt = bgzf_next_data_line(bgzf_file, line_num);
-            if (!line_opt) return false;  // EOF
+            if (!line_opt) { at_eof_ = true; return false; }
             const std::string& line = *line_opt;
 
             // parse the line
@@ -369,7 +369,7 @@ namespace genogrove::io {
     }
 
     bool gff_reader::has_next() {
-        return bgzf_has_next(bgzf_file);
+        return !at_eof_ && bgzf_file != nullptr;
     }
 
     std::string gff_reader::get_error_message() const {

@@ -25,9 +25,6 @@ namespace genogrove::io {
     /// Throws std::runtime_error on I/O error.
     std::optional<std::string> bgzf_next_data_line(BGZF* file, size_t& line_num);
 
-    /// Check whether more data is available in a BGZF stream (peek-based).
-    bool bgzf_has_next(BGZF* file);
-
 }
 
 #endif //GENOGROVE_IO_BGZF_UTILS_HPP

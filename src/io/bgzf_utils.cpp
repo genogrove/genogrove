@@ -31,19 +31,4 @@ namespace genogrove::io {
         }
     }
 
-    bool bgzf_has_next(BGZF* file) {
-        if (!file) return false;
-
-        int64_t current_pos = bgzf_tell(file);
-        char peek_char;
-        int peek_result = bgzf_read(file, &peek_char, 1);
-
-        int64_t seek_result = bgzf_seek(file, current_pos, SEEK_SET);
-        if (seek_result < 0) {
-            return false;
-        }
-
-        return peek_result > 0;
-    }
-
 }
