@@ -83,10 +83,13 @@ namespace genogrove::io {
 
             size_t start_num = 0;
             size_t end_num = 0;
-            std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
-            std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
+            auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
+            auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
+            if (ec1 != std::errc{} || ec2 != std::errc{}) {
+                throw std::runtime_error("Invalid BED coordinates (out of range) in " + fpath.string());
+            }
             if (start_num >= end_num) {
-                throw std::runtime_error("Invalid BED coordinates (start > end) in " + fpath.string());
+                throw std::runtime_error("Invalid BED coordinates (start >= end) in " + fpath.string());
             }
 
             if (bgzf_seek(bgzf_file, start_pos, SEEK_SET) < 0) {
