@@ -69,25 +69,26 @@ namespace genogrove::data_type {
             /**
              * @brief Get the original query that produced this result.
              *
-             * Returns a copy of the query that was used to search the grove.
+             * Returns a const reference to the query that was used to search the grove.
              *
-             * @return The query value
+             * @return Const reference to the query value
              */
-            key_type get_query() const noexcept { return this->query; }
+            const key_type& get_query() const noexcept { return this->query; }
 
             /**
              * @brief Get all matching keys found by the query.
              *
-             * Returns a vector of pointers to keys that overlapped with the query.
-             * The pointers reference keys owned by the grove and remain valid as
-             * long as the grove exists and the keys are not removed.
+             * Returns a const reference to the vector of pointers to keys that
+             * overlapped with the query. The pointers reference keys owned by the
+             * grove and remain valid as long as the grove exists and the keys are
+             * not removed.
              *
-             * @return Vector of pointers to matching keys (may be empty if no matches)
+             * @return Const reference to vector of pointers to matching keys (may be empty)
              *
              * @note Pointers remain valid as long as the grove is not modified
              * @note Keys are stored in the order they were found during tree traversal
              */
-            std::vector<key<key_type, data_type>*> get_keys() const { return this->keys; }
+            const std::vector<key<key_type, data_type>*>& get_keys() const { return this->keys; }
 
             /**
              * @brief Add a matching key to the result set.
