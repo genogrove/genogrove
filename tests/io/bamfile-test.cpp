@@ -64,8 +64,8 @@ TEST_F(BamReaderTest, ReadSamFile) {
     }
     EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
-    // We have 9 records in test.sam, but default options skip unmapped (read004)
-    ASSERT_EQ(entries.size(), 8);
+    // We have 12 records in test.sam, but default options skip unmapped (read004)
+    ASSERT_EQ(entries.size(), 11);
 }
 
 TEST_F(BamReaderTest, ReadSamFileIncludeAll) {
@@ -77,8 +77,8 @@ TEST_F(BamReaderTest, ReadSamFileIncludeAll) {
     }
     EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
-    // All 9 records including unmapped
-    ASSERT_EQ(entries.size(), 9);
+    // All 12 records including unmapped
+    ASSERT_EQ(entries.size(), 12);
 }
 
 TEST_F(BamReaderTest, VerifyFirstAlignment) {
@@ -531,7 +531,7 @@ TEST_F(BamReaderTest, IteratorBasicIteration) {
     }
     EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
-    EXPECT_EQ(read_names.size(), 8);
+    EXPECT_EQ(read_names.size(), 11);
     EXPECT_EQ(read_names[0], "read001");
 }
 
@@ -568,7 +568,7 @@ TEST_F(BamReaderTest, HasNextFunctionality) {
         count++;
     }
 
-    EXPECT_EQ(count, 8);
+    EXPECT_EQ(count, 11);
     EXPECT_FALSE(reader.has_next());
 }
 
@@ -740,6 +740,179 @@ TEST_F(BamReaderTest, AlignmentFlagsValue) {
 }
 
 // ==========================================
+// QC-Fail and Duplicate Filter Tests
+// ==========================================
+
+TEST_F(BamReaderTest, FilterQcFailReads) {
+    gio::bam_reader_options opts;
+    opts.skip_unmapped = false;
+    opts.skip_qc_fail = true;
+
+    gio::bam_reader reader(sam_path, opts);
+
+    std::vector<gio::sam_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    // read009 (flag 512) should be filtered
+    for (const auto& entry : entries) {
+        EXPECT_FALSE(entry.flags.is_qc_fail()) << "Read " << entry.qname << " is QC-fail";
+    }
+    auto qc_fail = std::find_if(entries.begin(), entries.end(),
+        [](const gio::sam_entry& e) { return e.qname == "read009"; });
+    EXPECT_EQ(qc_fail, entries.end());
+    ASSERT_EQ(entries.size(), 11);
+}
+
+TEST_F(BamReaderTest, FilterDuplicateReads) {
+    gio::bam_reader_options opts;
+    opts.skip_unmapped = false;
+    opts.skip_duplicates = true;
+
+    gio::bam_reader reader(sam_path, opts);
+
+    std::vector<gio::sam_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    // read010 (flag 1024) should be filtered
+    for (const auto& entry : entries) {
+        EXPECT_FALSE(entry.flags.is_duplicate()) << "Read " << entry.qname << " is duplicate";
+    }
+    auto dup = std::find_if(entries.begin(), entries.end(),
+        [](const gio::sam_entry& e) { return e.qname == "read010"; });
+    EXPECT_EQ(dup, entries.end());
+    ASSERT_EQ(entries.size(), 11);
+}
+
+TEST_F(BamReaderTest, QcFailFlagDetected) {
+    gio::bam_reader reader(sam_path, gio::bam_reader_options::include_all());
+
+    std::vector<gio::sam_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    auto it = std::find_if(entries.begin(), entries.end(),
+        [](const gio::sam_entry& e) { return e.qname == "read009"; });
+    ASSERT_NE(it, entries.end());
+    EXPECT_TRUE(it->flags.is_qc_fail());
+}
+
+TEST_F(BamReaderTest, DuplicateFlagDetected) {
+    gio::bam_reader reader(sam_path, gio::bam_reader_options::include_all());
+
+    std::vector<gio::sam_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    auto it = std::find_if(entries.begin(), entries.end(),
+        [](const gio::sam_entry& e) { return e.qname == "read010"; });
+    ASSERT_NE(it, entries.end());
+    EXPECT_TRUE(it->flags.is_duplicate());
+}
+
+TEST_F(BamReaderTest, HighQualityFilterCombination) {
+    // high_quality() enables all skip flags + MAPQ threshold
+    gio::bam_reader reader(sam_path, gio::bam_reader_options::high_quality(30));
+
+    std::vector<gio::sam_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    // Should filter: read004 (unmapped), read005 (secondary + MAPQ 20),
+    // read006 (supplementary), read008 (MAPQ 15), read009 (QC-fail), read010 (duplicate)
+    for (const auto& entry : entries) {
+        EXPECT_FALSE(entry.flags.is_unmapped()) << entry.qname;
+        EXPECT_FALSE(entry.flags.is_secondary()) << entry.qname;
+        EXPECT_FALSE(entry.flags.is_supplementary()) << entry.qname;
+        EXPECT_FALSE(entry.flags.is_qc_fail()) << entry.qname;
+        EXPECT_FALSE(entry.flags.is_duplicate()) << entry.qname;
+        EXPECT_GE(entry.mapq, 30) << entry.qname;
+    }
+    ASSERT_EQ(entries.size(), 6);
+}
+
+// ==========================================
+// Array Tag Parsing Tests
+// ==========================================
+
+TEST_F(BamReaderTest, ParseIntArrayTag) {
+    gio::bam_reader reader(sam_path);
+
+    std::vector<gio::sam_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    auto it = std::find_if(entries.begin(), entries.end(),
+        [](const gio::sam_entry& e) { return e.qname == "read011"; });
+    ASSERT_NE(it, entries.end());
+
+    auto tag_it = it->tags.find("X1");
+    ASSERT_NE(tag_it, it->tags.end());
+    const auto& arr = std::get<std::vector<int32_t>>(tag_it->second);
+    ASSERT_EQ(arr.size(), 3);
+    EXPECT_EQ(arr[0], 10);
+    EXPECT_EQ(arr[1], 20);
+    EXPECT_EQ(arr[2], 30);
+}
+
+TEST_F(BamReaderTest, ParseFloatArrayTag) {
+    gio::bam_reader reader(sam_path);
+
+    std::vector<gio::sam_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    auto it = std::find_if(entries.begin(), entries.end(),
+        [](const gio::sam_entry& e) { return e.qname == "read011"; });
+    ASSERT_NE(it, entries.end());
+
+    auto tag_it = it->tags.find("X2");
+    ASSERT_NE(tag_it, it->tags.end());
+    const auto& arr = std::get<std::vector<float>>(tag_it->second);
+    ASSERT_EQ(arr.size(), 3);
+    EXPECT_FLOAT_EQ(arr[0], 1.5f);
+    EXPECT_FLOAT_EQ(arr[1], 2.5f);
+    EXPECT_FLOAT_EQ(arr[2], 3.5f);
+}
+
+TEST_F(BamReaderTest, ParseUint8ArrayTag) {
+    gio::bam_reader reader(sam_path);
+
+    std::vector<gio::sam_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    auto it = std::find_if(entries.begin(), entries.end(),
+        [](const gio::sam_entry& e) { return e.qname == "read011"; });
+    ASSERT_NE(it, entries.end());
+
+    auto tag_it = it->tags.find("X3");
+    ASSERT_NE(tag_it, it->tags.end());
+    const auto& arr = std::get<std::vector<uint8_t>>(tag_it->second);
+    ASSERT_EQ(arr.size(), 3);
+    EXPECT_EQ(arr[0], 100);
+    EXPECT_EQ(arr[1], 200);
+    EXPECT_EQ(arr[2], 255);
+}
+
+// ==========================================
 // BAM File Tests
 // ==========================================
 
@@ -761,8 +934,8 @@ TEST_F(BamReaderTest, ReadBamFile) {
     }
     EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
-    // Same as SAM: 9 records, default options skip unmapped (read004)
-    ASSERT_EQ(entries.size(), 8);
+    // Same as SAM: 12 records, default options skip unmapped (read004)
+    ASSERT_EQ(entries.size(), 11);
 }
 
 TEST_F(BamReaderTest, BamFileContentMatchesSam) {
@@ -830,8 +1003,8 @@ TEST_F(BamReaderTest, BamFileIncludeAll) {
     }
     EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
-    // All 9 records including unmapped
-    ASSERT_EQ(entries.size(), 9);
+    // All 12 records including unmapped
+    ASSERT_EQ(entries.size(), 12);
 }
 
 TEST_F(BamReaderTest, BamFilePrimaryOnly) {
