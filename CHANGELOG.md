@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Remove unused `index` and `index_registry`**: Deleted `index.hpp`, `index_registry.hpp`, `index.cpp`, `index_registry.cpp`, and `index_test.cpp` — these classes were not used by the core library or any consumers. Closes [#147](https://github.com/genogrove/genogrove/issues/147). ([#229](https://github.com/genogrove/genogrove/pull/229))
 
 ### Changed
+- **`query_result` getters return by const reference**: `get_query()` and `get_keys()` now return `const key_type&` and `const std::vector<...>&` respectively, avoiding unnecessary copies on every call. ([#157](https://github.com/genogrove/genogrove/issues/157), [#251](https://github.com/genogrove/genogrove/pull/251))
 - **`registry::get()` returns references instead of raw pointers** (**breaking**): `get()` now returns `const T&` / `T&` and throws `std::out_of_range` on invalid IDs instead of returning `nullptr`. Internal storage switched from `std::vector` to `std::deque` for reference stability across `register_data()` calls. Use `contains()` to check validity before calling `get()`. ([#143](https://github.com/genogrove/genogrove/issues/143), [#226](https://github.com/genogrove/genogrove/pull/226))
 
 ### Fixed
