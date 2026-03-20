@@ -265,6 +265,31 @@ namespace genogrove::io {
         return true;
     }
 
+    bool gff_reader::validate_gtf_attributes(const gff_entry& entry) {
+        // GTF2 requires gene_id on all features
+        if (!entry.attributes.contains("gene_id")) {
+            error_message = "Missing mandatory GTF attribute 'gene_id' at line " +
+                            std::to_string(line_num);
+            return false;
+        }
+
+        // Transcript-level features require transcript_id
+        static constexpr std::string_view transcript_types[] = {
+            "exon", "CDS", "start_codon", "stop_codon", "UTR", "5UTR", "3UTR"
+        };
+        for (auto type : transcript_types) {
+            if (entry.type == type) {
+                if (!entry.attributes.contains("transcript_id")) {
+                    error_message = "Missing mandatory GTF attribute 'transcript_id' for " +
+                                    entry.type + " feature at line " + std::to_string(line_num);
+                    return false;
+                }
+                break;
+            }
+        }
+        return true;
+    }
+
     bool gff_reader::read_next(gff_entry& entry) {
         while (true) {
             error_message.clear();
@@ -355,6 +380,14 @@ namespace genogrove::io {
                 } else {
                     entry.attributes.clear();
                     entry.format = gff_format::UNKNOWN;
+                }
+
+                // Validate mandatory GTF2 attributes if enabled
+                if (options_.validate_gtf && entry.format == gff_format::GTF) {
+                    if (!validate_gtf_attributes(entry)) {
+                        if (options_.skip_invalid_lines) continue;
+                        throw std::runtime_error(error_message);
+                    }
                 }
 
                 return true;
