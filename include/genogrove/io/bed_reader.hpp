@@ -88,6 +88,18 @@ namespace genogrove::io {
 
     /**
      * @brief Configuration options for the BED reader.
+     *
+     * Options can be set via C++20 designated initializers at construction:
+     * ```cpp
+     * bed_reader reader(path, {.skip_invalid_lines = true});
+     * ```
+     *
+     * Or by constructing and assigning individual fields:
+     * ```cpp
+     * bed_reader_options opts;
+     * opts.skip_invalid_lines = true;
+     * bed_reader reader(path, opts);
+     * ```
      */
     struct bed_reader_options {
         bool skip_invalid_lines = false;    ///< Skip invalid lines instead of throwing

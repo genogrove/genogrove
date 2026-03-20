@@ -182,6 +182,22 @@ namespace genogrove::io {
 
     /**
      * @brief Configuration options for the BAM reader.
+     *
+     * Options can be set via C++20 designated initializers at construction:
+     * ```cpp
+     * bam_reader reader(path, {.skip_unmapped = false, .min_mapq = 30});
+     * ```
+     *
+     * Or by constructing and assigning individual fields:
+     * ```cpp
+     * bam_reader_options opts;
+     * opts.skip_secondary = true;
+     * opts.min_mapq = 20;
+     * bam_reader reader(path, opts);
+     * ```
+     *
+     * Named factory methods are also available for common configurations:
+     * `defaults()`, `include_all()`, `primary_only()`, `high_quality()`.
      */
     struct bam_reader_options {
         bool skip_unmapped = true;          ///< Skip unmapped reads (default: true)

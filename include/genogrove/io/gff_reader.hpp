@@ -76,9 +76,23 @@ namespace genogrove::io {
 
     /**
      * @brief Configuration options for the GFF reader.
+     *
+     * Options can be set via C++20 designated initializers at construction:
+     * ```cpp
+     * gff_reader reader(path, {.skip_invalid_lines = true, .validate_gtf = true});
+     * ```
+     *
+     * Or by constructing and assigning individual fields:
+     * ```cpp
+     * gff_reader_options opts;
+     * opts.skip_invalid_lines = true;
+     * opts.validate_gtf = true;
+     * gff_reader reader(path, opts);
+     * ```
      */
     struct gff_reader_options {
         bool skip_invalid_lines = false;    ///< Skip invalid lines instead of throwing
+        bool validate_gtf = false;          ///< Validate mandatory GTF2 attributes (gene_id, transcript_id)
 
         [[nodiscard]] static gff_reader_options defaults() { return {}; }
     };
@@ -133,6 +147,9 @@ namespace genogrove::io {
         bool parse_score(gff_entry& entry, std::string_view score_str);
         bool parse_strand(gff_entry& entry, std::string_view strand_str);
         bool parse_phase(gff_entry& entry, std::string_view phase_str);
+
+        // Validate mandatory GTF2 attributes (gene_id, transcript_id)
+        bool validate_gtf_attributes(const gff_entry& entry);
     };
 
 }

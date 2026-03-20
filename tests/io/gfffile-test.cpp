@@ -36,6 +36,8 @@ protected:
     fs::path invalid_phase_path;
     fs::path gff3_path_gz;
     fs::path gtf_path_gz;
+    fs::path missing_gene_id_path;
+    fs::path missing_transcript_id_path;
 
     void SetUp() override {
         test_data_dir = fs::current_path() / "io" / "data";
@@ -47,6 +49,8 @@ protected:
         invalid_phase_path = test_data_dir / "test_invalid_phase.gff";
         gff3_path_gz = test_data_dir / "test_gff3.gff.gz";
         gtf_path_gz = test_data_dir / "test.gtf.gz";
+        missing_gene_id_path = test_data_dir / "test_missing_gene_id.gtf";
+        missing_transcript_id_path = test_data_dir / "test_missing_transcript_id.gtf";
     }
 };
 
@@ -758,4 +762,72 @@ TEST_F(gfffileTest, iteratorAccessAttributes) {
         }
     }
     EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+}
+
+// ==========================================
+// GTF Attribute Validation Tests
+// ==========================================
+
+TEST_F(gfffileTest, validateGtfPassesOnValidFile) {
+    gio::gff_reader_options opts{.skip_invalid_lines = false, .validate_gtf = true};
+    gio::gff_reader reader(gtf_path, opts);
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+    EXPECT_EQ(entries.size(), 4);
+}
+
+TEST_F(gfffileTest, validateGtfThrowsOnMissingGeneId) {
+    gio::gff_reader_options opts{.skip_invalid_lines = false, .validate_gtf = true};
+    gio::gff_reader reader(missing_gene_id_path, opts);
+
+    gio::gff_entry entry;
+    EXPECT_THROW(reader.read_next(entry), std::runtime_error);
+}
+
+TEST_F(gfffileTest, validateGtfThrowsOnMissingTranscriptId) {
+    gio::gff_reader_options opts{.skip_invalid_lines = false, .validate_gtf = true};
+    gio::gff_reader reader(missing_transcript_id_path, opts);
+
+    gio::gff_entry entry;
+    // First entry (gene) should pass — gene_id present, transcript_id not required
+    EXPECT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.type, "gene");
+
+    // Second entry (exon) should fail — missing transcript_id
+    EXPECT_THROW(reader.read_next(entry), std::runtime_error);
+}
+
+TEST_F(gfffileTest, validateGtfSkipsInvalidWithOption) {
+    gio::gff_reader_options opts{.skip_invalid_lines = true, .validate_gtf = true};
+    gio::gff_reader reader(missing_gene_id_path, opts);
+
+    gio::gff_entry entry;
+    // Should skip the invalid line and return false (EOF)
+    EXPECT_FALSE(reader.read_next(entry));
+}
+
+TEST_F(gfffileTest, validateGtfOffByDefault) {
+    // Default options — validation disabled, missing gene_id should not throw
+    gio::gff_reader reader(missing_gene_id_path);
+
+    gio::gff_entry entry;
+    EXPECT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.type, "gene");
+}
+
+TEST_F(gfffileTest, validateGtfSkipsGff3Files) {
+    // validate_gtf should not affect GFF3 files (different format)
+    gio::gff_reader_options opts{.skip_invalid_lines = false, .validate_gtf = true};
+    gio::gff_reader reader(gff3_path, opts);
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+    EXPECT_FALSE(entries.empty());
 }
