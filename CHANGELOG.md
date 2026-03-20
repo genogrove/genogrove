@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-03-20
+
 ### Added
 - **Opt-in GTF attribute validation**: New `validate_gtf` option in `gff_reader_options` validates mandatory GTF2 attributes (`gene_id` on all features, `transcript_id` on transcript-level features). Respects `skip_invalid_lines`. Off by default, only applies to GTF-format files. Also added usage documentation to all reader options structs. ([#219](https://github.com/genogrove/genogrove/issues/219), [#252](https://github.com/genogrove/genogrove/pull/252))
 - **BAM reader filter and array tag test coverage**: Added 8 tests covering `skip_qc_fail`, `skip_duplicates`, QC-fail/duplicate flag detection, `high_quality()` filter combination, and array tag parsing (`B:i`, `B:f`, `B:C`). Extended test SAM/BAM data with 3 new records. ([#177](https://github.com/genogrove/genogrove/issues/177), [#249](https://github.com/genogrove/genogrove/pull/249))
