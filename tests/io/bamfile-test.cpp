@@ -1093,3 +1093,90 @@ TEST_F(BamReaderTest, BamFileIterator) {
     ASSERT_NE(it, end);
     EXPECT_EQ(it->qname, "read002");
 }
+
+// ==========================================
+// skip_invalid_records Filter Tests
+// ==========================================
+
+TEST_F(BamReaderTest, InvalidRecordThrowsWhenNotSkipped) {
+    // test_invalid_record.sam contains read_no_cigar: a mapped read with CIGAR=*
+    // parse_alignment() rejects mapped reads with no CIGAR
+    fs::path invalid_sam = test_data_dir / "test_invalid_record.sam";
+
+    gio::bam_reader_options opts{
+        .skip_unmapped = false,
+        .skip_secondary = false,
+        .skip_supplementary = false,
+        .skip_qc_fail = false,
+        .skip_duplicates = false,
+        .min_mapq = 0,
+        .skip_invalid_records = false
+    };
+
+    gio::bam_reader reader(invalid_sam, opts);
+
+    std::vector<gio::sam_entry> entries;
+    EXPECT_THROW({
+        for (const auto& entry : reader) {
+            entries.push_back(entry);
+        }
+    }, std::runtime_error);
+}
+
+TEST_F(BamReaderTest, InvalidRecordSkippedWhenOptionSet) {
+    // Same file, but with skip_invalid_records=true: the invalid record is silently skipped
+    fs::path invalid_sam = test_data_dir / "test_invalid_record.sam";
+
+    gio::bam_reader_options opts{
+        .skip_unmapped = false,
+        .skip_secondary = false,
+        .skip_supplementary = false,
+        .skip_qc_fail = false,
+        .skip_duplicates = false,
+        .min_mapq = 0,
+        .skip_invalid_records = true
+    };
+
+    gio::bam_reader reader(invalid_sam, opts);
+
+    std::vector<gio::sam_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty())
+        << "Unexpected error: " << reader.get_error_message();
+
+    // read_no_cigar should be skipped, leaving read001 and read002
+    ASSERT_EQ(entries.size(), 2);
+    EXPECT_EQ(entries[0].qname, "read001");
+    EXPECT_EQ(entries[1].qname, "read002");
+}
+
+TEST_F(BamReaderTest, SkipInvalidRecordsDefaultIsFalse) {
+    gio::bam_reader_options opts;
+    EXPECT_FALSE(opts.skip_invalid_records);
+}
+
+TEST_F(BamReaderTest, SkipInvalidRecordsNoEffectOnValidSam) {
+    gio::bam_reader_options opts{
+        .skip_unmapped = true,
+        .skip_secondary = false,
+        .skip_supplementary = false,
+        .skip_qc_fail = false,
+        .skip_duplicates = false,
+        .min_mapq = 0,
+        .skip_invalid_records = true
+    };
+
+    gio::bam_reader reader(sam_path, opts);
+
+    std::vector<gio::sam_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty())
+        << "Unexpected error: " << reader.get_error_message();
+
+    // With default filters (skip unmapped), same results as without the option
+    EXPECT_EQ(entries.size(), 10);
+}

@@ -186,6 +186,16 @@ namespace genogrove::io {
     bool bam_reader::parse_alignment(const bam1_t* b, sam_entry& entry) {
         const bam1_core_t& c = b->core;
 
+        // Validate mapped reads have a valid reference and CIGAR
+        if (!(c.flag & BAM_FUNMAP)) {
+            if (c.tid < 0 || c.tid >= header_->n_targets) {
+                return false;  // Mapped read with no valid reference
+            }
+            if (c.n_cigar == 0) {
+                return false;  // Mapped read with no CIGAR
+            }
+        }
+
         // Query name (QNAME)
         entry.qname = bam_get_qname(b);
 
