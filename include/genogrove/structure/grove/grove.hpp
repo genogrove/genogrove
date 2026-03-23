@@ -482,9 +482,9 @@ class grove {
 
     /**
      * @brief Get map of all root nodes indexed by their string keys
-     * @return Unordered map from index names (e.g., chromosome names) to root node pointers
+     * @return Const reference to unordered map from index names (e.g., chromosome names) to root node pointers
      */
-    std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>> get_root_nodes() const {
+    const std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>>& get_root_nodes() const {
         return this->root_nodes;
     }
 
