@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+- **`set_root_nodes()` made private**: Moved from public to private access to prevent misuse — the method performs a full internal reset and has no valid user-facing use case. ([#253](https://github.com/genogrove/genogrove/issues/253), [#254](https://github.com/genogrove/genogrove/pull/254))
+
 ## [0.18.0] - 2026-03-20
 
 ### Added
