@@ -118,26 +118,6 @@ TEST(grovePreconditionTest, intersectNonExistentIndexReturnsEmpty) {
 }
 
 // =============================================================================
-// set_root_nodes clears all associated state
-// =============================================================================
-
-TEST(grovePreconditionTest, setRootNodesClearsKeyStorageAndGraph) {
-    gst::grove<gdt::interval, int> g(10);
-    g.insert_data("chr1", gdt::interval{10, 20}, 1);
-    g.insert_data("chr1", gdt::interval{30, 40}, 2);
-    EXPECT_EQ(g.indexed_vertex_count(), 2);
-
-    // Replace with empty root nodes
-    std::unordered_map<std::string, gst::node<gdt::interval, int>*,
-        gst::string_hash, std::equal_to<>> empty;
-    g.set_root_nodes(std::move(empty));
-
-    EXPECT_EQ(g.get_root_nodes().size(), 0);
-    EXPECT_EQ(g.vertex_count(), 0);
-    EXPECT_EQ(g.graph().edge_count(), 0);
-}
-
-// =============================================================================
 // query_result preconditions
 // =============================================================================
 

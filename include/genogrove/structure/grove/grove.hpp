@@ -489,6 +489,17 @@ class grove {
     }
 
     /**
+     * @brief Get the rightmost leaf node for a given index
+     * @param key The index name (e.g., chromosome name)
+     * @return Pointer to rightmost leaf node, or nullptr if index doesn't exist
+     * @note Used for optimized sorted insertion
+     */
+    node<key_type, data_type>* get_rightmost_node(std::string_view key) const {
+        return ggu::value_lookup(this->rightmost_nodes, key).value_or(nullptr);
+    }
+
+  private:
+    /**
      * @brief Replace the grove's root nodes with a new set
      * @param root_nodes New map of root nodes to use
      * @note Deletes all existing tree nodes, clears key storage, graph overlay,
@@ -505,17 +516,6 @@ class grove {
         this->graph_data = graph_overlay<key_type, data_type, edge_data_type>{};
     }
 
-    /**
-     * @brief Get the rightmost leaf node for a given index
-     * @param key The index name (e.g., chromosome name)
-     * @return Pointer to rightmost leaf node, or nullptr if index doesn't exist
-     * @note Used for optimized sorted insertion
-     */
-    node<key_type, data_type>* get_rightmost_node(std::string_view key) const {
-        return ggu::value_lookup(this->rightmost_nodes, key).value_or(nullptr);
-    }
-
-  private:
     /**
      * @brief Set the rightmost leaf node for a given index
      * @param key The index name (e.g., chromosome name)
