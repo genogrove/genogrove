@@ -298,7 +298,7 @@ protected:
         size_t expected_count) {
 
         // Get root node
-        auto* root = grove.get_root_nodes()[index_name];
+        auto* root = grove.get_root_nodes().at(index_name);
         ASSERT_NE(root, nullptr) << "Root node should exist after insertion";
 
         // Find leftmost leaf node
@@ -999,7 +999,7 @@ TYPED_TEST_P(grove_typed_test, internal_node_split_invariants) {
     ASSERT_EQ(inserted_keys.size(), 20u);
 
     // Validate full tree structure
-    auto* root = small_grove.get_root_nodes()[this->get_default_index()];
+    auto* root = small_grove.get_root_nodes().at(this->get_default_index());
     ASSERT_NE(root, nullptr);
 
     int leaf_depth = -1;
@@ -1043,7 +1043,7 @@ TYPED_TEST_P(grove_typed_test, internal_node_split_regular_insert) {
     ASSERT_EQ(inserted_keys.size(), 15u);
 
     // Validate tree structure
-    auto* root = small_grove.get_root_nodes()[this->get_default_index()];
+    auto* root = small_grove.get_root_nodes().at(this->get_default_index());
     ASSERT_NE(root, nullptr);
 
     int leaf_depth = -1;
@@ -1073,7 +1073,7 @@ TYPED_TEST_P(grove_typed_test, sorted_insert_packs_leaves) {
     }
 
     // Walk the leaf chain: all leaves except the last should be fully packed
-    auto* n = g.get_root_nodes()["chr1"];
+    auto* n = g.get_root_nodes().at("chr1");
     ASSERT_NE(n, nullptr);
     while (!n->get_is_leaf()) {
         n = n->get_children()[0];
@@ -1102,7 +1102,7 @@ TYPED_TEST_P(grove_typed_test, sorted_insert_half_fill) {
     const auto expected = static_cast<size_t>(
         std::max(1, static_cast<int>((order - 1) * 0.5f)));
 
-    auto* n = g.get_root_nodes()["chr1"];
+    auto* n = g.get_root_nodes().at("chr1");
     ASSERT_NE(n, nullptr);
     while (!n->get_is_leaf()) {
         n = n->get_children()[0];
@@ -1132,7 +1132,7 @@ TYPED_TEST_P(grove_typed_test, sorted_insert_three_quarter_fill) {
     const auto expected = static_cast<size_t>(
         std::max(1, static_cast<int>((order - 1) * 0.75f)));
 
-    auto* n = g.get_root_nodes()["chr1"];
+    auto* n = g.get_root_nodes().at("chr1");
     ASSERT_NE(n, nullptr);
     while (!n->get_is_leaf()) {
         n = n->get_children()[0];
@@ -1155,7 +1155,7 @@ TYPED_TEST_P(grove_typed_test, grove_to_sif_output) {
         this->grove.insert_data(this->get_default_index(), key, value, gst::sorted);
     }
 
-    auto* root = this->grove.get_root_nodes()[this->get_default_index()];
+    auto* root = this->grove.get_root_nodes().at(this->get_default_index());
     ASSERT_NE(root, nullptr);
 
     // Walk the tree to count expected links
