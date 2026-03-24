@@ -122,10 +122,8 @@ namespace genogrove::io {
             if (ec1 != std::errc{} || ec2 != std::errc{}) {
                 throw std::runtime_error("Invalid GFF coordinates (out of range) in " + fpath.string());
             }
-            start_num -= 1;  // Convert to 0-based
-
-            if (start_num >= end_num) {
-                throw std::runtime_error("Invalid GFF coordinates (start >= end) in " + fpath.string());
+            if (start_num > end_num) {
+                throw std::runtime_error("Invalid GFF coordinates (start > end) in " + fpath.string());
             }
 
             if (bgzf_seek(bgzf_file, start_pos, SEEK_SET) < 0) {
@@ -336,7 +334,7 @@ namespace genogrove::io {
                     throw std::runtime_error(error_message);
                 }
 
-                // Parse coordinates (GFF is 1-based inclusive, convert to 0-based half-open)
+                // Parse coordinates (stored as 1-based inclusive, native GFF format)
                 size_t start = 0;
                 size_t end = 0;
                 auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start);
@@ -346,10 +344,9 @@ namespace genogrove::io {
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
-                start -= 1;  // Convert to 0-based
 
-                if (start >= end) {
-                    error_message = "Start coordinate is greater than or equal to end coordinate at line " + std::to_string(line_num);
+                if (start > end) {
+                    error_message = "Start coordinate is greater than end coordinate at line " + std::to_string(line_num);
                     if (options_.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }

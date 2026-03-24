@@ -370,14 +370,14 @@ TEST_F(gfffileTest, validationInvalidCoordinates) {
 }
 
 TEST_F(gfffileTest, validationInvalidCoordinateRange) {
-    // Create a temporary file with start >= end
+    // Create a temporary file with start > end
     fs::path temp_file = test_data_dir / "temp_invalid_range.gff";
     std::ofstream out(temp_file);
     out << "# Comment line\n";
     out << "chr1\tHAVANA\tgene\t2000\t1000\t.\t+\t.\tID=gene1\n";  // start > end
     out.close();
 
-    // Constructor should throw because start >= end
+    // Constructor should throw because start > end
     EXPECT_THROW({
         gio::gff_reader reader(temp_file);
     }, std::runtime_error);
@@ -438,11 +438,10 @@ TEST_F(gfffileTest, intervalObjectCreation) {
 
     ASSERT_TRUE(reader.read_next(entry));
 
-    // Verify interval object is properly created
-    // GFF uses 1-based inclusive coordinates, converted to 0-based half-open
-    EXPECT_EQ(entry.start, 999);   // 1000 - 1
-    EXPECT_EQ(entry.end, 2000);    // 2000 stays the same
-    EXPECT_EQ(entry.end - entry.start, 1001);
+    // Coordinates stored as native GFF (1-based inclusive)
+    EXPECT_EQ(entry.start, 1000);
+    EXPECT_EQ(entry.end, 2000);
+    EXPECT_EQ(entry.end - entry.start + 1, 1001);  // inclusive length
 }
 
 // ==========================================

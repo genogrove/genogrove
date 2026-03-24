@@ -49,10 +49,10 @@ All key types satisfy the `key_type_base` concept: `operator<`, `operator>`, `op
 - **serialization_traits**: Trait-based serialization. Trivially copyable types auto-work; `std::string` has built-in specialization; custom types need a specialization.
 
 ### `io/` — File Readers
-All readers inherit `file_reader<EntryType>` providing C++20 input iterators (`for (const auto& entry : reader)`). Non-copyable (own raw htslib handles), movable. Iterator stops on both EOF and errors — always check `get_error_message()` after the loop. Entry types store raw format-native coordinates as `size_t start`/`end` (0-based half-open), decoupled from `gdt::interval`. Users convert to grove's closed intervals via `gdt::interval(entry.start, entry.end - 1)` at insertion time. Reader options are aggregate structs configurable via C++20 designated initializers (`{.skip_invalid_lines = true}`) or assign-after-construct.
-- **bed_reader**: BED3/6/12 with mixed-format support. Resets optionals per record.
-- **gff_reader**: GFF3/GTF with attribute parsing. Format auto-detected. Attributes stored in `std::map` with `std::less<>` for heterogeneous lookup. Opt-in `validate_gtf` validates mandatory GTF2 attributes (`gene_id`, `transcript_id`).
-- **bam_reader**: SAM/BAM/CRAM via htslib. Configurable filtering (`bam_reader_options`). Converts SAM 1-based POS to 0-based half-open coordinates.
+All readers inherit `file_reader<EntryType>` providing C++20 input iterators (`for (const auto& entry : reader)`). Non-copyable (own raw htslib handles), movable. Iterator stops on both EOF and errors — always check `get_error_message()` after the loop. Entry types store coordinates in their **format-native** coordinate system as `size_t start`/`end`, decoupled from `gdt::interval`. Conversion to grove's closed intervals depends on the format: BED/BAM use `gdt::interval(entry.start, entry.end - 1)` (half-open → closed), GFF uses `gdt::interval(entry.start, entry.end)` (already inclusive). Reader options are aggregate structs configurable via C++20 designated initializers (`{.skip_invalid_lines = true}`) or assign-after-construct.
+- **bed_reader**: BED3/6/12 with mixed-format support. Coordinates are 0-based half-open (BED native). Resets optionals per record.
+- **gff_reader**: GFF3/GTF with attribute parsing. Coordinates are 1-based inclusive (GFF native). Format auto-detected. Attributes stored in `std::map` with `std::less<>` for heterogeneous lookup. Opt-in `validate_gtf` validates mandatory GTF2 attributes (`gene_id`, `transcript_id`).
+- **bam_reader**: SAM/BAM/CRAM via htslib. Coordinates are 0-based half-open (htslib-native). Configurable filtering (`bam_reader_options`).
 - **filetype_detector**: Detects file type and compression from magic bytes/extension.
 
 ### `utility/` — Helpers
