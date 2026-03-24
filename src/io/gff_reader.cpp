@@ -17,6 +17,8 @@ namespace ggu = genogrove::utility;
 
 namespace genogrove::io {
 
+    static constexpr int MAX_GFF_PHASE = 2;
+
     // ==========================================
     // gff_entry helper methods
     // ==========================================
@@ -255,7 +257,7 @@ namespace genogrove::io {
         int phase = 0;
         auto [pp, ecp] = std::from_chars(phase_str.data(), phase_str.data() + phase_str.size(), phase);
         if (ecp != std::errc{} || pp != phase_str.data() + phase_str.size() ||
-            phase < 0 || phase > 2) {
+            phase < 0 || phase > MAX_GFF_PHASE) {
             error_message = "Invalid phase value '" + std::string(phase_str) +
                             "' at line " + std::to_string(line_num) +
                             " (expected 0, 1, 2, or '.')";

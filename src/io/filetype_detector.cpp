@@ -41,33 +41,35 @@ namespace genogrove::io {
             return compression_type::NONE;
         }
 
+        static constexpr unsigned char GZIP_MAGIC[]  = {0x1f, 0x8b};
+        static constexpr unsigned char BZIP2_MAGIC[] = {0x42, 0x5a};
+        static constexpr unsigned char XZ_MAGIC[]    = {0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00};
+        static constexpr unsigned char ZSTD_MAGIC[]  = {0x28, 0xb5, 0x2f, 0xfd};
+        static constexpr unsigned char LZ4_MAGIC[]   = {0x04, 0x22, 0x4d, 0x18};
+
         unsigned char* ubuf = reinterpret_cast<unsigned char*>(buffer);
 
-        // gzip magic bytes: 0x1f 0x8b
-        if(bytes_read >= 2 && ubuf[0] == 0x1f && ubuf[1] == 0x8b) {
+        if(bytes_read >= 2 && ubuf[0] == GZIP_MAGIC[0] && ubuf[1] == GZIP_MAGIC[1]) {
             return compression_type::GZIP;
         }
 
-        // bzip2 magic bytes: 0x42 0x5a ('BZ')
-        if(bytes_read >= 2 && ubuf[0] == 0x42 && ubuf[1] == 0x5a) {
+        if(bytes_read >= 2 && ubuf[0] == BZIP2_MAGIC[0] && ubuf[1] == BZIP2_MAGIC[1]) {
             return compression_type::BZIP2;
         }
 
-        // xz magic bytes: 0xfd 0x37 0x7a 0x58 0x5a 0x00
-        if(bytes_read >= 6 && ubuf[0] == 0xfd && ubuf[1] == 0x37 &&
-           ubuf[2] == 0x7a && ubuf[3] == 0x58 && ubuf[4] == 0x5a && ubuf[5] == 0x00) {
+        if(bytes_read >= 6 && ubuf[0] == XZ_MAGIC[0] && ubuf[1] == XZ_MAGIC[1] &&
+           ubuf[2] == XZ_MAGIC[2] && ubuf[3] == XZ_MAGIC[3] &&
+           ubuf[4] == XZ_MAGIC[4] && ubuf[5] == XZ_MAGIC[5]) {
             return compression_type::XZ;
         }
 
-        // zstd magic bytes: 0x28 0xb5 0x2f 0xfd
-        if(bytes_read >= 4 && ubuf[0] == 0x28 && ubuf[1] == 0xb5 &&
-           ubuf[2] == 0x2f && ubuf[3] == 0xfd) {
+        if(bytes_read >= 4 && ubuf[0] == ZSTD_MAGIC[0] && ubuf[1] == ZSTD_MAGIC[1] &&
+           ubuf[2] == ZSTD_MAGIC[2] && ubuf[3] == ZSTD_MAGIC[3]) {
             return compression_type::ZSTD;
         }
 
-        // lz4 magic bytes: 0x04 0x22 0x4d 0x18
-        if(bytes_read >= 4 && ubuf[0] == 0x04 && ubuf[1] == 0x22 &&
-           ubuf[2] == 0x4d && ubuf[3] == 0x18) {
+        if(bytes_read >= 4 && ubuf[0] == LZ4_MAGIC[0] && ubuf[1] == LZ4_MAGIC[1] &&
+           ubuf[2] == LZ4_MAGIC[2] && ubuf[3] == LZ4_MAGIC[3]) {
             return compression_type::LZ4;
         }
 

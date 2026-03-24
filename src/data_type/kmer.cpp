@@ -43,7 +43,7 @@ namespace genogrove::data_type {
 
         // Extract bases from most significant to least significant
         for (int i = k - 1; i >= 0; --i) {
-            uint8_t base_encoding = (encoding >> (2 * i)) & 0x03;
+            uint8_t base_encoding = (encoding >> (2 * i)) & BASE_MASK;
             result.push_back(decode_base(base_encoding));
         }
 
