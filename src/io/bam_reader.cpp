@@ -163,13 +163,7 @@ namespace genogrove::io {
                 continue;
             }
 
-            // Parse the alignment into sam_entry
-            if (!parse_alignment(alignment_, entry)) {
-                error_message_ = "Failed to parse alignment record at record " + std::to_string(record_num_);
-                if (options_.skip_invalid_records) continue;
-                throw std::runtime_error(error_message_);
-            }
-
+            parse_alignment(alignment_, entry);
             return true;
         }
 
@@ -185,16 +179,6 @@ namespace genogrove::io {
 
     bool bam_reader::parse_alignment(const bam1_t* b, sam_entry& entry) {
         const bam1_core_t& c = b->core;
-
-        // Validate mapped reads have a valid reference and CIGAR
-        if (!(c.flag & BAM_FUNMAP)) {
-            if (c.tid < 0 || c.tid >= header_->n_targets) {
-                return false;  // Mapped read with no valid reference
-            }
-            if (c.n_cigar == 0) {
-                return false;  // Mapped read with no CIGAR
-            }
-        }
 
         // Query name (QNAME)
         entry.qname = bam_get_qname(b);
