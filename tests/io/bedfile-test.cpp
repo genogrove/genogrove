@@ -766,3 +766,50 @@ TEST_F(bedfileTest, iteratorGzippedFile) {
     EXPECT_EQ(chroms[1], "chr2");
     EXPECT_EQ(chroms[2], "chrX");
 }
+
+// ==========================================
+// BED12 Invalid Block Coordinate Tests
+// ==========================================
+
+TEST_F(bedfileTest, bed12BlockCountMismatchThrows) {
+    // blockCount=3 but only 2 blockSizes — should throw
+    fs::path invalid_blocks = test_data_dir / "test_invalid_blocks.bed";
+
+    gio::bed_reader reader(invalid_blocks);
+
+    std::vector<gio::bed_entry> entries;
+    EXPECT_THROW({
+        for (const auto& entry : reader) {
+            entries.push_back(entry);
+        }
+    }, std::runtime_error);
+}
+
+TEST_F(bedfileTest, bed12BlockCountMismatchSkipsWhenLenient) {
+    fs::path invalid_blocks = test_data_dir / "test_invalid_blocks.bed";
+
+    gio::bed_reader_options opts{.skip_invalid_lines = true};
+    gio::bed_reader reader(invalid_blocks, opts);
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+
+    // Invalid record skipped, no valid records in file
+    EXPECT_EQ(entries.size(), 0);
+}
+
+TEST_F(bedfileTest, bed12BlockStartOutsideIntervalThrows) {
+    // blockStarts=[0,1500] with interval length=1000 — blockStart outside bounds
+    fs::path invalid_bounds = test_data_dir / "test_invalid_block_bounds.bed";
+
+    gio::bed_reader reader(invalid_bounds);
+
+    std::vector<gio::bed_entry> entries;
+    EXPECT_THROW({
+        for (const auto& entry : reader) {
+            entries.push_back(entry);
+        }
+    }, std::runtime_error);
+}
