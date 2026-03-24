@@ -253,3 +253,53 @@ TEST(numericTest, serializeToFailedStream) {
     ss.setstate(std::ios::failbit);
     EXPECT_THROW(n.serialize(ss), std::runtime_error);
 }
+
+// =============================================================================
+// Edge case: INT_MIN / INT_MAX boundary values
+// =============================================================================
+
+TEST(numericTest, intMinValue) {
+    gdt::numeric n(std::numeric_limits<int>::min());
+    EXPECT_EQ(n.get_value(), std::numeric_limits<int>::min());
+}
+
+TEST(numericTest, intMaxValue) {
+    gdt::numeric n(std::numeric_limits<int>::max());
+    EXPECT_EQ(n.get_value(), std::numeric_limits<int>::max());
+}
+
+TEST(numericTest, intMinMaxOverlap) {
+    gdt::numeric nmin(std::numeric_limits<int>::min());
+    gdt::numeric nmax(std::numeric_limits<int>::max());
+
+    EXPECT_FALSE(gdt::numeric::overlaps(nmin, nmax));
+    EXPECT_TRUE(gdt::numeric::overlaps(nmin, nmin));
+    EXPECT_TRUE(gdt::numeric::overlaps(nmax, nmax));
+}
+
+TEST(numericTest, intMinMaxAggregate) {
+    gdt::numeric nmin(std::numeric_limits<int>::min());
+    gdt::numeric nmax(std::numeric_limits<int>::max());
+
+    gdt::numeric result = gdt::numeric::aggregate(nmin, nmax);
+    EXPECT_EQ(result.get_value(), std::numeric_limits<int>::max());
+}
+
+TEST(numericTest, intMinMaxComparison) {
+    gdt::numeric nmin(std::numeric_limits<int>::min());
+    gdt::numeric nmax(std::numeric_limits<int>::max());
+    gdt::numeric zero(0);
+
+    EXPECT_TRUE(nmin < zero);
+    EXPECT_TRUE(zero < nmax);
+    EXPECT_TRUE(nmin < nmax);
+    EXPECT_TRUE(nmax > nmin);
+}
+
+TEST(numericTest, defaultOverlapsWithIntMin) {
+    // Default value is INT_MIN
+    gdt::numeric def;
+    gdt::numeric nmin(std::numeric_limits<int>::min());
+
+    EXPECT_TRUE(gdt::numeric::overlaps(def, nmin));
+}
