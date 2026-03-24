@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Grove test fixture isolation documentation**: Documented that `grove_test_base` is safe without `SetUp()`/`TearDown()` — GoogleTest creates a fresh fixture instance per `TYPED_TEST_P`, and no singleton dependencies exist. ([#181](https://github.com/genogrove/genogrove/issues/181), [#259](https://github.com/genogrove/genogrove/pull/259))
+
 ### Refactored
 - **`set_root_nodes()` made private**: Moved from public to private access to prevent misuse — the method performs a full internal reset and has no valid user-facing use case. ([#253](https://github.com/genogrove/genogrove/issues/253), [#254](https://github.com/genogrove/genogrove/pull/254))
 
