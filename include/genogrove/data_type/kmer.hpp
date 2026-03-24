@@ -67,6 +67,8 @@ namespace genogrove::data_type {
      */
     class kmer {
         public:
+            static constexpr uint8_t BASE_MASK = 0x03;
+
             /**
              * @brief Default constructor creating an empty k-mer (k=0).
              */
@@ -238,7 +240,7 @@ namespace genogrove::data_type {
              */
             static constexpr char decode_base(uint8_t encoding) {
                 constexpr char bases[] = {'A', 'C', 'G', 'T'};
-                return bases[encoding & 0x03];
+                return bases[encoding & BASE_MASK];
             }
 
             /**

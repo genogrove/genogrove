@@ -776,7 +776,7 @@ class grove {
      * @return Midpoint index for balanced splits during regular insertion
      */
     int default_mid() const noexcept {
-        return (this->order + 2 - 1) / 2;
+        return (this->order + 1) / 2;
     }
 
     /**

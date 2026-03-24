@@ -2,6 +2,8 @@
 
 namespace subcalls {
 
+static constexpr const char* DEFAULT_TREE_ORDER = "3";
+
 cxxopts::Options index::parse_args(int argc, char** argv) {
     cxxopts::Options options("genogrove index", "index an interval file");
     options.add_options()
@@ -10,7 +12,7 @@ cxxopts::Options index::parse_args(int argc, char** argv) {
             ("o,outputfile", "Write the index to the specified file",
                     cxxopts::value<std::string>())
             ("k,order", "The order of the tree",
-                    cxxopts::value<int>()->default_value("3"))
+                    cxxopts::value<int>()->default_value(DEFAULT_TREE_ORDER))
             ("s,sorted", "Interval in the input file are sorted",
                     cxxopts::value<bool>()->default_value("false"))
             ("t,timed", "Measure the time taken for indexing",

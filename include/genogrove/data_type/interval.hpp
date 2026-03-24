@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -56,10 +57,12 @@ namespace genogrove::data_type {
      */
     class interval {
         public:
+            static constexpr size_t INVALID_POSITION = std::numeric_limits<size_t>::max();
+
             /**
              * @brief Default constructor creating an uninitialized interval.
              */
-            constexpr interval() : start(std::string::npos), end(std::string::npos) {}
+            constexpr interval() : start(INVALID_POSITION), end(INVALID_POSITION) {}
 
             /**
              * @brief Construct an interval with specified start and end positions.

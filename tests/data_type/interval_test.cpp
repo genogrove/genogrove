@@ -27,8 +27,8 @@ TEST(intervalTest, keyTypeBaseConcept) {
 
 TEST(intervalTest, defaultConstructor) {
     gdt::interval intvl;
-    EXPECT_EQ(intvl.get_start(), std::string::npos);
-    EXPECT_EQ(intvl.get_end(), std::string::npos);
+    EXPECT_EQ(intvl.get_start(), gdt::interval::INVALID_POSITION);
+    EXPECT_EQ(intvl.get_end(), gdt::interval::INVALID_POSITION);
 }
 
 TEST(intervalTest, parameterizedConstructor) {
@@ -319,8 +319,8 @@ TEST(intervalTest, serializationDefault) {
     gdt::interval restored = gdt::interval::deserialize(ss);
 
     EXPECT_EQ(original, restored);
-    EXPECT_EQ(restored.get_start(), std::string::npos);
-    EXPECT_EQ(restored.get_end(), std::string::npos);
+    EXPECT_EQ(restored.get_start(), gdt::interval::INVALID_POSITION);
+    EXPECT_EQ(restored.get_end(), gdt::interval::INVALID_POSITION);
 }
 
 TEST(intervalTest, serializationMultiple) {

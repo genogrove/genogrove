@@ -6,6 +6,9 @@
 namespace gio = genogrove::io;
 
 namespace subcalls {
+
+static constexpr const char* DEFAULT_TREE_ORDER = "3";
+
 cxxopts::Options intersect::parse_args(int argc, char** argv) {
     cxxopts::Options options("intersect", "Search for interval overlaps in the index");
     options.add_options()
@@ -15,8 +18,8 @@ cxxopts::Options intersect::parse_args(int argc, char** argv) {
                     cxxopts::value<std::string>())
             ("o,outputfile", "Write the index to the specified file",
              cxxopts::value<std::string>()->default_value("stdout"))
-            ("k,order", "The order of the tree (default: 3)",
-             cxxopts::value<int>()->default_value("3"))
+            ("k,order", "The order of the tree",
+             cxxopts::value<int>()->default_value(DEFAULT_TREE_ORDER))
             ("h,help", "Print the help")
             ;
     options.parse_positional({"queryfile", "targetfile"});

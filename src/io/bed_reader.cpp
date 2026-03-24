@@ -17,6 +17,9 @@ namespace ggu = genogrove::utility;
 
 namespace genogrove::io {
 
+    static constexpr int MAX_BED_SCORE = 1000;
+    static constexpr size_t MAX_RGB_VALUE = 255;
+
     // Helper function to parse comma-separated integers into a vector
     // Returns nullopt on parse error to distinguish from genuinely empty input
     static std::optional<std::vector<size_t>> parse_csv(const std::string& str) {
@@ -123,7 +126,7 @@ namespace genogrove::io {
             return false;
         }
 
-        if (score < 0 || score > 1000) {
+        if (score < 0 || score > MAX_BED_SCORE) {
             error_message = "Invalid score (must be 0-1000) at line ";
             error_message += std::to_string(line_num);
             return false;
@@ -204,7 +207,7 @@ namespace genogrove::io {
         }
 
         if (rgb_values.size() == 3) {
-            if (rgb_values[0] <= 255 && rgb_values[1] <= 255 && rgb_values[2] <= 255) {
+            if (rgb_values[0] <= MAX_RGB_VALUE && rgb_values[1] <= MAX_RGB_VALUE && rgb_values[2] <= MAX_RGB_VALUE) {
                 entry.item_rgb = rgb_color(rgb_values[0], rgb_values[1], rgb_values[2]);
                 return true;
             }
