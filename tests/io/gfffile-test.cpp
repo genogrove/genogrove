@@ -89,7 +89,7 @@ TEST_F(gfffileTest, readGFF3Format) {
     EXPECT_EQ(entries[0].seqid, "chr1");
     EXPECT_EQ(entries[0].source, "HAVANA");
     EXPECT_EQ(entries[0].type, "gene");
-    EXPECT_EQ(entries[0].start, 999);  // 1000 in GFF is 999 in 0-based
+    EXPECT_EQ(entries[0].start, 1000);  // native GFF 1-based inclusive
     EXPECT_EQ(entries[0].end, 2000);
     EXPECT_FALSE(entries[0].score.has_value());
     ASSERT_TRUE(entries[0].strand.has_value());
@@ -102,7 +102,7 @@ TEST_F(gfffileTest, readGFF3Format) {
     // Second entry - exon
     EXPECT_EQ(entries[1].seqid, "chr1");
     EXPECT_EQ(entries[1].type, "exon");
-    EXPECT_EQ(entries[1].start, 999);
+    EXPECT_EQ(entries[1].start, 1000);
     EXPECT_EQ(entries[1].end, 1500);
     EXPECT_EQ(entries[1].attributes.at("ID"), "exon1");
     EXPECT_EQ(entries[1].attributes.at("Parent"), "gene1");
@@ -141,7 +141,7 @@ TEST_F(gfffileTest, readGTFFormat) {
     EXPECT_EQ(entries[0].seqid, "chr1");
     EXPECT_EQ(entries[0].source, "HAVANA");
     EXPECT_EQ(entries[0].type, "gene");
-    EXPECT_EQ(entries[0].start, 999);
+    EXPECT_EQ(entries[0].start, 1000);
     EXPECT_EQ(entries[0].end, 2000);
     EXPECT_EQ(entries[0].attributes.at("gene_id"), "ENSG00000001");
     EXPECT_EQ(entries[0].attributes.at("gene_name"), "TEST1");
@@ -470,7 +470,7 @@ TEST_F(gfffileTest, readGzippedGFF3Format) {
     // First entry
     EXPECT_EQ(entries[0].seqid, "chr1");
     EXPECT_EQ(entries[0].type, "gene");
-    EXPECT_EQ(entries[0].start, 999);
+    EXPECT_EQ(entries[0].start, 1000);
     EXPECT_EQ(entries[0].end, 2000);
     EXPECT_EQ(entries[0].attributes.at("ID"), "gene1");
 
