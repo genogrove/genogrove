@@ -173,3 +173,72 @@ TEST(queryResultPreconditionTest, addKeyRejectsNull) {
     gdt::query_result<gdt::interval, int> qr(gdt::interval{10, 20});
     EXPECT_THROW(qr.add_key(nullptr), std::invalid_argument);
 }
+
+// =============================================================================
+// Grove edge cases
+// =============================================================================
+
+TEST(groveEdgeCaseTest, singleElementInsertAndQuery) {
+    gst::grove<gdt::interval, int> g(10);
+    g.insert_data("chr1", gdt::interval{10, 20}, 42);
+
+    auto result = g.intersect(gdt::interval{15, 15}, "chr1");
+    ASSERT_EQ(result.get_keys().size(), 1);
+    EXPECT_EQ(result.get_keys()[0]->get_data(), 42);
+}
+
+TEST(groveEdgeCaseTest, singleElementNoOverlap) {
+    gst::grove<gdt::interval, int> g(10);
+    g.insert_data("chr1", gdt::interval{10, 20}, 1);
+
+    auto result = g.intersect(gdt::interval{30, 40}, "chr1");
+    EXPECT_EQ(result.get_keys().size(), 0);
+}
+
+TEST(groveEdgeCaseTest, duplicateKeyInsertion) {
+    gst::grove<gdt::interval, int> g(10);
+    g.insert_data("chr1", gdt::interval{10, 20}, 1);
+    g.insert_data("chr1", gdt::interval{10, 20}, 2);
+
+    auto result = g.intersect(gdt::interval{10, 20}, "chr1");
+    EXPECT_EQ(result.get_keys().size(), 2);
+}
+
+TEST(groveEdgeCaseTest, orderTwoFunctional) {
+    // Minimum functional order — forces splits on every other insertion
+    gst::grove<gdt::interval, int> g(2);
+
+    for (int i = 0; i < 10; ++i) {
+        size_t start = i * 100;
+        g.insert_data("chr1", gdt::interval{start, start + 50}, i);
+    }
+
+    // Query should find all 10 keys
+    auto result = g.intersect(gdt::interval{0, 950}, "chr1");
+    EXPECT_EQ(result.get_keys().size(), 10);
+}
+
+TEST(groveEdgeCaseTest, orderTwoSortedInsert) {
+    gst::grove<gdt::interval, int> g(2);
+
+    for (int i = 0; i < 10; ++i) {
+        size_t start = i * 100;
+        g.insert_data("chr1", gdt::interval{start, start + 50}, i, gst::sorted);
+    }
+
+    auto result = g.intersect(gdt::interval{0, 950}, "chr1");
+    EXPECT_EQ(result.get_keys().size(), 10);
+}
+
+TEST(groveEdgeCaseTest, keysEqualToOrder) {
+    // Insert exactly (order - 1) keys — fills one leaf exactly without splitting
+    gst::grove<gdt::interval, int> g(5);
+
+    for (int i = 0; i < 4; ++i) {
+        size_t start = i * 100;
+        g.insert_data("chr1", gdt::interval{start, start + 50}, i);
+    }
+
+    auto result = g.intersect(gdt::interval{0, 350}, "chr1");
+    EXPECT_EQ(result.get_keys().size(), 4);
+}

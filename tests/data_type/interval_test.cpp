@@ -372,3 +372,86 @@ TEST(intervalTest, serializeToFailedStream) {
     ss.setstate(std::ios::failbit);
     EXPECT_THROW(intvl.serialize(ss), std::runtime_error);
 }
+
+// =============================================================================
+// Edge case: zero-length (point) intervals
+// =============================================================================
+
+TEST(intervalTest, zeroLengthAtPositionZero) {
+    gdt::interval point(0, 0);
+    EXPECT_EQ(point.get_start(), 0);
+    EXPECT_EQ(point.get_end(), 0);
+    EXPECT_EQ(point.to_string(), "[0,0]");
+}
+
+TEST(intervalTest, zeroLengthOverlapWithContainingInterval) {
+    gdt::interval point(15, 15);
+    gdt::interval range(10, 20);
+
+    EXPECT_TRUE(gdt::interval::overlaps(point, range));
+    EXPECT_TRUE(gdt::interval::overlaps(range, point));
+}
+
+TEST(intervalTest, zeroLengthOverlapWithDisjointInterval) {
+    gdt::interval point(5, 5);
+    gdt::interval range(10, 20);
+
+    EXPECT_FALSE(gdt::interval::overlaps(point, range));
+    EXPECT_FALSE(gdt::interval::overlaps(range, point));
+}
+
+TEST(intervalTest, zeroLengthOverlapAtBoundary) {
+    gdt::interval point(10, 10);
+    gdt::interval range(10, 20);
+
+    // Closed intervals: point at start of range overlaps
+    EXPECT_TRUE(gdt::interval::overlaps(point, range));
+    EXPECT_TRUE(gdt::interval::overlaps(range, point));
+}
+
+TEST(intervalTest, twoZeroLengthOverlapSamePosition) {
+    gdt::interval p1(10, 10);
+    gdt::interval p2(10, 10);
+    gdt::interval p3(11, 11);
+
+    EXPECT_TRUE(gdt::interval::overlaps(p1, p2));
+    EXPECT_FALSE(gdt::interval::overlaps(p1, p3));
+}
+
+TEST(intervalTest, zeroLengthAggregate) {
+    gdt::interval point(10, 10);
+    gdt::interval range(20, 30);
+
+    gdt::interval result = gdt::interval::aggregate(point, range);
+    EXPECT_EQ(result.get_start(), 10);
+    EXPECT_EQ(result.get_end(), 30);
+}
+
+// =============================================================================
+// Edge case: large coordinate values
+// =============================================================================
+
+TEST(intervalTest, largeCoordinateValues) {
+    size_t large = std::numeric_limits<size_t>::max() - 1;
+    gdt::interval intvl(large - 100, large);
+    EXPECT_EQ(intvl.get_start(), large - 100);
+    EXPECT_EQ(intvl.get_end(), large);
+}
+
+TEST(intervalTest, largeCoordinateOverlap) {
+    size_t large = std::numeric_limits<size_t>::max() - 1;
+    gdt::interval a(large - 100, large);
+    gdt::interval b(large - 50, large);
+
+    EXPECT_TRUE(gdt::interval::overlaps(a, b));
+}
+
+TEST(intervalTest, largeCoordinateAggregate) {
+    size_t large = std::numeric_limits<size_t>::max() - 1;
+    gdt::interval a(0, 100);
+    gdt::interval b(large - 100, large);
+
+    gdt::interval result = gdt::interval::aggregate(a, b);
+    EXPECT_EQ(result.get_start(), 0);
+    EXPECT_EQ(result.get_end(), large);
+}
