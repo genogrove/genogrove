@@ -1093,3 +1093,4 @@ TEST_F(BamReaderTest, BamFileIterator) {
     ASSERT_NE(it, end);
     EXPECT_EQ(it->qname, "read002");
 }
+

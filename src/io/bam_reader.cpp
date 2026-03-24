@@ -163,13 +163,7 @@ namespace genogrove::io {
                 continue;
             }
 
-            // Parse the alignment into sam_entry
-            if (!parse_alignment(alignment_, entry)) {
-                error_message_ = "Failed to parse alignment record at record " + std::to_string(record_num_);
-                if (options_.skip_invalid_records) continue;
-                throw std::runtime_error(error_message_);
-            }
-
+            parse_alignment(alignment_, entry);
             return true;
         }
 

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Refactored
+- **Remove `skip_invalid_records` from `bam_reader_options`**: The option was dead code — htslib handles malformed records by either rejecting them (unrecoverable I/O error) or silently fixing them up. Simplified `read_next()` by removing the unreachable `parse_alignment()` failure path. ([#250](https://github.com/genogrove/genogrove/issues/250), [#256](https://github.com/genogrove/genogrove/pull/256))
 - **`set_root_nodes()` made private**: Moved from public to private access to prevent misuse — the method performs a full internal reset and has no valid user-facing use case. ([#253](https://github.com/genogrove/genogrove/issues/253), [#254](https://github.com/genogrove/genogrove/pull/254))
 
 ### Added
