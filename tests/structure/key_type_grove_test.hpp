@@ -135,7 +135,10 @@ struct grove_test_traits {
 template <typename key_type, typename data_type = int, typename edge_data_type = void>
 class grove_test_base : public ::testing::Test {
 protected:
-    // Default grove with order 10
+    // GoogleTest creates a fresh fixture instance per TYPED_TEST_P, so this
+    // member is reconstructed each time — no cross-test state leakage.
+    // No SetUp/TearDown needed: grove has no singleton dependencies, and
+    // registry is not used in these tests.
     gst::grove<key_type, data_type, edge_data_type> grove{10};
 
     /**
