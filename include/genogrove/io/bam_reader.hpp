@@ -249,8 +249,8 @@ namespace genogrove::io {
     struct sam_entry {
         std::string qname;              ///< Query template NAME (read name)
         std::string chrom;              ///< Reference sequence name (RNAME)
-        size_t start = 0;              ///< 0-based start position (from POS)
-        size_t end = 0;                ///< 0-based exclusive end position (from POS + CIGAR)
+        size_t start = 0;              ///< 0-based start position (htslib-native, from POS)
+        size_t end = 0;                ///< 0-based exclusive end position (htslib-native, from POS + CIGAR)
         alignment_flags flags;          ///< Bitwise FLAG
         uint8_t mapq;                   ///< Mapping quality (0-255)
         cigar_string cigar;             ///< CIGAR string (alignment operations)

@@ -35,8 +35,8 @@ namespace genogrove::io {
         std::string seqid;              // chromosome/contig name
         std::string source;             // source of the feature
         std::string type;               // feature type (gene, exon, CDS, etc.)
-        size_t start = 0;              // 0-based start position (converted from 1-based GFF)
-        size_t end = 0;                // 0-based exclusive end position
+        size_t start = 0;              // 1-based inclusive start position (native GFF)
+        size_t end = 0;                // 1-based inclusive end position (native GFF)
         std::optional<double> score;    // score (if not '.')
         std::optional<char> strand;     // strand (+, -, ., or ?)
         std::optional<int> phase;       // phase for CDS features (0, 1, or 2)

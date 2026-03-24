@@ -89,7 +89,7 @@ TEST_F(gfffileTest, readGFF3Format) {
     EXPECT_EQ(entries[0].seqid, "chr1");
     EXPECT_EQ(entries[0].source, "HAVANA");
     EXPECT_EQ(entries[0].type, "gene");
-    EXPECT_EQ(entries[0].start, 999);  // 1000 in GFF is 999 in 0-based
+    EXPECT_EQ(entries[0].start, 1000);  // native GFF 1-based inclusive
     EXPECT_EQ(entries[0].end, 2000);
     EXPECT_FALSE(entries[0].score.has_value());
     ASSERT_TRUE(entries[0].strand.has_value());
@@ -102,7 +102,7 @@ TEST_F(gfffileTest, readGFF3Format) {
     // Second entry - exon
     EXPECT_EQ(entries[1].seqid, "chr1");
     EXPECT_EQ(entries[1].type, "exon");
-    EXPECT_EQ(entries[1].start, 999);
+    EXPECT_EQ(entries[1].start, 1000);
     EXPECT_EQ(entries[1].end, 1500);
     EXPECT_EQ(entries[1].attributes.at("ID"), "exon1");
     EXPECT_EQ(entries[1].attributes.at("Parent"), "gene1");
@@ -141,7 +141,7 @@ TEST_F(gfffileTest, readGTFFormat) {
     EXPECT_EQ(entries[0].seqid, "chr1");
     EXPECT_EQ(entries[0].source, "HAVANA");
     EXPECT_EQ(entries[0].type, "gene");
-    EXPECT_EQ(entries[0].start, 999);
+    EXPECT_EQ(entries[0].start, 1000);
     EXPECT_EQ(entries[0].end, 2000);
     EXPECT_EQ(entries[0].attributes.at("gene_id"), "ENSG00000001");
     EXPECT_EQ(entries[0].attributes.at("gene_name"), "TEST1");
@@ -370,14 +370,14 @@ TEST_F(gfffileTest, validationInvalidCoordinates) {
 }
 
 TEST_F(gfffileTest, validationInvalidCoordinateRange) {
-    // Create a temporary file with start >= end
+    // Create a temporary file with start > end
     fs::path temp_file = test_data_dir / "temp_invalid_range.gff";
     std::ofstream out(temp_file);
     out << "# Comment line\n";
     out << "chr1\tHAVANA\tgene\t2000\t1000\t.\t+\t.\tID=gene1\n";  // start > end
     out.close();
 
-    // Constructor should throw because start >= end
+    // Constructor should throw because start > end
     EXPECT_THROW({
         gio::gff_reader reader(temp_file);
     }, std::runtime_error);
@@ -438,11 +438,10 @@ TEST_F(gfffileTest, intervalObjectCreation) {
 
     ASSERT_TRUE(reader.read_next(entry));
 
-    // Verify interval object is properly created
-    // GFF uses 1-based inclusive coordinates, converted to 0-based half-open
-    EXPECT_EQ(entry.start, 999);   // 1000 - 1
-    EXPECT_EQ(entry.end, 2000);    // 2000 stays the same
-    EXPECT_EQ(entry.end - entry.start, 1001);
+    // Coordinates stored as native GFF (1-based inclusive)
+    EXPECT_EQ(entry.start, 1000);
+    EXPECT_EQ(entry.end, 2000);
+    EXPECT_EQ(entry.end - entry.start + 1, 1001);  // inclusive length
 }
 
 // ==========================================
@@ -471,7 +470,7 @@ TEST_F(gfffileTest, readGzippedGFF3Format) {
     // First entry
     EXPECT_EQ(entries[0].seqid, "chr1");
     EXPECT_EQ(entries[0].type, "gene");
-    EXPECT_EQ(entries[0].start, 999);
+    EXPECT_EQ(entries[0].start, 1000);
     EXPECT_EQ(entries[0].end, 2000);
     EXPECT_EQ(entries[0].attributes.at("ID"), "gene1");
 

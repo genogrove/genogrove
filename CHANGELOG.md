@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Edge case tests for key types and grove operations**: Zero-length interval overlaps/aggregation, large `size_t` coordinates, `INT_MIN`/`INT_MAX` numeric operations, single-element grove queries, duplicate key insertion, and order=2 grove stress tests. ([#179](https://github.com/genogrove/genogrove/issues/179), [#258](https://github.com/genogrove/genogrove/pull/258))
 
 ### Changed
+- **GFF reader stores native 1-based inclusive coordinates** (**breaking**): `gff_entry.start` and `gff_entry.end` now contain coordinates as they appear in the GFF file (1-based inclusive), instead of silently converting to 0-based half-open. Conversion to grove intervals simplifies to `gdt::interval(entry.start, entry.end)`. ([#257](https://github.com/genogrove/genogrove/issues/257), [#261](https://github.com/genogrove/genogrove/pull/261))
 - **`get_root_nodes()` returns by const reference**: Eliminates an unnecessary map copy on every call, including inside the all-index `intersect()` overload. ([#146](https://github.com/genogrove/genogrove/issues/146), [#255](https://github.com/genogrove/genogrove/pull/255))
 
 ## [0.18.0] - 2026-03-20

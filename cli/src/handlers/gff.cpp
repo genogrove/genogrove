@@ -13,7 +13,7 @@ void grove_insert(
 
     try {
         for (const auto& entry : reader) {
-            grove.insert_data(entry.seqid, gdt::interval(entry.start, entry.end - 1), entry);
+            grove.insert_data(entry.seqid, gdt::interval(entry.start, entry.end), entry);
         }
     } catch (const std::exception& e) {
         std::cerr << "Error reading GFF file: " << e.what() << std::endl;
@@ -30,7 +30,7 @@ void grove_intersect(
 
     try {
         for (const auto& query_entry : reader) {
-            gdt::interval query(query_entry.start, query_entry.end - 1);
+            gdt::interval query(query_entry.start, query_entry.end);
             auto results = grove.intersect(query, query_entry.seqid);
 
             for(auto* result : results.get_keys()) {
