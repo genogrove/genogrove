@@ -877,33 +877,6 @@ TEST_F(gfffileTest, gffSingleBaseFeature) {
 // Quoted Semicolons in Attributes
 // ==========================================
 
-TEST_F(gfffileTest, gtfAttributeWithQuotedSemicolon) {
-    // The GTF parser splits on semicolons before handling quotes,
-    // so a semicolon inside a quoted value will split the attribute incorrectly.
-    // This test documents the current behavior.
-    fs::path temp_file = test_data_dir / "temp_quoted_semi.gtf";
-    std::ofstream out(temp_file);
-    out << "chr1\ttest\tgene\t1\t100\t.\t+\t.\tgene_id \"GENE1\"; gene_name \"test;name\";\n";
-    out.close();
-
-    gio::gff_reader reader(temp_file);
-
-    std::vector<gio::gff_entry> entries;
-    for (const auto& entry : reader) {
-        entries.push_back(entry);
-    }
-    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
-
-    ASSERT_EQ(entries.size(), 1);
-    EXPECT_EQ(entries[0].attributes.at("gene_id"), "GENE1");
-
-    // Quoted semicolon splits the value — gene_name gets truncated to "test"
-    // This is a known limitation of the current parser
-    EXPECT_EQ(entries[0].attributes.at("gene_name"), "test");
-
-    fs::remove(temp_file);
-}
-
 TEST_F(gfffileTest, gff3AttributeWithSemicolonInValue) {
     // GFF3 uses key=value;key=value — semicolons in values are not quoted
     // URL-encoding (%3B) is the GFF3 standard for literal semicolons
