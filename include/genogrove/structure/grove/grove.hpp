@@ -15,6 +15,7 @@
 #include <deque>
 #include <algorithm>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <queue>
 
@@ -798,7 +799,7 @@ class grove {
     void split_node(node<key_type, data_type>* parent, int index,
                     std::string_view index_name, int mid) {
         node<key_type, data_type>* child = parent->get_child(index);
-        node<key_type, data_type>* new_child = new node<key_type, data_type>(this->order);
+        auto new_child = std::make_unique<node<key_type, data_type>>(this->order);
         new_child->set_parent(parent);
 
         new_child->set_is_leaf(child->get_is_leaf());
@@ -813,16 +814,17 @@ class grove {
             gdt::key<key_type, data_type> parent_key{child->calc_parent_key()};
             auto* parent_key_ptr = allocate_key(parent_key);
             parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
-            parent->get_children().insert(parent->get_children().begin() + index + 1, new_child);
+            parent->get_children().insert(parent->get_children().begin() + index + 1, new_child.get());
+            auto* released = new_child.release();
 
             // Link leaf chain
-            new_child->set_next(child->get_next());
-            child->set_next(new_child);
+            released->set_next(child->get_next());
+            child->set_next(released);
 
             // Update rightmost node cache if the split leaf was the rightmost (O(1) lookup)
             if (auto it = this->rightmost_nodes.find(index_name);
                 it != this->rightmost_nodes.end() && it->second == child) {
-                it->second = new_child;
+                it->second = released;
             }
         } else {
             // === INTERNAL NODE SPLIT ===
@@ -851,12 +853,13 @@ class grove {
 
             // Update parent pointers for moved children
             for (auto* moved_child : new_child->get_children()) {
-                moved_child->set_parent(new_child);
+                moved_child->set_parent(new_child.get());
             }
 
             // Insert separator and new child into parent
             parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
-            parent->get_children().insert(parent->get_children().begin() + index + 1, new_child);
+            parent->get_children().insert(parent->get_children().begin() + index + 1, new_child.get());
+            new_child.release();
         }
     }
 
@@ -1197,7 +1200,8 @@ class grove {
         }
 
         // Step 1: Create leaf nodes from sorted data
-        std::vector<node<key_type, data_type>*> leaves;
+        // RAII: unique_ptrs own nodes until the root is returned
+        std::vector<std::unique_ptr<node<key_type, data_type>>> leaves;
         inserted_keys.reserve(data.size());
 
         // Fill factor: use (order - 1) keys per node for optimal space utilization
@@ -1206,7 +1210,7 @@ class grove {
 
         size_t data_idx = 0;
         while (data_idx < data.size()) {
-            auto* leaf = new node<key_type, data_type>(this->order);
+            auto leaf = std::make_unique<node<key_type, data_type>>(this->order);
             leaf->set_is_leaf(true);
 
             // Fill this leaf node with up to keys_per_leaf keys
@@ -1227,44 +1231,45 @@ class grove {
                 }
             }
 
-            leaves.push_back(leaf);
+            leaves.push_back(std::move(leaf));
         }
 
         // Step 2: Link leaf nodes together for range queries
         for (size_t i = 0; i < leaves.size() - 1; ++i) {
-            leaves[i]->set_next(leaves[i + 1]);
+            leaves[i]->set_next(leaves[i + 1].get());
         }
 
-        // Set rightmost leaf for this index
-        if (!leaves.empty()) {
-            this->rightmost_nodes[std::string(index)] = leaves.back();
-        }
+        // Remember rightmost leaf — will be published only after the build succeeds
+        auto* rightmost_leaf = leaves.back().get();
 
         // Step 3: Build internal layers bottom-up
-        std::vector<node<key_type, data_type>*> current_layer = leaves;
+        // Transfer ownership: leaves become current_layer
+        std::vector<std::unique_ptr<node<key_type, data_type>>> current_layer = std::move(leaves);
 
         while (current_layer.size() > 1) {
-            std::vector<node<key_type, data_type>*> parent_layer;
+            std::vector<std::unique_ptr<node<key_type, data_type>>> parent_layer;
 
             // Each internal node can have up to 'order' children
             const int children_per_node = this->order;
 
             size_t child_idx = 0;
             while (child_idx < current_layer.size()) {
-                auto* parent = new node<key_type, data_type>(this->order);
+                auto parent = std::make_unique<node<key_type, data_type>>(this->order);
                 parent->set_is_leaf(false);
 
                 // Add up to 'order' children to this parent
                 size_t children_in_this_parent = 0;
                 while (children_in_this_parent < children_per_node && child_idx < current_layer.size()) {
-                    auto* child = current_layer[child_idx];
-                    parent->get_children().push_back(child);
-                    child->set_parent(parent);
+                    // Attach child to parent — push_back first, release after (exception-safe)
+                    parent->get_children().push_back(current_layer[child_idx].get());
+                    current_layer[child_idx].release();
+                    auto* child = parent->get_children().back();
+                    child->set_parent(parent.get());
 
-                    // Add separator key for all children except the last
+                    // Add separator key for all children except the first
                     if (children_in_this_parent > 0) {
                         // The separator key is the aggregate of the previous child
-                        key_type separator = current_layer[child_idx - 1]->calc_parent_key();
+                        key_type separator = parent->get_children()[children_in_this_parent - 1]->calc_parent_key();
                         gdt::key<key_type, data_type> sep_key(separator);
                         auto* sep_key_ptr = allocate_key(sep_key);
                         parent->get_keys().push_back(sep_key_ptr);
@@ -1274,14 +1279,15 @@ class grove {
                     ++child_idx;
                 }
 
-                parent_layer.push_back(parent);
+                parent_layer.push_back(std::move(parent));
             }
 
-            current_layer = parent_layer;
+            current_layer = std::move(parent_layer);
         }
 
-        // The last remaining node is the root
-        return {current_layer[0], inserted_keys};
+        // Build succeeded — publish rightmost leaf and release root to caller
+        this->rightmost_nodes[std::string(index)] = rightmost_leaf;
+        return {current_layer[0].release(), std::move(inserted_keys)};
     }
 
 
