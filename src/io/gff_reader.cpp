@@ -154,7 +154,7 @@ namespace genogrove::io {
         // Detect format: GFF3 uses '=' and ';', GTF uses ' "' and '";'
         if (attr_string.find(" \"") != std::string::npos) {
             // GTF format: key "value"; key "value";
-            while (auto token_sv = ggu::next_field(sv, pos, ';')) {
+            while (auto token_sv = ggu::next_gtf_field(sv, pos)) {
                 // Trim whitespace
                 auto trimmed = *token_sv;
                 if (auto p = trimmed.find_first_not_of(" \t"); p != std::string_view::npos) {

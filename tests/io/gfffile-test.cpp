@@ -901,3 +901,31 @@ TEST_F(gfffileTest, gff3AttributeWithSemicolonInValue) {
 
     fs::remove(temp_file);
 }
+
+// ==========================================
+// GTF Quoted Semicolons in Attribute Values
+// ==========================================
+
+TEST_F(gfffileTest, gtfAttributeWithQuotedSemicolon) {
+    // GTF values are double-quoted; semicolons inside quotes are literal
+    fs::path path = test_data_dir / "test_quoted_semicolon.gtf";
+    gio::gff_reader reader(path);
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    ASSERT_EQ(entries.size(), 2);
+
+    // First entry: gene_name contains a semicolon
+    EXPECT_EQ(entries[0].attributes.at("gene_id"), "ENSG00000001");
+    EXPECT_EQ(entries[0].attributes.at("gene_name"), "test;name");
+    EXPECT_EQ(entries[0].attributes.at("gene_biotype"), "protein_coding");
+
+    // Second entry: note contains multiple semicolons
+    EXPECT_EQ(entries[1].attributes.at("gene_id"), "ENSG00000002");
+    EXPECT_EQ(entries[1].attributes.at("gene_name"), "normal");
+    EXPECT_EQ(entries[1].attributes.at("note"), "a;b;c");
+}

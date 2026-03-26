@@ -1,0 +1,2 @@
+chr1	HAVANA	gene	1000	2000	.	+	.	gene_id "ENSG00000001"; gene_name "test;name"; gene_biotype "protein_coding";
+chr1	HAVANA	exon	1000	1500	.	+	.	gene_id "ENSG00000002"; gene_name "normal"; note "a;b;c";
