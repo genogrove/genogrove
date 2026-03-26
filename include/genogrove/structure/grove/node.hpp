@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <deque>
 #include <istream>
+#include <memory>
 #include <ostream>
 #include <ranges>
 #include <stdexcept>
@@ -462,20 +463,17 @@ template<typename key_type, typename data_type>
 node<key_type, data_type>* node<key_type, data_type>::deserialize(
         std::istream& is, int order,
         std::deque<gdt::key<key_type, data_type>>& key_storage) {
-    // Create new node
-    auto* n = new node<key_type, data_type>(order);
+    auto n = std::make_unique<node<key_type, data_type>>(order);
 
     // Unpack is_leaf from high bit + key count from low 31 bits
     uint32_t packed;
     is.read(reinterpret_cast<char*>(&packed), sizeof(packed));
     if (!is) {
-        delete n;
         throw std::runtime_error("Failed to deserialize node: stream error reading packed header");
     }
     n->is_leaf = (packed & 0x80000000u) != 0;
     uint32_t num_keys = packed & 0x7FFFFFFFu;
     if (num_keys >= static_cast<uint32_t>(order)) {
-        delete n;
         throw std::runtime_error("Failed to deserialize node: num_keys exceeds order");
     }
 
@@ -498,23 +496,21 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize(
         uint32_t num_children;
         is.read(reinterpret_cast<char*>(&num_children), sizeof(num_children));
         if (!is) {
-            delete n;
             throw std::runtime_error("Failed to deserialize node: stream error reading num_children");
         }
         if (num_children > static_cast<uint32_t>(order)) {
-            delete n;
             throw std::runtime_error("Failed to deserialize node: num_children exceeds order");
         }
 
         n->children.reserve(num_children);
         for (uint32_t i = 0; i < num_children; ++i) {
             auto* child = node<key_type, data_type>::deserialize(is, order, key_storage);
-            child->parent = n;
+            child->parent = n.get();
             n->children.push_back(child);
         }
     }
 
-    return n;
+    return n.release();
 }
 
 } // namespace genogrove::structure
