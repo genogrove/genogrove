@@ -830,3 +830,74 @@ TEST_F(gfffileTest, validateGtfSkipsGff3Files) {
     EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
     EXPECT_FALSE(entries.empty());
 }
+
+// ==========================================
+// Coordinate Boundary Tests
+// ==========================================
+
+TEST_F(gfffileTest, gffStartOneBoundary) {
+    // GFF start=1 is the minimum valid 1-based coordinate
+    fs::path boundary_gff = test_data_dir / "test_boundary_coords.gff";
+    gio::gff_reader reader(boundary_gff);
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    ASSERT_EQ(entries.size(), 2);
+
+    // start=1 stored as native 1-based
+    EXPECT_EQ(entries[0].start, 1);
+    EXPECT_EQ(entries[0].end, 100);
+    EXPECT_EQ(entries[0].attributes.at("ID"), "gene_at_start");
+}
+
+TEST_F(gfffileTest, gffSingleBaseFeature) {
+    // GFF allows start == end for single-base features
+    fs::path boundary_gff = test_data_dir / "test_boundary_coords.gff";
+    gio::gff_reader reader(boundary_gff);
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    ASSERT_EQ(entries.size(), 2);
+
+    // Single-base feature: start == end
+    EXPECT_EQ(entries[1].start, 50);
+    EXPECT_EQ(entries[1].end, 50);
+    EXPECT_EQ(entries[1].attributes.at("ID"), "single_base");
+}
+
+// ==========================================
+// Quoted Semicolons in Attributes
+// ==========================================
+
+TEST_F(gfffileTest, gff3AttributeWithSemicolonInValue) {
+    // GFF3 uses key=value;key=value — semicolons in values are not quoted
+    // URL-encoding (%3B) is the GFF3 standard for literal semicolons
+    fs::path temp_file = test_data_dir / "temp_gff3_semi.gff";
+    std::ofstream out(temp_file);
+    out << "##gff-version 3\n";
+    out << "chr1\ttest\tgene\t1\t100\t.\t+\t.\tID=gene1;Note=first%3Bsecond\n";
+    out.close();
+
+    gio::gff_reader reader(temp_file);
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    ASSERT_EQ(entries.size(), 1);
+    EXPECT_EQ(entries[0].attributes.at("ID"), "gene1");
+    // URL-encoded semicolon is stored as-is (reader doesn't decode %3B)
+    EXPECT_EQ(entries[0].attributes.at("Note"), "first%3Bsecond");
+
+    fs::remove(temp_file);
+}
