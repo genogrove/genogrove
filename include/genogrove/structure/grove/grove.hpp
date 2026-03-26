@@ -813,9 +813,9 @@ class grove {
             // Parent separator = aggregate of left leaf's keys
             gdt::key<key_type, data_type> parent_key{child->calc_parent_key()};
             auto* parent_key_ptr = allocate_key(parent_key);
-            auto* released = new_child.release();
             parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
-            parent->get_children().insert(parent->get_children().begin() + index + 1, released);
+            parent->get_children().insert(parent->get_children().begin() + index + 1, new_child.get());
+            auto* released = new_child.release();
 
             // Link leaf chain
             released->set_next(child->get_next());
@@ -857,9 +857,9 @@ class grove {
             }
 
             // Insert separator and new child into parent
-            auto* released = new_child.release();
             parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
-            parent->get_children().insert(parent->get_children().begin() + index + 1, released);
+            parent->get_children().insert(parent->get_children().begin() + index + 1, new_child.get());
+            new_child.release();
         }
     }
 
@@ -1239,10 +1239,8 @@ class grove {
             leaves[i]->set_next(leaves[i + 1].get());
         }
 
-        // Set rightmost leaf for this index
-        if (!leaves.empty()) {
-            this->rightmost_nodes[std::string(index)] = leaves.back().get();
-        }
+        // Remember rightmost leaf — will be published only after the build succeeds
+        auto* rightmost_leaf = leaves.back().get();
 
         // Step 3: Build internal layers bottom-up
         // Transfer ownership: leaves become current_layer
@@ -1287,8 +1285,9 @@ class grove {
             current_layer = std::move(parent_layer);
         }
 
-        // The last remaining node is the root — release ownership to caller
-        return {current_layer[0].release(), inserted_keys};
+        // Build succeeded — publish rightmost leaf and release root to caller
+        this->rightmost_nodes[std::string(index)] = rightmost_leaf;
+        return {current_layer[0].release(), std::move(inserted_keys)};
     }
 
 

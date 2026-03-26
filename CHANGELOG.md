@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **GTF attribute parser incorrectly splits on semicolons inside quoted values**: `next_field(';')` tokenized without quote awareness, truncating values like `gene_name "test;name"`. Added quote-aware `next_gtf_field()` to the tokenizer. GFF3 branch unchanged (uses URL-encoding). ([#263](https://github.com/genogrove/genogrove/issues/263), [#264](https://github.com/genogrove/genogrove/pull/264))
+- **Node allocations leak on exception in `build_tree_bottom_up()`, `split_node()`, and `node::deserialize()`**: Raw `new` without RAII meant that if any subsequent allocation threw, all previously created nodes would leak. Wrapped allocations in `std::unique_ptr`, releasing ownership only after nodes are safely attached to the tree. ([#141](https://github.com/genogrove/genogrove/issues/141), [#265](https://github.com/genogrove/genogrove/pull/265))
 
 ### Changed
 - **GFF reader stores native 1-based inclusive coordinates** (**breaking**): `gff_entry.start` and `gff_entry.end` now contain coordinates as they appear in the GFF file (1-based inclusive), instead of silently converting to 0-based half-open. Conversion to grove intervals simplifies to `gdt::interval(entry.start, entry.end)`. ([#257](https://github.com/genogrove/genogrove/issues/257), [#261](https://github.com/genogrove/genogrove/pull/261))
