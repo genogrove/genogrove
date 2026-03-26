@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Edge case tests for key types and grove operations**: Zero-length interval overlaps/aggregation, large `size_t` coordinates, `INT_MIN`/`INT_MAX` numeric operations, single-element grove queries, duplicate key insertion, and order=2 grove stress tests. ([#179](https://github.com/genogrove/genogrove/issues/179), [#258](https://github.com/genogrove/genogrove/pull/258))
 - **IO edge case tests**: GFF `start=1` boundary and single-base features, GFF3 URL-encoded semicolons in attributes, BED12 blockCount mismatch and blockStart out-of-bounds validation. ([#179](https://github.com/genogrove/genogrove/issues/179), [#262](https://github.com/genogrove/genogrove/pull/262))
 
+### Fixed
+- **GTF attribute parser incorrectly splits on semicolons inside quoted values**: `next_field(';')` tokenized without quote awareness, truncating values like `gene_name "test;name"`. Added quote-aware `next_gtf_field()` to the tokenizer. GFF3 branch unchanged (uses URL-encoding). ([#263](https://github.com/genogrove/genogrove/issues/263), [#264](https://github.com/genogrove/genogrove/pull/264))
+
 ### Changed
 - **GFF reader stores native 1-based inclusive coordinates** (**breaking**): `gff_entry.start` and `gff_entry.end` now contain coordinates as they appear in the GFF file (1-based inclusive), instead of silently converting to 0-based half-open. Conversion to grove intervals simplifies to `gdt::interval(entry.start, entry.end)`. ([#257](https://github.com/genogrove/genogrove/issues/257), [#261](https://github.com/genogrove/genogrove/pull/261))
 - **`get_root_nodes()` returns by const reference**: Eliminates an unnecessary map copy on every call, including inside the all-index `intersect()` overload. ([#146](https://github.com/genogrove/genogrove/issues/146), [#255](https://github.com/genogrove/genogrove/pull/255))
