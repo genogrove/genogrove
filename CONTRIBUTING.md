@@ -12,16 +12,16 @@ Run `.clang-format` on modified files before committing.
 
 ### `[[nodiscard]]` Policy
 
-Only apply `[[nodiscard]]` when **discarding the result is always a bug** and **a reasonable developer might plausibly do it by accident**:
+Apply `[[nodiscard]]` when **discarding the result is always a bug** or **wastes resources** (non-trivial computation, allocation, I/O):
 
 | Scenario | Recommendation |
 |---|---|
 | Returned ID is the only handle to stored data (e.g., `register_data()`) | `[[nodiscard]]` |
 | Factory / deserialize returns (e.g., `deserialize()`) | `[[nodiscard]]` |
 | `empty()`, `contains()`, `has_*()`, `is_*()` — confusable with mutators | `[[nodiscard]]` |
-| General getters (`get_order()`, `get_keys()`, ...) | No |
-| Insert/query methods where ignoring the result is a valid pattern | No |
-| `remove_*()` returning bool — caller may not care about the result | No |
+| Non-trivial computation or allocation (e.g., `intersect()`, `get_neighbors()`, `calc_parent_key()`) | `[[nodiscard]]` |
+| Simple getters returning a stored field or reference (`get_order()`, `get_keys()`, ...) | No |
+| Mutators with informational returns (`insert_data()`, `remove_edge()`) | No |
 
 When a `[[nodiscard]]` return must be intentionally discarded in tests or setup code, use `std::ignore = expr;`.
 
