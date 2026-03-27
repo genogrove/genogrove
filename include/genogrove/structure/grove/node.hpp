@@ -1,9 +1,9 @@
 /*
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
- * This file is part of genogrove and is licensed under the terms of the MIT license.
+ * This file is part of genogrove and is licensed under the terms of the GPL-3.0-or-later license.
  * See the LICENSE file in the root of the repository for more information.
  */
 #ifndef GENOGROVE_STRUCTURE_NODE_HPP

@@ -1,9 +1,9 @@
 /*
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
- * This file is part of genogrove and is licensed under the terms of the MIT license.
+ * This file is part of genogrove and is licensed under the terms of the GPL-3.0-or-later license.
  * See the LICENSE file in the root of the repository for more information.
  */
 #ifndef GENOGROVE_STRUCTURE_GRAPH_OVERLAY_HPP
@@ -23,7 +23,7 @@ namespace gdt = genogrove::data_type;
 
 namespace genogrove::structure {
 
-/*
+/**
  * @brief Graph overlay for grove - decoupled graph structure
  * @details Provides graph capabilities on top of any grove by storing directed edges
  * between keys. The graph is completely separate from the tree structure, allowing
@@ -39,7 +39,7 @@ template<
     typename edge_data_type = void>
 class graph_overlay {
   public:
-    /*
+    /**
      * @brief Edge structure representing a directed connection
      */
     struct edge {
@@ -61,12 +61,12 @@ class graph_overlay {
             : target(tgt), metadata(std::forward<M>(meta)) {}
     };
 
-    /*
+    /**
      * @brief Default constructor
      */
     graph_overlay() = default;
 
-    /*
+    /**
      * @brief Add edge without metadata
      * @param source Pointer to source key
      * @param target Pointer to target key
@@ -79,7 +79,7 @@ class graph_overlay {
         adjacency[source].emplace_back(target);
     }
 
-    /*
+    /**
      * @brief Add edge with metadata
      * @param source Pointer to source key
      * @param target Pointer to target key
@@ -96,7 +96,7 @@ class graph_overlay {
         adjacency[source].emplace_back(target, std::forward<M>(metadata));
     }
 
-    /*
+    /**
      * @brief Remove a specific edge
      * @param source Pointer to source key
      * @param target Pointer to target key
@@ -124,7 +124,7 @@ class graph_overlay {
         return false;
     }
 
-    /*
+    /**
      * @brief Get all neighbor keys (targets of outgoing edges)
      * @param source Pointer to source key
      * @return Vector of pointers to neighbor keys
@@ -146,7 +146,7 @@ class graph_overlay {
         return neighbors;
     }
 
-    /*
+    /**
      * @brief Get edge metadata for all outgoing edges
      * @param source Pointer to source key
      * @return Vector of edge metadata (only available when edge_data_type != void)
@@ -165,7 +165,7 @@ class graph_overlay {
         return metadata_list;
     }
 
-    /*
+    /**
      * @brief Get all outgoing edge structures (with targets and metadata)
      * @param source Pointer to source key
      * @return Const reference to vector of edges (empty if no edges)
@@ -176,7 +176,7 @@ class graph_overlay {
         return (it != adjacency.end()) ? it->second : empty_edges;
     }
 
-    /*
+    /**
      * @brief Get neighbors filtered by predicate on edge metadata
      * @param source Pointer to source key
      * @param predicate Function to filter edges by metadata
@@ -201,7 +201,7 @@ class graph_overlay {
         return neighbors;
     }
 
-    /*
+    /**
      * @brief Check if edge exists
      * @param source Pointer to source key
      * @param target Pointer to target key
@@ -218,7 +218,7 @@ class graph_overlay {
                                    [target](const edge& e) { return e.target == target; });
     }
 
-    /*
+    /**
      * @brief Get number of outgoing edges from a key
      * @param source Pointer to source key
      * @return Number of outgoing edges
@@ -228,7 +228,7 @@ class graph_overlay {
         return (it != adjacency.end()) ? it->second.size() : 0;
     }
 
-    /*
+    /**
      * @brief Get total number of edges in graph
      * @return Total edge count
      */
@@ -240,7 +240,7 @@ class graph_overlay {
         return count;
     }
 
-    /*
+    /**
      * @brief Get number of vertices (keys) with at least one outgoing edge
      * @return Number of keys that have outgoing edges
      */
@@ -248,14 +248,14 @@ class graph_overlay {
         return adjacency.size();
     }
 
-    /*
+    /**
      * @brief Clear all edges
      */
     void clear() {
         adjacency.clear();
     }
 
-    /*
+    /**
      * @brief Check if graph is empty
      * @return true if no edges exist
      */
