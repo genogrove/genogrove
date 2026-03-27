@@ -1,5 +1,5 @@
 /*
-* SPDX-License-Identifier: GPLv3
+* SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
