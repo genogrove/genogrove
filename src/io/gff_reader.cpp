@@ -218,7 +218,11 @@ namespace genogrove::io {
         const char* begin = score_s.c_str();
         char* end_ptr = nullptr;
         errno = 0;
-        static locale_t c_locale = newlocale(LC_ALL_MASK, "C", nullptr);
+        static locale_t c_locale = []() {
+            locale_t loc = newlocale(LC_ALL_MASK, "C", nullptr);
+            if (!loc) throw std::runtime_error("newlocale failed");
+            return loc;
+        }();
         double score_val = strtod_l(begin, &end_ptr, c_locale);
         if (errno == ERANGE) {
             error_message = "Score value out of range '" + score_s +

@@ -280,6 +280,9 @@ class node {
      * - genomic_coordinate: Returns bounding coordinate with wildcard strand
      */
     [[nodiscard]] key_type calc_parent_key() {
+        if (this->keys.empty()) {
+            throw std::runtime_error("calc_parent_key called on node with no keys");
+        }
         key_type result = this->keys[0]->get_value();
         for (size_t i = 1; i < this->keys.size(); ++i) {
             result = key_type::aggregate(result, this->keys[i]->get_value());

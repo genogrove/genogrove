@@ -44,9 +44,6 @@ namespace genogrove::io {
         [[nodiscard]] std::tuple<filetype, compression_type> detect_filetype(const fs::path& filepath);
     private:
         compression_type detect_compression(const fs::path& filepath);
-        bool validate_extension(const fs::path& filepath, std::string& extension,
-            compression_type& compression);
-
     };
 }
 #endif //GENOGROVE_FILETYPE_DETECTOR_HPP
