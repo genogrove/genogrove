@@ -156,15 +156,6 @@ class node {
     }
 
     /**
-     * @brief Set the keys vector
-     * @param keys New vector of key pointers to assign
-     * @note Keys are owned by grove's deque, not by node - no deletion occurs
-     */
-    void set_keys(const std::vector<gdt::key<key_type, data_type>*>& keys) {
-        this->keys = keys;
-    }
-
-    /**
      * @brief Get mutable reference to the children vector
      * @return Reference to vector of child node pointers
      * @note Children are owned by this node and will be deleted in destructor
@@ -179,15 +170,6 @@ class node {
      */
     const std::vector<node<key_type, data_type>*>& get_children() const {
         return this->children;
-    }
-
-    /**
-     * @brief Set the children vector
-     * @param children New vector of child node pointers to assign
-     * @note Previous children are not deleted - caller must manage memory
-     */
-    void set_children(const std::vector<node<key_type, data_type>*>& children) {
-        this->children = children;
     }
 
     /**
