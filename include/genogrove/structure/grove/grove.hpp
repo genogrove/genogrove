@@ -192,7 +192,7 @@ class grove {
      * @param source Pointer to source key
      * @return Vector of pointers to neighbor keys (targets of outgoing edges)
      */
-    std::vector<gdt::key<key_type, data_type>*> get_neighbors(
+    [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_neighbors(
         gdt::key<key_type, data_type>* source) const {
         return graph_data.get_neighbors(source);
     }
@@ -214,7 +214,7 @@ class grove {
      * @return Vector of edge metadata for all outgoing edges from source
      */
     template<typename M = edge_data_type>
-    std::vector<M> get_edges(gdt::key<key_type, data_type>* source) const
+    [[nodiscard]] std::vector<M> get_edges(gdt::key<key_type, data_type>* source) const
         requires (!std::is_void_v<edge_data_type>) {
         return graph_data.get_edges(source);
     }
@@ -236,7 +236,7 @@ class grove {
      * @return Vector of neighbor keys where predicate returns true
      */
     template<typename Predicate>
-    std::vector<gdt::key<key_type, data_type>*> get_neighbors_if(
+    [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_neighbors_if(
         gdt::key<key_type, data_type>* source,
         Predicate predicate) const
         requires (!std::is_void_v<edge_data_type>) {
