@@ -947,7 +947,7 @@ class grove {
      * @return query_result containing all overlapping keys from the specified index
      * @note Returns empty result if index doesn't exist
      */
-    gdt::query_result<key_type, data_type> intersect(const key_type& query, std::string_view index) {
+    [[nodiscard]] gdt::query_result<key_type, data_type> intersect(const key_type& query, std::string_view index) {
         gdt::query_result<key_type, data_type> result{query};
         node<key_type, data_type>* root = this->get_root(index);
 

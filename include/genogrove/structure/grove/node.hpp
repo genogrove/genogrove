@@ -297,7 +297,7 @@ class node {
      * - numeric: Returns maximum value
      * - genomic_coordinate: Returns bounding coordinate with wildcard strand
      */
-    key_type calc_parent_key() {
+    [[nodiscard]] key_type calc_parent_key() {
         key_type result = this->keys[0]->get_value();
         for (size_t i = 1; i < this->keys.size(); ++i) {
             result = key_type::aggregate(result, this->keys[i]->get_value());

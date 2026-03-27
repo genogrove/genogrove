@@ -129,7 +129,7 @@ class graph_overlay {
      * @param source Pointer to source key
      * @return Vector of pointers to neighbor keys
      */
-    std::vector<gdt::key<key_type, data_type>*> get_neighbors(
+    [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_neighbors(
         gdt::key<key_type, data_type>* source) const {
         if (!source) {
             throw std::invalid_argument("get_neighbors: source must not be null");
@@ -152,7 +152,7 @@ class graph_overlay {
      * @return Vector of edge metadata (only available when edge_data_type != void)
      */
     template<typename M = edge_data_type>
-    std::vector<M> get_edges(gdt::key<key_type, data_type>* source) const
+    [[nodiscard]] std::vector<M> get_edges(gdt::key<key_type, data_type>* source) const
         requires (!std::is_void_v<edge_data_type>) {
         std::vector<M> metadata_list;
         auto it = adjacency.find(source);
@@ -183,7 +183,7 @@ class graph_overlay {
      * @return Vector of neighbor keys where predicate returns true
      */
     template<typename Predicate>
-    std::vector<gdt::key<key_type, data_type>*> get_neighbors_if(
+    [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_neighbors_if(
         gdt::key<key_type, data_type>* source,
         Predicate predicate) const
         requires (!std::is_void_v<edge_data_type> && std::predicate<Predicate, const edge_data_type&>) {

@@ -18,7 +18,7 @@ namespace genogrove::io {
     // Base class for all file readers (no template)
     class file_reader_base {
     public:
-        virtual bool has_next() = 0;
+        [[nodiscard]] virtual bool has_next() = 0;
         /// Returns the error message from the most recent read_next() call.
         /// Cleared at the start of each read_next(); empty if the last read succeeded.
         virtual std::string get_error_message() const = 0;
