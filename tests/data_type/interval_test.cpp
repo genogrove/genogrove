@@ -219,20 +219,18 @@ TEST(intervalTest, toString) {
 TEST(intervalTest, gettersAndSetters) {
     gdt::interval intvl;
 
-    // Test setters
-    intvl.set_start(50);
-    intvl.set_end(100);
-
-    // Test getters
+    // Test set_range
+    intvl.set_range(50, 100);
     EXPECT_EQ(intvl.get_start(), 50);
     EXPECT_EQ(intvl.get_end(), 100);
 
     // Test modification
-    intvl.set_start(60);
+    intvl.set_range(60, 110);
     EXPECT_EQ(intvl.get_start(), 60);
-
-    intvl.set_end(110);
     EXPECT_EQ(intvl.get_end(), 110);
+
+    // Test validation
+    EXPECT_THROW(intvl.set_range(200, 100), std::invalid_argument);
 }
 
 TEST(intervalTest, sorting) {

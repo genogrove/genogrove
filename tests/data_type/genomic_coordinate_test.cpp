@@ -277,10 +277,9 @@ TEST(genomicCoordinateTest, toString) {
 TEST(genomicCoordinateTest, gettersAndSetters) {
     gdt::genomic_coordinate coord;
 
-    // Test setters
+    // Test set_strand and set_range
     coord.set_strand('+');
-    coord.set_start(50);
-    coord.set_end(100);
+    coord.set_range(50, 100);
 
     // Test getters
     EXPECT_EQ(coord.get_strand(), '+');
@@ -291,11 +290,13 @@ TEST(genomicCoordinateTest, gettersAndSetters) {
     coord.set_strand('-');
     EXPECT_EQ(coord.get_strand(), '-');
 
-    coord.set_start(60);
+    coord.set_range(60, 110);
     EXPECT_EQ(coord.get_start(), 60);
-
-    coord.set_end(110);
     EXPECT_EQ(coord.get_end(), 110);
+
+    // Test validation
+    EXPECT_THROW(coord.set_range(200, 100), std::invalid_argument);
+    EXPECT_THROW(coord.set_strand('x'), std::invalid_argument);
 }
 
 TEST(genomicCoordinateTest, sortingByStrand) {

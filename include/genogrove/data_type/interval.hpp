@@ -179,13 +179,19 @@ namespace genogrove::data_type {
             constexpr size_t get_start() const noexcept { return start; }
 
             /**
-             * @brief Set the start position.
+             * @brief Set both start and end positions atomically.
              *
              * @param start Start position (0-based, inclusive)
-             *
-             * @note No validation is performed
+             * @param end End position (0-based, inclusive)
+             * @throws std::invalid_argument if start > end
              */
-            constexpr void set_start(size_t start) noexcept { this->start = start; }
+            constexpr void set_range(size_t start, size_t end) {
+                if (start > end) {
+                    throw std::invalid_argument("interval: start must be <= end");
+                }
+                this->start = start;
+                this->end = end;
+            }
 
             /**
              * @brief Get the end position (0-based, inclusive).
@@ -193,15 +199,6 @@ namespace genogrove::data_type {
              * @return End position
              */
             constexpr size_t get_end() const noexcept { return end; }
-
-            /**
-             * @brief Set the end position.
-             *
-             * @param end End position (0-based, inclusive)
-             *
-             * @note No validation is performed
-             */
-            constexpr void set_end(size_t end) noexcept { this->end = end; }
 
             /**
              * @brief Serialize the interval to an output stream.
