@@ -41,6 +41,8 @@ public:
 
     deflate_streambuf(const deflate_streambuf&) = delete;
     deflate_streambuf& operator=(const deflate_streambuf&) = delete;
+    deflate_streambuf(deflate_streambuf&&) = delete;
+    deflate_streambuf& operator=(deflate_streambuf&&) = delete;
 
     ~deflate_streambuf() override {
         deflateEnd(&zs_);
@@ -119,6 +121,8 @@ public:
 
     inflate_streambuf(const inflate_streambuf&) = delete;
     inflate_streambuf& operator=(const inflate_streambuf&) = delete;
+    inflate_streambuf(inflate_streambuf&&) = delete;
+    inflate_streambuf& operator=(inflate_streambuf&&) = delete;
 
     ~inflate_streambuf() override {
         inflateEnd(&zs_);
