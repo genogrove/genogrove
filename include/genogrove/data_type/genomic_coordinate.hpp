@@ -219,28 +219,29 @@ namespace genogrove::data_type {
              * @brief Set the strand indicator.
              *
              * @param strand Strand character ('+', '-', '.', or '*')
-             *
-             * @note No validation is performed
+             * @throws std::invalid_argument if strand is not one of '+', '-', '.', '*'
              */
-            constexpr void set_strand(char strand) noexcept { this->strand = strand; }
+            constexpr void set_strand(char strand) {
+                if (strand != '+' && strand != '-' && strand != '.' && strand != '*') {
+                    throw std::invalid_argument("genomic_coordinate: strand must be one of '+', '-', '.', '*'");
+                }
+                this->strand = strand;
+            }
 
             /**
-             * @brief Set the start position.
+             * @brief Set both start and end positions atomically.
              *
              * @param start Start position (0-based, inclusive)
-             *
-             * @note No validation is performed
-             */
-            constexpr void set_start(std::size_t start) noexcept { this->start = start; }
-
-            /**
-             * @brief Set the end position.
-             *
              * @param end End position (0-based, inclusive)
-             *
-             * @note No validation is performed
+             * @throws std::invalid_argument if start > end
              */
-            constexpr void set_end(std::size_t end) noexcept { this->end = end; }
+            constexpr void set_range(std::size_t start, std::size_t end) {
+                if (start > end) {
+                    throw std::invalid_argument("genomic_coordinate: start must be <= end");
+                }
+                this->start = start;
+                this->end = end;
+            }
 
             /**
              * @brief Serialize the genomic coordinate to an output stream.
