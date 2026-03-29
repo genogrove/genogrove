@@ -218,6 +218,7 @@ class grove {
         this->root_nodes = std::move(root_nodes);
         this->rightmost_nodes.clear();
         this->key_storage.clear();
+        this->leaf_key_count = 0;
         this->external_key_storage.clear();
         this->graph_data = graph_overlay<key_type, data_type, edge_data_type>{};
     }
@@ -296,6 +297,9 @@ class grove {
 
     /// Deque storage for external (graph-only) keys that can participate in edges but are not indexed in the B+ tree
     std::deque<gdt::key<key_type, data_type>> external_key_storage;
+
+    /// Count of leaf keys — excludes internal separator keys in key_storage
+    size_t leaf_key_count = 0;
 
     /// Embedded graph overlay for managing directed edges and relationships between keys
     graph_overlay<key_type, data_type, edge_data_type> graph_data;

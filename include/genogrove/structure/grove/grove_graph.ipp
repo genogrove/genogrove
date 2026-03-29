@@ -133,16 +133,16 @@ public:
      * @note This counts all keys regardless of whether they have edges
      */
     [[nodiscard]] size_t vertex_count() const {
-        return key_storage.size() + external_key_storage.size();
+        return leaf_key_count + external_key_storage.size();
     }
 
     /**
-     * @brief Get number of indexed keys (stored in B+ tree)
-     * @return Number of keys indexed in the B+ tree
+     * @brief Get number of indexed keys (stored in B+ tree leaf nodes)
+     * @return Number of data keys indexed in the B+ tree (excludes internal separator keys)
      * @note These keys can be found via spatial queries (intersect)
      */
     [[nodiscard]] size_t indexed_vertex_count() const {
-        return key_storage.size();
+        return leaf_key_count;
     }
 
     /**

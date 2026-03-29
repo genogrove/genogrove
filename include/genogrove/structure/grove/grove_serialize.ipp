@@ -172,9 +172,12 @@ private:
         };
         collect_leaves(root);
 
-        // Link leaves together
-        for (size_t i = 0; i + 1 < leaves.size(); ++i) {
-            leaves[i]->set_next(leaves[i + 1]);
+        // Link leaves together and count leaf keys
+        for (size_t i = 0; i < leaves.size(); ++i) {
+            this->leaf_key_count += leaves[i]->get_keys().size();
+            if (i + 1 < leaves.size()) {
+                leaves[i]->set_next(leaves[i + 1]);
+            }
         }
 
         // Return rightmost leaf
