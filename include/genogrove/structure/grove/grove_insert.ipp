@@ -272,11 +272,7 @@ private:
         if (child->get_is_leaf()) {
             split_leaf_node(parent, child, std::move(new_child), index, index_name, mid);
         } else {
-            // Clamp mid so key[mid] is promoted and both sides get >= 1 key:
-            // left gets [0..mid-1], right gets [mid+1..end]
-            int max_mid = static_cast<int>(child->get_keys().size()) - 2;
-            int clamped_mid = std::clamp(mid, 1, max_mid);
-            split_internal_node(parent, child, std::move(new_child), index, clamped_mid);
+            split_internal_node(parent, child, std::move(new_child), index, mid);
         }
     }
 
