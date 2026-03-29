@@ -37,60 +37,67 @@ public:
 
 private:
     /**
-     * @brief Recursively search the tree for keys that overlap with the query
-     * @param node The current node being searched
+     * @brief Search the tree for keys that overlap with the query
+     * @param current The node to start searching from
      * @param query The query key to search for
      * @param result Reference to query_result where matching keys are accumulated
-     * @note Uses overlap detection to prune search space and traverse linked leaf nodes
+     * @note Recurses into child nodes (bounded by tree depth O(log n))
+     * @note Walks the leaf sibling chain iteratively (unbounded, avoids stack overflow)
      * @note Optimized for interval types with early termination when no overlap is possible
      */
-    void search_iter(node<key_type, data_type>* node, const key_type& query,
+    void search_iter(node<key_type, data_type>* current, const key_type& query,
         gdt::query_result<key_type, data_type>& result) {
-        if(node == nullptr) {
+        if(current == nullptr) {
             return;
         }
-        if(node->get_is_leaf()) {
-            std::optional<size_t> last_match;
-            for(size_t i = 0; i < node->get_keys().size(); ++i) {
-                if(key_type::overlaps(node->get_keys()[i]->get_value(), query)) {
-                    last_match = i;
-                    result.add_key(node->get_keys()[i]);
+        if(current->get_is_leaf()) {
+            // Walk the leaf chain iteratively to avoid stack overflow on long chains
+            auto* leaf = current;
+            while (leaf != nullptr) {
+                for(size_t i = 0; i < leaf->get_keys().size(); ++i) {
+                    if(key_type::overlaps(leaf->get_keys()[i]->get_value(), query)) {
+                        result.add_key(leaf->get_keys()[i]);
+                    }
                 }
-            }
-            // check if there is an overlap within the next node (if so we have to traverse it)
-            // Check first key of next node to avoid unnecessary traversal
-            if(node->get_next() != nullptr && node->get_next()->get_keys().size() > 0) {
-                auto& first_key_next = node->get_next()->get_keys()[0]->get_value();
 
-                // For interval types: check coordinate overlap only
+                // Check if the next sibling could overlap
+                auto* next = leaf->get_next();
+                if (next == nullptr || next->get_keys().empty()) {
+                    break;
+                }
+
+                auto& first_key_next = next->get_keys()[0]->get_value();
                 if constexpr (requires { key_type::is_interval; }) {
-                    if (!(first_key_next.get_start() > query.get_end() ||
-                          query.get_start() > first_key_next.get_end())) {
-                        search_iter(node->get_next(), query, result);
+                    // Keys are sorted by (start, end). If the first key's start exceeds
+                    // the query's end, all remaining keys also start past query.end
+                    // and cannot overlap. Checking first_key.end is NOT safe — later
+                    // keys can have larger starts that do overlap.
+                    if (first_key_next.get_start() > query.get_end()) {
+                        break;
                     }
                 } else {
-                    // For non-interval types, use regular overlap
-                    if(key_type::overlaps(first_key_next, query)) {
-                        search_iter(node->get_next(), query, result);
+                    if (!key_type::overlaps(first_key_next, query)) {
+                        break;
                     }
                 }
+                leaf = next;
             }
         } else {
             // abort if left of key (not overlapping) - only needed for intervals
             if constexpr (requires { key_type::is_interval; }) {
-                if(query < node->get_keys()[0]->get_value() &&
-                   !key_type::overlaps(node->get_keys()[0]->get_value(), query)) {
+                if(query < current->get_keys()[0]->get_value() &&
+                   !key_type::overlaps(current->get_keys()[0]->get_value(), query)) {
                     return;
                 }
             }
 
             size_t i = 0;
-            while(i < node->get_keys().size() && (query > node->get_keys()[i]->get_value()) &&
-                  !key_type::overlaps(node->get_keys()[i]->get_value(), query)) {
+            while(i < current->get_keys().size() && (query > current->get_keys()[i]->get_value()) &&
+                  !key_type::overlaps(current->get_keys()[i]->get_value(), query)) {
                 i++;
             }
-            if(node->get_child(i) != nullptr) {
-                search_iter(node->get_child(i), query, result);
+            if(current->get_child(i) != nullptr) {
+                search_iter(current->get_child(i), query, result);
             }
         }
     }
