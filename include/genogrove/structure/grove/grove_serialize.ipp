@@ -77,6 +77,36 @@ public:
             key.serialize(zos);
         }
 
+        // Write graph overlay edges as flat (source_index, target_index, [metadata]) list.
+        // Key indices: key_storage[0..N-1] → 0..N-1, external_key_storage[0..M-1] → N..N+M-1.
+        std::unordered_map<const gdt::key<key_type, data_type>*, uint32_t> key_index;
+        {
+            uint32_t idx = 0;
+            for (const auto& k : key_storage) { key_index[&k] = idx++; }
+            for (const auto& k : external_key_storage) { key_index[&k] = idx++; }
+        }
+
+        uint32_t total_edges = static_cast<uint32_t>(graph_data.edge_count());
+        zos.write(reinterpret_cast<const char*>(&total_edges), sizeof(total_edges));
+
+        auto write_edges_for = [&](const auto& storage) {
+            for (const auto& k : storage) {
+                auto* key_ptr = const_cast<gdt::key<key_type, data_type>*>(&k);
+                const auto& edges = graph_data.get_edge_list(key_ptr);
+                for (const auto& e : edges) {
+                    uint32_t src = key_index.at(&k);
+                    uint32_t tgt = key_index.at(e.target);
+                    zos.write(reinterpret_cast<const char*>(&src), sizeof(src));
+                    zos.write(reinterpret_cast<const char*>(&tgt), sizeof(tgt));
+                    if constexpr (!std::is_void_v<edge_data_type>) {
+                        gdt::serializer<edge_data_type>::write(zos, e.metadata);
+                    }
+                }
+            }
+        };
+        write_edges_for(key_storage);
+        write_edges_for(external_key_storage);
+
         if (!zos) {
             throw std::runtime_error("Failed to serialize grove: stream error");
         }
@@ -142,6 +172,37 @@ public:
         }
         for (uint32_t i = 0; i < external_count; ++i) {
             g.external_key_storage.push_back(gdt::key<key_type, data_type>::deserialize(zis));
+        }
+
+        // Read graph overlay edges.
+        // Build index → pointer array matching serialization order.
+        std::vector<gdt::key<key_type, data_type>*> key_by_index;
+        key_by_index.reserve(g.key_storage.size() + g.external_key_storage.size());
+        for (auto& k : g.key_storage) { key_by_index.push_back(&k); }
+        for (auto& k : g.external_key_storage) { key_by_index.push_back(&k); }
+
+        uint32_t total_edges;
+        zis.read(reinterpret_cast<char*>(&total_edges), sizeof(total_edges));
+        if (!zis) {
+            throw std::runtime_error("Failed to deserialize grove: stream error reading edge count");
+        }
+
+        for (uint32_t i = 0; i < total_edges; ++i) {
+            uint32_t src, tgt;
+            zis.read(reinterpret_cast<char*>(&src), sizeof(src));
+            zis.read(reinterpret_cast<char*>(&tgt), sizeof(tgt));
+            if (!zis) {
+                throw std::runtime_error("Failed to deserialize grove: stream error reading edge");
+            }
+            if (src >= key_by_index.size() || tgt >= key_by_index.size()) {
+                throw std::runtime_error("Failed to deserialize grove: edge index out of range");
+            }
+            if constexpr (std::is_void_v<edge_data_type>) {
+                g.graph_data.add_edge(key_by_index[src], key_by_index[tgt]);
+            } else {
+                auto metadata = gdt::serializer<edge_data_type>::read(zis);
+                g.graph_data.add_edge(key_by_index[src], key_by_index[tgt], std::move(metadata));
+            }
         }
 
         return g;

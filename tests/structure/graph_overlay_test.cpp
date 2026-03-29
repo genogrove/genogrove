@@ -1001,6 +1001,54 @@ TEST(ExternalKeyTest, SerializationDeserialization) {
     }
 }
 
+TEST(ExternalKeyTest, GraphEdgesSerializationRoundTrip) {
+    std::stringstream ss;
+
+    {
+        gst::grove<gdt::interval, std::string> grove(5);
+
+        auto* e1 = grove.insert_data("chr1", gdt::interval{1000, 1200}, "exon1", gst::sorted);
+        auto* e2 = grove.insert_data("chr1", gdt::interval{2000, 2200}, "exon2", gst::sorted);
+        auto* e3 = grove.insert_data("chr1", gdt::interval{3000, 3200}, "exon3", gst::sorted);
+        auto* ext = grove.add_external_key(gdt::interval{5000, 5500}, "enhancer_1");
+
+        // Create edges: exon chain + cross-type edge
+        grove.add_edge(e1, e2);
+        grove.add_edge(e2, e3);
+        grove.add_edge(e3, ext);
+
+        EXPECT_EQ(grove.edge_count(), 3);
+        grove.serialize(ss);
+    }
+
+    {
+        ss.seekg(0);
+        auto restored = gst::grove<gdt::interval, std::string>::deserialize(ss);
+
+        // Verify edges survived
+        EXPECT_EQ(restored.edge_count(), 3);
+
+        // Query to get key pointers in the restored grove
+        auto result = restored.intersect(gdt::interval{1000, 3200}, "chr1");
+        auto keys = result.get_keys();
+        ASSERT_EQ(keys.size(), 3);
+
+        // Verify edge chain: exon1 → exon2 → exon3
+        auto n1 = restored.get_neighbors(keys[0]);
+        ASSERT_EQ(n1.size(), 1);
+        EXPECT_EQ(n1[0]->get_data(), "exon2");
+
+        auto n2 = restored.get_neighbors(keys[1]);
+        ASSERT_EQ(n2.size(), 1);
+        EXPECT_EQ(n2[0]->get_data(), "exon3");
+
+        // exon3 → external enhancer
+        auto n3 = restored.get_neighbors(keys[2]);
+        ASSERT_EQ(n3.size(), 1);
+        EXPECT_EQ(n3[0]->get_data(), "enhancer_1");
+    }
+}
+
 TEST(ExternalKeyTest, PointerStabilityForExternalKeys) {
     gst::grove<gdt::interval, std::string> grove(3);  // Small order to force possible reallocations
 
