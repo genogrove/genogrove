@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tighten range concepts on bulk insert**: Replaced `input_range` with `forward_range && sized_range` (sorted bulk, build_tree_bottom_up) and `random_access_range && sized_range` (unsorted bulk). ([#281](https://github.com/genogrove/genogrove/issues/281), [#292](https://github.com/genogrove/genogrove/pull/292))
 
 ### Added
+- **Graph overlay edges now persist across serialization** (**breaking format change**): Edges are serialized as flat `(source_index, target_index, [metadata])` pairs after external keys. Empty graphs add only 4 bytes. Old serialized files must be re-created. ([#286](https://github.com/genogrove/genogrove/issues/286), [#296](https://github.com/genogrove/genogrove/pull/296))
 - **Edge case tests for key types and grove operations**: Zero-length interval overlaps/aggregation, large `size_t` coordinates, `INT_MIN`/`INT_MAX` numeric operations, single-element grove queries, duplicate key insertion, and order=2 grove stress tests. ([#179](https://github.com/genogrove/genogrove/issues/179), [#258](https://github.com/genogrove/genogrove/pull/258))
 - **IO edge case tests**: GFF `start=1` boundary and single-base features, GFF3 URL-encoded semicolons in attributes, BED12 blockCount mismatch and blockStart out-of-bounds validation. ([#179](https://github.com/genogrove/genogrove/issues/179), [#262](https://github.com/genogrove/genogrove/pull/262))
 
