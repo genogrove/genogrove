@@ -112,16 +112,10 @@ namespace genogrove::io {
     }
 
     bool bed_reader::parse_score(bed_entry& entry, const std::string& score_str) {
-        if (!std::ranges::all_of(score_str, ggu::is_digit)) {
-            error_message = "Invalid score format (non-integer) at line ";
-            error_message += std::to_string(line_num);
-            return false;
-        }
-        int score;
-        try {
-            score = std::stoi(score_str);
-        } catch (const std::exception&) {
-            error_message = "Invalid score format (out of range) at line ";
+        int score = 0;
+        auto [ptr, ec] = std::from_chars(score_str.data(), score_str.data() + score_str.size(), score);
+        if (ec != std::errc{} || ptr != score_str.data() + score_str.size()) {
+            error_message = "Invalid score format at line ";
             error_message += std::to_string(line_num);
             return false;
         }
@@ -150,24 +144,19 @@ namespace genogrove::io {
     bool bed_reader::parse_thickness(bed_entry& entry, const std::string& thick_start_str,
                                      const std::string& thick_end_str,
                                      size_t start_num, size_t end_num) {
-        if (!std::ranges::all_of(thick_start_str, ggu::is_digit)) {
-            error_message = "Invalid thickStart format (non-integer) at line ";
+        uint64_t thick_start = 0;
+        uint64_t thick_end = 0;
+        auto [p1, ec1] = std::from_chars(thick_start_str.data(),
+            thick_start_str.data() + thick_start_str.size(), thick_start);
+        if (ec1 != std::errc{} || p1 != thick_start_str.data() + thick_start_str.size()) {
+            error_message = "Invalid thickStart format at line ";
             error_message += std::to_string(line_num);
             return false;
         }
-        if (!std::ranges::all_of(thick_end_str, ggu::is_digit)) {
-            error_message = "Invalid thickEnd format (non-integer) at line ";
-            error_message += std::to_string(line_num);
-            return false;
-        }
-
-        uint64_t thick_start;
-        uint64_t thick_end;
-        try {
-            thick_start = std::stoul(thick_start_str);
-            thick_end = std::stoul(thick_end_str);
-        } catch(std::exception&) {
-            error_message = "Thickness coordinate out of range at line ";
+        auto [p2, ec2] = std::from_chars(thick_end_str.data(),
+            thick_end_str.data() + thick_end_str.size(), thick_end);
+        if (ec2 != std::errc{} || p2 != thick_end_str.data() + thick_end_str.size()) {
+            error_message = "Invalid thickEnd format at line ";
             error_message += std::to_string(line_num);
             return false;
         }
