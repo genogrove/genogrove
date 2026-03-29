@@ -800,6 +800,21 @@ TEST(ExternalKeyTest, VertexCountingSeparation) {
     EXPECT_EQ(grove.vertex_count(), 5);  // Total = indexed + external
 }
 
+TEST(ExternalKeyTest, VertexCountExcludesSeparatorKeys) {
+    // Small order forces splits — separator keys go into key_storage
+    // but indexed_vertex_count() should only count data (leaf) keys
+    gst::grove<gdt::interval, std::string> grove(3);
+
+    const size_t num_keys = 20;
+    for (size_t i = 0; i < num_keys; ++i) {
+        grove.insert_data("chr1", gdt::interval{i * 100, i * 100 + 50},
+                          "key" + std::to_string(i), gst::sorted);
+    }
+
+    EXPECT_EQ(grove.indexed_vertex_count(), num_keys);
+    EXPECT_EQ(grove.vertex_count(), num_keys);
+}
+
 TEST(ExternalKeyTest, EdgeBetweenIndexedAndExternal) {
     gst::grove<gdt::interval, std::string> grove(5);
 
