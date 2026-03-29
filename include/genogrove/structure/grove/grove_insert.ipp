@@ -69,16 +69,21 @@ public:
         if (rightmost_node == nullptr || rightmost_node->get_keys().empty()) {
             // Index is empty - use fast bottom-up tree construction
 
-            // Delete existing empty root node to avoid memory leak
+            // RAII-guard the old root: erase from maps first so no dangling
+            // pointers exist, then build. If build throws, the old root is
+            // still cleaned up by unique_ptr and the maps are consistent.
+            const std::string index_key(index);
+            std::unique_ptr<node<key_type, data_type>> old_root;
             auto* existing_root = this->get_root(index);
             if (existing_root != nullptr) {
-                delete existing_root;
-                // rightmost_nodes will be updated by build_tree_bottom_up
+                old_root.reset(existing_root);
+                this->root_nodes.erase(index_key);
+                this->rightmost_nodes.erase(index_key);
             }
 
-            auto [new_root, keys] = build_tree_bottom_up(index, data);
+            auto [new_root, keys] = build_tree_bottom_up(index_key, data);
             if (new_root != nullptr) {
-                this->root_nodes[std::string(index)] = new_root;
+                this->root_nodes[index_key] = new_root;
             }
             return keys;
         }
