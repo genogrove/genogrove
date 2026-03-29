@@ -145,7 +145,8 @@ public:
      */
     template<typename Container>
     std::vector<gdt::key<key_type, data_type>*> insert_data(std::string_view index, Container data, bulk_t)
-        requires (!std::is_void_v<data_type> && std::ranges::random_access_range<Container>) {
+        requires (!std::is_void_v<data_type> &&
+                 std::ranges::random_access_range<Container> && std::ranges::sized_range<Container>) {
         if (data.empty()) return {};
 
         // Sort the data (O(n log n))
