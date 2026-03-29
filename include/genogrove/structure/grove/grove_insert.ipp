@@ -91,6 +91,7 @@ public:
         for (const auto& [key_value, data_value] : data) {
             gdt::key<key_type, data_type> key(key_value, data_value);
             auto* key_ptr = allocate_key(key);
+            ++this->leaf_key_count;
             current_node->insert_key_ptr(key_ptr);
             inserted_keys.push_back(key_ptr);
 
@@ -215,6 +216,7 @@ private:
         }
         if(node->get_is_leaf()) {
             auto* key_ptr = allocate_key(key);
+            ++this->leaf_key_count;
             node->insert_key_ptr(key_ptr);
             return key_ptr;
         } else {
@@ -377,6 +379,7 @@ private:
             root = this->insert_root(index);
             // Allocate key from grove's deque storage
             auto* key_ptr = allocate_key(key);
+            ++this->leaf_key_count;
             root->insert_key_ptr(key_ptr);
             return key_ptr;
         } else {
@@ -384,6 +387,7 @@ private:
             node<key_type, data_type>* rightmost_node = this->get_rightmost_node(index);
             // Allocate key from grove's deque storage
             auto* key_ptr = allocate_key(key);
+            ++this->leaf_key_count;
             rightmost_node->insert_key_ptr(key_ptr);
 
             // handle key overflow - cascade splits upward until no overflow
@@ -454,6 +458,7 @@ private:
             while (keys_in_this_leaf < keys_per_leaf && data_idx < data.size()) {
                 gdt::key<key_type, data_type> key(it->first, it->second);
                 auto* key_ptr = allocate_key(key);
+                ++this->leaf_key_count;
                 leaf->get_keys().push_back(key_ptr);
                 inserted_keys.push_back(key_ptr);
 
