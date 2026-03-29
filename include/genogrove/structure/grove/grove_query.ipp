@@ -67,16 +67,18 @@ private:
                 }
 
                 auto& first_key_next = next->get_keys()[0]->get_value();
-                bool should_continue = false;
                 if constexpr (requires { key_type::is_interval; }) {
-                    should_continue = !(first_key_next.get_start() > query.get_end() ||
-                                        query.get_start() > first_key_next.get_end());
+                    // Keys are sorted by (start, end). If the first key's start exceeds
+                    // the query's end, all remaining keys also start past query.end
+                    // and cannot overlap. Checking first_key.end is NOT safe — later
+                    // keys can have larger starts that do overlap.
+                    if (first_key_next.get_start() > query.get_end()) {
+                        break;
+                    }
                 } else {
-                    should_continue = key_type::overlaps(first_key_next, query);
-                }
-
-                if (!should_continue) {
-                    break;
+                    if (!key_type::overlaps(first_key_next, query)) {
+                        break;
+                    }
                 }
                 leaf = next;
             }
