@@ -58,7 +58,8 @@ public:
     template<typename Container>
     std::vector<gdt::key<key_type, data_type>*> insert_data(std::string_view index,
         const Container& data, sorted_t, bulk_t)
-        requires (!std::is_void_v<data_type> && std::ranges::input_range<Container>) {
+        requires (!std::is_void_v<data_type> &&
+                 std::ranges::forward_range<Container> && std::ranges::sized_range<Container>) {
         std::vector<gdt::key<key_type, data_type>*> inserted_keys;
         if (data.empty()) return inserted_keys;
 
@@ -144,7 +145,8 @@ public:
      */
     template<typename Container>
     std::vector<gdt::key<key_type, data_type>*> insert_data(std::string_view index, Container data, bulk_t)
-        requires (!std::is_void_v<data_type> && std::ranges::input_range<Container>) {
+        requires (!std::is_void_v<data_type> &&
+                 std::ranges::random_access_range<Container> && std::ranges::sized_range<Container>) {
         if (data.empty()) return {};
 
         // Sort the data (O(n log n))
@@ -422,7 +424,8 @@ private:
     template<typename Container>
     std::pair<node<key_type, data_type>*, std::vector<gdt::key<key_type, data_type>*>>
     build_tree_bottom_up(std::string_view index, const Container& data)
-        requires (!std::is_void_v<data_type> && std::ranges::input_range<Container>) {
+        requires (!std::is_void_v<data_type> &&
+                 std::ranges::forward_range<Container> && std::ranges::sized_range<Container>) {
 
         std::vector<gdt::key<key_type, data_type>*> inserted_keys;
         if (data.empty()) {
