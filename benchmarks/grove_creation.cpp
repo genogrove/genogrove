@@ -1,9 +1,9 @@
 /*
- * SPDX-License-Identifier: MIT
+ * SPDX-License-Identifier: GPL-3.0-or-later
  *
  * Copyright (c) 2025 Richard A. Schäfer
  *
- * This file is part of genogrove and is licensed under the terms of the MIT license.
+ * This file is part of genogrove and is licensed under the terms of the GPL-3.0-or-later license.
  * See the LICENSE file in the root of the repository for more information.
  */
 
@@ -17,32 +17,27 @@
 // Standard library
 #include <filesystem>
 #include <string>
+#include <utility>
 
 namespace gst = genogrove::structure;
-
 
 // ----------------------------
 // Benchmark: Unsorted Intervals
 // ----------------------------
 static void BM_grove_creation_unsorted(benchmark::State& state) {
-    const int num_intervals = state.range(0);
-    const int k = state.range(1);
+    const auto num_intervals = state.range(0);
+    const auto k = static_cast<int>(state.range(1));
 
-    // Load intervals from file (cached after first load)
-    std::string filename = std::filesystem::current_path() / "data" / (std::to_string(num_intervals) + "_intervals_unsorted.txt");
+    std::string filename = std::filesystem::current_path() / "data" /
+        (std::to_string(num_intervals) + "_intervals_unsorted.txt");
     const auto& intervals = load_intervals(filename);
 
     for (auto _ : state) {
-        // Explicit scope ensures grove is destroyed after each iteration
-        {
-            gst::grove<gdt::interval, int> grove(k);
-
-            for (const auto& interval_data : intervals) {
-                grove.insert_data("chr1", interval_data.intvl, interval_data.data);
-            }
-
-            benchmark::DoNotOptimize(grove);
-        } // grove destructor called HERE - before next iteration
+        gst::grove<gdt::interval, int> grove(k);
+        for (const auto& interval_data : intervals) {
+            grove.insert_data("chr1", interval_data.intvl, interval_data.data);
+        }
+        benchmark::DoNotOptimize(grove);
     }
 
     state.SetItemsProcessed(state.iterations() * num_intervals);
@@ -53,24 +48,76 @@ static void BM_grove_creation_unsorted(benchmark::State& state) {
 // Benchmark: Sorted Intervals
 // ----------------------------
 static void BM_grove_creation_sorted(benchmark::State& state) {
-    const int num_intervals = state.range(0);
-    const int k = state.range(1);
+    const auto num_intervals = state.range(0);
+    const auto k = static_cast<int>(state.range(1));
 
-    // Load intervals from file (cached after first load)
-    std::string filename = std::filesystem::current_path() / "data" / (std::to_string(num_intervals) + "_intervals_sorted.txt");
+    std::string filename = std::filesystem::current_path() / "data" /
+        (std::to_string(num_intervals) + "_intervals_sorted.txt");
     const auto& intervals = load_intervals(filename);
 
     for (auto _ : state) {
-        // Explicit scope ensures grove is destroyed after each iteration
-        {
-            gst::grove<gdt::interval, int> grove(k);
+        gst::grove<gdt::interval, int> grove(k);
+        for (const auto& interval_data : intervals) {
+            grove.insert_data("chr1", interval_data.intvl, interval_data.data, gst::sorted);
+        }
+        benchmark::DoNotOptimize(grove);
+    }
 
-            for (const auto& interval_data : intervals) {
-                grove.insert_data("chr1", interval_data.intvl, interval_data.data, gst::sorted);
-            }
+    state.SetItemsProcessed(state.iterations() * num_intervals);
+    state.SetComplexityN(num_intervals);
+}
 
-            benchmark::DoNotOptimize(grove);
-        } // grove destructor called HERE - before next iteration
+// ----------------------------
+// Benchmark: Bulk Sorted Intervals
+// ----------------------------
+static void BM_grove_creation_bulk_sorted(benchmark::State& state) {
+    const auto num_intervals = state.range(0);
+    const auto k = static_cast<int>(state.range(1));
+
+    std::string filename = std::filesystem::current_path() / "data" /
+        (std::to_string(num_intervals) + "_intervals_sorted.txt");
+    const auto& intervals = load_intervals(filename);
+
+    // Prepare data as vector of pairs for bulk insert
+    std::vector<std::pair<gdt::interval, int>> pair_data;
+    pair_data.reserve(intervals.size());
+    for (const auto& iv : intervals) {
+        pair_data.emplace_back(iv.intvl, iv.data);
+    }
+
+    for (auto _ : state) {
+        gst::grove<gdt::interval, int> grove(k);
+        grove.insert_data("chr1", pair_data, gst::sorted, gst::bulk);
+        benchmark::DoNotOptimize(grove);
+    }
+
+    state.SetItemsProcessed(state.iterations() * num_intervals);
+    state.SetComplexityN(num_intervals);
+}
+
+// ----------------------------
+// Benchmark: Bulk Unsorted Intervals
+// ----------------------------
+static void BM_grove_creation_bulk_unsorted(benchmark::State& state) {
+    const auto num_intervals = state.range(0);
+    const auto k = static_cast<int>(state.range(1));
+
+    std::string filename = std::filesystem::current_path() / "data" /
+        (std::to_string(num_intervals) + "_intervals_unsorted.txt");
+    const auto& intervals = load_intervals(filename);
+
+    // Prepare data as vector of pairs for bulk insert
+    std::vector<std::pair<gdt::interval, int>> pair_data;
+    pair_data.reserve(intervals.size());
+    for (const auto& iv : intervals) {
+        pair_data.emplace_back(iv.intvl, iv.data);
+    }
+
+    for (auto _ : state) {
+        gst::grove<gdt::interval, int> grove(k);
+        // bulk_t without sorted_t: sorts internally then does sorted bulk insert
+        grove.insert_data("chr1", pair_data, gst::bulk);
+        benchmark::DoNotOptimize(grove);
     }
 
     state.SetItemsProcessed(state.iterations() * num_intervals);
@@ -104,6 +151,15 @@ BENCHMARK(BM_grove_creation_sorted)
     ->Unit(benchmark::kMicrosecond)
     ->Complexity();
 
+BENCHMARK(BM_grove_creation_bulk_sorted)
+    ->Apply(ApplyArgs)
+    ->Unit(benchmark::kMicrosecond)
+    ->Complexity();
+
+BENCHMARK(BM_grove_creation_bulk_unsorted)
+    ->Apply(ApplyArgs)
+    ->Unit(benchmark::kMicrosecond)
+    ->Complexity();
 
 // ----------------------------
 // Main
