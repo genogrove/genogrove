@@ -252,6 +252,45 @@ def plot_sorted_speedup(metrics: Dict[str, List[Tuple]], output_dir: Path):
     save_plot(fig, output_dir, 'sorted_insertion_speedup')
 
 
+def plot_all_modes_comparison(metrics: Dict[str, List[Tuple]], output_dir: Path):
+    """Plot all insertion modes side by side for each dataset size."""
+    modes = [
+        ('BM_grove_creation_sorted', 'Sorted', '#2ecc71', 'o', '-'),
+        ('BM_grove_creation_unsorted', 'Unsorted', '#e74c3c', 's', '--'),
+        ('BM_grove_creation_bulk_sorted', 'Bulk Sorted', '#3498db', '^', '-'),
+        ('BM_grove_creation_bulk_unsorted', 'Bulk Unsorted', '#e67e22', 'D', '--'),
+    ]
+
+    available = [(bt, label, color, marker, ls) for bt, label, color, marker, ls in modes if bt in metrics]
+    if len(available) < 2:
+        return
+
+    # Collect all sizes
+    all_sizes = set()
+    for bt, *_ in available:
+        for size, *__ in metrics[bt]:
+            all_sizes.add(size)
+
+    for size in sorted(all_sizes):
+        fig, ax = plt.subplots(figsize=(12, 8))
+
+        for bt, label, color, marker, ls in available:
+            points = sorted((o, t) for s, o, t, *_ in metrics[bt] if s == size and t > 0)
+            if points:
+                ax.plot([p[0] for p in points], [p[1] for p in points],
+                       marker=marker, linewidth=2.5, markersize=10, label=label,
+                       color=color, linestyle=ls)
+
+        ax.set_xlabel('Order (k)', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Time (μs, log scale)', fontsize=12, fontweight='bold')
+        ax.set_yscale('log')
+        ax.set_title(f'All Insertion Modes - {size} intervals', fontsize=14, fontweight='bold')
+        ax.legend(fontsize=11)
+        ax.grid(True, alpha=0.3, which='both')
+
+        save_plot(fig, output_dir, f'all_modes_size_{size}')
+
+
 def plot_serialization_size(metrics: Dict[str, List[Tuple]], output_dir: Path):
     """Plot serialized size vs dataset size and bytes-per-interval vs order."""
     data = metrics.get('BM_serialization_size', [])
@@ -274,7 +313,7 @@ def plot_serialization_size(metrics: Dict[str, List[Tuple]], output_dir: Path):
                    marker='o', linewidth=2, markersize=8, label=f'order={order}', color=colors[idx])
 
         ax.set_xlabel('Dataset Size (# intervals)', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Serialized Size (KB)', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Serialized Size (KB, zlib-compressed)', fontsize=12, fontweight='bold')
         ax.set_title('Serialized Size vs Dataset Size', fontsize=14, fontweight='bold')
         ax.legend(title='Order', fontsize=9, title_fontsize=10, ncol=2)
         ax.grid(True, alpha=0.3)
@@ -296,7 +335,7 @@ def plot_serialization_size(metrics: Dict[str, List[Tuple]], output_dir: Path):
                    marker='o', linewidth=2, markersize=8, label=f'{size} intervals')
 
         ax.set_xlabel('Order (k)', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Bytes per Interval (compressed)', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Bytes per Interval (zlib-compressed)', fontsize=12, fontweight='bold')
         ax.set_title('Serialization Efficiency vs Order', fontsize=14, fontweight='bold')
         ax.legend(title='Dataset Size', fontsize=10, title_fontsize=11)
         ax.grid(True, alpha=0.3)
@@ -339,6 +378,12 @@ SECTIONS = [
         'plots': [],
     },
     {
+        'id': 'all-modes',
+        'title': 'All Modes Comparison',
+        'bench_type': None,  # special handling
+        'plots': [],
+    },
+    {
         'id': 'serialization',
         'title': 'Serialization Size',
         'bench_type': 'BM_serialization_size',
@@ -360,11 +405,15 @@ def generate_html_index(output_dir: Path, metrics: Dict[str, List[Tuple]]):
     # Build list of active sections
     active_sections = []
     for section in SECTIONS:
-        if section['bench_type'] is None:
-            # Comparison section — needs both sorted and unsorted
+        if section['id'] == 'comparison':
             if 'BM_grove_creation_sorted' in metrics and 'BM_grove_creation_unsorted' in metrics:
                 active_sections.append(section)
-        elif section['bench_type'] in metrics:
+        elif section['id'] == 'all-modes':
+            # Need at least 2 creation modes
+            creation_modes = sum(1 for k in metrics if k.startswith('BM_grove_creation_'))
+            if creation_modes >= 2:
+                active_sections.append(section)
+        elif section['bench_type'] is not None and section['bench_type'] in metrics:
             active_sections.append(section)
 
     # Build sidebar nav
@@ -436,7 +485,7 @@ def generate_html_index(output_dir: Path, metrics: Dict[str, List[Tuple]]):
 
     <div class="description">
         <p><strong>Tested configurations:</strong>
-        Orders: 2, 5, 10, 15, 20, 25, 30 |
+        Orders: 2, 5, 10, 15, 20, 25, 30, 50, 75, 100, 150, 200 |
         Dataset sizes: 100, 500, 1000, 5000 intervals |
         Modes: Sorted, Unsorted, Bulk Sorted, Bulk Unsorted</p>
     </div>
@@ -462,7 +511,16 @@ def generate_html_index(output_dir: Path, metrics: Dict[str, List[Tuple]]):
             html += plot_card('sorted_insertion_speedup', 'Sorted Insertion Speedup')
             all_sizes = sorted(set(s for s, *_ in metrics.get('BM_grove_creation_sorted', [])))
             for size in all_sizes:
-                html += plot_card(f'sorted_vs_unsorted_size_{size}', f'Direct Comparison - {size} intervals')
+                html += plot_card(f'sorted_vs_unsorted_size_{size}', f'Sorted vs Unsorted - {size} intervals')
+
+        elif section['id'] == 'all-modes':
+            all_sizes = set()
+            for k, v in metrics.items():
+                if k.startswith('BM_grove_creation_'):
+                    for s, *_ in v:
+                        all_sizes.add(s)
+            for size in sorted(all_sizes):
+                html += plot_card(f'all_modes_size_{size}', f'All Modes - {size} intervals')
 
         elif section['id'] == 'serialization':
             html += plot_card('BM_serialization_size_size_vs_dataset', 'Total Serialized Size vs Dataset')
@@ -527,6 +585,10 @@ def main():
     print("\nGenerating comparison plots...")
     plot_sorted_vs_unsorted_comparison(metrics, output_dir)
     plot_sorted_speedup(metrics, output_dir)
+
+    # Generate all-modes comparison
+    print("\nGenerating all-modes comparisons...")
+    plot_all_modes_comparison(metrics, output_dir)
 
     # Generate serialization size plots
     print("\nGenerating serialization size plots...")
