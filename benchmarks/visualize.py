@@ -58,7 +58,11 @@ def extract_metrics(data: Dict) -> Dict[str, List[Tuple]]:
         if time_us > 0:
             throughput = (size * 1e6) / time_us  # Convert us to seconds
 
-        metrics[bench_type].append((size, order, time_us, throughput))
+        # Extract custom counters for serialization benchmarks
+        serialized_bytes = benchmark.get('serialized_bytes', 0)
+        bytes_per_interval = benchmark.get('bytes_per_interval', 0)
+
+        metrics[bench_type].append((size, order, time_us, throughput, serialized_bytes, bytes_per_interval))
 
     return metrics
 
@@ -71,7 +75,7 @@ def plot_time_vs_order(metrics: Dict[str, List[Tuple]], output_dir: Path):
     for bench_type, data in metrics.items():
         # Group by size
         by_size = defaultdict(list)
-        for size, order, time_us, _ in data:
+        for size, order, time_us, *_ in data:
             by_size[size].append((order, time_us))
 
         # Sort and create plot
@@ -110,7 +114,7 @@ def plot_time_vs_size(metrics: Dict[str, List[Tuple]], output_dir: Path):
     for bench_type, data in metrics.items():
         # Group by order
         by_order = defaultdict(list)
-        for size, order, time_us, _ in data:
+        for size, order, time_us, *_ in data:
             by_order[order].append((size, time_us))
 
         # Create plot
@@ -152,7 +156,7 @@ def plot_throughput_comparison(metrics: Dict[str, List[Tuple]], output_dir: Path
     for bench_type, data in metrics.items():
         # Group by size
         by_size = defaultdict(list)
-        for size, order, _, throughput in data:
+        for size, order, _, throughput, *__ in data:
             by_size[size].append((order, throughput))
 
         # Create plot
@@ -190,7 +194,7 @@ def plot_speedup_factor(metrics: Dict[str, List[Tuple]], output_dir: Path, basel
     for bench_type, data in metrics.items():
         # Group by size
         by_size = defaultdict(list)
-        for size, order, time_us, _ in data:
+        for size, order, time_us, *_ in data:
             by_size[size].append((order, time_us))
 
         # Calculate speedup factors
@@ -259,10 +263,10 @@ def plot_sorted_vs_unsorted_comparison(metrics: Dict[str, List[Tuple]], output_d
     sorted_by_size_order = {}
     unsorted_by_size_order = {}
 
-    for size, order, time_us, _ in sorted_data:
+    for size, order, time_us, *_ in sorted_data:
         sorted_by_size_order[(size, order)] = time_us
 
-    for size, order, time_us, _ in unsorted_data:
+    for size, order, time_us, *_ in unsorted_data:
         unsorted_by_size_order[(size, order)] = time_us
 
     # Get all unique sizes and orders
@@ -326,10 +330,10 @@ def plot_sorted_speedup(metrics: Dict[str, List[Tuple]], output_dir: Path):
     sorted_by_size_order = {}
     unsorted_by_size_order = {}
 
-    for size, order, time_us, _ in sorted_data:
+    for size, order, time_us, *_ in sorted_data:
         sorted_by_size_order[(size, order)] = time_us
 
-    for size, order, time_us, _ in unsorted_data:
+    for size, order, time_us, *_ in unsorted_data:
         unsorted_by_size_order[(size, order)] = time_us
 
     # Group by size
@@ -368,6 +372,79 @@ def plot_sorted_speedup(metrics: Dict[str, List[Tuple]], output_dir: Path):
     plt.savefig(output_dir / filename, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Generated: {filename}")
+
+
+def plot_serialization_size(metrics: Dict[str, List[Tuple]], output_dir: Path):
+    """
+    Plot serialized size vs dataset size for different orders.
+    Also plots bytes-per-interval vs order.
+    """
+    for bench_type in ['BM_serialization_size_sorted', 'BM_serialization_size_unsorted']:
+        data = metrics.get(bench_type, [])
+        if not data:
+            continue
+
+        title_suffix = 'Sorted' if 'sorted' in bench_type else 'Unsorted'
+
+        # --- Plot 1: Total serialized bytes vs dataset size ---
+        by_order = defaultdict(list)
+        for size, order, _, _, serialized_bytes, _ in data:
+            if serialized_bytes > 0:
+                by_order[order].append((size, serialized_bytes))
+
+        if not by_order:
+            continue
+
+        fig, ax = plt.subplots(figsize=(12, 8))
+        colors = sns.color_palette("husl", len(by_order))
+
+        for idx, order in enumerate(sorted(by_order.keys())):
+            points = sorted(by_order[order])
+            sizes = [p[0] for p in points]
+            bytes_vals = [p[1] / 1024 for p in points]  # Convert to KB
+            ax.plot(sizes, bytes_vals, marker='o', linewidth=2, markersize=8,
+                   label=f'order={order}', color=colors[idx])
+
+        ax.set_xlabel('Dataset Size (# intervals)', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Serialized Size (KB)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Serialized Size vs Dataset Size - {title_suffix}',
+                    fontsize=14, fontweight='bold')
+        ax.legend(title='Order', fontsize=9, title_fontsize=10, ncol=2)
+        ax.grid(True, alpha=0.3)
+
+        filename = f'{bench_type}_size_vs_dataset.png'
+        plt.tight_layout()
+        plt.savefig(output_dir / filename, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"Generated: {filename}")
+
+        # --- Plot 2: Bytes per interval vs order ---
+        by_size = defaultdict(list)
+        for size, order, _, _, _, bytes_per in data:
+            if bytes_per > 0:
+                by_size[size].append((order, bytes_per))
+
+        fig, ax = plt.subplots(figsize=(12, 8))
+
+        for size in sorted(by_size.keys()):
+            points = sorted(by_size[size])
+            orders = [p[0] for p in points]
+            bpi = [p[1] for p in points]
+            ax.plot(orders, bpi, marker='o', linewidth=2, markersize=8,
+                   label=f'{size} intervals')
+
+        ax.set_xlabel('Order (k)', fontsize=12, fontweight='bold')
+        ax.set_ylabel('Bytes per Interval (compressed)', fontsize=12, fontweight='bold')
+        ax.set_title(f'Serialization Efficiency vs Order - {title_suffix}',
+                    fontsize=14, fontweight='bold')
+        ax.legend(title='Dataset Size', fontsize=10, title_fontsize=11)
+        ax.grid(True, alpha=0.3)
+
+        filename = f'{bench_type}_bytes_per_interval.png'
+        plt.tight_layout()
+        plt.savefig(output_dir / filename, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"Generated: {filename}")
 
 
 def generate_html_index(output_dir: Path, metrics: Dict[str, List[Tuple]]):
@@ -505,11 +582,33 @@ def generate_html_index(output_dir: Path, metrics: Dict[str, List[Tuple]]):
 """
 
         # Add per-size comparison plots
-        all_sizes = sorted(set(size for size, _, _, _ in metrics['BM_grove_creation_sorted']))
+        all_sizes = sorted(set(size for size, *_ in metrics['BM_grove_creation_sorted']))
         for size in all_sizes:
             html_content += f"""        <div class="plot-container">
             <h3>Direct Comparison - {size} intervals</h3>
             <img src="sorted_vs_unsorted_size_{size}.png" alt="Sorted vs Unsorted - {size} intervals">
+        </div>
+"""
+
+        html_content += '    </div>\n'
+
+    # Add serialization size section
+    has_serialization = any(k.startswith('BM_serialization_size') for k in metrics.keys())
+    if has_serialization:
+        html_content += '\n    <h2>Serialization Size</h2>\n'
+        html_content += '    <div class="plot-grid">\n'
+
+        for bench_type in ['BM_serialization_size_sorted', 'BM_serialization_size_unsorted']:
+            if bench_type not in metrics:
+                continue
+            title_suffix = 'Sorted' if 'sorted' in bench_type else 'Unsorted'
+            html_content += f"""        <div class="plot-container">
+            <h3>Total Size vs Dataset - {title_suffix}</h3>
+            <img src="{bench_type}_size_vs_dataset.png" alt="Serialization Size - {title_suffix}">
+        </div>
+        <div class="plot-container">
+            <h3>Bytes per Interval - {title_suffix}</h3>
+            <img src="{bench_type}_bytes_per_interval.png" alt="Bytes per Interval - {title_suffix}">
         </div>
 """
 
@@ -570,6 +669,10 @@ def main():
     print("\nGenerating sorted vs unsorted comparisons...")
     plot_sorted_vs_unsorted_comparison(metrics, output_dir)
     plot_sorted_speedup(metrics, output_dir)
+
+    # Generate serialization size plots
+    print("\nGenerating serialization size plots...")
+    plot_serialization_size(metrics, output_dir)
 
     # Generate HTML index
     generate_html_index(output_dir, metrics)
