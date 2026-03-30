@@ -13,7 +13,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(benchmark)
 add_executable(genogrove_benchmarks
-        grove_creation.cpp)
+        grove_creation.cpp
+        grove_serialization.cpp)
 
 target_link_libraries(genogrove_benchmarks
         PRIVATE

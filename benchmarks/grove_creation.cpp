@@ -9,80 +9,16 @@
 
 // genogrove
 #include <genogrove/structure/grove/grove.hpp>
-#include <genogrove/data_type/interval.hpp>
+#include "benchmark_utils.hpp"
 
 // Google Benchmark
 #include <benchmark/benchmark.h>
 
 // Standard library
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
-#include <map>
 #include <filesystem>
+#include <string>
 
-namespace gdt = genogrove::data_type;
 namespace gst = genogrove::structure;
-
-// ----------------------------
-// Interval data structure
-// ----------------------------
-struct IntervalWithData {
-    gdt::interval intvl;
-    int data;
-};
-
-// ----------------------------
-// Cache for loaded intervals
-// ----------------------------
-std::map<std::string, std::vector<IntervalWithData>> g_interval_cache;
-
-// ----------------------------
-// Load intervals from file
-// ----------------------------
-const std::vector<IntervalWithData>& load_intervals(const std::string& filename) {
-    // Check cache first
-    auto it = g_interval_cache.find(filename);
-    if (it != g_interval_cache.end()) {
-        return it->second;
-    }
-
-    std::vector<IntervalWithData> intervals;
-    std::ifstream file(filename);
-    if (!file) {
-        std::cerr << "Error: Could not open " << filename << std::endl;
-        std::cerr << "Current working directory: " << std::filesystem::current_path() << std::endl;
-        // std::cerr << "Please run 'make generate-all' in the benchmarks directory first" << std::endl;
-        throw std::runtime_error("Failed to load intervals");
-    }
-
-    std::string line;
-    while (std::getline(file, line)) {
-        // Skip comments and empty lines
-        if (line.empty() || line[0] == '#') {
-            continue;
-        }
-
-        std::istringstream iss(line);
-        int start, end, data;
-        if (iss >> start >> end >> data) {
-            intervals.push_back({gdt::interval(start, end), data});
-        }
-    }
-
-    if (intervals.empty()) {
-        throw std::runtime_error("No intervals loaded from " + filename);
-    }
-
-    // Output needs to be ommitted as this taints the benchmark JSON output
-    // std::cout << "Loaded " << intervals.size() << " intervals from " << filename << std::endl;
-
-    // Cache the loaded intervals
-    g_interval_cache[filename] = std::move(intervals);
-    return g_interval_cache[filename];
-}
 
 
 // ----------------------------
