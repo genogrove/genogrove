@@ -7,8 +7,8 @@
  * See the LICENSE file in the root of the repository for more information.
  */
 
-#ifndef GENOGROVE_IO_INDEXED_FASTA_HPP
-#define GENOGROVE_IO_INDEXED_FASTA_HPP
+#ifndef GENOGROVE_IO_FASTA_INDEX_HPP
+#define GENOGROVE_IO_FASTA_INDEX_HPP
 
 // standard
 #include <string>
@@ -32,7 +32,7 @@ namespace genogrove::io {
      * ## Usage
      *
      * ```cpp
-     * indexed_fasta fasta("genome.fa");
+     * fasta_index fasta("genome.fa");
      *
      * // Fetch a region (0-based half-open)
      * std::string seq = fasta.fetch("chr1", 1000, 2000);
@@ -57,7 +57,7 @@ namespace genogrove::io {
      * @note Non-copyable, movable. The `.fai` index file is created on first
      *       use if missing (requires write permission to the FASTA directory).
      */
-    class indexed_fasta {
+    class fasta_index {
     public:
         /**
          * @brief Open a FASTA file and load (or create) its index.
@@ -65,17 +65,17 @@ namespace genogrove::io {
          * @param path Path to the FASTA file (.fa, .fasta, .fna)
          * @throws std::runtime_error if file cannot be opened or indexed
          */
-        explicit indexed_fasta(const std::filesystem::path& path);
+        explicit fasta_index(const std::filesystem::path& path);
 
         // Non-copyable
-        indexed_fasta(const indexed_fasta&) = delete;
-        indexed_fasta& operator=(const indexed_fasta&) = delete;
+        fasta_index(const fasta_index&) = delete;
+        fasta_index& operator=(const fasta_index&) = delete;
 
         // Movable
-        indexed_fasta(indexed_fasta&& other) noexcept;
-        indexed_fasta& operator=(indexed_fasta&& other) noexcept;
+        fasta_index(fasta_index&& other) noexcept;
+        fasta_index& operator=(fasta_index&& other) noexcept;
 
-        ~indexed_fasta();
+        ~fasta_index();
 
         /**
          * @brief Fetch a subsequence by region.
@@ -133,4 +133,4 @@ namespace genogrove::io {
 
 } // namespace genogrove::io
 
-#endif // GENOGROVE_IO_INDEXED_FASTA_HPP
+#endif // GENOGROVE_IO_FASTA_INDEX_HPP

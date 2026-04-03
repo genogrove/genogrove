@@ -7,7 +7,7 @@
  * See the LICENSE file in the root of the repository for more information.
  */
 
-#include <genogrove/io/sequence_reader.hpp>
+#include <genogrove/io/fasta_reader.hpp>
 
 // standard
 #include <stdexcept>
@@ -22,11 +22,11 @@ namespace genogrove::io {
     // Helper to cast opaque void* to the macro-generated kseq_t*
     static kseq_t* as_kseq(void* p) { return static_cast<kseq_t*>(p); }
 
-    sequence_reader::sequence_reader(const std::filesystem::path& path)
-        : sequence_reader(path, sequence_reader_options::defaults()) {}
+    fasta_reader::fasta_reader(const std::filesystem::path& path)
+        : fasta_reader(path, fasta_reader_options::defaults()) {}
 
-    sequence_reader::sequence_reader(const std::filesystem::path& path,
-                                     const sequence_reader_options& options)
+    fasta_reader::fasta_reader(const std::filesystem::path& path,
+                                     const fasta_reader_options& options)
         : gz_file_(nullptr)
         , kseq_(nullptr)
         , record_num_(0)
@@ -46,11 +46,11 @@ namespace genogrove::io {
         }
     }
 
-    sequence_reader::~sequence_reader() {
+    fasta_reader::~fasta_reader() {
         cleanup();
     }
 
-    void sequence_reader::cleanup() {
+    void fasta_reader::cleanup() {
         if (kseq_) {
             kseq_destroy(as_kseq(kseq_));
             kseq_ = nullptr;
@@ -61,8 +61,8 @@ namespace genogrove::io {
         }
     }
 
-    sequence_reader::sequence_reader(sequence_reader&& other) noexcept
-        : file_reader<sequence_entry>(std::move(other))
+    fasta_reader::fasta_reader(fasta_reader&& other) noexcept
+        : file_reader<fasta_entry>(std::move(other))
         , gz_file_(other.gz_file_)
         , kseq_(other.kseq_)
         , record_num_(other.record_num_)
@@ -73,9 +73,9 @@ namespace genogrove::io {
         other.kseq_ = nullptr;
     }
 
-    sequence_reader& sequence_reader::operator=(sequence_reader&& other) noexcept {
+    fasta_reader& fasta_reader::operator=(fasta_reader&& other) noexcept {
         if (this != &other) {
-            file_reader<sequence_entry>::operator=(std::move(other));
+            file_reader<fasta_entry>::operator=(std::move(other));
             cleanup();
 
             gz_file_ = other.gz_file_;
@@ -91,7 +91,7 @@ namespace genogrove::io {
         return *this;
     }
 
-    bool sequence_reader::read_next(sequence_entry& entry) {
+    bool fasta_reader::read_next(fasta_entry& entry) {
         if (!kseq_ || at_eof_) {
             return false;
         }
@@ -137,15 +137,15 @@ namespace genogrove::io {
         }
     }
 
-    bool sequence_reader::has_next() {
+    bool fasta_reader::has_next() {
         return !at_eof_ && kseq_ != nullptr;
     }
 
-    std::string sequence_reader::get_error_message() const {
+    std::string fasta_reader::get_error_message() const {
         return error_message_;
     }
 
-    size_t sequence_reader::get_current_line() const {
+    size_t fasta_reader::get_current_line() const {
         return record_num_;
     }
 

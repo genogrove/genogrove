@@ -7,7 +7,7 @@
  * See the LICENSE file in the root of the repository for more information.
  */
 
-#include <genogrove/io/indexed_fasta.hpp>
+#include <genogrove/io/fasta_index.hpp>
 
 // standard
 #include <stdexcept>
@@ -15,7 +15,7 @@
 
 namespace genogrove::io {
 
-    indexed_fasta::indexed_fasta(const std::filesystem::path& path)
+    fasta_index::fasta_index(const std::filesystem::path& path)
         : fai_(nullptr) {
         fai_ = fai_load(path.c_str());
         if (!fai_) {
@@ -23,23 +23,23 @@ namespace genogrove::io {
         }
     }
 
-    indexed_fasta::~indexed_fasta() {
+    fasta_index::~fasta_index() {
         cleanup();
     }
 
-    void indexed_fasta::cleanup() {
+    void fasta_index::cleanup() {
         if (fai_) {
             fai_destroy(fai_);
             fai_ = nullptr;
         }
     }
 
-    indexed_fasta::indexed_fasta(indexed_fasta&& other) noexcept
+    fasta_index::fasta_index(fasta_index&& other) noexcept
         : fai_(other.fai_) {
         other.fai_ = nullptr;
     }
 
-    indexed_fasta& indexed_fasta::operator=(indexed_fasta&& other) noexcept {
+    fasta_index& fasta_index::operator=(fasta_index&& other) noexcept {
         if (this != &other) {
             cleanup();
             fai_ = other.fai_;
@@ -48,7 +48,7 @@ namespace genogrove::io {
         return *this;
     }
 
-    std::string indexed_fasta::fetch(const std::string& name, size_t start, size_t end) const {
+    std::string fasta_index::fetch(const std::string& name, size_t start, size_t end) const {
         if (!faidx_has_seq(fai_, name.c_str())) {
             throw std::out_of_range("Sequence not found in index: " + name);
         }
@@ -74,16 +74,16 @@ namespace genogrove::io {
         return result;
     }
 
-    std::string indexed_fasta::fetch(const std::string& name) const {
+    std::string fasta_index::fetch(const std::string& name) const {
         size_t len = sequence_length(name);
         return fetch(name, 0, len);
     }
 
-    size_t indexed_fasta::sequence_count() const {
+    size_t fasta_index::sequence_count() const {
         return static_cast<size_t>(faidx_nseq(fai_));
     }
 
-    std::string indexed_fasta::sequence_name(size_t index) const {
+    std::string fasta_index::sequence_name(size_t index) const {
         if (index >= sequence_count()) {
             throw std::out_of_range("Sequence index out of range: " + std::to_string(index));
         }
@@ -91,7 +91,7 @@ namespace genogrove::io {
         return std::string(name);
     }
 
-    size_t indexed_fasta::sequence_length(const std::string& name) const {
+    size_t fasta_index::sequence_length(const std::string& name) const {
         int len = faidx_seq_len(fai_, name.c_str());
         if (len < 0) {
             throw std::out_of_range("Sequence not found in index: " + name);
@@ -99,7 +99,7 @@ namespace genogrove::io {
         return static_cast<size_t>(len);
     }
 
-    bool indexed_fasta::has_sequence(const std::string& name) const {
+    bool fasta_index::has_sequence(const std::string& name) const {
         return faidx_has_seq(fai_, name.c_str()) != 0;
     }
 

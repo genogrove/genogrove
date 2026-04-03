@@ -14,7 +14,7 @@
 #include <filesystem>
 
 // genogrove
-#include <genogrove/io/indexed_fasta.hpp>
+#include <genogrove/io/fasta_index.hpp>
 
 namespace fs = std::filesystem;
 namespace gio = genogrove::io;
@@ -23,7 +23,7 @@ namespace gio = genogrove::io;
 // Test Fixture
 // ==========================================
 
-class indexedFastaTest : public ::testing::Test {
+class fastaIndexTest : public ::testing::Test {
 protected:
     fs::path test_data_dir;
     fs::path fasta_path;
@@ -47,27 +47,27 @@ protected:
 // Index Query Tests
 // ==========================================
 
-TEST_F(indexedFastaTest, sequenceCount) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, sequenceCount) {
+    gio::fasta_index fasta(fasta_path);
     EXPECT_EQ(fasta.sequence_count(), 3);
 }
 
-TEST_F(indexedFastaTest, sequenceNames) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, sequenceNames) {
+    gio::fasta_index fasta(fasta_path);
     EXPECT_EQ(fasta.sequence_name(0), "chr1");
     EXPECT_EQ(fasta.sequence_name(1), "chr2");
     EXPECT_EQ(fasta.sequence_name(2), "chrM");
 }
 
-TEST_F(indexedFastaTest, sequenceLengths) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, sequenceLengths) {
+    gio::fasta_index fasta(fasta_path);
     EXPECT_EQ(fasta.sequence_length("chr1"), 40);
     EXPECT_EQ(fasta.sequence_length("chr2"), 12);
     EXPECT_EQ(fasta.sequence_length("chrM"), 30);
 }
 
-TEST_F(indexedFastaTest, hasSequence) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, hasSequence) {
+    gio::fasta_index fasta(fasta_path);
     EXPECT_TRUE(fasta.has_sequence("chr1"));
     EXPECT_TRUE(fasta.has_sequence("chr2"));
     EXPECT_TRUE(fasta.has_sequence("chrM"));
@@ -79,8 +79,8 @@ TEST_F(indexedFastaTest, hasSequence) {
 // Region Fetch Tests
 // ==========================================
 
-TEST_F(indexedFastaTest, fetchRegion) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, fetchRegion) {
+    gio::fasta_index fasta(fasta_path);
 
     // First 10 bases of chr1 (0-based half-open)
     std::string seq = fasta.fetch("chr1", 0, 10);
@@ -88,39 +88,39 @@ TEST_F(indexedFastaTest, fetchRegion) {
     EXPECT_EQ(seq.size(), 10);
 }
 
-TEST_F(indexedFastaTest, fetchAcrossLines) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, fetchAcrossLines) {
+    gio::fasta_index fasta(fasta_path);
 
     // Fetch across the line boundary in chr1 (positions 18-22 span both lines)
     std::string seq = fasta.fetch("chr1", 18, 22);
     EXPECT_EQ(seq, "CGAT");
 }
 
-TEST_F(indexedFastaTest, fetchEntireSequence) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, fetchEntireSequence) {
+    gio::fasta_index fasta(fasta_path);
 
     std::string seq = fasta.fetch("chr2");
     EXPECT_EQ(seq, "GCTAGCTAGCTA");
     EXPECT_EQ(seq.size(), 12);
 }
 
-TEST_F(indexedFastaTest, fetchEntireMultilineSequence) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, fetchEntireMultilineSequence) {
+    gio::fasta_index fasta(fasta_path);
 
     std::string seq = fasta.fetch("chr1");
     EXPECT_EQ(seq.size(), 40);
     EXPECT_EQ(seq, "ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG");
 }
 
-TEST_F(indexedFastaTest, fetchSingleBase) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, fetchSingleBase) {
+    gio::fasta_index fasta(fasta_path);
 
     std::string seq = fasta.fetch("chr1", 0, 1);
     EXPECT_EQ(seq, "A");
 }
 
-TEST_F(indexedFastaTest, fetchLastBase) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, fetchLastBase) {
+    gio::fasta_index fasta(fasta_path);
 
     std::string seq = fasta.fetch("chr2", 11, 12);
     EXPECT_EQ(seq, "A");
@@ -130,37 +130,37 @@ TEST_F(indexedFastaTest, fetchLastBase) {
 // Error Handling Tests
 // ==========================================
 
-TEST_F(indexedFastaTest, nonExistentFileThrows) {
+TEST_F(fastaIndexTest, nonExistentFileThrows) {
     EXPECT_THROW(
-        { gio::indexed_fasta fasta{"/nonexistent/path/genome.fa"}; },
+        { gio::fasta_index fasta{"/nonexistent/path/genome.fa"}; },
         std::runtime_error
     );
 }
 
-TEST_F(indexedFastaTest, fetchUnknownSequenceThrows) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, fetchUnknownSequenceThrows) {
+    gio::fasta_index fasta(fasta_path);
     EXPECT_THROW(fasta.fetch("chrX", 0, 10), std::out_of_range);
 }
 
-TEST_F(indexedFastaTest, fetchEntireUnknownSequenceThrows) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, fetchEntireUnknownSequenceThrows) {
+    gio::fasta_index fasta(fasta_path);
     EXPECT_THROW(fasta.fetch("chrX"), std::out_of_range);
 }
 
-TEST_F(indexedFastaTest, fetchInvalidRegionThrows) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, fetchInvalidRegionThrows) {
+    gio::fasta_index fasta(fasta_path);
     EXPECT_THROW(fasta.fetch("chr1", 10, 10), std::runtime_error);
     EXPECT_THROW(fasta.fetch("chr1", 20, 10), std::runtime_error);
 }
 
-TEST_F(indexedFastaTest, sequenceNameOutOfRangeThrows) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, sequenceNameOutOfRangeThrows) {
+    gio::fasta_index fasta(fasta_path);
     EXPECT_THROW(fasta.sequence_name(3), std::out_of_range);
     EXPECT_THROW(fasta.sequence_name(100), std::out_of_range);
 }
 
-TEST_F(indexedFastaTest, sequenceLengthUnknownNameThrows) {
-    gio::indexed_fasta fasta(fasta_path);
+TEST_F(fastaIndexTest, sequenceLengthUnknownNameThrows) {
+    gio::fasta_index fasta(fasta_path);
     EXPECT_THROW(fasta.sequence_length("chrX"), std::out_of_range);
 }
 
@@ -168,18 +168,18 @@ TEST_F(indexedFastaTest, sequenceLengthUnknownNameThrows) {
 // Move Semantics Tests
 // ==========================================
 
-TEST_F(indexedFastaTest, moveConstruction) {
-    gio::indexed_fasta fasta1(fasta_path);
+TEST_F(fastaIndexTest, moveConstruction) {
+    gio::fasta_index fasta1(fasta_path);
     EXPECT_EQ(fasta1.sequence_count(), 3);
 
-    gio::indexed_fasta fasta2(std::move(fasta1));
+    gio::fasta_index fasta2(std::move(fasta1));
     EXPECT_EQ(fasta2.sequence_count(), 3);
     EXPECT_EQ(fasta2.fetch("chr2"), "GCTAGCTAGCTA");
 }
 
-TEST_F(indexedFastaTest, moveAssignment) {
-    gio::indexed_fasta fasta1(fasta_path);
-    gio::indexed_fasta fasta2(fasta_path);
+TEST_F(fastaIndexTest, moveAssignment) {
+    gio::fasta_index fasta1(fasta_path);
+    gio::fasta_index fasta2(fasta_path);
 
     fasta2 = std::move(fasta1);
     EXPECT_EQ(fasta2.sequence_count(), 3);
@@ -190,7 +190,7 @@ TEST_F(indexedFastaTest, moveAssignment) {
 // Index Auto-Creation Test
 // ==========================================
 
-TEST_F(indexedFastaTest, createsIndexFile) {
+TEST_F(fastaIndexTest, createsIndexFile) {
     fs::path fai_path = fasta_path;
     fai_path += ".fai";
 
@@ -201,7 +201,7 @@ TEST_F(indexedFastaTest, createsIndexFile) {
     ASSERT_FALSE(fs::exists(fai_path));
 
     {
-        gio::indexed_fasta fasta(fasta_path);
+        gio::fasta_index fasta(fasta_path);
         EXPECT_EQ(fasta.sequence_count(), 3);
     }
 
