@@ -105,14 +105,14 @@ namespace genogrove::io {
                 if (ret == -1) {
                     // EOF
                     at_eof_ = true;
+                    return false;
                 } else if (ret == -2) {
                     error_message_ = "Truncated quality string at record " + std::to_string(record_num_ + 1);
-                    at_eof_ = true;
+                    throw std::runtime_error(error_message_);
                 } else {
                     error_message_ = "I/O error reading sequence record after record " + std::to_string(record_num_);
-                    at_eof_ = true;
+                    throw std::runtime_error(error_message_);
                 }
-                return false;
             }
 
             record_num_++;

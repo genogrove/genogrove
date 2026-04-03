@@ -231,7 +231,7 @@ TEST_F(sequencefileTest, includeEmptySequencesByDefault) {
 
 TEST_F(sequencefileTest, nonExistentFileThrows) {
     EXPECT_THROW(
-        gio::sequence_reader reader("/nonexistent/path/file.fa"),
+        { gio::sequence_reader reader{"/nonexistent/path/file.fa"}; },
         std::runtime_error
     );
 }
