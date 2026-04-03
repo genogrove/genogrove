@@ -15,6 +15,12 @@ namespace genogrove::io {
         {"vcf", filetype::VCF},
         {"sam", filetype::SAM},
         {"bam", filetype::BAM},
+        {"fa", filetype::FASTA},
+        {"fasta", filetype::FASTA},
+        {"fna", filetype::FASTA},
+        {"fq", filetype::FASTQ},
+        {"fastq", filetype::FASTQ},
+        {"fnq", filetype::FASTQ},
         {"gg", filetype::GG}
     };
 

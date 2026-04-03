@@ -1,0 +1,12 @@
+@read1 instrument:run:flowcell
+ATCGATCGATCG
++
+IIIIIIIIIIII
+@read2 instrument:run:flowcell
+GCTAGCTAGCTA
++
+HHHHHHHHHHHH
+@read3
+NNNNNNNNNN
++
+##########
