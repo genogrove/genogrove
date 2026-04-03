@@ -12,6 +12,7 @@
 // standard
 #include <stdexcept>
 #include <cstdlib>
+#include <limits>
 
 namespace genogrove::io {
 
@@ -57,6 +58,12 @@ namespace genogrove::io {
             throw std::runtime_error("Invalid region: start >= end for " + name);
         }
 
+        // Guard against size_t→int narrowing (faidx_fetch_seq takes int)
+        constexpr auto kIntMax = static_cast<size_t>(std::numeric_limits<int>::max());
+        if (start > kIntMax || (end - 1) > kIntMax) {
+            throw std::out_of_range("Region exceeds htslib coordinate limit for " + name);
+        }
+
         // faidx_fetch_seq uses 0-based inclusive coordinates
         int len = 0;
         char* seq = faidx_fetch_seq(fai_, name.c_str(),
@@ -76,6 +83,9 @@ namespace genogrove::io {
 
     std::string fasta_index::fetch(const std::string& name) const {
         size_t len = sequence_length(name);
+        if (len == 0) {
+            return {};
+        }
         return fetch(name, 0, len);
     }
 
