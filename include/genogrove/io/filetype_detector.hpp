@@ -25,6 +25,8 @@ namespace genogrove::io {
         VCF,
         SAM,
         BAM,
+        FASTA,
+        FASTQ,
         GG,
         UNKNOWN
     };
