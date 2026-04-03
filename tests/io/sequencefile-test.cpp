@@ -16,7 +16,7 @@
 
 // genogrove
 #include <genogrove/io/filetype_detector.hpp>
-#include <genogrove/io/sequence_reader.hpp>
+#include <genogrove/io/fasta_reader.hpp>
 
 namespace fs = std::filesystem;
 namespace gio = genogrove::io;
@@ -25,7 +25,7 @@ namespace gio = genogrove::io;
 // Test Fixture
 // ==========================================
 
-class sequencefileTest : public ::testing::Test {
+class fastaReaderTest : public ::testing::Test {
 protected:
     fs::path test_data_dir;
     fs::path fasta_path;
@@ -48,7 +48,7 @@ protected:
 // File Type Detection Tests
 // ==========================================
 
-TEST_F(sequencefileTest, detectFastaFileType) {
+TEST_F(fastaReaderTest, detectFastaFileType) {
     gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(fasta_path);
 
@@ -56,7 +56,7 @@ TEST_F(sequencefileTest, detectFastaFileType) {
     EXPECT_EQ(comp, gio::compression_type::NONE);
 }
 
-TEST_F(sequencefileTest, detectFastqFileType) {
+TEST_F(fastaReaderTest, detectFastqFileType) {
     gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(fastq_path);
 
@@ -64,7 +64,7 @@ TEST_F(sequencefileTest, detectFastqFileType) {
     EXPECT_EQ(comp, gio::compression_type::NONE);
 }
 
-TEST_F(sequencefileTest, detectGzippedFastaFileType) {
+TEST_F(fastaReaderTest, detectGzippedFastaFileType) {
     gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(fasta_gz_path);
 
@@ -72,7 +72,7 @@ TEST_F(sequencefileTest, detectGzippedFastaFileType) {
     EXPECT_EQ(comp, gio::compression_type::GZIP);
 }
 
-TEST_F(sequencefileTest, detectGzippedFastqFileType) {
+TEST_F(fastaReaderTest, detectGzippedFastqFileType) {
     gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(fastq_gz_path);
 
@@ -84,9 +84,9 @@ TEST_F(sequencefileTest, detectGzippedFastqFileType) {
 // FASTA Reading Tests
 // ==========================================
 
-TEST_F(sequencefileTest, readFastaBasic) {
-    gio::sequence_reader reader(fasta_path);
-    std::vector<gio::sequence_entry> entries;
+TEST_F(fastaReaderTest, readFastaBasic) {
+    gio::fasta_reader reader(fasta_path);
+    std::vector<gio::fasta_entry> entries;
 
     for (const auto& entry : reader) {
         entries.push_back(entry);
@@ -111,9 +111,9 @@ TEST_F(sequencefileTest, readFastaBasic) {
     EXPECT_FALSE(entries[2].quality.has_value());
 }
 
-TEST_F(sequencefileTest, readFastaGzipped) {
-    gio::sequence_reader reader(fasta_gz_path);
-    std::vector<gio::sequence_entry> entries;
+TEST_F(fastaReaderTest, readFastaGzipped) {
+    gio::fasta_reader reader(fasta_gz_path);
+    std::vector<gio::fasta_entry> entries;
 
     for (const auto& entry : reader) {
         entries.push_back(entry);
@@ -129,9 +129,9 @@ TEST_F(sequencefileTest, readFastaGzipped) {
 // FASTQ Reading Tests
 // ==========================================
 
-TEST_F(sequencefileTest, readFastqBasic) {
-    gio::sequence_reader reader(fastq_path);
-    std::vector<gio::sequence_entry> entries;
+TEST_F(fastaReaderTest, readFastqBasic) {
+    gio::fasta_reader reader(fastq_path);
+    std::vector<gio::fasta_entry> entries;
 
     for (const auto& entry : reader) {
         entries.push_back(entry);
@@ -159,9 +159,9 @@ TEST_F(sequencefileTest, readFastqBasic) {
     EXPECT_EQ(*entries[2].quality, "##########");
 }
 
-TEST_F(sequencefileTest, readFastqGzipped) {
-    gio::sequence_reader reader(fastq_gz_path);
-    std::vector<gio::sequence_entry> entries;
+TEST_F(fastaReaderTest, readFastqGzipped) {
+    gio::fasta_reader reader(fastq_gz_path);
+    std::vector<gio::fasta_entry> entries;
 
     for (const auto& entry : reader) {
         entries.push_back(entry);
@@ -178,9 +178,9 @@ TEST_F(sequencefileTest, readFastqGzipped) {
 // Direct read_next() Tests
 // ==========================================
 
-TEST_F(sequencefileTest, readNextDirect) {
-    gio::sequence_reader reader(fasta_path);
-    gio::sequence_entry entry;
+TEST_F(fastaReaderTest, readNextDirect) {
+    gio::fasta_reader reader(fasta_path);
+    gio::fasta_entry entry;
 
     EXPECT_TRUE(reader.read_next(entry));
     EXPECT_EQ(entry.name, "seq1");
@@ -200,9 +200,9 @@ TEST_F(sequencefileTest, readNextDirect) {
 // Options Tests
 // ==========================================
 
-TEST_F(sequencefileTest, skipEmptySequences) {
-    gio::sequence_reader reader(empty_seq_path, {.skip_empty_sequences = true});
-    std::vector<gio::sequence_entry> entries;
+TEST_F(fastaReaderTest, skipEmptySequences) {
+    gio::fasta_reader reader(empty_seq_path, {.skip_empty_sequences = true});
+    std::vector<gio::fasta_entry> entries;
 
     for (const auto& entry : reader) {
         entries.push_back(entry);
@@ -214,9 +214,9 @@ TEST_F(sequencefileTest, skipEmptySequences) {
     EXPECT_EQ(entries[1].name, "seq3");
 }
 
-TEST_F(sequencefileTest, includeEmptySequencesByDefault) {
-    gio::sequence_reader reader(empty_seq_path);
-    std::vector<gio::sequence_entry> entries;
+TEST_F(fastaReaderTest, includeEmptySequencesByDefault) {
+    gio::fasta_reader reader(empty_seq_path);
+    std::vector<gio::fasta_entry> entries;
 
     for (const auto& entry : reader) {
         entries.push_back(entry);
@@ -229,9 +229,9 @@ TEST_F(sequencefileTest, includeEmptySequencesByDefault) {
 // Error Handling Tests
 // ==========================================
 
-TEST_F(sequencefileTest, nonExistentFileThrows) {
+TEST_F(fastaReaderTest, nonExistentFileThrows) {
     EXPECT_THROW(
-        { gio::sequence_reader reader{"/nonexistent/path/file.fa"}; },
+        { gio::fasta_reader reader{"/nonexistent/path/file.fa"}; },
         std::runtime_error
     );
 }
@@ -240,11 +240,11 @@ TEST_F(sequencefileTest, nonExistentFileThrows) {
 // Record Count Tests
 // ==========================================
 
-TEST_F(sequencefileTest, getCurrentLine) {
-    gio::sequence_reader reader(fasta_path);
+TEST_F(fastaReaderTest, getCurrentLine) {
+    gio::fasta_reader reader(fasta_path);
     EXPECT_EQ(reader.get_current_line(), 0);
 
-    gio::sequence_entry entry;
+    gio::fasta_entry entry;
     reader.read_next(entry);
     EXPECT_EQ(reader.get_current_line(), 1);
 
@@ -259,22 +259,22 @@ TEST_F(sequencefileTest, getCurrentLine) {
 // Move Semantics Tests
 // ==========================================
 
-TEST_F(sequencefileTest, moveConstruction) {
-    gio::sequence_reader reader1(fasta_path);
-    gio::sequence_entry entry;
+TEST_F(fastaReaderTest, moveConstruction) {
+    gio::fasta_reader reader1(fasta_path);
+    gio::fasta_entry entry;
     reader1.read_next(entry);
     EXPECT_EQ(entry.name, "seq1");
 
-    gio::sequence_reader reader2(std::move(reader1));
+    gio::fasta_reader reader2(std::move(reader1));
     reader2.read_next(entry);
     EXPECT_EQ(entry.name, "seq2");
 }
 
-TEST_F(sequencefileTest, moveAssignment) {
-    gio::sequence_reader reader1(fasta_path);
-    gio::sequence_reader reader2(fastq_path);
+TEST_F(fastaReaderTest, moveAssignment) {
+    gio::fasta_reader reader1(fasta_path);
+    gio::fasta_reader reader2(fastq_path);
 
-    gio::sequence_entry entry;
+    gio::fasta_entry entry;
     reader1.read_next(entry);
     EXPECT_EQ(entry.name, "seq1");
 
@@ -287,11 +287,11 @@ TEST_F(sequencefileTest, moveAssignment) {
 // has_next() Tests
 // ==========================================
 
-TEST_F(sequencefileTest, hasNext) {
-    gio::sequence_reader reader(fasta_path);
+TEST_F(fastaReaderTest, hasNext) {
+    gio::fasta_reader reader(fasta_path);
     EXPECT_TRUE(reader.has_next());
 
-    gio::sequence_entry entry;
+    gio::fasta_entry entry;
     while (reader.read_next(entry)) {}
 
     EXPECT_FALSE(reader.has_next());
@@ -301,9 +301,9 @@ TEST_F(sequencefileTest, hasNext) {
 // Multi-line Sequence Tests
 // ==========================================
 
-TEST_F(sequencefileTest, multiLineSequence) {
-    gio::sequence_reader reader(fasta_path);
-    std::vector<gio::sequence_entry> entries;
+TEST_F(fastaReaderTest, multiLineSequence) {
+    gio::fasta_reader reader(fasta_path);
+    std::vector<gio::fasta_entry> entries;
 
     for (const auto& entry : reader) {
         entries.push_back(entry);

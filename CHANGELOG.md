@@ -8,7 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **FASTA/FASTQ sequence reader**: `sequence_reader` class for streaming FASTA and FASTQ files (including gzip-compressed) using htslib's kseq parser. Adds `FASTA`/`FASTQ` to filetype detector with standard extensions. ([#297](https://github.com/genogrove/genogrove/pull/297))
+- **FASTA/FASTQ streaming reader**: `fasta_reader` class for streaming FASTA and FASTQ files (including gzip-compressed) using htslib's kseq parser. Adds `FASTA`/`FASTQ` to filetype detector with standard extensions. ([#297](https://github.com/genogrove/genogrove/pull/297))
+- **Indexed FASTA random access**: `fasta_index` class wrapping htslib's faidx API for region-based sequence retrieval with 0-based half-open coordinates. ([#298](https://github.com/genogrove/genogrove/pull/298))
+
+### Changed
+- **Rename FASTA/FASTQ reader types**: `sequence_reader` → `fasta_reader`, `sequence_entry` → `fasta_entry`, `sequence_reader_options` → `fasta_reader_options` for naming consistency. ([#298](https://github.com/genogrove/genogrove/pull/298))
 
 ## [0.19.0] - 2026-03-29
 
