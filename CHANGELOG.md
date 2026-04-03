@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **FASTA/FASTQ sequence reader**: `sequence_reader` class for streaming FASTA and FASTQ files (including gzip-compressed) using htslib's kseq parser. Adds `FASTA`/`FASTQ` to filetype detector with standard extensions. ([#297](https://github.com/genogrove/genogrove/pull/297))
+
 ## [0.19.0] - 2026-03-29
 
 ### Added
