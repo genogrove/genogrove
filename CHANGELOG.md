@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-04-08
+
 ### Fixed
 - **`inflate_streambuf` leaves failbit on source stream after decompression**: When the last `source_.read()` returned fewer bytes than requested, `std::istream::read` set eofbit + failbit. The `source_.clear()` call was inside the `avail_in > 0` seekback branch and never ran when all bytes were consumed. Now clears unconditionally on `Z_STREAM_END`. ([#301](https://github.com/genogrove/genogrove/issues/301), [#302](https://github.com/genogrove/genogrove/pull/302))
 
