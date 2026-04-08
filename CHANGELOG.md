@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Edge index mismatch in serialization roundtrip**: Serialization built key indices by iterating `key_storage` (insertion order), but deserialization populates `key_storage` via DFS pre-order traversal. Internal separator keys from node splits caused indices to diverge, wiring edges to wrong keys after roundtrip. Now builds indices via DFS to match deserialization order. ([#299](https://github.com/genogrove/genogrove/issues/299), [#300](https://github.com/genogrove/genogrove/pull/300))
+
 ## [0.20.0] - 2026-04-03
 
 ### Added

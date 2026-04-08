@@ -1005,7 +1005,9 @@ TEST(ExternalKeyTest, GraphEdgesSerializationRoundTrip) {
     std::stringstream ss;
 
     {
-        gst::grove<gdt::interval, std::string> grove(5);
+        // Order 3: max 2 keys per node, so 3+ keys force a split with
+        // internal separator keys — exercises the DFS-order edge index fix.
+        gst::grove<gdt::interval, std::string> grove(3);
 
         auto* e1 = grove.insert_data("chr1", gdt::interval{1000, 1200}, "exon1", gst::sorted);
         auto* e2 = grove.insert_data("chr1", gdt::interval{2000, 2200}, "exon2", gst::sorted);

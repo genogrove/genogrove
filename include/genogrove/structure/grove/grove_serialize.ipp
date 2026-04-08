@@ -78,11 +78,19 @@ public:
         }
 
         // Write graph overlay edges as flat (source_index, target_index, [metadata]) list.
-        // Key indices: key_storage[0..N-1] → 0..N-1, external_key_storage[0..M-1] → N..N+M-1.
+        // Key indices must match the order that deserialize() populates key_storage:
+        // DFS pre-order traversal of tree nodes, then external keys.
         std::unordered_map<const gdt::key<key_type, data_type>*, uint32_t> key_index;
         {
             uint32_t idx = 0;
-            for (const auto& k : key_storage) { key_index[&k] = idx++; }
+            std::function<void(const node<key_type, data_type>*)> index_dfs =
+                [&](const node<key_type, data_type>* n) {
+                    for (const auto* k : n->get_keys()) { key_index[k] = idx++; }
+                    if (!n->get_is_leaf()) {
+                        for (const auto* child : n->get_children()) { index_dfs(child); }
+                    }
+                };
+            for (const auto& [name, root] : root_nodes) { index_dfs(root); }
             for (const auto& k : external_key_storage) { key_index[&k] = idx++; }
         }
 
