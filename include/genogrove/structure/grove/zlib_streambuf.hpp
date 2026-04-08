@@ -158,10 +158,10 @@ protected:
             int ret = inflate(&zs_, Z_NO_FLUSH);
             if (ret == Z_STREAM_END) {
                 stream_ended_ = true;
-                // Seek source back by unconsumed bytes so trailing data
-                // (e.g. a second grove) remains readable on the source stream
+                // Clear eofbit/failbit from the last partial source_.read(),
+                // then seek back unconsumed bytes so trailing data remains readable.
+                source_.clear();
                 if (zs_.avail_in > 0) {
-                    source_.clear();  // clear eofbit if set
                     source_.seekg(-static_cast<std::streamoff>(zs_.avail_in),
                                   std::ios_base::cur);
                 }
