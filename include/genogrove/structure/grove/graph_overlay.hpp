@@ -249,6 +249,75 @@ class graph_overlay {
     }
 
     /**
+     * @brief Remove all outgoing edges from a source key
+     * @param source Pointer to source key
+     * @return Number of edges removed
+     */
+    size_t remove_edges_from(gdt::key<key_type, data_type>* source) {
+        auto it = adjacency.find(source);
+        if (it == adjacency.end()) return 0;
+        size_t count = it->second.size();
+        adjacency.erase(it);
+        return count;
+    }
+
+    /**
+     * @brief Remove all incoming edges to a target key
+     * @param target Pointer to target key
+     * @return Number of edges removed
+     * @note O(E) — scans all edges in the graph
+     */
+    size_t remove_edges_to(gdt::key<key_type, data_type>* target) {
+        size_t count = 0;
+        for (auto it = adjacency.begin(); it != adjacency.end(); ) {
+            auto& edges = it->second;
+            auto orig_size = edges.size();
+            std::erase_if(edges, [target](const edge& e) { return e.target == target; });
+            count += orig_size - edges.size();
+            if (edges.empty()) {
+                it = adjacency.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * @brief Remove all edges (both incoming and outgoing) involving a key
+     * @param key Pointer to the key
+     * @return Total number of edges removed
+     */
+    size_t remove_all_edges(gdt::key<key_type, data_type>* key) {
+        size_t count = remove_edges_from(key);
+        count += remove_edges_to(key);
+        return count;
+    }
+
+    /**
+     * @brief Remove all edges matching a predicate
+     * @param predicate Callable taking const edge& and returning bool
+     * @return Number of edges removed
+     */
+    template<typename Predicate>
+    size_t remove_edges_if(Predicate predicate)
+        requires std::predicate<Predicate, const edge&> {
+        size_t count = 0;
+        for (auto it = adjacency.begin(); it != adjacency.end(); ) {
+            auto& edges = it->second;
+            auto orig_size = edges.size();
+            std::erase_if(edges, predicate);
+            count += orig_size - edges.size();
+            if (edges.empty()) {
+                it = adjacency.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        return count;
+    }
+
+    /**
      * @brief Clear all edges
      */
     void clear() {
