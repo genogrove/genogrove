@@ -26,14 +26,17 @@ namespace gdt = genogrove::data_type;
 // Grove preconditions
 // =============================================================================
 
-TEST(grovePreconditionTest, constructorRejectsOrderBelowTwo) {
+TEST(grovePreconditionTest, constructorRejectsOrderBelowThree) {
+    // Order must be at least 3. With order == 2, split_internal_node would
+    // produce a degenerate right sibling with 0 keys and 1 child.
+    EXPECT_THROW((gst::grove<gdt::interval, int>(2)), std::invalid_argument);
     EXPECT_THROW((gst::grove<gdt::interval, int>(1)), std::invalid_argument);
     EXPECT_THROW((gst::grove<gdt::interval, int>(0)), std::invalid_argument);
     EXPECT_THROW((gst::grove<gdt::interval, int>(-1)), std::invalid_argument);
 }
 
-TEST(grovePreconditionTest, constructorAcceptsOrderTwo) {
-    EXPECT_NO_THROW((gst::grove<gdt::interval, int>(2)));
+TEST(grovePreconditionTest, constructorAcceptsOrderThree) {
+    EXPECT_NO_THROW((gst::grove<gdt::interval, int>(3)));
 }
 
 
@@ -192,32 +195,6 @@ TEST(groveEdgeCaseTest, duplicateKeyInsertion) {
 
     auto result = g.intersect(gdt::interval{10, 20}, "chr1");
     EXPECT_EQ(result.get_keys().size(), 2);
-}
-
-TEST(groveEdgeCaseTest, orderTwoFunctional) {
-    // Minimum functional order — forces splits on every other insertion
-    gst::grove<gdt::interval, int> g(2);
-
-    for (int i = 0; i < 10; ++i) {
-        size_t start = i * 100;
-        g.insert_data("chr1", gdt::interval{start, start + 50}, i);
-    }
-
-    // Query should find all 10 keys
-    auto result = g.intersect(gdt::interval{0, 950}, "chr1");
-    EXPECT_EQ(result.get_keys().size(), 10);
-}
-
-TEST(groveEdgeCaseTest, orderTwoSortedInsert) {
-    gst::grove<gdt::interval, int> g(2);
-
-    for (int i = 0; i < 10; ++i) {
-        size_t start = i * 100;
-        g.insert_data("chr1", gdt::interval{start, start + 50}, i, gst::sorted);
-    }
-
-    auto result = g.intersect(gdt::interval{0, 950}, "chr1");
-    EXPECT_EQ(result.get_keys().size(), 10);
 }
 
 TEST(groveEdgeCaseTest, keysEqualToOrder) {
