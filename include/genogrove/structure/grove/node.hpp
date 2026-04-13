@@ -267,27 +267,51 @@ class node {
     }
 
     /**
-     * @brief Calculate the aggregated parent key for this node
-     * @return Aggregated key_type representing the bounding value for all keys in this node
+     * @brief Aggregate this node's own keys
+     * @return Aggregate key_type covering all keys stored directly in this node
      *
-     * Used to compute the representative key value for internal nodes during tree
-     * construction and maintenance. The aggregate function combines all key values
-     * to create a single value that encompasses the entire subtree.
+     * For leaf nodes, this is the bounding range of the leaf data. For internal
+     * nodes, it covers children[0..n-2] (each separator covers its corresponding
+     * child) but NOT the last child, which has no separator key in this node.
+     * Use calc_keys_subtree_aggregate() to include a specific child's full range.
      *
-     * For example:
-     * - interval: Returns bounding interval (min start, max end)
-     * - numeric: Returns maximum value
-     * - genomic_coordinate: Returns bounding coordinate with wildcard strand
+     * For example with intervals: returns the bounding interval (min start, max
+     * end) of this node's keys.
      */
-    [[nodiscard]] key_type calc_parent_key() {
+    [[nodiscard]] key_type calc_keys_aggregate() {
         if (this->keys.empty()) {
-            throw std::runtime_error("calc_parent_key called on node with no keys");
+            throw std::runtime_error("calc_keys_aggregate called on node with no keys");
         }
         key_type result = this->keys[0]->get_value();
         for (size_t i = 1; i < this->keys.size(); ++i) {
             result = key_type::aggregate(result, this->keys[i]->get_value());
         }
         return result;
+    }
+
+    /**
+     * @brief Compute the bounding range of the entire subtree rooted at this node
+     * @return Aggregate key_type covering all leaf keys reachable from this node
+     *
+     * For leaf nodes, identical to calc_keys_aggregate(). For internal nodes,
+     * calc_keys_aggregate() only covers children[0..n-2] (each separator key
+     * covers its corresponding child), missing the last child which has no
+     * separator in this node. This method descends the last-child chain at
+     * every level to pick up the missing range.
+     *
+     * Used as a separator value when the parent needs an accurate upper bound
+     * for this node's entire subtree — especially after rebalancing, where
+     * calc_keys_aggregate() would leave the separator too narrow to reach
+     * keys in the catch-all chain.
+     */
+    [[nodiscard]] key_type calc_subtree_range() {
+        if (this->is_leaf || this->children.empty()) {
+            return calc_keys_aggregate();
+        }
+        return key_type::aggregate(
+            calc_keys_aggregate(),
+            this->children.back()->calc_subtree_range()
+        );
     }
 
     // =========================================================================

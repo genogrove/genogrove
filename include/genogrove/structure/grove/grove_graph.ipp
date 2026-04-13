@@ -203,6 +203,46 @@ public:
     }
 
     /**
+     * @brief Remove all outgoing edges from a source key (convenience forwarding to graph)
+     * @param source Pointer to source key
+     * @return Number of edges removed
+     */
+    size_t remove_edges_from(gdt::key<key_type, data_type>* source) {
+        return graph_data.remove_edges_from(source);
+    }
+
+    /**
+     * @brief Remove all incoming edges to a target key (convenience forwarding to graph)
+     * @param target Pointer to target key
+     * @return Number of edges removed
+     * @note O(E) — scans all edges in the graph
+     */
+    size_t remove_edges_to(gdt::key<key_type, data_type>* target) {
+        return graph_data.remove_edges_to(target);
+    }
+
+    /**
+     * @brief Remove all edges involving a key (convenience forwarding to graph)
+     * @param key Pointer to the key
+     * @return Total number of edges removed
+     */
+    size_t remove_all_edges(gdt::key<key_type, data_type>* key) {
+        return graph_data.remove_all_edges(key);
+    }
+
+    /**
+     * @brief Remove all edges matching a predicate (convenience forwarding to graph)
+     * @param predicate Callable taking const edge& and returning bool
+     * @return Number of edges removed
+     */
+    template<typename Predicate>
+    size_t remove_edges_if(Predicate predicate)
+        requires std::predicate<Predicate,
+            const typename graph_overlay<key_type, data_type, edge_data_type>::edge&> {
+        return graph_data.remove_edges_if(predicate);
+    }
+
+    /**
      * @brief Clear all edges in the graph (convenience forwarding to graph)
      * @note This does not delete the keys themselves, only the edge relationships
      */

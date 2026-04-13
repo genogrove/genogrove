@@ -55,9 +55,8 @@ public:
         detail::deflate_streambuf zbuf(os);
         std::ostream zos(&zbuf);
 
-        // write the order and fill factor
+        // write the order
         zos.write(reinterpret_cast<const char*>(&this->order), sizeof(this->order));
-        zos.write(reinterpret_cast<const char*>(&this->fill_factor), sizeof(this->fill_factor));
 
         // write the root nodes
         uint32_t number_root_nodes = static_cast<uint32_t>(this->root_nodes.size());
@@ -137,12 +136,7 @@ public:
         if (!zis) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading order");
         }
-        float fill_factor;
-        zis.read(reinterpret_cast<char*>(&fill_factor), sizeof(fill_factor));
-        if (!zis) {
-            throw std::runtime_error("Failed to deserialize grove: stream error reading fill_factor");
-        }
-        grove g(order, fill_factor);
+        grove g(order);
 
         uint32_t number_root_nodes;
         zis.read(reinterpret_cast<char*>(&number_root_nodes), sizeof(number_root_nodes));

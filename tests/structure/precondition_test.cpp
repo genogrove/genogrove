@@ -36,16 +36,6 @@ TEST(grovePreconditionTest, constructorAcceptsOrderTwo) {
     EXPECT_NO_THROW((gst::grove<gdt::interval, int>(2)));
 }
 
-TEST(grovePreconditionTest, constructorRejectsInvalidFillFactor) {
-    EXPECT_THROW((gst::grove<gdt::interval, int>(10, 0.4f)), std::invalid_argument);
-    EXPECT_THROW((gst::grove<gdt::interval, int>(10, 1.1f)), std::invalid_argument);
-}
-
-TEST(grovePreconditionTest, setFillFactorRejectsInvalid) {
-    gst::grove<gdt::interval, int> g(10);
-    EXPECT_THROW(g.set_fill_factor(0.3f), std::invalid_argument);
-    EXPECT_THROW(g.set_fill_factor(1.5f), std::invalid_argument);
-}
 
 // =============================================================================
 // Node preconditions
