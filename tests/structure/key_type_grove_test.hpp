@@ -16,6 +16,9 @@
 // genogrove
 #include <genogrove/structure/grove/grove.hpp>
 
+// shared test infrastructure
+#include "tree_validator.hpp"
+
 // standard
 #include <vector>
 #include <string>
@@ -139,101 +142,11 @@ struct grove_test_traits {
 // =============================================================================
 
 /**
- * @brief Recursively validate structural B+ tree invariants for a node
- *
- * Checks per node:
- * - Parent pointer matches expected
- * - Key count does not exceed order-1
- * - Non-root leaf nodes have at least ceil((order-1)/2) keys, EXCEPT the
- *   rightmost leaf of the tree — the sorted-append split leaves it with as
- *   few as 1 key until the next order-1 appends fill it back up
- * - Non-root internal nodes have at least floor((order-1)/2) keys
- * - Leaf nodes have no children; internal nodes have keys.size()+1 children
- * - Keys within a node are sorted
- * - All leaves at the same depth
- * - Accumulates the ordered leaf sequence (via in-order traversal)
- */
-template <typename key_type, typename data_type>
-void validate_tree_invariants(
-    gst::node<key_type, data_type>* n,
-    gst::node<key_type, data_type>* expected_parent,
-    int depth,
-    int order,
-    int& leaf_depth,
-    size_t& leaf_count,
-    std::vector<gst::node<key_type, data_type>*>& leaves_in_order,
-    bool is_root,
-    bool is_rightmost_spine) {
-
-    ASSERT_NE(n, nullptr) << "Node should not be null at depth " << depth;
-
-    EXPECT_EQ(n->get_parent(), expected_parent)
-        << "Parent pointer mismatch at depth " << depth;
-
-    // Leaf min: ceil((order-1)/2); internal min: floor((order-1)/2)
-    const int min_keys = n->get_is_leaf()
-        ? (order / 2)            // ceil((order-1)/2) for positive order
-        : ((order - 1) / 2);     // floor((order-1)/2)
-    EXPECT_LE(n->get_keys().size(), static_cast<size_t>(order - 1))
-        << "Node has too many keys at depth " << depth
-        << " (has " << n->get_keys().size() << ", max " << (order - 1) << ")";
-    // Rightmost leaf is exempt from min-occupancy: the sorted-append split
-    // biases the old leaf fully left and leaves the new rightmost leaf with a
-    // single key, which will fill up again on the next order-1 appends.
-    const bool is_rightmost_leaf = n->get_is_leaf() && is_rightmost_spine;
-    if (!is_root && !is_rightmost_leaf) {
-        EXPECT_GE(static_cast<int>(n->get_keys().size()), min_keys)
-            << "Node has too few keys at depth " << depth
-            << " (has " << n->get_keys().size() << ", min " << min_keys << ")";
-    }
-
-    if (n->get_is_leaf()) {
-        EXPECT_TRUE(n->get_children().empty())
-            << "Leaf node should have no children at depth " << depth;
-
-        if (leaf_depth < 0) {
-            leaf_depth = depth;
-        } else {
-            EXPECT_EQ(depth, leaf_depth)
-                << "All leaves should be at the same depth";
-        }
-
-        leaf_count += n->get_keys().size();
-        leaves_in_order.push_back(n);
-
-        for (size_t i = 1; i < n->get_keys().size(); ++i) {
-            EXPECT_FALSE(n->get_keys()[i]->get_value() < n->get_keys()[i-1]->get_value())
-                << "Keys should be sorted within leaf at depth " << depth;
-        }
-    } else {
-        EXPECT_EQ(n->get_children().size(), n->get_keys().size() + 1)
-            << "Internal node invariant violated at depth " << depth
-            << ": " << n->get_children().size() << " children but "
-            << n->get_keys().size() << " keys";
-
-        for (size_t i = 1; i < n->get_keys().size(); ++i) {
-            EXPECT_FALSE(n->get_keys()[i]->get_value() < n->get_keys()[i-1]->get_value())
-                << "Keys should be sorted within internal node at depth " << depth;
-        }
-
-        for (size_t i = 0; i < n->get_children().size(); ++i) {
-            const bool child_is_rightmost_spine =
-                is_rightmost_spine && (i + 1 == n->get_children().size());
-            validate_tree_invariants(
-                n->get_children()[i], n, depth + 1, order, leaf_depth, leaf_count,
-                leaves_in_order, false, child_is_rightmost_spine);
-        }
-    }
-}
-
-/**
  * @brief Validate the full index: structural invariants + leaf chain + routing
  *
- * Runs the recursive structural checks, then additionally verifies:
- * - Leaf chain: `next` pointers form a single sequence matching the in-order
- *   traversal of leaves, ending with nullptr
- * - Every leaf key is reachable via the tree's own insert/search routing (so
- *   that find_leaf / intersect / remove_key can actually locate it)
+ * Wraps the shared validator in tree_validator.hpp and additionally verifies
+ * that every leaf key is reachable via the tree's own search routing (so
+ * `intersect()` / `find_leaf` / `remove_key` can locate it).
  */
 template <typename key_type, typename data_type>
 void validate_grove_index(gst::grove<key_type, data_type>& grove_instance,
@@ -244,22 +157,8 @@ void validate_grove_index(gst::grove<key_type, data_type>& grove_instance,
     auto* root = it->second;
     ASSERT_NE(root, nullptr);
 
-    int leaf_depth = -1;
-    size_t leaf_count = 0;
-    std::vector<gst::node<key_type, data_type>*> leaves_in_order;
-    validate_tree_invariants(root, static_cast<gst::node<key_type, data_type>*>(nullptr),
-                             0, order, leaf_depth, leaf_count, leaves_in_order,
-                             /*is_root=*/true, /*is_rightmost_spine=*/true);
-
-    // Leaf chain must match the in-order leaf sequence
-    for (size_t i = 0; i + 1 < leaves_in_order.size(); ++i) {
-        EXPECT_EQ(leaves_in_order[i]->get_next(), leaves_in_order[i + 1])
-            << "Leaf chain mismatch at leaf " << i;
-    }
-    if (!leaves_in_order.empty()) {
-        EXPECT_EQ(leaves_in_order.back()->get_next(), nullptr)
-            << "Last leaf's next pointer should be nullptr";
-    }
+    auto leaves_in_order =
+        genogrove::test_support::validate_tree_structure(root, order);
 
     // Routing correctness: every leaf key must be reachable via intersect()
     for (auto* leaf : leaves_in_order) {
