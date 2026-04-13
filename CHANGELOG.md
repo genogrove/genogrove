@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **B+ tree key removal with rebalancing**: `grove::remove_key()` removes a key from the tree, borrowing from a sibling or merging if the leaf underflows, cascading internal rebalances and collapsing the root if needed. Automatically cleans up all graph edges (incoming + outgoing) involving the removed key. ([#304](https://github.com/genogrove/genogrove/issues/304), [#305](https://github.com/genogrove/genogrove/pull/305))
+- **Bulk graph edge removal**: `graph_overlay::remove_edges_from()`, `remove_edges_to()`, `remove_all_edges()`, `remove_edges_if()` (with grove forwarding methods) for scrubbing edges independently of key removal. ([#305](https://github.com/genogrove/genogrove/pull/305))
+- **`node::calc_subtree_range()`**: walks the last-child chain to produce the full subtree bounding range, used where separators need to cover the entire subtree (not just the node's own keys). `calc_parent_key()` renamed to `calc_keys_aggregate()` for accuracy. ([#305](https://github.com/genogrove/genogrove/pull/305))
+
+### Fixed
+- **`insert_iter` stale separators**: on a non-splitting recursive insert, the parent's separator for the child was never refreshed; if the new key extended the child's range, `search_iter`'s abort clause could then fire and make the key unreachable via `intersect()`. The separator is now widened with `aggregate(sep, key)` after each recursive insert. ([#305](https://github.com/genogrove/genogrove/pull/305))
+- **`build_tree_bottom_up` under-filled tail and multi-level separator bug**: greedy packing left the last leaf/internal group under min occupancy, and internal-level separators computed via `calc_keys_aggregate(child)` missed the child's own last-child subtree for 3+ level trees. Now distributes items evenly across groups and tracks each node's true subtree range as the build proceeds. ([#305](https://github.com/genogrove/genogrove/pull/305))
+- **`split_internal_node` unbalanced split**: with `default_mid = (order+1)/2` the split could produce a right child with 0 keys and 1 child (degenerate). Now uses a single `order / 2` midpoint for both leaf and internal splits — the one value that satisfies both leaf and internal min-occupancy constraints. ([#305](https://github.com/genogrove/genogrove/pull/305))
+- **`search_iter` strand-unsafe abort**: the early-out `query < keys[0] && !overlaps` tripped on pure strand mismatch for `genomic_coordinate`, aborting subtree traversals that still contained strand-compatible matches. Replaced with a pure spatial check (`query.get_end() < keys[0].get_start()`). ([#305](https://github.com/genogrove/genogrove/pull/305))
+
+### Changed
+- **Removed `fill_factor` from `grove`** (constructor, member, getters/setters, serialization): after tightening split points to respect leaf and internal minimum occupancy, `fill_factor` had essentially no effect. The O(1) rightmost-append path of sorted insert is preserved. ([#305](https://github.com/genogrove/genogrove/pull/305))
+
 ## [0.20.2] - 2026-04-08
 
 ### Fixed
