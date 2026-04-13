@@ -185,7 +185,7 @@ TEST_F(CLIIntersectE2ETest, InvalidOrder) {
         "isec -q \"" + query_path.string() + "\" -t \"" + target_path.string() + "\" -k 1"
     ));
     EXPECT_NE(result.exit_code, 0);
-    EXPECT_NE(result.output.find("order must be at least 2"), std::string::npos);
+    EXPECT_NE(result.output.find("order must be at least 3"), std::string::npos);
 }
 
 // ==========================================
