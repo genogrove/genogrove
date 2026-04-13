@@ -16,6 +16,8 @@
 #include <genogrove/structure/grove/grove.hpp>
 #include <genogrove/data_type/interval.hpp>
 
+#include "tree_validator.hpp"
+
 namespace gst = genogrove::structure;
 namespace gdt = genogrove::data_type;
 
@@ -24,90 +26,14 @@ namespace gdt = genogrove::data_type;
 // =============================================================================
 
 /**
- * @brief Validate B+ tree invariants recursively (adapted from key_type_grove_test.hpp)
+ * @brief Full tree validation: structural invariants + leaf chain continuity
  *
- * Checks: parent pointers, children/keys count, sorted keys, uniform leaf depth,
- * leaf chain continuity, and separator correctness.
- */
-template <typename key_type, typename data_type>
-void validate_tree(
-    gst::node<key_type, data_type>* n,
-    gst::node<key_type, data_type>* expected_parent,
-    int depth,
-    int order,
-    bool is_root,
-    int& leaf_depth,
-    std::vector<gst::node<key_type, data_type>*>& leaves) {
-
-    ASSERT_NE(n, nullptr) << "Node should not be null at depth " << depth;
-
-    EXPECT_EQ(n->get_parent(), expected_parent)
-        << "Parent pointer mismatch at depth " << depth;
-
-    // Leaf min: ceil((order-1)/2) = order/2 (integer); internal min: floor((order-1)/2)
-    const int min_keys = n->get_is_leaf() ? (order / 2) : ((order - 1) / 2);
-
-    EXPECT_LE(n->get_keys().size(), static_cast<size_t>(order - 1))
-        << "Node has too many keys at depth " << depth;
-
-    if (!is_root) {
-        EXPECT_GE(static_cast<int>(n->get_keys().size()), min_keys)
-            << "Node has too few keys at depth " << depth
-            << " (has " << n->get_keys().size() << ", min " << min_keys << ")";
-    }
-
-    if (n->get_is_leaf()) {
-        EXPECT_TRUE(n->get_children().empty())
-            << "Leaf node should have no children at depth " << depth;
-
-        if (leaf_depth < 0) {
-            leaf_depth = depth;
-        } else {
-            EXPECT_EQ(depth, leaf_depth) << "All leaves should be at the same depth";
-        }
-
-        // Check sorted keys
-        for (size_t i = 1; i < n->get_keys().size(); ++i) {
-            EXPECT_FALSE(n->get_keys()[i]->get_value() < n->get_keys()[i-1]->get_value())
-                << "Keys should be sorted within leaf at depth " << depth;
-        }
-
-        leaves.push_back(n);
-    } else {
-        EXPECT_EQ(n->get_children().size(), n->get_keys().size() + 1)
-            << "Internal node invariant violated at depth " << depth
-            << ": " << n->get_children().size() << " children but "
-            << n->get_keys().size() << " keys";
-
-        for (size_t i = 0; i < n->get_children().size(); ++i) {
-            validate_tree(n->get_children()[i], n, depth + 1, order, false,
-                          leaf_depth, leaves);
-        }
-    }
-}
-
-/**
- * @brief Full tree validation including leaf chain continuity
+ * Thin wrapper around the shared validator in tree_validator.hpp so existing
+ * call sites in this file can keep the name they used.
  */
 template <typename key_type, typename data_type>
 void validate_grove_index(gst::node<key_type, data_type>* root, int order) {
-    if (root == nullptr) return;
-
-    int leaf_depth = -1;
-    std::vector<gst::node<key_type, data_type>*> leaves;
-
-    validate_tree(root, static_cast<gst::node<key_type, data_type>*>(nullptr),
-                  0, order, true, leaf_depth, leaves);
-
-    // Verify leaf chain
-    for (size_t i = 0; i + 1 < leaves.size(); ++i) {
-        EXPECT_EQ(leaves[i]->get_next(), leaves[i + 1])
-            << "Leaf chain broken between leaf " << i << " and " << (i + 1);
-    }
-    if (!leaves.empty()) {
-        EXPECT_EQ(leaves.back()->get_next(), nullptr)
-            << "Last leaf should have null next pointer";
-    }
+    genogrove::test_support::validate_tree_structure(root, order);
 }
 
 /**
@@ -305,12 +231,23 @@ TEST(GroveRemoveTest, BorrowFromRightSibling) {
 }
 
 TEST(GroveRemoveTest, MergeLeaves) {
-    // Order 4: max 3 keys, leaf min 2. Inserting 4 keys produces a balanced
-    // 2/2 leaf split. Both leaves are exactly at min_keys — removing any
-    // single key underflows that leaf AND its sibling cannot lend (still
-    // at min_keys), forcing a merge.
+    // Order 4: max 3 keys, leaf min 2. Inserting 4 keys via the regular
+    // (unsorted) insert path produces a balanced 2/2 leaf split. Both
+    // leaves are exactly at min_keys — removing any single key underflows
+    // that leaf AND its sibling cannot lend (still at min_keys), forcing
+    // a merge.
+    //
+    // Note: this test deliberately does NOT use sorted insertion. The
+    // sorted-append path uses an asymmetric split (mid = order - 1) which
+    // produces a 3/1 layout, so a single removal does not underflow the
+    // over-full left leaf.
     gst::grove<gdt::interval, int> grove(4);
-    auto keys = insert_intervals(grove, "chr1", 4);
+    std::vector<gdt::key<gdt::interval, int>*> keys;
+    keys.reserve(4);
+    for (int i = 0; i < 4; ++i) {
+        const size_t start = static_cast<size_t>(i) * 10;
+        keys.push_back(grove.insert_data("chr1", gdt::interval{start, start + 5}, i));
+    }
 
     auto* root = grove.get_root_nodes().at("chr1");
     ASSERT_FALSE(root->get_is_leaf()) << "Root should be internal before merge";
