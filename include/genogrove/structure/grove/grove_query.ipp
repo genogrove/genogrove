@@ -83,10 +83,14 @@ private:
                 leaf = next;
             }
         } else {
-            // abort if left of key (not overlapping) - only needed for intervals
+            // Early-out: if the query ends before the first separator's
+            // subtree starts, nothing in this subtree can match spatially,
+            // regardless of any strand or other type-specific dimensions.
+            // Using a pure spatial check keeps this sound for strand-sensitive
+            // types (where `!overlaps` would also trip on strand mismatch and
+            // incorrectly abort subtrees that still contain matching keys).
             if constexpr (requires { key_type::is_interval; }) {
-                if(query < current->get_keys()[0]->get_value() &&
-                   !key_type::overlaps(current->get_keys()[0]->get_value(), query)) {
+                if (query.get_end() < current->get_keys()[0]->get_value().get_start()) {
                     return;
                 }
             }

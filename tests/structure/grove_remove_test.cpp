@@ -35,7 +35,6 @@ void validate_tree(
     gst::node<key_type, data_type>* expected_parent,
     int depth,
     int order,
-    int min_keys,
     bool is_root,
     int& leaf_depth,
     std::vector<gst::node<key_type, data_type>*>& leaves) {
@@ -44,6 +43,9 @@ void validate_tree(
 
     EXPECT_EQ(n->get_parent(), expected_parent)
         << "Parent pointer mismatch at depth " << depth;
+
+    // Leaf min: ceil((order-1)/2) = order/2 (integer); internal min: floor((order-1)/2)
+    const int min_keys = n->get_is_leaf() ? (order / 2) : ((order - 1) / 2);
 
     EXPECT_LE(n->get_keys().size(), static_cast<size_t>(order - 1))
         << "Node has too many keys at depth " << depth;
@@ -77,16 +79,8 @@ void validate_tree(
             << ": " << n->get_children().size() << " children but "
             << n->get_keys().size() << " keys";
 
-        // Check separator correctness: keys[i] should be aggregate of children[i]
-        for (size_t i = 0; i < n->get_keys().size(); ++i) {
-            auto expected = n->get_children()[i]->calc_parent_key();
-            EXPECT_EQ(n->get_keys()[i]->get_value(), expected)
-                << "Separator key[" << i << "] should be aggregate of child[" << i << "]"
-                << " at depth " << depth;
-        }
-
         for (size_t i = 0; i < n->get_children().size(); ++i) {
-            validate_tree(n->get_children()[i], n, depth + 1, order, min_keys, false,
+            validate_tree(n->get_children()[i], n, depth + 1, order, false,
                           leaf_depth, leaves);
         }
     }
@@ -99,12 +93,11 @@ template <typename key_type, typename data_type>
 void validate_grove_index(gst::node<key_type, data_type>* root, int order) {
     if (root == nullptr) return;
 
-    int min_keys = (order + 1) / 2 - 1;
     int leaf_depth = -1;
     std::vector<gst::node<key_type, data_type>*> leaves;
 
     validate_tree(root, static_cast<gst::node<key_type, data_type>*>(nullptr),
-                  0, order, min_keys, true, leaf_depth, leaves);
+                  0, order, true, leaf_depth, leaves);
 
     // Verify leaf chain
     for (size_t i = 0; i + 1 < leaves.size(); ++i) {
@@ -221,6 +214,44 @@ TEST(GroveRemoveTest, RemoveWithoutUnderflow) {
     EXPECT_EQ(root->get_keys().size(), 3);
 }
 
+TEST(GroveRemoveTest, RemoveSameKeyTwice) {
+    // Second removal must return false (key no longer in tree) and not corrupt
+    // the tree.
+    gst::grove<gdt::interval, int> grove(4);
+    auto keys = insert_intervals(grove, "chr1", 5);
+
+    EXPECT_TRUE(grove.remove_key("chr1", keys[2]));
+    EXPECT_FALSE(grove.remove_key("chr1", keys[2]));
+    EXPECT_EQ(grove.indexed_vertex_count(), 4);
+    validate_grove_index(grove.get_root_nodes().at("chr1"), 4);
+}
+
+TEST(GroveRemoveTest, RemoveLastChildLeaf) {
+    // Regression test for the empty-leaf bug: removing a key that leaves the
+    // PARENT'S LAST CHILD (catch-all position) empty previously caused
+    // update_separators_upward to walk calc_subtree_range into the empty
+    // leaf and throw.
+    gst::grove<gdt::interval, int> grove(3);
+    auto keys = insert_intervals(grove, "chr1", 5);
+
+    // Find the rightmost leaf by walking the leaf chain
+    auto* root = grove.get_root_nodes().at("chr1");
+    auto* leaf = root;
+    while (!leaf->get_is_leaf()) leaf = leaf->get_child(0);
+    while (leaf->get_next() != nullptr) leaf = leaf->get_next();
+
+    // The rightmost leaf's keys are the last child (catch-all) of its parent.
+    // Remove them all — triggers the "empty last child" path.
+    auto leaf_keys = leaf->get_keys();  // copy since we mutate
+    for (auto* k : leaf_keys) {
+        EXPECT_TRUE(grove.remove_key("chr1", k));
+        if (auto root_it = grove.get_root_nodes().find("chr1");
+            root_it != grove.get_root_nodes().end()) {
+            validate_grove_index(root_it->second, 3);
+        }
+    }
+}
+
 // =============================================================================
 // Rebalancing Tests — use order=3 (max 2 keys/node, min_keys=1)
 // =============================================================================
@@ -274,36 +305,28 @@ TEST(GroveRemoveTest, BorrowFromRightSibling) {
 }
 
 TEST(GroveRemoveTest, MergeLeaves) {
-    // Order 4: max 3 keys, min 1. Use regular (unsorted) insert to get a
-    // balanced split where both siblings end up at min_keys after one removal,
-    // forcing a real merge of two non-empty leaves.
+    // Order 4: max 3 keys, leaf min 2. Inserting 4 keys produces a balanced
+    // 2/2 leaf split. Both leaves are exactly at min_keys — removing any
+    // single key underflows that leaf AND its sibling cannot lend (still
+    // at min_keys), forcing a merge.
     gst::grove<gdt::interval, int> grove(4);
-    // Insert 4 keys — after splits with default_mid()=(4+1)/2=2:
-    // root (internal) with 2 leaves, each with 2 keys.
     auto keys = insert_intervals(grove, "chr1", 4);
 
     auto* root = grove.get_root_nodes().at("chr1");
+    ASSERT_FALSE(root->get_is_leaf()) << "Root should be internal before merge";
     validate_grove_index(root, 4);
 
-    // Remove one key from the left leaf → left has 1 key (= min_keys)
+    // Remove one key → underflow → merge → root collapses to a leaf
     EXPECT_TRUE(grove.remove_key("chr1", keys[0]));
     root = grove.get_root_nodes().at("chr1");
+    EXPECT_TRUE(root->get_is_leaf()) << "Root should have collapsed to a leaf";
+    EXPECT_EQ(root->get_keys().size(), 3);
     validate_grove_index(root, 4);
 
-    // Now remove from left again → left has 0 keys, both siblings were at
-    // min_keys so borrow was not possible → merge two leaves
-    EXPECT_TRUE(grove.remove_key("chr1", keys[1]));
-    root = grove.get_root_nodes().at("chr1");
-    // Root should have collapsed to a leaf with the 2 remaining keys
-    EXPECT_TRUE(root->get_is_leaf());
-    EXPECT_EQ(root->get_keys().size(), 2);
-    validate_grove_index(root, 4);
-
-    // Verify remaining keys
-    auto result2 = grove.intersect(keys[2]->get_value(), "chr1");
-    EXPECT_GE(result2.get_keys().size(), 1);
-    auto result3 = grove.intersect(keys[3]->get_value(), "chr1");
-    EXPECT_GE(result3.get_keys().size(), 1);
+    for (int i = 1; i < 4; ++i) {
+        auto result = grove.intersect(keys[i]->get_value(), "chr1");
+        EXPECT_GE(result.get_keys().size(), 1) << "Key " << i << " should be findable";
+    }
 }
 
 TEST(GroveRemoveTest, RootCollapse) {
@@ -327,13 +350,15 @@ TEST(GroveRemoveTest, RemoveAllWithRebalancing) {
     gst::grove<gdt::interval, int> grove(3);
     auto keys = insert_intervals(grove, "chr1", 10);
 
+    int removal_count = 0;
     for (auto* k : keys) {
-        EXPECT_TRUE(grove.remove_key("chr1", k));
-        // Validate after each removal (if tree still exists)
-        auto root_it = grove.get_root_nodes().find("chr1");
-        if (root_it != grove.get_root_nodes().end()) {
+        EXPECT_TRUE(grove.remove_key("chr1", k))
+            << "removal iteration " << removal_count;
+        if (auto root_it = grove.get_root_nodes().find("chr1");
+            root_it != grove.get_root_nodes().end()) {
             validate_grove_index(root_it->second, 3);
         }
+        ++removal_count;
     }
     EXPECT_EQ(grove.get_root_nodes().count("chr1"), 0);
     EXPECT_EQ(grove.indexed_vertex_count(), 0);
@@ -349,9 +374,9 @@ TEST(GroveRemoveTest, CascadingRebalance) {
 
     // Remove every other key — forces cascading rebalances
     for (int i = 0; i < 20; i += 2) {
-        EXPECT_TRUE(grove.remove_key("chr1", keys[i]));
-        auto root_it = grove.get_root_nodes().find("chr1");
-        if (root_it != grove.get_root_nodes().end()) {
+        EXPECT_TRUE(grove.remove_key("chr1", keys[i])) << "removing key " << i;
+        if (auto root_it = grove.get_root_nodes().find("chr1");
+            root_it != grove.get_root_nodes().end()) {
             validate_grove_index(root_it->second, 3);
         }
     }
@@ -373,7 +398,8 @@ TEST(GroveRemoveTest, LargerOrder) {
 
     // Remove half the keys
     for (int i = 0; i < 100; i += 2) {
-        EXPECT_TRUE(grove.remove_key("chr1", keys[i]));
+        EXPECT_TRUE(grove.remove_key("chr1", keys[i]))
+            << "remove iteration i=" << i;
     }
 
     root = grove.get_root_nodes().at("chr1");
@@ -635,12 +661,119 @@ TEST(GroveRemoveTest, StressRemoveRandom) {
     std::mt19937 rng(42);
     std::ranges::shuffle(indices, rng);
 
+    int removal_count = 0;
     for (int idx : indices) {
-        EXPECT_TRUE(grove.remove_key("chr1", keys[idx]));
-        auto root_it = grove.get_root_nodes().find("chr1");
-        if (root_it != grove.get_root_nodes().end()) {
+        EXPECT_TRUE(grove.remove_key("chr1", keys[idx]))
+            << "removal " << removal_count << " (key idx=" << idx << ")";
+        if (auto root_it = grove.get_root_nodes().find("chr1");
+            root_it != grove.get_root_nodes().end()) {
             validate_grove_index(root_it->second, 4);
         }
+        ++removal_count;
     }
     EXPECT_EQ(grove.get_root_nodes().count("chr1"), 0);
+}
+
+// =============================================================================
+// Mixed Insert + Remove
+// =============================================================================
+
+TEST(GroveRemoveTest, MixedInsertAndRemove) {
+    // Interleave inserts and removes: the tree must remain fully functional
+    // after removals (rightmost cache, separators) so that further inserts work.
+    gst::grove<gdt::interval, int> grove(4);
+
+    // Initial batch
+    auto initial = insert_intervals(grove, "chr1", 20);
+    validate_grove_index(grove.get_root_nodes().at("chr1"), 4);
+
+    // Remove every other key
+    for (int i = 0; i < 20; i += 2) {
+        EXPECT_TRUE(grove.remove_key("chr1", initial[i]));
+    }
+    validate_grove_index(grove.get_root_nodes().at("chr1"), 4);
+    EXPECT_EQ(grove.indexed_vertex_count(), 10);
+
+    // Append 10 more keys (strictly greater) via sorted insert —
+    // exercises the rightmost-cache path after removals.
+    std::vector<gdt::key<gdt::interval, int>*> appended;
+    for (int i = 20; i < 30; ++i) {
+        appended.push_back(grove.insert_data("chr1",
+            gdt::interval{static_cast<size_t>(i * 10), static_cast<size_t>(i * 10 + 5)},
+            i, gst::sorted));
+    }
+    validate_grove_index(grove.get_root_nodes().at("chr1"), 4);
+    EXPECT_EQ(grove.indexed_vertex_count(), 20);
+
+    // All appended keys must be findable
+    for (auto* k : appended) {
+        auto result = grove.intersect(k->get_value(), "chr1");
+        EXPECT_GE(result.get_keys().size(), 1);
+    }
+}
+
+// =============================================================================
+// Range Query After Removal
+// =============================================================================
+
+TEST(GroveRemoveTest, RangeQueryAfterRemoval) {
+    // Verify that a range query covering many keys returns the correct
+    // remaining set after removals (not just single-key lookups).
+    gst::grove<gdt::interval, int> grove(5);
+    auto keys = insert_intervals(grove, "chr1", 30, /*gap=*/10);
+    // Intervals: [0,5], [10,15], ..., [290,295]
+
+    // Remove indices 5, 10, 15, 20, 25
+    std::vector<int> to_remove = {5, 10, 15, 20, 25};
+    for (int i : to_remove) {
+        EXPECT_TRUE(grove.remove_key("chr1", keys[i]));
+    }
+    validate_grove_index(grove.get_root_nodes().at("chr1"), 5);
+
+    // Range query covering the full inserted range
+    auto result = grove.intersect(gdt::interval{0, 295}, "chr1");
+
+    // Should return 30 - 5 = 25 keys
+    EXPECT_EQ(result.get_keys().size(), 25);
+
+    // None of the removed keys should appear in the results
+    for (int i : to_remove) {
+        for (const auto* k : result.get_keys()) {
+            EXPECT_NE(k, keys[i]) << "Removed key " << i << " appeared in range query";
+        }
+    }
+}
+
+// =============================================================================
+// Internal Rebalance (borrow/merge at internal level via cascade)
+// =============================================================================
+
+TEST(GroveRemoveTest, InternalBorrowAndMerge) {
+    // Build a 3-level tree, then remove enough keys to force the leaf
+    // rebalance to cascade into an internal-level borrow/merge.
+    gst::grove<gdt::interval, int> grove(3);
+    auto keys = insert_intervals(grove, "chr1", 30);
+
+    auto* root = grove.get_root_nodes().at("chr1");
+    validate_grove_index(root, 3);
+
+    // Remove a cluster of keys to trigger cascaded rebalancing
+    for (int i = 0; i < 15; ++i) {
+        EXPECT_TRUE(grove.remove_key("chr1", keys[i]));
+        if (auto root_it = grove.get_root_nodes().find("chr1");
+            root_it != grove.get_root_nodes().end()) {
+            validate_grove_index(root_it->second, 3);
+        }
+    }
+    EXPECT_EQ(grove.indexed_vertex_count(), 15);
+
+    // Remaining keys must all still be reachable
+    for (int i = 15; i < 30; ++i) {
+        auto result = grove.intersect(keys[i]->get_value(), "chr1");
+        bool found = false;
+        for (const auto* k : result.get_keys()) {
+            if (k == keys[i]) { found = true; break; }
+        }
+        EXPECT_TRUE(found) << "Key " << i << " not findable after cascade";
+    }
 }

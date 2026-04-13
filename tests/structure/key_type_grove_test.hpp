@@ -22,6 +22,8 @@
 #include <optional>
 #include <queue>
 #include <random>
+#include <filesystem>
+#include <fstream>
 #include <sstream>
 #include <unordered_map>
 
@@ -132,6 +134,138 @@ struct grove_test_traits {
  * @tparam data_type The associated data type (default: int)
  * @tparam edge_data_type The edge metadata type (default: void)
  */
+// =============================================================================
+// Tree Invariant Validation Helpers
+// =============================================================================
+
+/**
+ * @brief Recursively validate structural B+ tree invariants for a node
+ *
+ * Checks per node:
+ * - Parent pointer matches expected
+ * - Key count does not exceed order-1
+ * - Non-root leaf nodes have at least ceil((order-1)/2) keys
+ * - Non-root internal nodes have at least floor((order-1)/2) keys
+ * - Leaf nodes have no children; internal nodes have keys.size()+1 children
+ * - Keys within a node are sorted
+ * - All leaves at the same depth
+ * - Accumulates the ordered leaf sequence (via in-order traversal)
+ */
+template <typename key_type, typename data_type>
+void validate_tree_invariants(
+    gst::node<key_type, data_type>* n,
+    gst::node<key_type, data_type>* expected_parent,
+    int depth,
+    int order,
+    int& leaf_depth,
+    size_t& leaf_count,
+    std::vector<gst::node<key_type, data_type>*>& leaves_in_order,
+    bool is_root) {
+
+    ASSERT_NE(n, nullptr) << "Node should not be null at depth " << depth;
+
+    EXPECT_EQ(n->get_parent(), expected_parent)
+        << "Parent pointer mismatch at depth " << depth;
+
+    // Leaf min: ceil((order-1)/2); internal min: floor((order-1)/2)
+    const int min_keys = n->get_is_leaf()
+        ? (order / 2)            // ceil((order-1)/2) for positive order
+        : ((order - 1) / 2);     // floor((order-1)/2)
+    EXPECT_LE(n->get_keys().size(), static_cast<size_t>(order - 1))
+        << "Node has too many keys at depth " << depth
+        << " (has " << n->get_keys().size() << ", max " << (order - 1) << ")";
+    if (!is_root) {
+        EXPECT_GE(static_cast<int>(n->get_keys().size()), min_keys)
+            << "Node has too few keys at depth " << depth
+            << " (has " << n->get_keys().size() << ", min " << min_keys << ")";
+    }
+
+    if (n->get_is_leaf()) {
+        EXPECT_TRUE(n->get_children().empty())
+            << "Leaf node should have no children at depth " << depth;
+
+        if (leaf_depth < 0) {
+            leaf_depth = depth;
+        } else {
+            EXPECT_EQ(depth, leaf_depth)
+                << "All leaves should be at the same depth";
+        }
+
+        leaf_count += n->get_keys().size();
+        leaves_in_order.push_back(n);
+
+        for (size_t i = 1; i < n->get_keys().size(); ++i) {
+            EXPECT_FALSE(n->get_keys()[i]->get_value() < n->get_keys()[i-1]->get_value())
+                << "Keys should be sorted within leaf at depth " << depth;
+        }
+    } else {
+        EXPECT_EQ(n->get_children().size(), n->get_keys().size() + 1)
+            << "Internal node invariant violated at depth " << depth
+            << ": " << n->get_children().size() << " children but "
+            << n->get_keys().size() << " keys";
+
+        for (size_t i = 1; i < n->get_keys().size(); ++i) {
+            EXPECT_FALSE(n->get_keys()[i]->get_value() < n->get_keys()[i-1]->get_value())
+                << "Keys should be sorted within internal node at depth " << depth;
+        }
+
+        for (size_t i = 0; i < n->get_children().size(); ++i) {
+            validate_tree_invariants(
+                n->get_children()[i], n, depth + 1, order, leaf_depth, leaf_count,
+                leaves_in_order, false);
+        }
+    }
+}
+
+/**
+ * @brief Validate the full index: structural invariants + leaf chain + routing
+ *
+ * Runs the recursive structural checks, then additionally verifies:
+ * - Leaf chain: `next` pointers form a single sequence matching the in-order
+ *   traversal of leaves, ending with nullptr
+ * - Every leaf key is reachable via the tree's own insert/search routing (so
+ *   that find_leaf / intersect / remove_key can actually locate it)
+ */
+template <typename key_type, typename data_type>
+void validate_grove_index(gst::grove<key_type, data_type>& grove_instance,
+                          std::string_view index_name,
+                          int order) {
+    auto it = grove_instance.get_root_nodes().find(index_name);
+    if (it == grove_instance.get_root_nodes().end()) return;
+    auto* root = it->second;
+    ASSERT_NE(root, nullptr);
+
+    int leaf_depth = -1;
+    size_t leaf_count = 0;
+    std::vector<gst::node<key_type, data_type>*> leaves_in_order;
+    validate_tree_invariants(root, static_cast<gst::node<key_type, data_type>*>(nullptr),
+                             0, order, leaf_depth, leaf_count, leaves_in_order, true);
+
+    // Leaf chain must match the in-order leaf sequence
+    for (size_t i = 0; i + 1 < leaves_in_order.size(); ++i) {
+        EXPECT_EQ(leaves_in_order[i]->get_next(), leaves_in_order[i + 1])
+            << "Leaf chain mismatch at leaf " << i;
+    }
+    if (!leaves_in_order.empty()) {
+        EXPECT_EQ(leaves_in_order.back()->get_next(), nullptr)
+            << "Last leaf's next pointer should be nullptr";
+    }
+
+    // Routing correctness: every leaf key must be reachable via intersect()
+    for (auto* leaf : leaves_in_order) {
+        for (auto* key_ptr : leaf->get_keys()) {
+            auto results = grove_instance.intersect(key_ptr->get_value(), index_name);
+            bool found = false;
+            for (const auto* found_key : results.get_keys()) {
+                if (found_key == key_ptr) { found = true; break; }
+            }
+            EXPECT_TRUE(found)
+                << "Leaf key not reachable via intersect() — routing is broken; "
+                << "key value: " << key_ptr->get_value().to_string();
+        }
+    }
+}
+
 template <typename key_type, typename data_type = int, typename edge_data_type = void>
 class grove_test_base : public ::testing::Test {
 protected:
@@ -394,6 +528,9 @@ protected:
             << "Non-overlapping query should return 0 results";
         EXPECT_EQ(expect_non_ovlp.expected_indices.size(), 0)
             << "Non-overlapping query expectation should have 0 expected indices";
+
+        // Final structural validation
+        validate_grove_index(grove, get_default_index(), 10);
     }
 
     /**
@@ -440,6 +577,9 @@ protected:
             << "Non-overlapping query should return 0 results";
         EXPECT_EQ(expect_non_ovlp.expected_indices.size(), 0)
             << "Non-overlapping query expectation should have 0 expected indices";
+
+        // Final structural validation
+        validate_grove_index(grove, get_default_index(), 10);
     }
 
     /**
@@ -488,6 +628,9 @@ protected:
             << "Non-overlapping query should return 0 results";
         EXPECT_EQ(expect_non_ovlp.expected_indices.size(), 0)
             << "Non-overlapping query expectation should have 0 expected indices";
+
+        // Final structural validation
+        validate_grove_index(grove, get_default_index(), 10);
     }
 
     /**
@@ -667,73 +810,6 @@ protected:
 };
 
 // =============================================================================
-// Tree Invariant Validation Helpers
-// =============================================================================
-
-/**
- * @brief Recursively validate B+ tree invariants for a node and its subtree
- *
- * Checks:
- * - Internal nodes: children.size() == keys.size() + 1
- * - Leaf nodes: no children
- * - Parent pointers match actual parent
- * - All leaves at the same depth
- * - Key count does not exceed order-1
- */
-template <typename key_type, typename data_type>
-void validate_tree_invariants(
-    gst::node<key_type, data_type>* n,
-    gst::node<key_type, data_type>* expected_parent,
-    int depth,
-    int order,
-    int& leaf_depth,
-    size_t& leaf_count) {
-
-    ASSERT_NE(n, nullptr) << "Node should not be null at depth " << depth;
-
-    EXPECT_EQ(n->get_parent(), expected_parent)
-        << "Parent pointer mismatch at depth " << depth;
-
-    EXPECT_LE(n->get_keys().size(), static_cast<size_t>(order - 1))
-        << "Node has too many keys at depth " << depth
-        << " (has " << n->get_keys().size() << ", max " << (order - 1) << ")";
-
-    if (n->get_is_leaf()) {
-        EXPECT_TRUE(n->get_children().empty())
-            << "Leaf node should have no children at depth " << depth;
-
-        if (leaf_depth < 0) {
-            leaf_depth = depth;
-        } else {
-            EXPECT_EQ(depth, leaf_depth)
-                << "All leaves should be at the same depth";
-        }
-
-        leaf_count += n->get_keys().size();
-
-        for (size_t i = 1; i < n->get_keys().size(); ++i) {
-            EXPECT_FALSE(n->get_keys()[i]->get_value() < n->get_keys()[i-1]->get_value())
-                << "Keys should be sorted within leaf at depth " << depth;
-        }
-    } else {
-        EXPECT_EQ(n->get_children().size(), n->get_keys().size() + 1)
-            << "Internal node invariant violated at depth " << depth
-            << ": " << n->get_children().size() << " children but "
-            << n->get_keys().size() << " keys";
-
-        for (size_t i = 1; i < n->get_keys().size(); ++i) {
-            EXPECT_FALSE(n->get_keys()[i]->get_value() < n->get_keys()[i-1]->get_value())
-                << "Keys should be sorted within internal node at depth " << depth;
-        }
-
-        for (size_t i = 0; i < n->get_children().size(); ++i) {
-            validate_tree_invariants(
-                n->get_children()[i], n, depth + 1, order, leaf_depth, leaf_count);
-        }
-    }
-}
-
-// =============================================================================
 // Typed Test Suite - Define tests ONCE, run for all types
 // =============================================================================
 
@@ -814,6 +890,10 @@ TYPED_TEST_P(grove_typed_test, bulk_insert_large_dataset) {
     auto keys = this->grove.insert_data(this->get_default_index(), data, gst::sorted, gst::bulk);
 
     ASSERT_EQ(keys.size(), 100) << "Should insert all 100 keys";
+
+    // Full structural + per-key reachability validation — critical for catching
+    // multi-level build_tree_bottom_up separator bugs at 3+ level trees.
+    validate_grove_index(this->grove, this->get_default_index(), 10);
 
     // Verify all data is queryable
     auto expectation = this->create_overlapping_query(data);
@@ -958,34 +1038,6 @@ TYPED_TEST_P(grove_typed_test, serialization_multiple_indices) {
         << "Second index should have correct data after deserialization";
 }
 
-TYPED_TEST_P(grove_typed_test, serialization_fill_factor) {
-    // Create grove with non-default fill_factor
-    const int order = 10;
-    gst::grove<TypeParam, int> g(order, 0.75f);
-
-    auto data = this->generate_test_data(25);
-    for (const auto& [key, value] : data) {
-        g.insert_data("chr1", key, value, gst::sorted);
-    }
-
-    // Serialize
-    std::stringstream ss;
-    g.serialize(ss);
-
-    // Deserialize and verify fill_factor survived the round-trip
-    auto restored = gst::grove<TypeParam, int>::deserialize(ss);
-    EXPECT_FLOAT_EQ(restored.get_fill_factor(), 0.75f)
-        << "fill_factor should be preserved through serialization";
-    EXPECT_EQ(restored.get_order(), order)
-        << "order should be preserved through serialization";
-
-    // Verify data is queryable
-    auto expectation = this->create_overlapping_query(data);
-    auto results = restored.intersect(expectation.query, "chr1");
-    EXPECT_EQ(results.get_keys().size(), expectation.expected_indices.size())
-        << "Deserialized grove should return same query results";
-}
-
 TYPED_TEST_P(grove_typed_test, internal_node_split_invariants) {
     // Order 3 forces internal node splits after ~6 keys (max 2 keys/node)
     gst::grove<TypeParam, int> small_grove(3);
@@ -1001,29 +1053,7 @@ TYPED_TEST_P(grove_typed_test, internal_node_split_invariants) {
     }
     ASSERT_EQ(inserted_keys.size(), 20u);
 
-    // Validate full tree structure
-    auto* root = small_grove.get_root_nodes().at(this->get_default_index());
-    ASSERT_NE(root, nullptr);
-
-    int leaf_depth = -1;
-    size_t leaf_count = 0;
-    validate_tree_invariants(root, static_cast<gst::node<TypeParam, int>*>(nullptr),
-        0, 3, leaf_depth, leaf_count);
-
-    EXPECT_EQ(leaf_count, 20u) << "All 20 keys should be in leaf nodes";
-
-    // Validate leaf chain completeness
-    auto* current = root;
-    while (!current->get_is_leaf()) {
-        ASSERT_GT(current->get_children().size(), 0u);
-        current = current->get_children()[0];
-    }
-    size_t chain_count = 0;
-    while (current != nullptr) {
-        chain_count += current->get_keys().size();
-        current = current->get_next();
-    }
-    EXPECT_EQ(chain_count, 20u) << "Leaf chain should contain all 20 keys";
+    validate_grove_index(small_grove, this->get_default_index(), 3);
 
     // Verify data is queryable
     auto expectation = grove_test_traits<TypeParam, int>::create_overlapping_query(data);
@@ -1045,16 +1075,7 @@ TYPED_TEST_P(grove_typed_test, internal_node_split_regular_insert) {
     }
     ASSERT_EQ(inserted_keys.size(), 15u);
 
-    // Validate tree structure
-    auto* root = small_grove.get_root_nodes().at(this->get_default_index());
-    ASSERT_NE(root, nullptr);
-
-    int leaf_depth = -1;
-    size_t leaf_count = 0;
-    validate_tree_invariants(root, static_cast<gst::node<TypeParam, int>*>(nullptr),
-        0, 3, leaf_depth, leaf_count);
-
-    EXPECT_EQ(leaf_count, 15u) << "All 15 keys should be in leaf nodes";
+    validate_grove_index(small_grove, this->get_default_index(), 3);
 
     // Verify all data is queryable
     for (const auto& [key_val, data_val] : data) {
@@ -1063,93 +1084,6 @@ TYPED_TEST_P(grove_typed_test, internal_node_split_regular_insert) {
         EXPECT_GE(results.get_keys().size(), 1u)
             << "Each inserted key should be queryable";
     }
-}
-
-TYPED_TEST_P(grove_typed_test, sorted_insert_packs_leaves) {
-    // Use a separate grove with default fill_factor (1.0)
-    const int order = 10;
-    gst::grove<TypeParam, int> g(order);
-
-    auto data = this->generate_test_data(50);
-    for (const auto& [key, value] : data) {
-        g.insert_data("chr1", key, value, gst::sorted);
-    }
-
-    // Walk the leaf chain: all leaves except the last should be fully packed
-    auto* n = g.get_root_nodes().at("chr1");
-    ASSERT_NE(n, nullptr);
-    while (!n->get_is_leaf()) {
-        n = n->get_children()[0];
-    }
-
-    int leaf_count = 0;
-    while (n->get_next() != nullptr) {
-        EXPECT_EQ(n->get_keys().size(), static_cast<size_t>(order - 1))
-            << "Leaf " << leaf_count << " should be fully packed with fill_factor=1.0";
-        n = n->get_next();
-        ++leaf_count;
-    }
-    EXPECT_GT(n->get_keys().size(), 0u) << "Last leaf should have at least one key";
-}
-
-TYPED_TEST_P(grove_typed_test, sorted_insert_half_fill) {
-    const int order = 10;
-    gst::grove<TypeParam, int> g(order, 0.5f);
-
-    auto data = this->generate_test_data(50);
-    for (const auto& [key, value] : data) {
-        g.insert_data("chr1", key, value, gst::sorted);
-    }
-
-    // Expected keys per non-last leaf: max(1, int((order-1) * 0.5)) = 4
-    const auto expected = static_cast<size_t>(
-        std::max(1, static_cast<int>((order - 1) * 0.5f)));
-
-    auto* n = g.get_root_nodes().at("chr1");
-    ASSERT_NE(n, nullptr);
-    while (!n->get_is_leaf()) {
-        n = n->get_children()[0];
-    }
-
-    int leaf_count = 0;
-    while (n->get_next() != nullptr) {
-        EXPECT_EQ(n->get_keys().size(), expected)
-            << "Leaf " << leaf_count << " should have " << expected
-            << " keys with fill_factor=0.5";
-        n = n->get_next();
-        ++leaf_count;
-    }
-    EXPECT_GT(n->get_keys().size(), 0u) << "Last leaf should have at least one key";
-}
-
-TYPED_TEST_P(grove_typed_test, sorted_insert_three_quarter_fill) {
-    const int order = 10;
-    gst::grove<TypeParam, int> g(order, 0.75f);
-
-    auto data = this->generate_test_data(50);
-    for (const auto& [key, value] : data) {
-        g.insert_data("chr1", key, value, gst::sorted);
-    }
-
-    // Expected keys per non-last leaf: max(1, int((order-1) * 0.75)) = 6
-    const auto expected = static_cast<size_t>(
-        std::max(1, static_cast<int>((order - 1) * 0.75f)));
-
-    auto* n = g.get_root_nodes().at("chr1");
-    ASSERT_NE(n, nullptr);
-    while (!n->get_is_leaf()) {
-        n = n->get_children()[0];
-    }
-
-    int leaf_count = 0;
-    while (n->get_next() != nullptr) {
-        EXPECT_EQ(n->get_keys().size(), expected)
-            << "Leaf " << leaf_count << " should have " << expected
-            << " keys with fill_factor=0.75";
-        n = n->get_next();
-        ++leaf_count;
-    }
-    EXPECT_GT(n->get_keys().size(), 0u) << "Last leaf should have at least one key";
 }
 
 TYPED_TEST_P(grove_typed_test, grove_to_sif_output) {
@@ -1371,12 +1305,8 @@ REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     serialization,
     serialization_empty_grove,
     serialization_multiple_indices,
-    serialization_fill_factor,
     internal_node_split_invariants,
     internal_node_split_regular_insert,
-    sorted_insert_packs_leaves,
-    sorted_insert_half_fill,
-    sorted_insert_three_quarter_fill,
     grove_to_sif_output,
     serialization_compressed_smaller,
     serialization_back_to_back_streams,

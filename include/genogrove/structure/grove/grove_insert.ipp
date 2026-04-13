@@ -108,13 +108,13 @@ public:
                     new_root->add_child(current_node, 0);
                     new_root->set_is_leaf(false);
                     current_node->set_parent(new_root);
-                    split_node(new_root, 0, index, sorted_mid());
+                    split_node(new_root, 0, index);
                     this->root_nodes[std::string(index)] = new_root;
                     current_node = this->get_rightmost_node(index);
                 } else {
                     // Internal node overflow
                     int child_index = current_node->get_parent()->get_children().size() - 1;
-                    split_node(current_node->get_parent(), child_index, index, sorted_mid());
+                    split_node(current_node->get_parent(), child_index, index);
                     current_node = this->get_rightmost_node(index);
                 }
             }
@@ -186,7 +186,7 @@ public:
             new_root->add_child(root, 0);
             new_root->set_is_leaf(false);
             root->set_parent(new_root);
-            split_node(new_root, 0, index, default_mid());
+            split_node(new_root, 0, index);
             root = new_root;
             this->root_nodes[std::string(index)] = root; // update the root node in the map
         }
@@ -231,27 +231,23 @@ private:
                 child_index++;
             }
             auto* key_ptr = insert_iter(node->get_child(child_index), key, index);
+
+            // Widen this child's separator (if it has one) to cover the newly
+            // inserted key's range. The last child has no separator — its range
+            // is implicit as the catch-all. Without this, a separator set at
+            // split time can become stale when a later insert adds a key that
+            // extends the child's subtree range, causing search_iter to skip
+            // over the child during routing.
+            if (child_index < static_cast<int>(node->get_keys().size())) {
+                auto* sep = node->get_keys()[child_index];
+                sep->set_value(key_type::aggregate(sep->get_value(), key.get_value()));
+            }
+
             if(node->get_child(child_index)->get_keys().size() == this->order) {
-                split_node(node, child_index, index, default_mid());
+                split_node(node, child_index, index);
             }
             return key_ptr;
         }
-    }
-
-    /**
-     * @brief Compute the default (classic) midpoint for node splits
-     * @return Midpoint index for balanced splits during regular insertion
-     */
-    int default_mid() const noexcept {
-        return (this->order + 1) / 2;
-    }
-
-    /**
-     * @brief Compute the midpoint for sorted insertion splits based on fill_factor
-     * @return Midpoint index that packs the left node according to fill_factor
-     */
-    int sorted_mid() const noexcept {
-        return std::max(1, static_cast<int>((this->order - 1) * this->fill_factor));
     }
 
     /**
@@ -259,20 +255,21 @@ private:
      * @param parent The parent node whose child will be split
      * @param index The index of the child node to split within the parent
      * @param index_name The grove index name (e.g., chromosome) for O(1) rightmost cache update
-     * @param mid The split position — use default_mid() for regular inserts, sorted_mid() for sorted
-     * @note Dispatches to split_leaf_node() or split_internal_node() based on child type
+     * @note Dispatches to split_leaf_node() or split_internal_node() based on child type.
+     *       Uses split_mid() = floor(order/2) as the midpoint — the single value that
+     *       satisfies both leaf and internal minimum occupancy constraints.
      */
     void split_node(node<key_type, data_type>* parent, int index,
-                    std::string_view index_name, int mid) {
+                    std::string_view index_name) {
         node<key_type, data_type>* child = parent->get_child(index);
         auto new_child = std::make_unique<node<key_type, data_type>>(this->order);
         new_child->set_parent(parent);
         new_child->set_is_leaf(child->get_is_leaf());
 
         if (child->get_is_leaf()) {
-            split_leaf_node(parent, child, std::move(new_child), index, index_name, mid);
+            split_leaf_node(parent, child, std::move(new_child), index, index_name);
         } else {
-            split_internal_node(parent, child, std::move(new_child), index, mid);
+            split_internal_node(parent, child, std::move(new_child), index);
         }
     }
 
@@ -283,17 +280,17 @@ private:
      * @param new_child The new sibling node (right half after split)
      * @param index Position in parent's children vector
      * @param index_name The grove index name for rightmost cache update
-     * @param mid Split position — keys [0..mid-1] stay in child, [mid..end] go to new_child
      */
     void split_leaf_node(node<key_type, data_type>* parent, node<key_type, data_type>* child,
                          std::unique_ptr<node<key_type, data_type>> new_child,
-                         int index, std::string_view index_name, int mid) {
+                         int index, std::string_view index_name) {
+        const int mid = this->split_mid();
         // All keys stay in leaves; left [0..mid-1], right [mid..end]
         new_child->get_keys().assign(child->get_keys().begin() + mid, child->get_keys().end());
         child->get_keys().resize(mid);
 
         // Parent separator = aggregate of left leaf's keys
-        gdt::key<key_type, data_type> parent_key{child->calc_parent_key()};
+        gdt::key<key_type, data_type> parent_key{child->calc_keys_aggregate()};
         auto* parent_key_ptr = allocate_key(parent_key);
         parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
         parent->get_children().insert(parent->get_children().begin() + index + 1, new_child.get());
@@ -316,11 +313,11 @@ private:
      * @param child The internal node being split (left half after split)
      * @param new_child The new sibling node (right half after split)
      * @param index Position in parent's children vector
-     * @param mid Split position — left keeps [0..mid-1] keys and [0..mid] children
      */
     void split_internal_node(node<key_type, data_type>* parent, node<key_type, data_type>* child,
                              std::unique_ptr<node<key_type, data_type>> new_child,
-                             int index, int mid) {
+                             int index) {
+        const int mid = this->split_mid();
         // B+ tree invariant: n keys -> n+1 children.
         // Promote key[mid]: left keeps [0..mid-1] keys and [0..mid] children,
         // right gets [mid+1..end] keys and [mid+1..end] children.
@@ -404,13 +401,13 @@ private:
                     new_root->add_child(overflow_node, 0);
                     new_root->set_is_leaf(false);
                     overflow_node->set_parent(new_root);
-                    split_node(new_root, 0, index, sorted_mid());
+                    split_node(new_root, 0, index);
                     this->root_nodes[std::string(index)] = new_root;
                     break;
                 } else {
                     auto* parent_node = overflow_node->get_parent();
                     int child_index = static_cast<int>(parent_node->get_children().size()) - 1;
-                    split_node(parent_node, child_index, index, sorted_mid());
+                    split_node(parent_node, child_index, index);
                     overflow_node = parent_node;
                 }
             }
@@ -446,32 +443,28 @@ private:
         std::vector<std::unique_ptr<node<key_type, data_type>>> leaves;
         inserted_keys.reserve(data.size());
 
-        // Fill factor: use (order - 1) keys per node for optimal space utilization
-        // This gives us fuller nodes than the ~50% from split-based insertion
-        const int keys_per_leaf = this->order - 1;
+        // Distribute data evenly across leaves so no leaf violates leaf_min_keys.
+        // num_leaves = ceil(N / (order - 1)). Each leaf gets floor(N / num_leaves)
+        // keys, with the first (N % num_leaves) leaves getting one extra.
+        const size_t total = data.size();
+        const int max_per_leaf = this->order - 1;
+        const size_t num_leaves = ceil_div(static_cast<int>(total), max_per_leaf);
+        const size_t base_per_leaf = total / num_leaves;
+        const size_t extra_leaves = total % num_leaves;
 
-        size_t data_idx = 0;
-        while (data_idx < data.size()) {
+        auto it = data.begin();
+        for (size_t leaf_idx = 0; leaf_idx < num_leaves; ++leaf_idx) {
             auto leaf = std::make_unique<node<key_type, data_type>>(this->order);
             leaf->set_is_leaf(true);
 
-            // Fill this leaf node with up to keys_per_leaf keys
-            size_t keys_in_this_leaf = 0;
-            auto it = data.begin();
-            std::advance(it, data_idx);
-
-            while (keys_in_this_leaf < keys_per_leaf && data_idx < data.size()) {
+            const size_t keys_in_this_leaf = base_per_leaf + (leaf_idx < extra_leaves ? 1 : 0);
+            for (size_t i = 0; i < keys_in_this_leaf; ++i) {
                 gdt::key<key_type, data_type> key(it->first, it->second);
                 auto* key_ptr = allocate_key(key);
                 ++this->leaf_key_count;
                 leaf->get_keys().push_back(key_ptr);
                 inserted_keys.push_back(key_ptr);
-
-                ++keys_in_this_leaf;
-                ++data_idx;
-                if (data_idx < data.size()) {
-                    ++it;
-                }
+                ++it;
             }
 
             leaves.push_back(std::move(leaf));
@@ -485,47 +478,77 @@ private:
         // Remember rightmost leaf — will be published only after the build succeeds
         auto* rightmost_leaf = leaves.back().get();
 
+        // Track the full subtree range of every node in the current layer so
+        // we can set correct separators at higher levels. For leaves, the
+        // range is exact (calc_keys_aggregate covers all leaf data). For
+        // internal nodes at higher levels, we aggregate the children's
+        // tracked ranges directly — calc_keys_aggregate() on an internal
+        // node would miss its own last child's subtree (its catch-all), and
+        // that would cascade up to cause lost keys during search.
+        std::vector<key_type> current_ranges;
+        current_ranges.reserve(leaves.size());
+        for (const auto& leaf : leaves) {
+            current_ranges.push_back(leaf->calc_keys_aggregate());
+        }
+
         // Step 3: Build internal layers bottom-up
         // Transfer ownership: leaves become current_layer
         std::vector<std::unique_ptr<node<key_type, data_type>>> current_layer = std::move(leaves);
 
         while (current_layer.size() > 1) {
             std::vector<std::unique_ptr<node<key_type, data_type>>> parent_layer;
+            std::vector<key_type> parent_ranges;
 
-            // Each internal node can have up to 'order' children
-            const int children_per_node = this->order;
+            // Distribute children evenly across parents so no parent violates
+            // internal_min_keys. num_parents = ceil(child_count / order). Each
+            // parent gets floor(child_count / num_parents) children, with the
+            // first (child_count % num_parents) parents getting one extra.
+            const size_t child_count = current_layer.size();
+            const size_t num_parents = ceil_div(static_cast<int>(child_count), this->order);
+            const size_t base_per_parent = child_count / num_parents;
+            const size_t extra_parents = child_count % num_parents;
 
             size_t child_idx = 0;
-            while (child_idx < current_layer.size()) {
+            for (size_t parent_idx = 0; parent_idx < num_parents; ++parent_idx) {
                 auto parent = std::make_unique<node<key_type, data_type>>(this->order);
                 parent->set_is_leaf(false);
 
-                // Add up to 'order' children to this parent
-                size_t children_in_this_parent = 0;
-                while (children_in_this_parent < children_per_node && child_idx < current_layer.size()) {
+                const size_t children_in_this_parent =
+                    base_per_parent + (parent_idx < extra_parents ? 1 : 0);
+                const size_t first_child_idx = child_idx;
+
+                for (size_t i = 0; i < children_in_this_parent; ++i) {
                     // Attach child to parent — push_back first, release after (exception-safe)
                     parent->get_children().push_back(current_layer[child_idx].get());
                     current_layer[child_idx].release();
                     auto* child = parent->get_children().back();
                     child->set_parent(parent.get());
 
-                    // Add separator key for all children except the first
-                    if (children_in_this_parent > 0) {
-                        // The separator key is the aggregate of the previous child
-                        key_type separator = parent->get_children()[children_in_this_parent - 1]->calc_parent_key();
-                        gdt::key<key_type, data_type> sep_key(separator);
+                    // Add separator key for all children except the first.
+                    // Use the previous child's TRACKED full subtree range
+                    // rather than calc_keys_aggregate (which would miss the
+                    // child's own last-child subtree).
+                    if (i > 0) {
+                        gdt::key<key_type, data_type> sep_key(current_ranges[child_idx - 1]);
                         auto* sep_key_ptr = allocate_key(sep_key);
                         parent->get_keys().push_back(sep_key_ptr);
                     }
 
-                    ++children_in_this_parent;
                     ++child_idx;
                 }
+
+                // Compute this parent's full subtree range for the next layer
+                key_type parent_range = current_ranges[first_child_idx];
+                for (size_t i = first_child_idx + 1; i < child_idx; ++i) {
+                    parent_range = key_type::aggregate(parent_range, current_ranges[i]);
+                }
+                parent_ranges.push_back(parent_range);
 
                 parent_layer.push_back(std::move(parent));
             }
 
             current_layer = std::move(parent_layer);
+            current_ranges = std::move(parent_ranges);
         }
 
         // Build succeeded — publish rightmost leaf and release root to caller

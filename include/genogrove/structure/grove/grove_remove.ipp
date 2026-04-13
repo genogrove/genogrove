@@ -8,37 +8,33 @@ public:
      * @param key_to_remove Pointer to the key to remove (must be in this index's tree)
      * @return true if key was found and removed, false if not found
      *
-     * @note Automatically removes all graph edges (both incoming and outgoing) involving
-     *       the removed key to prevent dangling edge pointers.
-     * @note The key object remains in the grove's deque (not deallocated); it is simply
-     *       unlinked from the tree. The deque is cleaned up when the grove is destroyed.
-     * @note Handles leaf underflow via redistribution (borrow from sibling) or merging,
-     *       with cascading rebalance up to internal nodes and root collapse.
+     * @note Automatically removes all graph edges (both incoming and outgoing)
+     *       involving the removed key to prevent dangling edge pointers.
+     * @note The key object remains in the grove's deque (not deallocated); it is
+     *       simply unlinked from the tree.
+     * @note Handles leaf underflow via redistribution (borrow from sibling) or
+     *       merging, cascading up to internal nodes and root collapse.
      */
     bool remove_key(std::string_view index_name, gdt::key<key_type, data_type>* key_to_remove) {
         if (key_to_remove == nullptr) return false;
 
-        node<key_type, data_type>* root = this->get_root(index_name);
+        auto* root = this->get_root(index_name);
         if (root == nullptr) return false;
 
-        // Find the leaf containing this key
-        node<key_type, data_type>* leaf = find_leaf(root, key_to_remove);
+        auto* leaf = find_leaf(root, key_to_remove);
         if (leaf == nullptr) return false;
 
-        // Remove the key pointer from the leaf (by pointer identity)
         auto& keys = leaf->get_keys();
         auto it = std::ranges::find(keys, key_to_remove);
         if (it == keys.end()) return false;
         keys.erase(it);
         --this->leaf_key_count;
 
-        // Clean up all graph edges involving this key
         this->graph_data.remove_all_edges(key_to_remove);
 
-        // If leaf is root, handle the simple case
+        // Leaf was the root — handle directly, no rebalance needed
         if (leaf->get_parent() == nullptr) {
             if (keys.empty()) {
-                // Tree for this index is now empty — clean up
                 delete leaf;
                 std::string key_str(index_name);
                 this->root_nodes.erase(key_str);
@@ -47,187 +43,227 @@ public:
             return true;
         }
 
-        // Update separator keys up the tree
-        if (!keys.empty()) {
+        // If the leaf is underflowing (possibly empty), rebalance handles the
+        // separator updates internally. Otherwise just walk up to refresh
+        // separators for the still-populated leaf.
+        if (is_underflowing(leaf)) {
+            rebalance_node(leaf, index_name);
+        } else {
             update_separators_upward(leaf);
         }
-
-        // Check for underflow
-        if (keys.size() >= static_cast<size_t>(min_keys()) && !keys.empty()) {
-            return true;
-        }
-
-        // Rebalance
-        rebalance_node(leaf, index_name);
         return true;
     }
 
 private:
-    /**
-     * @brief Minimum number of keys for a non-root node
-     * @return ceil(order/2) - 1
-     */
-    int min_keys() const noexcept {
-        return (this->order + 1) / 2 - 1;
+    /// Minimum number of keys a non-root node of the same type as `n` must have
+    int min_keys_for(node<key_type, data_type>* n) const noexcept {
+        return n->get_is_leaf() ? leaf_min_keys() : internal_min_keys();
+    }
+
+    /// A non-root node is underflowing if it has fewer than its min_keys
+    bool is_underflowing(node<key_type, data_type>* n) const noexcept {
+        return static_cast<int>(n->get_keys().size()) < min_keys_for(n);
+    }
+
+    /// Find a node's position in its parent's children vector
+    int find_child_pos(node<key_type, data_type>* n) const {
+        auto& siblings = n->get_parent()->get_children();
+        return static_cast<int>(std::ranges::find(siblings, n) - siblings.begin());
     }
 
     /**
      * @brief Find the leaf node containing a specific key pointer
-     * @param current Node to start searching from
-     * @param key_to_find Key pointer to locate (matched by pointer identity)
-     * @return Pointer to the leaf containing the key, or nullptr if not found
      *
-     * Uses the same traversal logic as insert_iter to walk down the tree.
+     * Uses search_iter-style routing with overlap check to navigate to the
+     * correct subtree, then walks the leaf chain to find the exact leaf by
+     * pointer identity.
      */
     node<key_type, data_type>* find_leaf(node<key_type, data_type>* current,
                                           gdt::key<key_type, data_type>* key_to_find) {
         if (current == nullptr) return nullptr;
 
         if (current->get_is_leaf()) {
-            auto& keys = current->get_keys();
-            if (std::ranges::find(keys, key_to_find) != keys.end()) {
-                return current;
+            auto* leaf = current;
+            while (leaf != nullptr) {
+                if (std::ranges::find(leaf->get_keys(), key_to_find) != leaf->get_keys().end()) {
+                    return leaf;
+                }
+                auto* next = leaf->get_next();
+                if (next == nullptr || next->get_keys().empty()) break;
+                if (next->get_keys()[0]->get_value() > key_to_find->get_value()) break;
+                leaf = next;
             }
             return nullptr;
         }
 
-        // Internal node: same traversal as insert_iter
-        int child_index = 0;
-        while (child_index < static_cast<int>(current->get_keys().size()) &&
-               key_to_find->get_value() > current->get_keys()[child_index]->get_value()) {
-            child_index++;
+        size_t i = 0;
+        while (i < current->get_keys().size() &&
+               (key_to_find->get_value() > current->get_keys()[i]->get_value()) &&
+               !key_type::overlaps(current->get_keys()[i]->get_value(),
+                                   key_to_find->get_value())) {
+            i++;
         }
-        return find_leaf(current->get_child(child_index), key_to_find);
+        return find_leaf(current->get_child(i), key_to_find);
     }
 
     /**
-     * @brief Walk from a node up to the root, recomputing separator keys
-     * @param n The node whose ancestors' separators need updating
+     * @brief Update the parent's separator for a child (if the child has one)
+     *
+     * Uses calc_subtree_range() rather than calc_keys_aggregate() so the
+     * separator covers the child's entire subtree, including its catch-all
+     * last-child chain. For leaves the two are equivalent.
+     */
+    void set_parent_separator(node<key_type, data_type>* parent, int child_pos,
+                              node<key_type, data_type>* child) {
+        if (child_pos >= 0 &&
+            child_pos < static_cast<int>(parent->get_keys().size()) &&
+            !child->get_keys().empty()) {
+            parent->get_keys()[child_pos]->set_value(child->calc_subtree_range());
+        }
+    }
+
+    /**
+     * @brief Walk from a node up to the root, refreshing separator keys
      */
     void update_separators_upward(node<key_type, data_type>* n) {
         auto* current = n;
         while (current->get_parent() != nullptr) {
             auto* parent = current->get_parent();
-            auto& parent_children = parent->get_children();
-            auto child_it = std::ranges::find(parent_children, current);
-            int child_pos = static_cast<int>(child_it - parent_children.begin());
-
-            if (child_pos < static_cast<int>(parent->get_keys().size()) &&
-                !current->get_keys().empty()) {
-                parent->get_keys()[child_pos]->set_value(current->calc_parent_key());
-            }
+            set_parent_separator(parent, find_child_pos(current), current);
             current = parent;
         }
     }
 
     /**
-     * @brief Rebalance a node that has underflowed after key removal
-     * @param n The underflowing node (leaf or internal)
-     * @param index_name The grove index name for rightmost cache updates
+     * @brief Rebalance an underflowing node via borrow or merge
      *
-     * Tries to borrow from a sibling first (left preferred, then right).
-     * If neither sibling can spare a key, merges with a sibling.
+     * Tries borrow from left, then from right, then falls through to merge.
      * Cascades rebalancing upward if the merge causes the parent to underflow.
      */
     void rebalance_node(node<key_type, data_type>* n, std::string_view index_name) {
+        int child_pos = find_child_pos(n);
+
+        if (try_borrow_from_left(n, child_pos) ||
+            try_borrow_from_right(n, child_pos)) {
+            update_separators_upward(n->get_parent());
+            return;
+        }
+
+        merge_with_sibling(n, child_pos, index_name);
+    }
+
+    /**
+     * @brief Try to borrow the last key/child from the left sibling
+     * @return true if the borrow succeeded, false if no left sibling or it's at min_keys
+     */
+    bool try_borrow_from_left(node<key_type, data_type>* n, int child_pos) {
+        if (child_pos == 0) return false;
         auto* parent = n->get_parent();
-        auto& parent_children = parent->get_children();
-        auto child_it = std::ranges::find(parent_children, n);
-        int child_pos = static_cast<int>(child_it - parent_children.begin());
+        auto* left = parent->get_children()[child_pos - 1];
+        if (static_cast<int>(left->get_keys().size()) <= min_keys_for(n)) return false;
 
-        bool is_leaf = n->get_is_leaf();
-
-        // --- Try borrow from left sibling ---
-        if (child_pos > 0) {
-            auto* left = parent_children[child_pos - 1];
-            if (static_cast<int>(left->get_keys().size()) > min_keys()) {
-                if (is_leaf) {
-                    n->get_keys().insert(n->get_keys().begin(), left->get_keys().back());
-                    left->get_keys().pop_back();
-                } else {
-                    n->get_keys().insert(n->get_keys().begin(), left->get_keys().back());
-                    left->get_keys().pop_back();
-                    auto* moved_child = left->get_children().back();
-                    left->get_children().pop_back();
-                    n->get_children().insert(n->get_children().begin(), moved_child);
-                    moved_child->set_parent(n);
-                }
-
-                // Update separators for both siblings
-                if (child_pos - 1 < static_cast<int>(parent->get_keys().size()) &&
-                    !left->get_keys().empty()) {
-                    parent->get_keys()[child_pos - 1]->set_value(left->calc_parent_key());
-                }
-                if (child_pos < static_cast<int>(parent->get_keys().size()) &&
-                    !n->get_keys().empty()) {
-                    parent->get_keys()[child_pos]->set_value(n->calc_parent_key());
-                }
-                update_separators_upward(parent);
-                return;
-            }
+        if (n->get_is_leaf()) {
+            n->get_keys().insert(n->get_keys().begin(), left->get_keys().back());
+            left->get_keys().pop_back();
+        } else {
+            // Move left's last child to n's front. The moved child was left's
+            // catch-all (no separator); its new slot in n needs one covering
+            // its full subtree range.
+            auto* moved_child = left->get_children().back();
+            auto moved_range = moved_child->calc_subtree_range();
+            auto* moved_key = left->get_keys().back();
+            left->get_keys().pop_back();
+            left->get_children().pop_back();
+            moved_key->set_value(moved_range);
+            n->get_keys().insert(n->get_keys().begin(), moved_key);
+            n->get_children().insert(n->get_children().begin(), moved_child);
+            moved_child->set_parent(n);
         }
 
-        // --- Try borrow from right sibling ---
-        if (child_pos < static_cast<int>(parent_children.size()) - 1) {
-            auto* right = parent_children[child_pos + 1];
-            if (static_cast<int>(right->get_keys().size()) > min_keys()) {
-                if (is_leaf) {
-                    n->get_keys().push_back(right->get_keys().front());
-                    right->get_keys().erase(right->get_keys().begin());
-                } else {
-                    n->get_keys().push_back(right->get_keys().front());
-                    right->get_keys().erase(right->get_keys().begin());
-                    auto* moved_child = right->get_children().front();
-                    right->get_children().erase(right->get_children().begin());
-                    n->get_children().push_back(moved_child);
-                    moved_child->set_parent(n);
-                }
+        set_parent_separator(parent, child_pos - 1, left);
+        set_parent_separator(parent, child_pos, n);
+        return true;
+    }
 
-                // Update separators
-                if (child_pos < static_cast<int>(parent->get_keys().size()) &&
-                    !n->get_keys().empty()) {
-                    parent->get_keys()[child_pos]->set_value(n->calc_parent_key());
-                }
-                if (child_pos + 1 < static_cast<int>(parent->get_keys().size()) &&
-                    !right->get_keys().empty()) {
-                    parent->get_keys()[child_pos + 1]->set_value(right->calc_parent_key());
-                }
-                update_separators_upward(parent);
-                return;
-            }
+    /**
+     * @brief Try to borrow the first key/child from the right sibling
+     * @return true if the borrow succeeded, false if no right sibling or it's at min_keys
+     */
+    bool try_borrow_from_right(node<key_type, data_type>* n, int child_pos) {
+        auto* parent = n->get_parent();
+        if (child_pos >= static_cast<int>(parent->get_children().size()) - 1) return false;
+        auto* right = parent->get_children()[child_pos + 1];
+        if (static_cast<int>(right->get_keys().size()) <= min_keys_for(n)) return false;
+
+        if (n->get_is_leaf()) {
+            n->get_keys().push_back(right->get_keys().front());
+            right->get_keys().erase(right->get_keys().begin());
+        } else {
+            // Move right's first child to n's tail (becomes n's new last child).
+            // n's OLD last child was catch-all; it now becomes interior and needs
+            // a separator covering its full subtree range.
+            auto old_last_range = n->get_children().back()->calc_subtree_range();
+            auto* moved_key = right->get_keys().front();
+            right->get_keys().erase(right->get_keys().begin());
+            auto* moved_child = right->get_children().front();
+            right->get_children().erase(right->get_children().begin());
+            moved_key->set_value(old_last_range);
+            n->get_keys().push_back(moved_key);
+            n->get_children().push_back(moved_child);
+            moved_child->set_parent(n);
         }
 
-        // --- Must merge: always merge right into left ---
+        set_parent_separator(parent, child_pos, n);
+        set_parent_separator(parent, child_pos + 1, right);
+        return true;
+    }
+
+    /**
+     * @brief Merge n with a sibling (prefer merging into left sibling)
+     *
+     * Performs the merge, removes the extra child and separator from the parent,
+     * deletes the now-empty right node, and recursively handles the parent state
+     * (root collapse or cascading rebalance).
+     */
+    void merge_with_sibling(node<key_type, data_type>* n, int child_pos,
+                            std::string_view index_name) {
+        auto* parent = n->get_parent();
+
+        // Always merge "right into left" — pick sides based on which sibling exists
         node<key_type, data_type>* left;
         node<key_type, data_type>* right;
         int right_pos;
-
         if (child_pos > 0) {
-            left = parent_children[child_pos - 1];
+            left = parent->get_children()[child_pos - 1];
             right = n;
             right_pos = child_pos;
         } else {
             left = n;
-            right = parent_children[child_pos + 1];
+            right = parent->get_children()[child_pos + 1];
             right_pos = child_pos + 1;
         }
 
-        // Move all keys from right into left
-        left->get_keys().insert(left->get_keys().end(),
-            right->get_keys().begin(), right->get_keys().end());
-
-        if (is_leaf) {
-            // Fix leaf chain
+        if (left->get_is_leaf()) {
+            // Leaf merge: concatenate keys, fix chain, update rightmost cache
+            left->get_keys().insert(left->get_keys().end(),
+                right->get_keys().begin(), right->get_keys().end());
             left->set_next(right->get_next());
 
-            // Update rightmost cache
-            std::string key_str(index_name);
-            if (auto rm_it = this->rightmost_nodes.find(key_str);
+            if (auto rm_it = this->rightmost_nodes.find(index_name);
                 rm_it != this->rightmost_nodes.end() && rm_it->second == right) {
                 rm_it->second = left;
             }
         } else {
-            // Move children and update their parent pointers
+            // Internal merge: left's old last child was catch-all; it becomes
+            // interior and needs a bridge separator covering its full range.
+            if (!left->get_children().empty()) {
+                gdt::key<key_type, data_type> bridge_key{
+                    left->get_children().back()->calc_subtree_range()
+                };
+                left->get_keys().push_back(allocate_key(bridge_key));
+            }
+            left->get_keys().insert(left->get_keys().end(),
+                right->get_keys().begin(), right->get_keys().end());
             for (auto* child : right->get_children()) {
                 child->set_parent(left);
             }
@@ -235,45 +271,48 @@ private:
                 right->get_children().begin(), right->get_children().end());
         }
 
-        // Remove right child from parent
-        parent_children.erase(parent_children.begin() + right_pos);
+        // Detach right from parent: drop its child slot, then drop one key.
+        // If right had its own separator (wasn't the last child), remove that
+        // separator. Otherwise right was the catch-all and had no separator,
+        // so remove the one belonging to left — left inherits right's
+        // catch-all role and no longer needs its own separator.
+        parent->get_children().erase(parent->get_children().begin() + right_pos);
+        const int sep_to_remove = (right_pos < static_cast<int>(parent->get_keys().size()))
+            ? right_pos
+            : right_pos - 1;
+        parent->get_keys().erase(parent->get_keys().begin() + sep_to_remove);
+        set_parent_separator(parent, right_pos - 1, left);
 
-        // Remove the corresponding separator from parent
-        if (right_pos < static_cast<int>(parent->get_keys().size())) {
-            parent->get_keys().erase(parent->get_keys().begin() + right_pos);
-        } else {
-            parent->get_keys().erase(parent->get_keys().begin() + (right_pos - 1));
-        }
-
-        // Update left's separator if it still has one
-        int left_pos = right_pos - 1;
-        if (left_pos >= 0 && left_pos < static_cast<int>(parent->get_keys().size()) &&
-            !left->get_keys().empty()) {
-            parent->get_keys()[left_pos]->set_value(left->calc_parent_key());
-        }
-
-        // Clean up right node
+        // Clean up right node. Keys are owned by the grove's deque (not the
+        // node), so just clear the vector. For internal right nodes, we also
+        // clear children before delete — otherwise ~node() would cascade-delete
+        // the children we just transferred to left.
         right->get_keys().clear();
-        if (!is_leaf) {
+        if (!right->get_is_leaf()) {
             right->get_children().clear();
-            right->set_is_leaf(true);  // prevent destructor from deleting moved children
+            right->set_is_leaf(true);
         }
         delete right;
 
-        // Check parent state
+        // Handle parent state: collapse root, cascade rebalance, or just update
         auto* root = this->get_root(index_name);
         if (parent == root && parent->get_children().size() == 1) {
-            // Collapse root: promote single child to root
-            auto* new_root = parent->get_children()[0];
-            new_root->set_parent(nullptr);
-            parent->get_children().clear();
-            parent->set_is_leaf(true);  // prevent child deletion
-            delete parent;
-            this->root_nodes[std::string(index_name)] = new_root;
-        } else if (parent != root &&
-                   static_cast<int>(parent->get_keys().size()) < min_keys()) {
+            collapse_root(parent, index_name);
+        } else if (parent != root && is_underflowing(parent)) {
             rebalance_node(parent, index_name);
         } else {
             update_separators_upward(parent);
         }
+    }
+
+    /**
+     * @brief Collapse a root that has only a single remaining child
+     */
+    void collapse_root(node<key_type, data_type>* old_root, std::string_view index_name) {
+        auto* new_root = old_root->get_children()[0];
+        new_root->set_parent(nullptr);
+        old_root->get_children().clear();
+        old_root->set_is_leaf(true);  // prevent cascade delete of new_root
+        delete old_root;
+        this->root_nodes[std::string(index_name)] = new_root;
     }

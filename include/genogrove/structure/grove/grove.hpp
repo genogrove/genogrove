@@ -112,20 +112,16 @@ class grove {
      * @brief Construct a grove with specified order
      * @param order Determines the maximum number of k-1 keys and k children per node
      */
-    explicit grove(int order, float fill_factor = 1.0f)
-        : order(order), fill_factor(fill_factor) {
+    explicit grove(int order) : order(order) {
         if (order < 2) {
             throw std::invalid_argument("grove order must be >= 2");
-        }
-        if (fill_factor < 0.5f || fill_factor > 1.0f) {
-            throw std::invalid_argument("grove fill_factor must be in [0.5, 1.0]");
         }
     }
 
     /**
      * @brief Construct a grove with default order of 3
      */
-    grove() : order(3), fill_factor(1.0f) {}
+    grove() : order(3) {}
 
     /**
      * @brief Destructor that cleans up all tree nodes
@@ -163,24 +159,6 @@ class grove {
         return this->order;
     }
 
-    /**
-     * @brief Get the fill factor for sorted insertion splits
-     * @return Fill factor in [0.5, 1.0]
-     */
-    float get_fill_factor() const noexcept {
-        return this->fill_factor;
-    }
-
-    /**
-     * @brief Set the fill factor for sorted insertion splits
-     * @param fill_factor Value in [0.5, 1.0]; 1.0 packs nodes fully, 0.5 is classic mid-split
-     */
-    void set_fill_factor(float fill_factor) {
-        if (fill_factor < 0.5f || fill_factor > 1.0f) {
-            throw std::invalid_argument("grove fill_factor must be in [0.5, 1.0]");
-        }
-        this->fill_factor = fill_factor;
-    }
 
     /**
      * @brief Get map of all root nodes indexed by their string keys
@@ -262,6 +240,36 @@ class grove {
     }
 
     // =========================================================================
+    // Integer math helpers (explicit ceil/floor — no integer-division tricks)
+    // =========================================================================
+
+    /// Ceiling of a/b for positive integers (e.g. ceil_div(9, 2) == 5)
+    static constexpr int ceil_div(int a, int b) noexcept {
+        return (a + b - 1) / b;
+    }
+
+    /// Floor of a/b for positive integers (e.g. floor_div(9, 2) == 4)
+    static constexpr int floor_div(int a, int b) noexcept {
+        return a / b;
+    }
+
+    /// Minimum number of keys for a leaf node: ceil((order - 1) / 2)
+    int leaf_min_keys() const noexcept {
+        return ceil_div(this->order - 1, 2);
+    }
+
+    /// Minimum number of keys for an internal node: floor((order - 1) / 2)
+    int internal_min_keys() const noexcept {
+        return floor_div(this->order - 1, 2);
+    }
+
+    /// Split midpoint — a single value that satisfies both leaf and internal
+    /// minimum occupancy constraints for all orders >= 2.
+    int split_mid() const noexcept {
+        return floor_div(this->order, 2);
+    }
+
+    // =========================================================================
     // Insertion methods
     // =========================================================================
     #include "grove_insert.ipp"
@@ -287,9 +295,6 @@ class grove {
 
     /// Maximum number of keys per node (B+ tree order/capacity)
     int order;
-
-    /// Fill factor for sorted insertion splits (0.5–1.0); controls how full the left node is after a split
-    float fill_factor;
 
     /// Map from index names (e.g., chromosome names) to their root nodes
     std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>> root_nodes;
