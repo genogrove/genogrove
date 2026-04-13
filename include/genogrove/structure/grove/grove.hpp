@@ -271,7 +271,8 @@ class grove {
     }
 
     /// Split midpoint — a single value that satisfies both leaf and internal
-    /// minimum occupancy constraints for all orders >= 2.
+    /// minimum occupancy constraints (grove enforces order >= 3 in its
+    /// constructor, so `floor(order / 2) >= 1` and both halves are non-empty).
     int split_mid() const noexcept {
         return floor_div(this->order, 2);
     }

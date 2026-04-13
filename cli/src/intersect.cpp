@@ -56,8 +56,8 @@ void intersect::validate(const cxxopts::ParseResult& args) {
 
     if(args.count("k")) {
         int k = args["k"].as<int>();
-        if(k < 2) {
-            throw std::runtime_error("Error: order must be at least 2");
+        if(k < 3) {
+            throw std::runtime_error("Error: order must be at least 3");
         }
     }
 }
