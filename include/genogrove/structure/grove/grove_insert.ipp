@@ -108,13 +108,13 @@ public:
                     new_root->add_child(current_node, 0);
                     new_root->set_is_leaf(false);
                     current_node->set_parent(new_root);
-                    split_node(new_root, 0, index);
+                    split_node(new_root, 0, index, /*sorted_append=*/true);
                     this->root_nodes[std::string(index)] = new_root;
                     current_node = this->get_rightmost_node(index);
                 } else {
                     // Internal node overflow
                     int child_index = current_node->get_parent()->get_children().size() - 1;
-                    split_node(current_node->get_parent(), child_index, index);
+                    split_node(current_node->get_parent(), child_index, index, /*sorted_append=*/true);
                     current_node = this->get_rightmost_node(index);
                 }
             }
@@ -186,7 +186,7 @@ public:
             new_root->add_child(root, 0);
             new_root->set_is_leaf(false);
             root->set_parent(new_root);
-            split_node(new_root, 0, index);
+            split_node(new_root, 0, index, /*sorted_append=*/false);
             root = new_root;
             this->root_nodes[std::string(index)] = root; // update the root node in the map
         }
@@ -244,7 +244,7 @@ private:
             }
 
             if(node->get_child(child_index)->get_keys().size() == this->order) {
-                split_node(node, child_index, index);
+                split_node(node, child_index, index, /*sorted_append=*/false);
             }
             return key_ptr;
         }
@@ -255,19 +255,26 @@ private:
      * @param parent The parent node whose child will be split
      * @param index The index of the child node to split within the parent
      * @param index_name The grove index name (e.g., chromosome) for O(1) rightmost cache update
-     * @note Dispatches to split_leaf_node() or split_internal_node() based on child type.
-     *       Uses split_mid() = floor(order/2) as the midpoint — the single value that
-     *       satisfies both leaf and internal minimum occupancy constraints.
+     * @param sorted_append When true, a leaf child is split with the asymmetric
+     *        `split_leaf_node_sorted()` midpoint (biased fully left, right starts
+     *        with just the just-appended key). Used by the sorted-insert hot path
+     *        to halve the number of leaf splits. Ignored for internal children,
+     *        which always use the symmetric `split_internal_node()` to avoid
+     *        producing degenerate (0-key, 1-child) right siblings.
      */
     void split_node(node<key_type, data_type>* parent, int index,
-                    std::string_view index_name) {
+                    std::string_view index_name, bool sorted_append) {
         node<key_type, data_type>* child = parent->get_child(index);
         auto new_child = std::make_unique<node<key_type, data_type>>(this->order);
         new_child->set_parent(parent);
         new_child->set_is_leaf(child->get_is_leaf());
 
         if (child->get_is_leaf()) {
-            split_leaf_node(parent, child, std::move(new_child), index, index_name);
+            if (sorted_append) {
+                split_leaf_node_sorted(parent, child, std::move(new_child), index, index_name);
+            } else {
+                split_leaf_node(parent, child, std::move(new_child), index, index_name);
+            }
         } else {
             split_internal_node(parent, child, std::move(new_child), index);
         }
@@ -301,6 +308,47 @@ private:
         child->set_next(released);
 
         // Update rightmost node cache if the split leaf was the rightmost (O(1) lookup)
+        if (auto it = this->rightmost_nodes.find(index_name);
+            it != this->rightmost_nodes.end() && it->second == child) {
+            it->second = released;
+        }
+    }
+
+    /**
+     * @brief Sorted-append leaf split: biased to keep the old leaf full
+     * @param parent The parent node to insert the separator key into
+     * @param child The overflowing leaf (order keys), last key is the just-appended one
+     * @param new_child The new sibling node (right half after split)
+     * @param index Position in parent's children vector
+     * @param index_name The grove index name for rightmost cache update
+     *
+     * Uses `mid = order - 1` so `child` keeps `order - 1` keys (the full leaf's
+     * old contents) and `new_child` gets exactly 1 key — the just-appended one.
+     * The next `order - 1` sorted appends then land in `new_child` without
+     * triggering another split, cutting the leaf-split rate in half relative
+     * to the symmetric `split_mid()` midpoint.
+     *
+     * The rightmost leaf may hold fewer than `leaf_min_keys()` until it fills
+     * up again. That is the invariant relaxation the sorted-append path buys:
+     * min-occupancy is enforced everywhere except the rightmost leaf of each
+     * index (see `validate_tree_invariants` in `key_type_grove_test.hpp`).
+     */
+    void split_leaf_node_sorted(node<key_type, data_type>* parent, node<key_type, data_type>* child,
+                                std::unique_ptr<node<key_type, data_type>> new_child,
+                                int index, std::string_view index_name) {
+        const int mid = this->order - 1;
+        new_child->get_keys().assign(child->get_keys().begin() + mid, child->get_keys().end());
+        child->get_keys().resize(mid);
+
+        gdt::key<key_type, data_type> parent_key{child->calc_keys_aggregate()};
+        auto* parent_key_ptr = allocate_key(parent_key);
+        parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
+        parent->get_children().insert(parent->get_children().begin() + index + 1, new_child.get());
+        auto* released = new_child.release();
+
+        released->set_next(child->get_next());
+        child->set_next(released);
+
         if (auto it = this->rightmost_nodes.find(index_name);
             it != this->rightmost_nodes.end() && it->second == child) {
             it->second = released;
@@ -401,13 +449,13 @@ private:
                     new_root->add_child(overflow_node, 0);
                     new_root->set_is_leaf(false);
                     overflow_node->set_parent(new_root);
-                    split_node(new_root, 0, index);
+                    split_node(new_root, 0, index, /*sorted_append=*/true);
                     this->root_nodes[std::string(index)] = new_root;
                     break;
                 } else {
                     auto* parent_node = overflow_node->get_parent();
                     int child_index = static_cast<int>(parent_node->get_children().size()) - 1;
-                    split_node(parent_node, child_index, index);
+                    split_node(parent_node, child_index, index, /*sorted_append=*/true);
                     overflow_node = parent_node;
                 }
             }

@@ -144,7 +144,9 @@ struct grove_test_traits {
  * Checks per node:
  * - Parent pointer matches expected
  * - Key count does not exceed order-1
- * - Non-root leaf nodes have at least ceil((order-1)/2) keys
+ * - Non-root leaf nodes have at least ceil((order-1)/2) keys, EXCEPT the
+ *   rightmost leaf of the tree — the sorted-append split leaves it with as
+ *   few as 1 key until the next order-1 appends fill it back up
  * - Non-root internal nodes have at least floor((order-1)/2) keys
  * - Leaf nodes have no children; internal nodes have keys.size()+1 children
  * - Keys within a node are sorted
@@ -160,7 +162,8 @@ void validate_tree_invariants(
     int& leaf_depth,
     size_t& leaf_count,
     std::vector<gst::node<key_type, data_type>*>& leaves_in_order,
-    bool is_root) {
+    bool is_root,
+    bool is_rightmost_spine) {
 
     ASSERT_NE(n, nullptr) << "Node should not be null at depth " << depth;
 
@@ -174,7 +177,11 @@ void validate_tree_invariants(
     EXPECT_LE(n->get_keys().size(), static_cast<size_t>(order - 1))
         << "Node has too many keys at depth " << depth
         << " (has " << n->get_keys().size() << ", max " << (order - 1) << ")";
-    if (!is_root) {
+    // Rightmost leaf is exempt from min-occupancy: the sorted-append split
+    // biases the old leaf fully left and leaves the new rightmost leaf with a
+    // single key, which will fill up again on the next order-1 appends.
+    const bool is_rightmost_leaf = n->get_is_leaf() && is_rightmost_spine;
+    if (!is_root && !is_rightmost_leaf) {
         EXPECT_GE(static_cast<int>(n->get_keys().size()), min_keys)
             << "Node has too few keys at depth " << depth
             << " (has " << n->get_keys().size() << ", min " << min_keys << ")";
@@ -210,9 +217,11 @@ void validate_tree_invariants(
         }
 
         for (size_t i = 0; i < n->get_children().size(); ++i) {
+            const bool child_is_rightmost_spine =
+                is_rightmost_spine && (i + 1 == n->get_children().size());
             validate_tree_invariants(
                 n->get_children()[i], n, depth + 1, order, leaf_depth, leaf_count,
-                leaves_in_order, false);
+                leaves_in_order, false, child_is_rightmost_spine);
         }
     }
 }
@@ -239,7 +248,8 @@ void validate_grove_index(gst::grove<key_type, data_type>& grove_instance,
     size_t leaf_count = 0;
     std::vector<gst::node<key_type, data_type>*> leaves_in_order;
     validate_tree_invariants(root, static_cast<gst::node<key_type, data_type>*>(nullptr),
-                             0, order, leaf_depth, leaf_count, leaves_in_order, true);
+                             0, order, leaf_depth, leaf_count, leaves_in_order,
+                             /*is_root=*/true, /*is_rightmost_spine=*/true);
 
     // Leaf chain must match the in-order leaf sequence
     for (size_t i = 0; i + 1 < leaves_in_order.size(); ++i) {
