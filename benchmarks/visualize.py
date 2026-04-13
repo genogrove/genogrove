@@ -156,7 +156,7 @@ def plot_throughput_comparison(metrics: Dict[str, List[Tuple]], output_dir: Path
         save_plot(fig, output_dir, f'{bench_type}_throughput')
 
 
-def plot_speedup_factor(metrics: Dict[str, List[Tuple]], output_dir: Path, baseline_order: int = 2):
+def plot_speedup_factor(metrics: Dict[str, List[Tuple]], output_dir: Path, baseline_order: int = 3):
     """Plot speedup factor relative to baseline order."""
     for bench_type, data in metrics.items():
         by_size = defaultdict(list)
