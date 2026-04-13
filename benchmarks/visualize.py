@@ -156,7 +156,7 @@ def plot_throughput_comparison(metrics: Dict[str, List[Tuple]], output_dir: Path
         save_plot(fig, output_dir, f'{bench_type}_throughput')
 
 
-def plot_speedup_factor(metrics: Dict[str, List[Tuple]], output_dir: Path, baseline_order: int = 2):
+def plot_speedup_factor(metrics: Dict[str, List[Tuple]], output_dir: Path, baseline_order: int = 3):
     """Plot speedup factor relative to baseline order."""
     for bench_type, data in metrics.items():
         by_size = defaultdict(list)
@@ -485,7 +485,7 @@ def generate_html_index(output_dir: Path, metrics: Dict[str, List[Tuple]]):
 
     <div class="description">
         <p><strong>Tested configurations:</strong>
-        Orders: 2, 5, 10, 15, 20, 25, 30, 50, 75, 100, 150, 200 |
+        Orders: 3, 5, 10, 15, 20, 25, 30, 50, 75, 100, 150, 200 |
         Dataset sizes: 100, 500, 1000, 5000 intervals |
         Modes: Sorted, Unsorted, Bulk Sorted, Bulk Unsorted</p>
     </div>

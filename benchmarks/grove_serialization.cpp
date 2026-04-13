@@ -90,7 +90,7 @@ static void BM_deserialization(benchmark::State& state) {
 // ----------------------------
 static void ApplyArgs(benchmark::internal::Benchmark* b) {
     std::vector<int> sizes = {100, 500, 1000, 5000};
-    std::vector<int> k_values = {2, 5, 10, 15, 20, 25, 30, 50, 75, 100, 150, 200};
+    std::vector<int> k_values = {3, 5, 10, 15, 20, 25, 30, 50, 75, 100, 150, 200};
 
     for (int n : sizes) {
         for (int k : k_values) {

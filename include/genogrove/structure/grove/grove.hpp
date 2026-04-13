@@ -111,10 +111,17 @@ class grove {
     /**
      * @brief Construct a grove with specified order
      * @param order Determines the maximum number of k-1 keys and k children per node
+     * @throws std::invalid_argument if order < 3
+     *
+     * Order must be at least 3. With order == 2, `split_internal_node` would
+     * produce a right sibling with 0 keys and 1 child (a degenerate internal
+     * node that breaks every path which dereferences `keys[0]` or calls
+     * `calc_keys_aggregate`). Classical B+ trees require order >= 3 for
+     * splits to produce balanced halves on both sides.
      */
     explicit grove(int order) : order(order) {
-        if (order < 2) {
-            throw std::invalid_argument("grove order must be >= 2");
+        if (order < 3) {
+            throw std::invalid_argument("grove order must be >= 3");
         }
     }
 
@@ -264,7 +271,8 @@ class grove {
     }
 
     /// Split midpoint — a single value that satisfies both leaf and internal
-    /// minimum occupancy constraints for all orders >= 2.
+    /// minimum occupancy constraints (grove enforces order >= 3 in its
+    /// constructor, so `floor(order / 2) >= 1` and both halves are non-empty).
     int split_mid() const noexcept {
         return floor_div(this->order, 2);
     }

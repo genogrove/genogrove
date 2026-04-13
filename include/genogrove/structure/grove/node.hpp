@@ -273,7 +273,8 @@ class node {
      * For leaf nodes, this is the bounding range of the leaf data. For internal
      * nodes, it covers children[0..n-2] (each separator covers its corresponding
      * child) but NOT the last child, which has no separator key in this node.
-     * Use calc_keys_subtree_aggregate() to include a specific child's full range.
+     * Use calc_subtree_range() to cover the full subtree including the last
+     * child's catch-all chain.
      *
      * For example with intervals: returns the bounding interval (min start, max
      * end) of this node's keys.
