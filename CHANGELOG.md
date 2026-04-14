@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-04-13
+
 ### Added
 - **B+ tree key removal with rebalancing**: `grove::remove_key()` removes a key from the tree, borrowing from a sibling or merging if the leaf underflows, cascading internal rebalances and collapsing the root if needed. Automatically cleans up all graph edges (incoming + outgoing) involving the removed key. ([#304](https://github.com/genogrove/genogrove/issues/304), [#305](https://github.com/genogrove/genogrove/pull/305))
 - **Bulk graph edge removal**: `graph_overlay::remove_edges_from()`, `remove_edges_to()`, `remove_all_edges()`, `remove_edges_if()` (with grove forwarding methods) for scrubbing edges independently of key removal. ([#305](https://github.com/genogrove/genogrove/pull/305))
