@@ -63,8 +63,8 @@ TEST(GroveFlankingTest, QueryBracketedByTwoKeys) {
 
 TEST(GroveFlankingTest, OverlappingKeysAreSkipped) {
     gst::grove<gdt::interval, int> g(8);
-    g.insert_data("chr1", gdt::interval{100, 350}, 1, gst::sorted);  // overlaps query
     auto* far_pred = g.insert_data("chr1", gdt::interval{50, 60}, 2, gst::sorted);
+    g.insert_data("chr1", gdt::interval{100, 350}, 1, gst::sorted);  // overlaps query
     auto* far_succ = g.insert_data("chr1", gdt::interval{500, 600}, 3, gst::sorted);
     auto nn = g.flanking(gdt::interval{300, 400}, "chr1");
     EXPECT_EQ(nn.get_predecessor(), far_pred);
@@ -125,8 +125,8 @@ TEST(GroveFlankingTest, MultiLeafTreePicksGlobalNearest) {
 
 TEST(GroveFlankingTest, GenomicCoordinateNoPredicateIgnoresStrand) {
     gst::grove<gdt::genomic_coordinate, int> g(8);
-    auto* minus_close = g.insert_data("chr1", gdt::genomic_coordinate{'-', 50, 99},  1, gst::sorted);
     g.insert_data("chr1", gdt::genomic_coordinate{'+', 0,  10},  2, gst::sorted);
+    auto* minus_close = g.insert_data("chr1", gdt::genomic_coordinate{'-', 50, 99},  1, gst::sorted);
     auto nn = g.flanking(gdt::genomic_coordinate{'+', 100, 200}, "chr1");
     // Without a predicate, strand is ignored: closest by coordinate wins.
     EXPECT_EQ(nn.get_predecessor(), minus_close);
@@ -134,8 +134,8 @@ TEST(GroveFlankingTest, GenomicCoordinateNoPredicateIgnoresStrand) {
 
 TEST(GroveFlankingTest, StrandPredicateFiltersOutWrongStrand) {
     gst::grove<gdt::genomic_coordinate, int> g(8);
-    g.insert_data("chr1", gdt::genomic_coordinate{'-', 50, 99}, 1, gst::sorted);   // close, wrong strand
     auto* far_match = g.insert_data("chr1", gdt::genomic_coordinate{'+', 0, 10}, 2, gst::sorted); // far, right strand
+    g.insert_data("chr1", gdt::genomic_coordinate{'-', 50, 99}, 1, gst::sorted);   // close, wrong strand
     auto same_strand = [](const auto& cand, const auto& q) {
         return q.get_strand() == '*' || cand.get_strand() == '*'
             || cand.get_strand() == q.get_strand();
