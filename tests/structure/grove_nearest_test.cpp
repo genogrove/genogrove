@@ -93,6 +93,18 @@ TEST(GroveNearestTest, ChoosesClosestPredecessorAmongMany) {
     EXPECT_EQ(nn.get_successor(),   nullptr);
 }
 
+TEST(GroveNearestTest, NestedIntervalsPickClosestEndForPredecessor) {
+    // Regression: when two non-overlapping upstream intervals are nested,
+    // sort order (start, end) picks the inner one [80,90] (larger sort-key),
+    // but nearest-by-distance is the outer one [50,100] (larger end → smaller
+    // gap to query.start = 200).
+    gst::grove<gdt::interval, int> g(8);
+    auto* outer = g.insert_data("chr1", gdt::interval{50, 100}, 1, gst::sorted);
+    g.insert_data("chr1", gdt::interval{80, 90}, 2, gst::sorted);
+    auto nn = g.nearest_neighbors(gdt::interval{200, 300}, "chr1");
+    EXPECT_EQ(nn.get_predecessor(), outer);
+}
+
 TEST(GroveNearestTest, MultiLeafTreePicksGlobalNearest) {
     // Order 4 forces splits with > 8 keys; verify pruning across multiple leaves.
     gst::grove<gdt::interval, int> g(4);

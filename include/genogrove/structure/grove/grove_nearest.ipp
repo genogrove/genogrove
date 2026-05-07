@@ -95,11 +95,27 @@ private:
 
                 if (k < query) {
                     auto* cur = state.get_predecessor();
-                    if (cur == nullptr || k > cur->get_value()) {
+                    // For interval-like keys, "nearest" predecessor is the one
+                    // with the maximum end (smallest gap to query.start), which
+                    // can differ from the sort-order maximum when intervals are
+                    // nested (e.g. [50,100] vs [80,90] — sort picks [80,90] but
+                    // [50,100] is closer). For scalar keys, sort-order maximum
+                    // equals nearest-by-value.
+                    bool better;
+                    if constexpr (requires { key_type::is_interval; }) {
+                        better = (cur == nullptr) || (k.get_end() > cur->get_value().get_end());
+                    } else {
+                        better = (cur == nullptr) || (k > cur->get_value());
+                    }
+                    if (better) {
                         state.set_predecessor(k_ptr);
                     }
                 } else if (k > query) {
                     auto* cur = state.get_successor();
+                    // Successor: "nearest" is the smallest start (smallest gap
+                    // to query.end). For interval keys with non-overlapping
+                    // candidates this coincides with the sort-order minimum
+                    // (sort is start-first), so a single rule suffices.
                     if (cur == nullptr || k < cur->get_value()) {
                         state.set_successor(k_ptr);
                     }
