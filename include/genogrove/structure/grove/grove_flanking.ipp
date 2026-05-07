@@ -1,4 +1,4 @@
-// grove_nearest.ipp — Nearest-neighbor query methods for grove<>
+// grove_flanking.ipp — Flanking-key query methods for grove<>
 // Included inside the grove class body. Do not include directly.
 
 public:
@@ -10,22 +10,24 @@ public:
      * `!key_type::overlaps(K, query)`. The successor is the smallest such K with
      * `K > query`. Either may be null if no such key exists.
      *
-     * For interval-like keys this corresponds to the closest non-overlapping key
-     * to the left and right of the query. For scalar keys it is the nearest
-     * non-equal key on each side. Distance is type-specific and computed by the
-     * caller from the returned values.
+     * For interval-like keys, picks the key with the smallest gap distance on each
+     * side (max end for predecessor, min start for successor) — which can differ
+     * from the sort-order extremum when intervals are nested. For scalar keys, sort-
+     * order extremum coincides with nearest-by-value.
+     *
+     * Distance is type-specific and computed by the caller from the returned values.
      *
      * @param query The query key
      * @param index The index name (e.g., chromosome) to search within
-     * @return nearest_query_result with predecessor and successor pointers
+     * @return flanking_query_result with predecessor and successor pointers
      *         (either or both may be nullptr)
      *
      * @note Returns both fields nullptr if the index does not exist or the
      *       corresponding tree is empty.
      */
-    [[nodiscard]] gdt::nearest_query_result<key_type, data_type>
-    nearest_neighbors(const key_type& query, std::string_view index) const {
-        return this->nearest_neighbors(query, index,
+    [[nodiscard]] gdt::flanking_query_result<key_type, data_type>
+    flanking(const key_type& query, std::string_view index) const {
+        return this->flanking(query, index,
             [](const key_type&, const key_type&) constexpr noexcept { return true; });
     }
 
@@ -36,10 +38,10 @@ public:
      * comparison checks; only candidates satisfying `is_compatible(candidate, query)`
      * may end up in the result. This lets callers filter by domain-specific criteria
      * not encoded in `key_type::overlaps()`. For example, atroplex passes a strand-
-     * matching predicate to find the nearest same-strand segment:
+     * matching predicate to find the flanking same-strand segment:
      *
      * @code
-     * auto nn = grove.nearest_neighbors(q, "chr1",
+     * auto r = grove.flanking(q, "chr1",
      *     [](const auto& candidate, const auto& q) {
      *         return q.get_strand() == '*' || candidate.get_strand() == '*'
      *             || candidate.get_strand() == q.get_strand();
@@ -50,7 +52,7 @@ public:
      * @param query The query key
      * @param index The index name (e.g., chromosome)
      * @param is_compatible Predicate filtering candidate keys
-     * @return nearest_query_result with predecessor and successor pointers
+     * @return flanking_query_result with predecessor and successor pointers
      *
      * @note The predicate is invoked only at leaf nodes; internal-node pruning is
      *       always purely structural (aggregate ranges) and does not consult the
@@ -58,30 +60,30 @@ public:
      *       traversed; the predicate filters them out at the leaf level.
      */
     template <typename Pred>
-    [[nodiscard]] gdt::nearest_query_result<key_type, data_type>
-    nearest_neighbors(const key_type& query, std::string_view index,
-                      Pred is_compatible) const {
-        gdt::nearest_query_result<key_type, data_type> result{};
+    [[nodiscard]] gdt::flanking_query_result<key_type, data_type>
+    flanking(const key_type& query, std::string_view index,
+             Pred is_compatible) const {
+        gdt::flanking_query_result<key_type, data_type> result{};
         node<key_type, data_type>* root = this->get_root(index);
         if (root == nullptr) {
             return result;
         }
-        this->nn_descend(root, query, is_compatible, result);
+        this->flanking_descend(root, query, is_compatible, result);
         return result;
     }
 
 private:
     /**
-     * @brief Recursive descent for nearest-neighbor search.
+     * @brief Recursive descent for flanking-key search.
      *
      * At leaf nodes, scans every key and updates predecessor/successor candidates
      * in `state`. At internal nodes, prunes subtrees whose aggregate range cannot
      * possibly improve the current best on either side.
      */
     template <typename Pred>
-    void nn_descend(node<key_type, data_type>* current, const key_type& query,
-                    const Pred& is_compatible,
-                    gdt::nearest_query_result<key_type, data_type>& state) const {
+    void flanking_descend(node<key_type, data_type>* current, const key_type& query,
+                          const Pred& is_compatible,
+                          gdt::flanking_query_result<key_type, data_type>& state) const {
         if (current == nullptr) {
             return;
         }
@@ -95,7 +97,7 @@ private:
 
                 if (k < query) {
                     auto* cur = state.get_predecessor();
-                    // For interval-like keys, "nearest" predecessor is the one
+                    // For interval-like keys, the nearest predecessor is the one
                     // with the maximum end (smallest gap to query.start), which
                     // can differ from the sort-order maximum when intervals are
                     // nested (e.g. [50,100] vs [80,90] — sort picks [80,90] but
@@ -112,8 +114,8 @@ private:
                     }
                 } else if (k > query) {
                     auto* cur = state.get_successor();
-                    // Successor: "nearest" is the smallest start (smallest gap
-                    // to query.end). For interval keys with non-overlapping
+                    // Successor: nearest is the smallest start (smallest gap to
+                    // query.end). For interval keys with non-overlapping
                     // candidates this coincides with the sort-order minimum
                     // (sort is start-first), so a single rule suffices.
                     if (cur == nullptr || k < cur->get_value()) {
@@ -138,8 +140,8 @@ private:
                 ? sep_keys[i]->get_value()
                 : child->calc_subtree_range();
 
-            if (this->nn_could_descend(agg, query, state)) {
-                this->nn_descend(child, query, is_compatible, state);
+            if (this->flanking_could_descend(agg, query, state)) {
+                this->flanking_descend(child, query, is_compatible, state);
             }
         }
     }
@@ -152,8 +154,8 @@ private:
      * max_end] structure of the aggregate for tight pruning. For scalar key types,
      * falls back to looser comparison-based pruning.
      */
-    bool nn_could_descend(const key_type& agg, const key_type& query,
-                          const gdt::nearest_query_result<key_type, data_type>& state) const {
+    bool flanking_could_descend(const key_type& agg, const key_type& query,
+                                const gdt::flanking_query_result<key_type, data_type>& state) const {
         if constexpr (requires { key_type::is_interval; }) {
             // Interval pruning. Aggregate has start = min(starts), end = max(ends).
             //
