@@ -44,13 +44,17 @@ namespace genogrove::io {
         if (!file) return;
         if (bgzf_seek(file, 0, SEEK_SET) >= 0) return;
 
-        // bgzf_seek failed — likely a plain gzip stream. Fall back to
-        // close + reopen of the same path.
-        bgzf_close(file);
-        file = bgzf_open(fpath.c_str(), "r");
-        if (!file) {
+        // bgzf_seek failed — likely a plain gzip stream. Reopen the file,
+        // then replace the existing handle. Open-before-close so a failed
+        // reopen leaves the original handle valid for the caller's catch
+        // block to clean up properly (rather than leaving file == nullptr
+        // and relying on bgzf_close(nullptr) being a no-op downstream).
+        BGZF* reopened = bgzf_open(fpath.c_str(), "r");
+        if (!reopened) {
             throw std::runtime_error("Failed to reopen file after rewind: " + fpath.string());
         }
+        bgzf_close(file);
+        file = reopened;
     }
 
 }
