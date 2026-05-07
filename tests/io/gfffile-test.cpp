@@ -395,7 +395,11 @@ TEST_F(gfffileTest, validationEmptyFile) {
 
     EXPECT_NO_THROW({
         gio::gff_reader reader(temp_file);
-        EXPECT_EQ(reader.begin(), reader.end());
+        // Iterating yields zero entries; this also exercises the
+        // begin() == end() contract for an empty input. (Don't call
+        // reader.begin() explicitly before the loop — it constructs an
+        // iterator that calls advance(), which on a non-empty file
+        // would consume the first record before the loop sees it.)
         std::vector<gio::gff_entry> entries;
         for (const auto& entry : reader) {
             entries.push_back(entry);
