@@ -33,17 +33,24 @@ namespace genogrove::io {
 
     bool bgzf_has_next(BGZF* file) {
         if (!file) return false;
+        // bgzf_peek is stateless: returns the next unsigned byte (>= 0) or
+        // a negative value on EOF/error. Works for both BGZF and plain gzip,
+        // unlike the previous read+seek-back approach which silently broke
+        // on plain gzip because bgzf_seek is unsupported there.
+        return bgzf_peek(file) >= 0;
+    }
 
-        int64_t current_pos = bgzf_tell(file);
-        char peek_char;
-        int peek_result = bgzf_read(file, &peek_char, 1);
+    void bgzf_rewind_to_start(BGZF*& file, const std::filesystem::path& fpath) {
+        if (!file) return;
+        if (bgzf_seek(file, 0, SEEK_SET) >= 0) return;
 
-        int64_t seek_result = bgzf_seek(file, current_pos, SEEK_SET);
-        if (seek_result < 0) {
-            return false;
+        // bgzf_seek failed — likely a plain gzip stream. Fall back to
+        // close + reopen of the same path.
+        bgzf_close(file);
+        file = bgzf_open(fpath.c_str(), "r");
+        if (!file) {
+            throw std::runtime_error("Failed to reopen file after rewind: " + fpath.string());
         }
-
-        return peek_result > 0;
     }
 
 }

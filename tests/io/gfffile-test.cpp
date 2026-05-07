@@ -929,3 +929,51 @@ TEST_F(gfffileTest, gtfAttributeWithQuotedSemicolon) {
     EXPECT_EQ(entries[1].attributes.at("gene_name"), "normal");
     EXPECT_EQ(entries[1].attributes.at("note"), "a;b;c");
 }
+
+// ==========================================
+// Plain-gzip support (regression: #303)
+// ==========================================
+// Mirrors bedfile-test's plain-gzip coverage: ENCODE-style GTFs are
+// distributed as plain gzip (not BGZF). The reader's rewind-after-validation
+// step now falls back to close+reopen when bgzf_seek fails, and has_next()
+// uses bgzf_peek instead of read+seek-back, so plain-gzip inputs iterate
+// end-to-end without the previous "Failed to seek back to start of file"
+// failure.
+
+TEST_F(gfffileTest, readPlainGzipFile) {
+    // test_plain_gzip.gtf.gz is plain gzip (re-compressed from test.gtf
+    // with Python's gzip.compress, mtime=0). Same 3 records as test.gtf.
+    fs::path plain_gz = test_data_dir / "test_plain_gzip.gtf.gz";
+    gio::gff_reader reader(plain_gz);
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    ASSERT_EQ(entries.size(), 3);
+    EXPECT_EQ(entries[0].seqid, "chr1");
+    EXPECT_EQ(entries[1].seqid, "chr2");
+    EXPECT_EQ(entries[2].seqid, "chrX");
+}
+
+TEST_F(gfffileTest, hasNextOnPlainGzipFile) {
+    // Verifies has_next() works mid-iteration on plain gzip — the prior
+    // implementation used bgzf_seek to roll back its peek, which silently
+    // returned false on plain gzip and broke iteration.
+    fs::path plain_gz = test_data_dir / "test_plain_gzip.gtf.gz";
+    gio::gff_reader reader(plain_gz);
+
+    EXPECT_TRUE(reader.has_next());
+
+    gio::gff_entry entry;
+    reader.read_next(entry);
+    EXPECT_TRUE(reader.has_next());
+
+    reader.read_next(entry);
+    EXPECT_TRUE(reader.has_next());
+
+    reader.read_next(entry);
+    EXPECT_FALSE(reader.has_next());
+}
