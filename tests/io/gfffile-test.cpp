@@ -387,22 +387,33 @@ TEST_F(gfffileTest, validationInvalidCoordinateRange) {
 }
 
 TEST_F(gfffileTest, validationEmptyFile) {
-    // Create a temporary empty file
+    // Empty file: structurally valid but zero records. Constructor must not
+    // throw; iterator must immediately equal end(). See #310.
     fs::path temp_file = test_data_dir / "temp_empty.gff";
     std::ofstream out(temp_file);
     out.close();
 
-    // Constructor should throw because no valid data found
-    EXPECT_THROW({
+    EXPECT_NO_THROW({
         gio::gff_reader reader(temp_file);
-    }, std::runtime_error);
+        // Iterating yields zero entries; this also exercises the
+        // begin() == end() contract for an empty input. (Don't call
+        // reader.begin() explicitly before the loop — it constructs an
+        // iterator that calls advance(), which on a non-empty file
+        // would consume the first record before the loop sees it.)
+        std::vector<gio::gff_entry> entries;
+        for (const auto& entry : reader) {
+            entries.push_back(entry);
+        }
+        EXPECT_EQ(entries.size(), 0u);
+    });
 
-    // Clean up
     fs::remove(temp_file);
 }
 
 TEST_F(gfffileTest, validationOnlyComments) {
-    // Create a temporary file with only comments
+    // Comments-only file: structurally valid but zero records. Same contract
+    // as the empty case — constructor must not throw, iterator yields zero
+    // entries. See #310.
     fs::path temp_file = test_data_dir / "temp_only_comments.gff";
     std::ofstream out(temp_file);
     out << "# Comment 1\n";
@@ -410,12 +421,16 @@ TEST_F(gfffileTest, validationOnlyComments) {
     out << "## Directive\n";
     out.close();
 
-    // Constructor should throw because no valid data found
-    EXPECT_THROW({
+    EXPECT_NO_THROW({
         gio::gff_reader reader(temp_file);
-    }, std::runtime_error);
+        std::vector<gio::gff_entry> entries;
+        for (const auto& entry : reader) {
+            entries.push_back(entry);
+        }
+        EXPECT_EQ(entries.size(), 0u);
+        EXPECT_TRUE(reader.get_error_message().empty());
+    });
 
-    // Clean up
     fs::remove(temp_file);
 }
 
