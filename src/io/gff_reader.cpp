@@ -91,7 +91,12 @@ namespace genogrove::io {
         try {
             auto first_line = bgzf_next_data_line(bgzf_file, temp_line_num);
             if (!first_line) {
-                throw std::runtime_error("No valid GFF data found in " + fpath.string());
+                // Structurally valid file with zero data records (empty file,
+                // comments-only file, or all blank lines). Treat as non-error:
+                // rewind so the iterator reports end() immediately. Consumers
+                // can detect zero records via reader.begin() == reader.end().
+                bgzf_rewind_to_start(bgzf_file, fpath);
+                return;
             }
 
             std::string_view line_sv(*first_line);

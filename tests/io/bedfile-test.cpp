@@ -410,22 +410,29 @@ TEST_F(bedfileTest, partialBED12SkipInvalid) {
 }
 
 TEST_F(bedfileTest, validationEmptyFile) {
-    // Create a temporary empty file
+    // Empty file: structurally valid but zero records. Constructor must not
+    // throw; iterator must immediately equal end(). See #310.
     fs::path temp_file = test_data_dir / "temp_empty.bed";
     std::ofstream out(temp_file);
     out.close();
 
-    // Constructor should throw because no valid data found
-    EXPECT_THROW({
+    EXPECT_NO_THROW({
         gio::bed_reader reader(temp_file);
-    }, std::runtime_error);
+        EXPECT_EQ(reader.begin(), reader.end());
+        std::vector<gio::bed_entry> entries;
+        for (const auto& entry : reader) {
+            entries.push_back(entry);
+        }
+        EXPECT_EQ(entries.size(), 0u);
+    });
 
-    // Clean up
     fs::remove(temp_file);
 }
 
 TEST_F(bedfileTest, validationOnlyComments) {
-    // Create a temporary file with only comments
+    // Comments-only file: structurally valid but zero records. Same contract
+    // as the empty case — constructor must not throw, iterator yields zero
+    // entries. See #310.
     fs::path temp_file = test_data_dir / "temp_only_comments.bed";
     std::ofstream out(temp_file);
     out << "# Comment 1\n";
@@ -433,12 +440,16 @@ TEST_F(bedfileTest, validationOnlyComments) {
     out << "# Comment 3\n";
     out.close();
 
-    // Constructor should throw because no valid data found
-    EXPECT_THROW({
+    EXPECT_NO_THROW({
         gio::bed_reader reader(temp_file);
-    }, std::runtime_error);
+        std::vector<gio::bed_entry> entries;
+        for (const auto& entry : reader) {
+            entries.push_back(entry);
+        }
+        EXPECT_EQ(entries.size(), 0u);
+        EXPECT_TRUE(reader.get_error_message().empty());
+    });
 
-    // Clean up
     fs::remove(temp_file);
 }
 
@@ -648,18 +659,20 @@ TEST_F(bedfileTest, iteratorWithOptionalFields) {
 }
 
 TEST_F(bedfileTest, iteratorEmptyFile) {
-    // Create temporary file with only a comment (no valid data)
+    // Comments-only file: range-based for loop must produce zero iterations.
+    // See #310.
     fs::path empty_bed = test_data_dir / "temp_iter_empty.bed";
     std::ofstream out(empty_bed);
     out << "# Just a comment\n";
     out.close();
 
-    // Constructor should throw because no valid data found
-    EXPECT_THROW({
-        gio::bed_reader reader(empty_bed);
-    }, std::runtime_error);
+    gio::bed_reader reader(empty_bed);
+    int count = 0;
+    for ([[maybe_unused]] const auto& entry : reader) {
+        ++count;
+    }
+    EXPECT_EQ(count, 0);
 
-    // Cleanup
     fs::remove(empty_bed);
 }
 
