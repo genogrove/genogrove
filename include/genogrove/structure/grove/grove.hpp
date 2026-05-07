@@ -21,6 +21,7 @@
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
+#include <genogrove/data_type/nearest_query_result.hpp>
 #include <genogrove/data_type/query_result.hpp>
 #include <genogrove/structure/grove/node.hpp>
 #include <genogrove/structure/grove/graph_overlay.hpp>
@@ -286,6 +287,11 @@ class grove {
     // Query methods
     // =========================================================================
     #include "grove_query.ipp"
+
+    // =========================================================================
+    // Nearest-neighbor query methods
+    // =========================================================================
+    #include "grove_nearest.ipp"
 
     // =========================================================================
     // Key removal methods

@@ -18,6 +18,7 @@
 #include <genogrove/data_type/key.hpp>
 #include <genogrove/data_type/key_type_base.hpp>
 #include <genogrove/data_type/kmer.hpp>
+#include <genogrove/data_type/nearest_query_result.hpp>
 #include <genogrove/data_type/numeric.hpp>
 #include <genogrove/data_type/query_result.hpp>
 
