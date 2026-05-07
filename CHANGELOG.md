@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **`grove::flanking()`**: returns the predecessor and successor of a query in the grove's sort order, restricted to keys that do not overlap the query. Two overloads, with or without a caller-supplied compatibility predicate (e.g., strand match). Generic over `key_type` — interval-aware tight pruning when `key_type::is_interval` is defined, looser comparison-based pruning otherwise. New `gdt::flanking_query_result` companion type holds the predecessor/successor pointers; distance is type-specific and computed by the caller. Named `flanking` rather than `neighbors` to avoid collision with the existing graph-overlay `get_neighbors()`. ([#309](https://github.com/genogrove/genogrove/issues/309), [#311](https://github.com/genogrove/genogrove/pull/311))
 
+### Fixed
+- **`gff_reader` and `bed_reader` constructors fail on plain gzip files**: the rewind-after-validation step used `bgzf_seek`, which only works on BGZF (plain gzip has no block index). Affected ENCODE-style GTFs distributed as `gzip` rather than `bgzip`. New helper `bgzf_rewind_to_start()` falls back to close+reopen when `bgzf_seek` fails. Also rewrote `bgzf_has_next()` on top of stateless `bgzf_peek()` — the previous read+seek-back pattern silently returned `false` on plain gzip and broke iteration mid-stream. ([#303](https://github.com/genogrove/genogrove/issues/303), [#313](https://github.com/genogrove/genogrove/pull/313))
+
 ## [0.21.0] - 2026-04-13
 
 ### Added

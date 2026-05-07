@@ -59,7 +59,6 @@ namespace genogrove::io {
         }
 
         // Validate first data line
-        int64_t start_pos = bgzf_tell(bgzf_file);
         size_t temp_line_num = 0;
 
         try {
@@ -95,9 +94,7 @@ namespace genogrove::io {
                 throw std::runtime_error("Invalid BED coordinates (start >= end) in " + fpath.string());
             }
 
-            if (bgzf_seek(bgzf_file, start_pos, SEEK_SET) < 0) {
-                throw std::runtime_error("Failed to seek back to start of file: " + fpath.string());
-            }
+            bgzf_rewind_to_start(bgzf_file, fpath);
         } catch (...) {
             bgzf_close(bgzf_file);
             bgzf_file = nullptr;

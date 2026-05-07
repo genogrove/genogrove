@@ -813,3 +813,50 @@ TEST_F(bedfileTest, bed12BlockStartOutsideIntervalThrows) {
         }
     }, std::runtime_error);
 }
+
+// ==========================================
+// Plain-gzip support (regression: #303)
+// ==========================================
+// `bgzf_open` reads both BGZF and plain gzip transparently, but `bgzf_seek`
+// only works on BGZF. The reader's first-line validation rewinds via the
+// helper which falls back to close+reopen when seek fails, so plain-gzip
+// inputs (e.g. ENCODE-style `gzip` outputs, not `bgzip`) can be iterated
+// end-to-end. `bgzf_has_next` likewise uses `bgzf_peek` rather than
+// read-then-seek-back so iteration's `has_next()` is reliable mid-stream.
+
+TEST_F(bedfileTest, readPlainGzipFile) {
+    // test_compression.bed.gz is plain gzip (not BGZF); contains 3 BED3 rows.
+    fs::path plain_gz = test_data_dir / "test_compression.bed.gz";
+    gio::bed_reader reader(plain_gz);
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) {
+        entries.push_back(entry);
+    }
+    EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
+
+    ASSERT_EQ(entries.size(), 3);
+    EXPECT_EQ(entries[0].chrom, "chr1");
+    EXPECT_EQ(entries[1].chrom, "chr2");
+    EXPECT_EQ(entries[2].chrom, "chrX");
+}
+
+TEST_F(bedfileTest, hasNextOnPlainGzipFile) {
+    // Verifies that has_next() works mid-iteration on plain gzip — the prior
+    // implementation used bgzf_seek to roll back its peek, which silently
+    // returned false on plain gzip and broke iteration.
+    fs::path plain_gz = test_data_dir / "test_compression.bed.gz";
+    gio::bed_reader reader(plain_gz);
+
+    EXPECT_TRUE(reader.has_next());
+
+    gio::bed_entry entry;
+    reader.read_next(entry);
+    EXPECT_TRUE(reader.has_next());
+
+    reader.read_next(entry);
+    EXPECT_TRUE(reader.has_next());
+
+    reader.read_next(entry);
+    EXPECT_FALSE(reader.has_next());
+}
