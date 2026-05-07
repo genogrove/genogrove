@@ -942,7 +942,8 @@ TEST_F(gfffileTest, gtfAttributeWithQuotedSemicolon) {
 
 TEST_F(gfffileTest, readPlainGzipFile) {
     // test_plain_gzip.gtf.gz is plain gzip (re-compressed from test.gtf
-    // with Python's gzip.compress, mtime=0). Same 3 records as test.gtf.
+    // with Python's gzip.compress, mtime=0). Same 4 records as test.gtf:
+    // chr1/gene, chr1/exon, chr2/gene, chrX/CDS.
     fs::path plain_gz = test_data_dir / "test_plain_gzip.gtf.gz";
     gio::gff_reader reader(plain_gz);
 
@@ -952,10 +953,11 @@ TEST_F(gfffileTest, readPlainGzipFile) {
     }
     EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
-    ASSERT_EQ(entries.size(), 3);
+    ASSERT_EQ(entries.size(), 4);
     EXPECT_EQ(entries[0].seqid, "chr1");
-    EXPECT_EQ(entries[1].seqid, "chr2");
-    EXPECT_EQ(entries[2].seqid, "chrX");
+    EXPECT_EQ(entries[1].seqid, "chr1");
+    EXPECT_EQ(entries[2].seqid, "chr2");
+    EXPECT_EQ(entries[3].seqid, "chrX");
 }
 
 TEST_F(gfffileTest, hasNextOnPlainGzipFile) {
@@ -965,15 +967,11 @@ TEST_F(gfffileTest, hasNextOnPlainGzipFile) {
     fs::path plain_gz = test_data_dir / "test_plain_gzip.gtf.gz";
     gio::gff_reader reader(plain_gz);
 
-    EXPECT_TRUE(reader.has_next());
-
     gio::gff_entry entry;
-    reader.read_next(entry);
-    EXPECT_TRUE(reader.has_next());
-
-    reader.read_next(entry);
-    EXPECT_TRUE(reader.has_next());
-
-    reader.read_next(entry);
+    for (int i = 0; i < 4; ++i) {
+        EXPECT_TRUE(reader.has_next()) << "has_next false before reading record " << i;
+        reader.read_next(entry);
+    }
+    // After reading all 4 records, has_next should return false.
     EXPECT_FALSE(reader.has_next());
 }
