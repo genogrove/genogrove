@@ -21,6 +21,7 @@
 
 // genogrove
 #include "genogrove/utility/ranges.hpp"
+#include <genogrove/data_type/flanking_query_result.hpp>
 #include <genogrove/data_type/query_result.hpp>
 #include <genogrove/structure/grove/node.hpp>
 #include <genogrove/structure/grove/graph_overlay.hpp>
@@ -286,6 +287,11 @@ class grove {
     // Query methods
     // =========================================================================
     #include "grove_query.ipp"
+
+    // =========================================================================
+    // Flanking-key query methods
+    // =========================================================================
+    #include "grove_flanking.ipp"
 
     // =========================================================================
     // Key removal methods
