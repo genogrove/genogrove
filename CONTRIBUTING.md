@@ -16,7 +16,7 @@ Apply `[[nodiscard]]` when **discarding the result is always a bug** or **wastes
 
 | Scenario | Recommendation |
 |---|---|
-| Returned ID is the only handle to stored data (e.g., `register_data()`) | `[[nodiscard]]` |
+| Returned ID is the only handle to stored data (e.g., `registry::intern()`) | `[[nodiscard]]` |
 | Factory / deserialize returns (e.g., `deserialize()`) | `[[nodiscard]]` |
 | `empty()`, `contains()`, `has_*()`, `is_*()` — confusable with mutators | `[[nodiscard]]` |
 | Non-trivial computation or allocation (e.g., `intersect()`, `get_neighbors()`, `calc_parent_key()`) | `[[nodiscard]]` |
