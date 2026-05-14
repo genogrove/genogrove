@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`registry::find(value)`**: returns `std::optional<id_type>` for the value if interned, `std::nullopt` otherwise. Lets callers probe the registry without inserting. ([#316](https://github.com/genogrove/genogrove/issues/316))
+
+### Changed
+- **`gdt::registry<T>` is now dedup-on-insert** (**breaking**): `register_data()` is replaced by `intern()`. `intern(value)` returns the existing ID for a value already in the registry, or allocates a new one if not — idempotent: `intern(x) == intern(x)` for all `x`. Collapses N references to the same value down to a single 4-byte ID, the use case the issue was filed for (chromosome names, transcript/gene IDs, sample names seen thousands of times across grove entries). `T` must now satisfy the new `registry_value` concept (hashable + equality-comparable). The mutable `get(id)` overload is removed — mutating an interned value would desynchronize the internal value→id lookup. Old serialized files load fine; the lookup map is rebuilt from the deque on `deserialize()`. ([#316](https://github.com/genogrove/genogrove/issues/316))
+- **`gdt::registry<T>` is now thread-safe**: `intern()`, `find()`, `clear()`, `serialize()`, and `deserialize()` are protected by an internal `std::mutex`. `get(id)`, `contains(id)`, `size()`, and `empty()` are unlocked fast paths — `get(id)` is safe under concurrent `intern()` iff the caller obtained `id` from an `intern()` call that happens-before this thread (the natural pattern: id is returned, then published to other threads via a queue/atomic/join). Lets atroplex's forthcoming parallel-build code use one upstream primitive instead of maintaining its own per-string-pool boilerplate. ([#316](https://github.com/genogrove/genogrove/issues/316))
+
 ## [0.22.0] - 2026-05-07
 
 ### Added
