@@ -108,16 +108,16 @@ class registry {
      * @note Thread-safe.
      */
     [[nodiscard]] id_type intern(const T& value) {
-        std::lock_guard lock(mtx_);
-        if (auto it = lookup_.find(value); it != lookup_.end()) {
+        std::lock_guard lock(mtx);
+        if (auto it = lookup.find(value); it != lookup.end()) {
             return it->second;
         }
-        if (storage_.size() >= null_id) {
+        if (storage.size() >= null_id) {
             throw std::runtime_error("registry: maximum capacity reached");
         }
-        auto id = static_cast<id_type>(storage_.size());
-        storage_.push_back(value);
-        lookup_.emplace(storage_.back(), id);
+        auto id = static_cast<id_type>(storage.size());
+        storage.push_back(value);
+        lookup.emplace(storage.back(), id);
         return id;
     }
 
@@ -128,8 +128,8 @@ class registry {
      * @note Thread-safe.
      */
     [[nodiscard]] std::optional<id_type> find(const T& value) const {
-        std::lock_guard lock(mtx_);
-        if (auto it = lookup_.find(value); it != lookup_.end()) {
+        std::lock_guard lock(mtx);
+        if (auto it = lookup.find(value); it != lookup.end()) {
             return it->second;
         }
         return std::nullopt;
@@ -144,10 +144,10 @@ class registry {
      *       an intern() that happens-before this call.
      */
     const T& get(id_type id) const {
-        if (id >= storage_.size()) {
+        if (id >= storage.size()) {
             throw std::out_of_range("registry::get(): invalid id " + std::to_string(id));
         }
-        return storage_[id];
+        return storage[id];
     }
 
     /**
@@ -158,7 +158,7 @@ class registry {
      *       concurrent writes.
      */
     [[nodiscard]] bool contains(id_type id) const noexcept {
-        return id < storage_.size();
+        return id < storage.size();
     }
 
     /**
@@ -166,7 +166,7 @@ class registry {
      * @note Unlocked best-effort read under concurrent writes.
      */
     [[nodiscard]] std::size_t size() const noexcept {
-        return storage_.size();
+        return storage.size();
     }
 
     /**
@@ -174,7 +174,7 @@ class registry {
      * @note Unlocked best-effort read under concurrent writes.
      */
     [[nodiscard]] bool empty() const noexcept {
-        return storage_.empty();
+        return storage.empty();
     }
 
     /**
@@ -184,9 +184,9 @@ class registry {
      * @note Thread-safe.
      */
     void clear() {
-        std::lock_guard lock(mtx_);
-        storage_.clear();
-        lookup_.clear();
+        std::lock_guard lock(mtx);
+        storage.clear();
+        lookup.clear();
     }
 
     /**
@@ -205,11 +205,11 @@ class registry {
      * @note Thread-safe (acquires the mutex for a coherent snapshot).
      */
     void serialize(std::ostream& os) const {
-        std::lock_guard lock(mtx_);
-        uint64_t count = storage_.size();
+        std::lock_guard lock(mtx);
+        uint64_t count = storage.size();
         os.write(reinterpret_cast<const char*>(&count), sizeof(count));
 
-        for (const auto& entry : storage_) {
+        for (const auto& entry : storage) {
             serializer<T>::write(os, entry);
         }
 
@@ -228,9 +228,9 @@ class registry {
      */
     [[nodiscard]] static registry& deserialize(std::istream& is) {
         auto& inst = instance();
-        std::lock_guard lock(inst.mtx_);
-        inst.storage_.clear();
-        inst.lookup_.clear();
+        std::lock_guard lock(inst.mtx);
+        inst.storage.clear();
+        inst.lookup.clear();
 
         uint64_t count;
         is.read(reinterpret_cast<char*>(&count), sizeof(count));
@@ -240,9 +240,9 @@ class registry {
 
         for (uint64_t i = 0; i < count; ++i) {
             T value = serializer<T>::read(is);
-            auto id = static_cast<id_type>(inst.storage_.size());
-            inst.storage_.push_back(std::move(value));
-            inst.lookup_.emplace(inst.storage_.back(), id);
+            auto id = static_cast<id_type>(inst.storage.size());
+            inst.storage.push_back(std::move(value));
+            inst.lookup.emplace(inst.storage.back(), id);
         }
 
         return inst;
@@ -251,9 +251,9 @@ class registry {
   private:
     registry() = default;
 
-    std::deque<T> storage_;
-    std::unordered_map<T, id_type> lookup_;
-    mutable std::mutex mtx_;
+    std::deque<T> storage;
+    std::unordered_map<T, id_type> lookup;
+    mutable std::mutex mtx;
 };
 
 } // namespace genogrove::data_type
