@@ -117,7 +117,15 @@ class registry {
         }
         auto id = static_cast<id_type>(storage.size());
         storage.push_back(value);
-        lookup.emplace(storage.back(), id);
+        try {
+            lookup.emplace(storage.back(), id);
+        } catch (...) {
+            // Roll back the deque entry so storage and lookup stay consistent;
+            // otherwise the orphaned value would be invisible to future
+            // intern() calls but still occupy an id slot.
+            storage.pop_back();
+            throw;
+        }
         return id;
     }
 
