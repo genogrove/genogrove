@@ -1,9 +1,5 @@
 /*
- * SPDX-License-Identifier: MIT
- *
- * Copyright (c) 2025 Richard A. Schäfer
- *
- * This file is part of genogrove and is licensed under the terms of the MIT license.
+ * SPDX-License-Identifier: GPL-3.0-or-later
  * See the LICENSE file in the root of the repository for more information.
  */
 
