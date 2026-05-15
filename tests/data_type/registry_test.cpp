@@ -279,6 +279,57 @@ TEST_F(RegistryTest, IndependentRegistriesPerType) {
     EXPECT_FALSE(experiment_reg.empty());
 }
 
+TEST_F(RegistryTest, TaggedRegistriesAreIndependentSingletons) {
+    // Phantom tags discriminate singletons that share the same value type T,
+    // so independent pools (e.g. transcript ids vs sample names) do not
+    // collide on a shared singleton.
+    using transcript_registry = gdt::registry<std::string, struct transcript_tag>;
+    using sample_registry     = gdt::registry<std::string, struct sample_tag>;
+
+    transcript_registry::reset();
+    sample_registry::reset();
+
+    auto& reg_default = gdt::registry<std::string>::instance();
+    auto& reg_tx = transcript_registry::instance();
+    auto& reg_sample = sample_registry::instance();
+
+    // The three singletons must be distinct objects.
+    EXPECT_NE(static_cast<void*>(&reg_default), static_cast<void*>(&reg_tx));
+    EXPECT_NE(static_cast<void*>(&reg_default), static_cast<void*>(&reg_sample));
+    EXPECT_NE(static_cast<void*>(&reg_tx), static_cast<void*>(&reg_sample));
+
+    auto tx_a = reg_tx.intern("ENST00000001");
+    auto tx_b = reg_tx.intern("ENST00000002");
+    auto sample_a = reg_sample.intern("TCGA-A1-B2");
+    auto sample_b = reg_sample.intern("ENST00000001"); // same string, different pool
+
+    // Same string in two different tagged pools must allocate independent ids.
+    EXPECT_EQ(tx_a, 0u);
+    EXPECT_EQ(tx_b, 1u);
+    EXPECT_EQ(sample_a, 0u);
+    EXPECT_EQ(sample_b, 1u);
+
+    EXPECT_EQ(reg_tx.size(), 2u);
+    EXPECT_EQ(reg_sample.size(), 2u);
+
+    // Resolving an id only refers to its own pool.
+    EXPECT_EQ(reg_tx.get(tx_a), "ENST00000001");
+    EXPECT_EQ(reg_sample.get(sample_b), "ENST00000001");
+    EXPECT_EQ(reg_sample.get(sample_a), "TCGA-A1-B2");
+
+    // The default-tagged singleton (used by existing callers) is untouched.
+    EXPECT_TRUE(reg_default.empty());
+
+    // Clearing one tagged pool leaves the others alone.
+    reg_tx.clear();
+    EXPECT_TRUE(reg_tx.empty());
+    EXPECT_EQ(reg_sample.size(), 2u);
+    EXPECT_TRUE(reg_default.empty());
+
+    transcript_registry::reset();
+    sample_registry::reset();
+}
+
 TEST_F(RegistryTest, PrimitiveTypes) {
     auto& int_reg = gdt::registry<int>::instance();
     auto& str_reg = gdt::registry<std::string>::instance();

@@ -39,7 +39,12 @@ concept registry_value =
 /**
  * @brief Singleton registry that interns values into small integer IDs.
  *
- * @tparam T The value type to intern. Must be hashable and equality-comparable.
+ * @tparam T   The value type to intern. Must be hashable and equality-comparable.
+ * @tparam Tag Phantom type used only to discriminate singletons. Different `Tag`
+ *             arguments produce distinct types with independent ID pools; the
+ *             default `void` preserves the original "one singleton per T"
+ *             behavior. `Tag` never appears in the body — no storage, no
+ *             serialization, no runtime cost.
  *
  * @details Every distinct value gets one stable ID; calling intern() with the same
  * value always returns the same ID. The point is to collapse many references to
@@ -47,7 +52,17 @@ concept registry_value =
  * sample name) down to a 4-byte ID stored elsewhere — useful when the same value
  * appears thousands of times across grove entries.
  *
- * Each type T has its own singleton with an independent ID space.
+ * Each `(T, Tag)` pair has its own singleton with an independent ID space. Use
+ * the `Tag` parameter when two unrelated pools share the same value type and
+ * must not collide:
+ *
+ * @code
+ * using transcript_registry = registry<std::string, struct transcript_tag>;
+ * using source_registry     = registry<std::string, struct source_tag>;
+ *
+ * transcript_registry::instance().intern("ENST00000001"); // 0 in transcript pool
+ * source_registry::instance().intern("HAVANA");           // 0 in source pool (separate)
+ * @endcode
  *
  * @note Thread safety: intern(), find(), clear(), serialize(), and deserialize()
  *       are protected by an internal mutex. get(), contains(), size(), empty()
@@ -69,7 +84,7 @@ concept registry_value =
  * const std::string& s = reg.get(a); // "chr1"
  * @endcode
  */
-template<registry_value T>
+template<registry_value T, typename Tag = void>
 class registry {
   public:
     /// Type used for registry IDs
