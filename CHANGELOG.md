@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-05-15
+
 ### Added
 - **`registry::find(value)`**: returns `std::optional<id_type>` for the value if interned, `std::nullopt` otherwise. Lets callers probe the registry without inserting. ([#316](https://github.com/genogrove/genogrove/issues/316), [#317](https://github.com/genogrove/genogrove/pull/317))
 
