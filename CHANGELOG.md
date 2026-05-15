@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **`gdt::registry<T, Tag>`**: optional phantom `Tag` template parameter discriminates singletons that share the same value type `T`, so two unrelated pools (e.g. transcript ids vs sample names, both `std::string`) get independent ID spaces without consumers having to wrap `T` in a strong-type struct. `Tag` defaults to `void`, so every existing `registry<T>` keeps its singleton and call sites are unchanged. Tag is type-level only — no storage, no runtime cost, no impact on the serialization wire format. ([#319](https://github.com/genogrove/genogrove/issues/319))
+- **`gdt::registry<T, Tag>`**: optional phantom `Tag` template parameter discriminates singletons that share the same value type `T`, so two unrelated pools (e.g. transcript ids vs sample names, both `std::string`) get independent ID spaces without consumers having to wrap `T` in a strong-type struct. `Tag` defaults to `void`, so every existing `registry<T>` keeps its singleton and call sites are unchanged. Tag is type-level only — no storage, no runtime cost, no impact on the serialization wire format. ([#319](https://github.com/genogrove/genogrove/issues/319), [#320](https://github.com/genogrove/genogrove/pull/320))
 
 ## [0.23.0] - 2026-05-15
 
