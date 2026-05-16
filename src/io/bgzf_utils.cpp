@@ -25,7 +25,10 @@ namespace genogrove::io {
                 return std::nullopt;  // EOF
             }
 
-            std::string line(str.s);
+            // (ptr, count) ctor preserves embedded NULs; the (ptr) ctor would
+            // truncate at the first NUL since kstring isn't NUL-terminated by
+            // contract — it tracks length in `.l`.
+            std::string line(str.s, str.l);
             if (!line.empty() && line.back() == '\r') line.pop_back();
             line_num++;
 
