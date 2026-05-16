@@ -699,6 +699,36 @@ TEST_F(BamReaderTest, ConsumesReferenceTrueForNormalRecord) {
     EXPECT_LT(entry.start, entry.end);
 }
 
+TEST_F(BamReaderTest, HardClipOnlySecondaryDoesNotFabricateInterval) {
+    // Hard-clip-only secondary records (e.g. CIGAR=100H, FLAG=256) consume
+    // zero reference bases — same code path as pure soft-clip, but driven
+    // by a different CIGAR op. Pins the other half of the contract from
+    // the #327 issue.
+    fs::path hard_clip_sam = test_data_dir / "test_hard_clip_secondary.sam";
+    {
+        std::ofstream out(hard_clip_sam);
+        out << "@HD\tVN:1.6\tSO:coordinate\n";
+        out << "@SQ\tSN:chr1\tLN:1000000\n";
+        // FLAG=256 (SECONDARY); POS=500 (1-based) -> 499 (0-based);
+        // CIGAR=100H; SEQ/QUAL=* (hard-clipped portions are not present)
+        out << "read_hardclip\t256\tchr1\t500\t60\t100H\t*\t0\t0\t*\t*\n";
+    }
+
+    gio::bam_reader reader(hard_clip_sam);
+    gio::sam_entry entry;
+
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.qname, "read_hardclip");
+    EXPECT_EQ(entry.start, 499u);
+    EXPECT_EQ(entry.end, 499u) << "Hard-clip-only secondary must yield zero-length "
+                                   "[pos, pos), not a fabricated 1-base interval";
+    EXPECT_FALSE(entry.consumes_reference());
+    EXPECT_TRUE(entry.is_mapped());
+    EXPECT_FALSE(entry.is_primary());
+
+    fs::remove(hard_clip_sam);
+}
+
 TEST_F(BamReaderTest, ConsumesReferenceFalseForUnmappedRead) {
     // Unmapped reads carry start == end == 0; the helper must
     // report consumes_reference() == false for them too.
