@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * See the LICENSE file in the root of the repository for more information.
+ */
+
 // grove_flanking.ipp — Flanking-key query methods for grove<>
 // Included inside the grove class body. Do not include directly.
 

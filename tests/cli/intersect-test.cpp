@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * See the LICENSE file in the root of the repository for more information.
+ */
+
 // gtest
 #include <gtest/gtest.h>
 
