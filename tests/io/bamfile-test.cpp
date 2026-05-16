@@ -657,6 +657,73 @@ TEST_F(BamReaderTest, ErrorMessageClearedOnEofEarlyReturn) {
 }
 
 // ==========================================
+// Zero-ref-consuming CIGAR Tests (#327)
+// ==========================================
+
+TEST_F(BamReaderTest, PureSoftClipDoesNotFabricateInterval) {
+    // Pure-soft-clip CIGAR ("100S") consumes zero reference bases.
+    // The reader must propagate that truthfully (start == end == POS-1
+    // in 0-based) rather than coercing ref_len 0 -> 1 and fabricating
+    // a spurious [pos, pos+1) hit.
+    fs::path soft_clip_sam = test_data_dir / "test_pure_soft_clip.sam";
+    {
+        std::ofstream out(soft_clip_sam);
+        out << "@HD\tVN:1.6\tSO:coordinate\n";
+        out << "@SQ\tSN:chr1\tLN:1000000\n";
+        // POS=1000 (1-based) -> 999 (0-based); CIGAR=100S; FLAG=0 (mapped, primary)
+        out << "read_softclip\t0\tchr1\t1000\t60\t100S\t*\t0\t0\t"
+            << std::string(100, 'A') << "\t" << std::string(100, '!') << "\n";
+    }
+
+    gio::bam_reader reader(soft_clip_sam);
+    gio::sam_entry entry;
+
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.qname, "read_softclip");
+    EXPECT_EQ(entry.start, 999u);
+    EXPECT_EQ(entry.end, 999u) << "Pure soft-clip must yield zero-length [pos, pos), "
+                                   "not a fabricated 1-base interval";
+    EXPECT_FALSE(entry.consumes_reference());
+    EXPECT_TRUE(entry.is_mapped());
+
+    fs::remove(soft_clip_sam);
+}
+
+TEST_F(BamReaderTest, ConsumesReferenceTrueForNormalRecord) {
+    gio::bam_reader reader(sam_path);
+    gio::sam_entry entry;
+
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_TRUE(entry.consumes_reference())
+        << "First record in fixture is a normal alignment with non-zero ref span";
+    EXPECT_LT(entry.start, entry.end);
+}
+
+TEST_F(BamReaderTest, ConsumesReferenceFalseForUnmappedRead) {
+    // Unmapped reads carry start == end == 0; the helper must
+    // report consumes_reference() == false for them too.
+    fs::path unmapped_sam = test_data_dir / "test_unmapped.sam";
+    {
+        std::ofstream out(unmapped_sam);
+        out << "@HD\tVN:1.6\tSO:coordinate\n";
+        out << "@SQ\tSN:chr1\tLN:1000000\n";
+        // FLAG=4 (BAM_FUNMAP); reader default skips unmapped, opt back in
+        out << "read_unmapped\t4\t*\t0\t0\t*\t*\t0\t0\tACGT\t!!!!\n";
+    }
+
+    gio::bam_reader reader(unmapped_sam, gio::bam_reader_options::include_all());
+    gio::sam_entry entry;
+
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_FALSE(entry.is_mapped());
+    EXPECT_FALSE(entry.consumes_reference());
+    EXPECT_EQ(entry.start, 0u);
+    EXPECT_EQ(entry.end, 0u);
+
+    fs::remove(unmapped_sam);
+}
+
+// ==========================================
 // Move Semantics Tests
 // ==========================================
 
