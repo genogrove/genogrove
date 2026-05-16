@@ -369,7 +369,7 @@ class node {
      * Writes the node's structure and content to the stream in binary format,
      * allowing the node to be persisted and later restored.
      */
-    void serialize(std::ostream& os);
+    void serialize(std::ostream& os) const;
 
     /**
      * @brief Deserialize a node from an input stream
@@ -434,7 +434,7 @@ class node {
 namespace genogrove::structure {
 
 template<typename key_type, typename data_type>
-void node<key_type, data_type>::serialize(std::ostream& os) {
+void node<key_type, data_type>::serialize(std::ostream& os) const {
     // Pack is_leaf into high bit of key count (saves 5B per node vs separate bool + size_t)
     uint32_t packed = static_cast<uint32_t>(keys.size());
     if (is_leaf) packed |= 0x80000000u;
