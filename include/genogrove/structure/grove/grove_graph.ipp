@@ -49,7 +49,7 @@ public:
      * @return Vector of pointers to neighbor keys (targets of outgoing edges)
      */
     [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_neighbors(
-        gdt::key<key_type, data_type>* source) const {
+        const gdt::key<key_type, data_type>* source) const {
         return graph_data.get_neighbors(source);
     }
 
@@ -70,7 +70,7 @@ public:
      * @return Vector of edge metadata for all outgoing edges from source
      */
     template<typename M = edge_data_type>
-    [[nodiscard]] std::vector<M> get_edges(gdt::key<key_type, data_type>* source) const
+    [[nodiscard]] std::vector<M> get_edges(const gdt::key<key_type, data_type>* source) const
         requires (!std::is_void_v<edge_data_type>) {
         return graph_data.get_edges(source);
     }
@@ -81,7 +81,7 @@ public:
      * @return Const reference to vector of edge structures containing target and metadata
      */
     const std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>&
-    get_edge_list(gdt::key<key_type, data_type>* source) const {
+    get_edge_list(const gdt::key<key_type, data_type>* source) const {
         return graph_data.get_edge_list(source);
     }
 
@@ -93,7 +93,7 @@ public:
      */
     template<typename Predicate>
     [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_neighbors_if(
-        gdt::key<key_type, data_type>* source,
+        const gdt::key<key_type, data_type>* source,
         Predicate predicate) const
         requires (!std::is_void_v<edge_data_type>) {
         return graph_data.get_neighbors_if(source, predicate);
@@ -105,8 +105,8 @@ public:
      * @param target Pointer to target key
      * @return true if edge exists, false otherwise
      */
-    [[nodiscard]] bool has_edge(gdt::key<key_type, data_type>* source,
-                  gdt::key<key_type, data_type>* target) const {
+    [[nodiscard]] bool has_edge(const gdt::key<key_type, data_type>* source,
+                  const gdt::key<key_type, data_type>* target) const {
         return graph_data.has_edge(source, target);
     }
 
@@ -115,7 +115,7 @@ public:
      * @param source Pointer to source key
      * @return Number of outgoing edges from source key
      */
-    [[nodiscard]] size_t out_degree(gdt::key<key_type, data_type>* source) const {
+    [[nodiscard]] size_t out_degree(const gdt::key<key_type, data_type>* source) const {
         return graph_data.out_degree(source);
     }
 

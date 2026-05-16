@@ -127,7 +127,7 @@ class graph_overlay {
      * @return Vector of pointers to neighbor keys
      */
     [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_neighbors(
-        gdt::key<key_type, data_type>* source) const {
+        const gdt::key<key_type, data_type>* source) const {
         if (!source) {
             throw std::invalid_argument("get_neighbors: source must not be null");
         }
@@ -149,7 +149,7 @@ class graph_overlay {
      * @return Vector of edge metadata (only available when edge_data_type != void)
      */
     template<typename M = edge_data_type>
-    [[nodiscard]] std::vector<M> get_edges(gdt::key<key_type, data_type>* source) const
+    [[nodiscard]] std::vector<M> get_edges(const gdt::key<key_type, data_type>* source) const
         requires (!std::is_void_v<edge_data_type>) {
         std::vector<M> metadata_list;
         auto it = adjacency.find(source);
@@ -167,7 +167,7 @@ class graph_overlay {
      * @param source Pointer to source key
      * @return Const reference to vector of edges (empty if no edges)
      */
-    const std::vector<edge>& get_edge_list(gdt::key<key_type, data_type>* source) const {
+    const std::vector<edge>& get_edge_list(const gdt::key<key_type, data_type>* source) const {
         static const std::vector<edge> empty_edges;
         auto it = adjacency.find(source);
         return (it != adjacency.end()) ? it->second : empty_edges;
@@ -181,7 +181,7 @@ class graph_overlay {
      */
     template<typename Predicate>
     [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_neighbors_if(
-        gdt::key<key_type, data_type>* source,
+        const gdt::key<key_type, data_type>* source,
         Predicate predicate) const
         requires (!std::is_void_v<edge_data_type> && std::predicate<Predicate, const edge_data_type&>) {
         std::vector<gdt::key<key_type, data_type>*> neighbors;
@@ -204,8 +204,8 @@ class graph_overlay {
      * @param target Pointer to target key
      * @return true if edge exists, false otherwise
      */
-    [[nodiscard]] bool has_edge(gdt::key<key_type, data_type>* source,
-                  gdt::key<key_type, data_type>* target) const {
+    [[nodiscard]] bool has_edge(const gdt::key<key_type, data_type>* source,
+                  const gdt::key<key_type, data_type>* target) const {
         auto it = adjacency.find(source);
         if (it == adjacency.end()) {
             return false;
@@ -220,7 +220,7 @@ class graph_overlay {
      * @param source Pointer to source key
      * @return Number of outgoing edges
      */
-    [[nodiscard]] size_t out_degree(gdt::key<key_type, data_type>* source) const {
+    [[nodiscard]] size_t out_degree(const gdt::key<key_type, data_type>* source) const {
         auto it = adjacency.find(source);
         return (it != adjacency.end()) ? it->second.size() : 0;
     }
@@ -330,8 +330,12 @@ class graph_overlay {
     }
 
   private:
-    // Adjacency list: source key → vector of edges
-    std::unordered_map<gdt::key<key_type, data_type>*, std::vector<edge>> adjacency;
+    // Adjacency list: source key → vector of edges.
+    // Map key is const-pointer so read-only accessors (get_neighbors, has_edge,
+    // get_edge_list, ...) can take `const key*` and `find()` it directly; the
+    // graph never mutates through the source pointer. Mutating accessors still
+    // accept non-const `key*` source — implicit conversion handles the lookup.
+    std::unordered_map<const gdt::key<key_type, data_type>*, std::vector<edge>> adjacency;
 };
 
 } // namespace genogrove::structure

@@ -8,16 +8,16 @@ public:
      * @param root Root node of the tree to visualize
      * @note Used for debugging and visualization; outputs node links, leaf links, and key links in SIF format
      */
-    void grove_to_sif(std::ostream& os, node<key_type, data_type>* root) const {
+    void grove_to_sif(std::ostream& os, const node<key_type, data_type>* root) const {
         if (!root) { return; }
-        std::queue<node<key_type, data_type>*> q;
+        std::queue<const node<key_type, data_type>*> q;
         q.push(root);
 
         while (!q.empty()) {
-            auto* current = q.front();
+            const auto* current = q.front();
             q.pop();
             if (!current->get_is_leaf()) {
-                for (auto* child : current->get_children()) {
+                for (const auto* child : current->get_children()) {
                     q.push(child);
                     os << "|";
                     current->print_keys(os, "|");
@@ -34,9 +34,9 @@ public:
                     os << "|\n";
                 }
 
-                for (auto* key : current->get_keys()) {
+                for (const auto* key : current->get_keys()) {
                     auto neighbors = graph_data.get_neighbors(key);
-                    for (auto* neighbor : neighbors) {
+                    for (const auto* neighbor : neighbors) {
                         os << key->get_value().to_string()
                            << "\tkeylink\t"
                            << neighbor->get_value().to_string() << "\n";
@@ -51,7 +51,7 @@ public:
      * @param os Output stream to write compressed data to
      * @note The output is always zlib-compressed
      */
-    void serialize(std::ostream& os) {
+    void serialize(std::ostream& os) const {
         detail::deflate_streambuf zbuf(os);
         std::ostream zos(&zbuf);
 
@@ -62,7 +62,7 @@ public:
         uint32_t number_root_nodes = static_cast<uint32_t>(this->root_nodes.size());
         zos.write(reinterpret_cast<const char*>(&number_root_nodes), sizeof(number_root_nodes));
 
-        for(auto& [key, root] : this->root_nodes) {
+        for(const auto& [key, root] : this->root_nodes) {
             uint32_t index_name_length = static_cast<uint32_t>(key.size());
             zos.write(reinterpret_cast<const char*>(&index_name_length), sizeof(index_name_length));
             zos.write(key.c_str(), index_name_length);
@@ -98,8 +98,7 @@ public:
 
         auto write_edges_for = [&](const auto& storage) {
             for (const auto& k : storage) {
-                auto* key_ptr = const_cast<gdt::key<key_type, data_type>*>(&k);
-                const auto& edges = graph_data.get_edge_list(key_ptr);
+                const auto& edges = graph_data.get_edge_list(&k);
                 for (const auto& e : edges) {
                     uint32_t src = key_index.at(&k);
                     uint32_t tgt = key_index.at(e.target);

@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **`bam_reader::read_next()` honors the `file_reader_base` error-message contract** (**minor behavior change**): `error_message_` is now cleared at the very top of `read_next()` rather than only inside the read loop, so the `!sam_file_ || at_eof_` early-return path can no longer leak a stale message from a prior call. Truncated auxiliary data — previously returned alongside `true` from `read_next()` with `error_message_` quietly set — now throws `std::runtime_error("Truncated auxiliary data at record N")`. Together these guarantee the documented invariant: when `read_next()` returns `true`, `get_error_message()` reads empty. ([#321](https://github.com/genogrove/genogrove/issues/321), [#385](https://github.com/genogrove/genogrove/pull/385))
 
+### Refactored
+- **`grove::serialize()`, `grove::grove_to_sif()`, and `node::serialize()` are now `const`**: read-only graph_overlay accessors (`get_neighbors`, `get_edges`, `get_edge_list`, `get_neighbors_if`, `has_edge`, `out_degree`) now take `const gdt::key<...>*` source, and the adjacency map is keyed on `const gdt::key<...>*` so lookups don't need a `const_cast`. Removes the `const_cast` that `serialize()` previously used to compensate for the non-const accessors. Mutating accessors (`add_edge`, `remove_edge`, `remove_edges_*`) keep their non-const-pointer signatures and existing callers passing `key*` continue to work via implicit conversion — no source changes required in consumers. ([#334](https://github.com/genogrove/genogrove/issues/334), [#335](https://github.com/genogrove/genogrove/issues/335))
+
 ## [0.23.0] - 2026-05-15
 
 ### Added

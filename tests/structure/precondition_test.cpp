@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 // Standard
+#include <sstream>
 #include <type_traits>
 
 // genogrove
@@ -204,4 +205,43 @@ TEST(groveEdgeCaseTest, keysEqualToOrder) {
 
     auto result = g.intersect(gdt::interval{0, 350}, "chr1");
     EXPECT_EQ(result.get_keys().size(), 4);
+}
+
+// =============================================================================
+// Const surface — pins that read-only operations can be invoked through a
+// `const grove&` (no const_cast required by callers).
+// =============================================================================
+
+TEST(groveConstCorrectnessTest, serializeAndGraphAccessorsCallableThroughConstRef) {
+    gst::grove<gdt::interval, int> g(5);
+    auto* k0 = g.insert_data("chr1", gdt::interval{10, 20}, 1);
+    auto* k1 = g.insert_data("chr1", gdt::interval{30, 40}, 2);
+    g.add_edge(k0, k1);
+
+    // Acquire the read-only view a downstream consumer would hold.
+    const auto& cg = g;
+
+    // serialize must be callable through a const reference.
+    std::stringstream payload;
+    EXPECT_NO_THROW(cg.serialize(payload));
+
+    // Round-trip: deserialize what const-serialize produced.
+    payload.seekg(0);
+    auto restored = gst::grove<gdt::interval, int>::deserialize(payload);
+    EXPECT_EQ(restored.indexed_vertex_count(), 2u);
+    EXPECT_EQ(restored.edge_count(), 1u);
+
+    // grove_to_sif must be callable through a const reference, taking a
+    // const node pointer.
+    std::stringstream sif;
+    const auto* root = cg.get_root_nodes().at("chr1");
+    EXPECT_NO_THROW(cg.grove_to_sif(sif, root));
+
+    // Read-only graph accessors must accept const key pointers.
+    const gdt::key<gdt::interval, int>* ck0 = k0;
+    const gdt::key<gdt::interval, int>* ck1 = k1;
+    EXPECT_TRUE(cg.has_edge(ck0, ck1));
+    EXPECT_EQ(cg.out_degree(ck0), 1u);
+    EXPECT_EQ(cg.get_neighbors(ck0).size(), 1u);
+    EXPECT_EQ(cg.get_edge_list(ck0).size(), 1u);
 }
