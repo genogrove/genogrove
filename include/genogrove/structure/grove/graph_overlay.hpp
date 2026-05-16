@@ -315,6 +315,40 @@ class graph_overlay {
     }
 
     /**
+     * @brief Rewrite every source/target pointer using an old → new remap
+     * @param remap Map from old key pointer to new key pointer
+     *
+     * For each adjacency entry (source → edges):
+     *   - if `source` appears in `remap`, the entry is moved to `remap[source]`
+     *   - for each `edge.target` that appears in `remap`, it is rewritten
+     *
+     * Keys absent from the remap (e.g. external keys, which were not migrated)
+     * are preserved unchanged. Intended for grove::compact() to migrate
+     * adjacency after rebuilding the indexed key storage.
+     */
+    void remap_keys(
+        const std::unordered_map<const gdt::key<key_type, data_type>*,
+                                 gdt::key<key_type, data_type>*>& remap) {
+        if (remap.empty()) return;
+        std::unordered_map<const gdt::key<key_type, data_type>*,
+                           std::vector<edge>> new_adjacency;
+        new_adjacency.reserve(adjacency.size());
+        for (auto& [source, edges] : adjacency) {
+            auto src_it = remap.find(source);
+            const gdt::key<key_type, data_type>* new_source =
+                (src_it != remap.end()) ? src_it->second : source;
+            for (auto& e : edges) {
+                auto tgt_it = remap.find(e.target);
+                if (tgt_it != remap.end()) {
+                    e.target = tgt_it->second;
+                }
+            }
+            new_adjacency.emplace(new_source, std::move(edges));
+        }
+        adjacency = std::move(new_adjacency);
+    }
+
+    /**
      * @brief Clear all edges
      */
     void clear() {

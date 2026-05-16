@@ -11,7 +11,8 @@ public:
      * @note Automatically removes all graph edges (both incoming and outgoing)
      *       involving the removed key to prevent dangling edge pointers.
      * @note The key object remains in the grove's deque (not deallocated); it is
-     *       simply unlinked from the tree.
+     *       simply unlinked from the tree. Across many insert/remove cycles the
+     *       deque grows unboundedly. Call `compact()` to reclaim those slots.
      * @note Handles leaf underflow via redistribution (borrow from sibling) or
      *       merging, cascading up to internal nodes and root collapse.
      */
@@ -52,6 +53,35 @@ public:
             update_separators_upward(leaf);
         }
         return true;
+    }
+
+    /**
+     * @brief Reclaim memory from keys unlinked by remove_key()
+     *
+     * Walks every B+ tree, copies all live keys (leaf data keys + internal
+     * separator keys) into a fresh internal storage deque, and rewrites every
+     * node and every graph edge to point at the new locations. The deque
+     * shrinks to exactly the number of live keys.
+     *
+     * @warning Invalidates every key pointer previously returned by
+     *          `insert_data()` or held externally for indexed keys. After
+     *          calling `compact()`, callers must rediscover keys via queries.
+     * @note External keys (`add_external_key`) are unaffected; their pointers
+     *       remain valid and any graph edges referring to them stay intact.
+     * @note O(N + E) — single tree traversal to migrate keys + a single pass
+     *       over graph adjacency to remap pointers.
+     */
+    void compact() {
+        std::deque<gdt::key<key_type, data_type>> new_storage;
+        std::unordered_map<const gdt::key<key_type, data_type>*,
+                           gdt::key<key_type, data_type>*> remap;
+        remap.reserve(this->key_storage.size());
+
+        for (auto& [_, root] : this->root_nodes) {
+            migrate_keys(root, new_storage, remap);
+        }
+        this->graph_data.remap_keys(remap);
+        this->key_storage = std::move(new_storage);
     }
 
 private:
@@ -315,4 +345,27 @@ private:
         old_root->set_is_leaf(true);  // prevent cascade delete of new_root
         delete old_root;
         this->root_nodes[std::string(index_name)] = new_root;
+    }
+
+    /**
+     * @brief Copy every key in the subtree into new_storage and rewrite the
+     *        node's key pointers to the new addresses in one pass. Each key
+     *        lives in exactly one node, so a single pre-order walk suffices.
+     */
+    void migrate_keys(node<key_type, data_type>* n,
+                      std::deque<gdt::key<key_type, data_type>>& new_storage,
+                      std::unordered_map<const gdt::key<key_type, data_type>*,
+                                         gdt::key<key_type, data_type>*>& remap) {
+        if (n == nullptr) return;
+        for (auto*& k : n->get_keys()) {
+            new_storage.push_back(*k);
+            auto* new_k = &new_storage.back();
+            remap.emplace(k, new_k);
+            k = new_k;
+        }
+        if (!n->get_is_leaf()) {
+            for (auto* child : n->get_children()) {
+                migrate_keys(child, new_storage, remap);
+            }
+        }
     }
