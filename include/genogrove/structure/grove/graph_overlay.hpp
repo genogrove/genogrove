@@ -323,8 +323,10 @@ class graph_overlay {
      *   - for each `edge.target` that appears in `remap`, it is rewritten
      *
      * Keys absent from the remap (e.g. external keys, which were not migrated)
-     * are preserved unchanged. Intended for grove::compact() to migrate
-     * adjacency after rebuilding the indexed key storage.
+     * are preserved unchanged. If multiple old sources map to the same new
+     * source (non-injective remap), their edge lists are appended into the
+     * destination bucket — no edges are dropped. Intended for grove::compact()
+     * to migrate adjacency after rebuilding the indexed key storage.
      */
     void remap_keys(
         const std::unordered_map<const gdt::key<key_type, data_type>*,
@@ -343,7 +345,14 @@ class graph_overlay {
                     e.target = tgt_it->second;
                 }
             }
-            new_adjacency.emplace(new_source, std::move(edges));
+            auto& bucket = new_adjacency[new_source];
+            if (bucket.empty()) {
+                bucket = std::move(edges);
+            } else {
+                bucket.insert(bucket.end(),
+                    std::make_move_iterator(edges.begin()),
+                    std::make_move_iterator(edges.end()));
+            }
         }
         adjacency = std::move(new_adjacency);
     }

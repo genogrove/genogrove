@@ -724,14 +724,24 @@ TEST(GroveCompactTest, NoOpOnEmptyGrove) {
     EXPECT_EQ(grove.indexed_vertex_count(), 0u);
 }
 
-TEST(GroveCompactTest, NoOpWhenNothingRemoved) {
+TEST(GroveCompactTest, PreservesIndexedKeysWithoutRemoval) {
     gst::grove<gdt::interval, int> grove(4);
     insert_intervals(grove, "chr1", 20);
-    const size_t pre = grove.key_storage_size();
 
     grove.compact();
-    EXPECT_EQ(grove.key_storage_size(), pre);
     EXPECT_EQ(grove.indexed_vertex_count(), 20u);
+
+    // Queries find every inserted interval — pointers were rewritten but
+    // values are intact. (`key_storage_size()` may shrink even without any
+    // `remove_key()` calls because `split_internal_node` drops the promoted
+    // key without reclaiming its slot — a pre-existing leak that `compact()`
+    // also happens to clean up. Don't assert size invariance.)
+    for (int i = 0; i < 20; ++i) {
+        const size_t start = static_cast<size_t>(i * 10);
+        auto result = grove.intersect(gdt::interval{start, start + 5}, "chr1");
+        ASSERT_EQ(result.get_keys().size(), 1u) << "Missing key i=" << i;
+        EXPECT_EQ(result.get_keys()[0]->get_data(), i);
+    }
 }
 
 TEST(GroveCompactTest, ReclaimsKeyStorageAfterRemovals) {
