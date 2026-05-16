@@ -6,13 +6,12 @@
 #ifndef GENOGROVE_SERIALIZATION_TRAITS_H
 #define GENOGROVE_SERIALIZATION_TRAITS_H
 
-#include <type_traits>
-#include <cassert>
+#include <concepts>
 #include <cstdint>
 #include <istream>
 #include <ostream>
 #include <string>
-#include <concepts>
+#include <type_traits>
 
 namespace genogrove::data_type {
 

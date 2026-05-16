@@ -10,9 +10,9 @@
 #include <filesystem>
 #include <tuple>
 
-namespace fs = std::filesystem;
-
 namespace genogrove::io {
+    namespace fs = std::filesystem;
+
     enum class filetype {
         BED,
         BEDGRAPH,
