@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <numeric>
 #include <random>
+#include <sstream>
 
 #include <genogrove/structure/grove/grove.hpp>
 #include <genogrove/data_type/interval.hpp>
@@ -708,5 +709,165 @@ TEST(GroveRemoveTest, InternalBorrowAndMerge) {
             if (k == keys[i]) { found = true; break; }
         }
         EXPECT_TRUE(found) << "Key " << i << " not findable after cascade";
+    }
+}
+
+// =============================================================================
+// Compaction
+// =============================================================================
+
+TEST(GroveCompactTest, NoOpOnEmptyGrove) {
+    gst::grove<gdt::interval, int> grove(4);
+    EXPECT_EQ(grove.key_storage_size(), 0u);
+    grove.compact();
+    EXPECT_EQ(grove.key_storage_size(), 0u);
+    EXPECT_EQ(grove.indexed_vertex_count(), 0u);
+}
+
+TEST(GroveCompactTest, PreservesIndexedKeysWithoutRemoval) {
+    gst::grove<gdt::interval, int> grove(4);
+    insert_intervals(grove, "chr1", 20);
+
+    grove.compact();
+    EXPECT_EQ(grove.indexed_vertex_count(), 20u);
+
+    // Queries find every inserted interval — pointers were rewritten but
+    // values are intact. (`key_storage_size()` may shrink even without any
+    // `remove_key()` calls because `split_internal_node` drops the promoted
+    // key without reclaiming its slot — a pre-existing leak that `compact()`
+    // also happens to clean up. Don't assert size invariance.)
+    for (int i = 0; i < 20; ++i) {
+        const size_t start = static_cast<size_t>(i * 10);
+        auto result = grove.intersect(gdt::interval{start, start + 5}, "chr1");
+        ASSERT_EQ(result.get_keys().size(), 1u) << "Missing key i=" << i;
+        EXPECT_EQ(result.get_keys()[0]->get_data(), i);
+    }
+}
+
+TEST(GroveCompactTest, ReclaimsKeyStorageAfterRemovals) {
+    gst::grove<gdt::interval, int> grove(4);
+    auto keys = insert_intervals(grove, "chr1", 20);
+
+    for (int i = 0; i < 10; ++i) {
+        EXPECT_TRUE(grove.remove_key("chr1", keys[i]));
+    }
+    const size_t before_compact = grove.key_storage_size();
+    EXPECT_EQ(grove.indexed_vertex_count(), 10u);
+
+    grove.compact();
+
+    // After compact, every slot is a live leaf key or live separator
+    EXPECT_LT(grove.key_storage_size(), before_compact);
+    EXPECT_GE(grove.key_storage_size(), grove.indexed_vertex_count());
+    EXPECT_EQ(grove.indexed_vertex_count(), 10u);
+}
+
+TEST(GroveCompactTest, QueriesStillWorkAfterCompact) {
+    gst::grove<gdt::interval, int> grove(4);
+    auto keys = insert_intervals(grove, "chr1", 20);
+
+    for (int i = 0; i < 10; ++i) {
+        grove.remove_key("chr1", keys[i]);
+    }
+    grove.compact();
+
+    // All remaining intervals must still be findable; the live keys live in
+    // the new key_storage so the result-set pointers will differ from the
+    // pre-compact `keys[i]` pointers.
+    for (int i = 10; i < 20; ++i) {
+        const size_t start = static_cast<size_t>(i * 10);
+        auto result = grove.intersect(gdt::interval{start, start + 5}, "chr1");
+        ASSERT_EQ(result.get_keys().size(), 1u) << "Missing key i=" << i;
+        EXPECT_EQ(result.get_keys()[0]->get_data(), i);
+    }
+
+    auto* root = grove.get_root_nodes().at("chr1");
+    validate_grove_index(root, 4);
+}
+
+TEST(GroveCompactTest, GraphEdgesSurviveCompact) {
+    gst::grove<gdt::interval, int> grove(4);
+    auto keys = insert_intervals(grove, "chr1", 10);
+
+    // Edges: 0->1, 2->3, 4->5, 6->7, 8->9
+    for (int i = 0; i < 10; i += 2) {
+        grove.add_edge(keys[i], keys[i + 1]);
+    }
+    const size_t pre_edges = grove.edge_count();
+
+    // Remove the source of edge 0->1 so that edge is also gone
+    EXPECT_TRUE(grove.remove_key("chr1", keys[0]));
+    EXPECT_EQ(grove.edge_count(), pre_edges - 1);
+
+    grove.compact();
+
+    // The remaining 4 edges must still be navigable. Look them up via query
+    // (pre-compact pointers are now stale).
+    EXPECT_EQ(grove.edge_count(), pre_edges - 1);
+    for (int i = 2; i < 10; i += 2) {
+        const size_t s_start = static_cast<size_t>(i * 10);
+        const size_t t_start = static_cast<size_t>((i + 1) * 10);
+        auto src = grove.intersect(gdt::interval{s_start, s_start + 5}, "chr1");
+        auto tgt = grove.intersect(gdt::interval{t_start, t_start + 5}, "chr1");
+        ASSERT_EQ(src.get_keys().size(), 1u);
+        ASSERT_EQ(tgt.get_keys().size(), 1u);
+        auto neighbors = grove.get_neighbors(src.get_keys()[0]);
+        ASSERT_EQ(neighbors.size(), 1u);
+        EXPECT_EQ(neighbors[0], tgt.get_keys()[0]);
+    }
+}
+
+TEST(GroveCompactTest, ExternalKeysAndCrossEdgesPreserved) {
+    gst::grove<gdt::interval, int> grove(4);
+    auto* indexed = grove.insert_data("chr1", gdt::interval{0, 5}, 1, gst::sorted);
+    auto* external = grove.add_external_key(gdt::interval{1000, 1100}, 42);
+
+    grove.add_edge(indexed, external);   // indexed → external
+    grove.add_edge(external, indexed);   // external → indexed
+
+    // Force a removal so compact() has dead slots to reclaim
+    auto* victim = grove.insert_data("chr1", gdt::interval{10, 15}, 2, gst::sorted);
+    EXPECT_TRUE(grove.remove_key("chr1", victim));
+
+    grove.compact();
+
+    // External pointer is unchanged (compact only rebuilds indexed storage)
+    EXPECT_EQ(external->get_data(), 42);
+
+    // Find the surviving indexed key via query — its pointer changed
+    auto result = grove.intersect(gdt::interval{0, 5}, "chr1");
+    ASSERT_EQ(result.get_keys().size(), 1u);
+    auto* new_indexed = result.get_keys()[0];
+
+    // Both edges must still resolve to the right targets
+    auto from_indexed = grove.get_neighbors(new_indexed);
+    ASSERT_EQ(from_indexed.size(), 1u);
+    EXPECT_EQ(from_indexed[0], external);
+
+    auto from_external = grove.get_neighbors(external);
+    ASSERT_EQ(from_external.size(), 1u);
+    EXPECT_EQ(from_external[0], new_indexed);
+}
+
+TEST(GroveCompactTest, RoundtripSerializationAfterCompact) {
+    gst::grove<gdt::interval, int> grove(4);
+    auto keys = insert_intervals(grove, "chr1", 20);
+    for (int i = 0; i < 10; ++i) {
+        grove.remove_key("chr1", keys[i]);
+    }
+    grove.compact();
+
+    // Serialize + deserialize round-trip after compact must still produce a
+    // valid grove with the same surviving intervals.
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    grove.serialize(ss);
+    auto restored = gst::grove<gdt::interval, int>::deserialize(ss);
+
+    EXPECT_EQ(restored.indexed_vertex_count(), 10u);
+    for (int i = 10; i < 20; ++i) {
+        const size_t start = static_cast<size_t>(i * 10);
+        auto result = restored.intersect(gdt::interval{start, start + 5}, "chr1");
+        ASSERT_EQ(result.get_keys().size(), 1u);
+        EXPECT_EQ(result.get_keys()[0]->get_data(), i);
     }
 }

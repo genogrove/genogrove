@@ -155,6 +155,18 @@ public:
     }
 
     /**
+     * @brief Get total number of slots in the indexed key storage deque
+     * @return Size of `key_storage` (leaf data keys + internal separator keys
+     *         + dead slots left behind by `remove_key()`)
+     * @note Strictly greater than or equal to `indexed_vertex_count()` once
+     *       internal separator keys exist. Across many insert/remove cycles
+     *       this can grow without bound until `compact()` is called.
+     */
+    [[nodiscard]] size_t key_storage_size() const {
+        return key_storage.size();
+    }
+
+    /**
      * @brief Add an external (graph-only) key with associated data
      * @param key_value The key value (e.g., interval)
      * @param data_value The data associated with the key
