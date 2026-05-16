@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **`gdt::registry<T, Tag>`**: optional phantom `Tag` template parameter discriminates singletons that share the same value type `T`, so two unrelated pools (e.g. transcript ids vs sample names, both `std::string`) get independent ID spaces without consumers having to wrap `T` in a strong-type struct. `Tag` defaults to `void`, so every existing `registry<T>` keeps its singleton and call sites are unchanged. Tag is type-level only — no storage, no runtime cost, no impact on the serialization wire format. ([#319](https://github.com/genogrove/genogrove/issues/319), [#320](https://github.com/genogrove/genogrove/pull/320))
 
+### Fixed
+- **`bam_reader::read_next()` honors the `file_reader_base` error-message contract** (**minor behavior change**): `error_message_` is now cleared at the very top of `read_next()` rather than only inside the read loop, so the `!sam_file_ || at_eof_` early-return path can no longer leak a stale message from a prior call. Truncated auxiliary data — previously returned alongside `true` from `read_next()` with `error_message_` quietly set — now throws `std::runtime_error("Truncated auxiliary data at record N")`. Together these guarantee the documented invariant: when `read_next()` returns `true`, `get_error_message()` reads empty. ([#321](https://github.com/genogrove/genogrove/issues/321), [#385](https://github.com/genogrove/genogrove/pull/385))
+
 ## [0.23.0] - 2026-05-15
 
 ### Added

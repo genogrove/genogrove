@@ -145,6 +145,11 @@ namespace genogrove::io {
     }
 
     bool bam_reader::read_next(sam_entry& entry) {
+        // Unconditional clear honors the file_reader_base contract: any path
+        // that sets error_message_ must either throw or return false. After a
+        // successful read or a clean EOF, get_error_message() reads empty.
+        error_message_.clear();
+
         if (!sam_file_ || at_eof_) {
             return false;
         }
@@ -152,7 +157,6 @@ namespace genogrove::io {
         // Read records until we find one that passes filters
         int ret;
         while ((ret = sam_read1(sam_file_, header_, alignment_)) >= 0) {
-            error_message_.clear();
             record_num_++;
 
             if (should_skip(alignment_)) {
@@ -248,6 +252,7 @@ namespace genogrove::io {
         entry.tags = parse_tags(b, aux_truncated);
         if (aux_truncated) {
             error_message_ = "Truncated auxiliary data at record " + std::to_string(record_num_);
+            throw std::runtime_error(error_message_);
         }
 
         return true;

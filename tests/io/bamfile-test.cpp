@@ -628,6 +628,34 @@ TEST_F(BamReaderTest, ErrorMessageEmptyAfterSuccessfulRead) {
     EXPECT_TRUE(reader.get_error_message().empty());
 }
 
+TEST_F(BamReaderTest, ErrorMessageClearedOnEofEarlyReturn) {
+    // Pins the contract that read_next() unconditionally clears error_message_
+    // before any early-return path. Without the clear at the top of the
+    // function, a second read_next() past EOF would silently carry stale state
+    // from any prior call.
+    fs::path empty_sam = test_data_dir / "test_eof_clear.sam";
+    {
+        std::ofstream out(empty_sam);
+        out << "@HD\tVN:1.6\tSO:coordinate\n";
+        out << "@SQ\tSN:chr1\tLN:1000000\n";
+    }
+
+    gio::bam_reader reader(empty_sam);
+    gio::sam_entry entry;
+
+    // First call drains the (empty) record stream and sets at_eof_
+    EXPECT_FALSE(reader.read_next(entry));
+    EXPECT_TRUE(reader.get_error_message().empty());
+
+    // Second call takes the !sam_file_ || at_eof_ early-return path; the
+    // message must still read empty.
+    EXPECT_FALSE(reader.read_next(entry));
+    EXPECT_TRUE(reader.get_error_message().empty())
+        << "error_message_ must be cleared on the at_eof_ early-return path";
+
+    fs::remove(empty_sam);
+}
+
 // ==========================================
 // Move Semantics Tests
 // ==========================================
