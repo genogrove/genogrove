@@ -6,8 +6,9 @@
 #ifndef GENOGROVE_DATA_TYPE_KEY_TYPE_BASE_HPP
 #define GENOGROVE_DATA_TYPE_KEY_TYPE_BASE_HPP
 
-#include <cstddef>
 #include <concepts>
+#include <cstddef>
+#include <string>
 
 namespace genogrove::data_type {
     template<typename T>

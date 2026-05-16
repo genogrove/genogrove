@@ -7,19 +7,18 @@
 #define GENOGROVE_IO_BAMREADER_HPP
 
 // standard
-#include <string>
+#include <cstdint>
 #include <filesystem>
 #include <format>
 #include <optional>
-#include <vector>
-#include <variant>
+#include <string>
 #include <unordered_map>
-#include <cstdint>
+#include <utility>
+#include <variant>
+#include <vector>
 
 // genogrove
 #include <genogrove/io/file_reader.hpp>
-
-#include <utility>
 
 // htslib
 #include <htslib/sam.h>
