@@ -259,7 +259,13 @@ namespace genogrove::io {
     }
 
     std::pair<size_t, size_t> bam_reader::compute_interval(int64_t pos, const bam1_t* b) const {
-        // Calculate reference length consumed by CIGAR
+        // Calculate reference length consumed by CIGAR.
+        // Pure soft-clip (e.g. "100S") and hard-clip-only secondary records
+        // consume zero reference bases and return a zero-length half-open
+        // interval `[pos, pos)`. Callers can detect this via
+        // `sam_entry::consumes_reference()` and filter as appropriate;
+        // converting to a closed `gdt::interval(start, end - 1)` is only
+        // valid when `start < end`.
         uint32_t* cigar = bam_get_cigar(b);
         uint32_t n_cigar = b->core.n_cigar;
 
@@ -273,11 +279,6 @@ namespace genogrove::io {
                 op == BAM_CEQUAL || op == BAM_CDIFF) {
                 ref_len += len;
             }
-        }
-
-        // Handle edge case of no reference-consuming operations
-        if (ref_len == 0) {
-            ref_len = 1;  // Minimum interval size
         }
 
         return {static_cast<size_t>(pos),

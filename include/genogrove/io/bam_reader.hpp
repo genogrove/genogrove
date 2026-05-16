@@ -244,8 +244,8 @@ namespace genogrove::io {
     struct sam_entry {
         std::string qname;              ///< Query template NAME (read name)
         std::string chrom;              ///< Reference sequence name (RNAME)
-        size_t start = 0;              ///< 0-based start position (htslib-native, from POS)
-        size_t end = 0;                ///< 0-based exclusive end position (htslib-native, from POS + CIGAR)
+        size_t start = 0;              ///< 0-based start position (htslib-native, from POS). Unmapped reads carry `start == 0`; zero-ref-consuming CIGARs (e.g. pure soft-clip) carry `start == end == POS`.
+        size_t end = 0;                ///< 0-based exclusive end position (htslib-native, from POS + CIGAR-consumed reference length). Equals `start` for unmapped reads and for zero-ref-consuming CIGARs (pure soft-clip, hard-clip-only secondaries). Convert to closed `gdt::interval(start, end - 1)` only when `consumes_reference()` is true.
         alignment_flags flags;          ///< Bitwise FLAG
         uint8_t mapq;                   ///< Mapping quality (0-255)
         cigar_string cigar;             ///< CIGAR string (alignment operations)
@@ -270,6 +270,20 @@ namespace genogrove::io {
         /// Check if this read is mapped
         [[nodiscard]] bool is_mapped() const {
             return !flags.is_unmapped();
+        }
+
+        /**
+         * @brief Whether this record covers any reference bases.
+         *
+         * False for unmapped reads and for mapped records whose CIGAR
+         * consumes zero reference bases (pure soft-clip like "100S",
+         * hard-clip-only secondary alignments). Use this as the gate
+         * before converting to a closed `gdt::interval(start, end - 1)`
+         * or inserting into a grove — the conversion is only valid when
+         * `start < end`.
+         */
+        [[nodiscard]] bool consumes_reference() const {
+            return start < end;
         }
 
         /// Convert CIGAR to string representation
