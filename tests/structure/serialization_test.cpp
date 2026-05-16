@@ -1,4 +1,9 @@
 /*
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * See the LICENSE file in the root of the repository for more information.
+ */
+
+/*
  * Tests for grove serialization that are not key-type-dependent.
  * Key-type-specific roundtrip tests live in key_type_grove_test.hpp.
  */
