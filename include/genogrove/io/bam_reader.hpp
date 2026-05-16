@@ -343,11 +343,13 @@ namespace genogrove::io {
          * Reads the next alignment from the file, applying configured filters.
          * Skipped records (based on options) are automatically bypassed.
          *
-         * Returns false only at EOF. Throws on I/O errors.
+         * Returns false only at EOF. Throws on I/O errors or on truncated/
+         * malformed auxiliary data — when read_next() returns true the record
+         * is fully populated and get_error_message() reads empty.
          *
          * @param entry Output parameter for the alignment record
          * @return true if a record was successfully read, false at EOF
-         * @throws std::runtime_error on I/O error
+         * @throws std::runtime_error on I/O error or truncated auxiliary data
          */
         bool read_next(sam_entry& entry) override;
 
