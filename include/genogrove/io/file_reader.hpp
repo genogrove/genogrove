@@ -35,6 +35,14 @@ namespace genogrove::io {
      * pointer to its parent file_reader — the reader must outlive all iterators obtained from it.
      * Advancing past a read failure or EOF moves the iterator to the end position.
      * Always check get_error_message() on the reader after the loop to distinguish EOF from error.
+     *
+     * @note Equality: two iterators compare equal iff they refer to the same position.
+     *       End iterators compare equal to each other. Two non-end iterators compare
+     *       equal iff they have the same parent reader AND have advanced the same number
+     *       of times (position tracked via an internal monotonic counter). Because the
+     *       underlying reader is single-pass, copying an iterator and then advancing one
+     *       copy is the only realistic way to produce two iterators on the same reader
+     *       with different positions.
      */
     template<typename EntryType>
     class file_reader_iterator {
@@ -85,8 +93,11 @@ namespace genogrove::io {
             if (at_end_ && other.at_end_) return true;
             // End iterator compared to non-end
             if (at_end_ != other.at_end_) return false;
-            // Same reader
-            return reader_ == other.reader_;
+            // Two non-end iterators are equal iff they're at the same position on
+            // the same reader. Without the pos_ check, any two non-end iterators
+            // on the same reader would compare equal — broken for copies whose
+            // original has since advanced.
+            return reader_ == other.reader_ && pos_ == other.pos_;
         }
 
     private:
@@ -100,6 +111,7 @@ namespace genogrove::io {
             EntryType entry;
             if (reader_->read_next(entry)) {
                 current_entry_ = std::move(entry);
+                ++pos_;  // bump on successful advance; failure keeps pos_ unchanged
             } else {
                 // Error occurred or no more entries
                 at_end_ = true;
@@ -110,6 +122,10 @@ namespace genogrove::io {
         file_reader<EntryType>* reader_;
         std::optional<EntryType> current_entry_;
         bool at_end_;
+        // Monotonic record-index counter. 0 on construction; bumped on each
+        // successful advance(). Lets operator== distinguish two iterators
+        // on the same reader that have advanced different numbers of times.
+        size_t pos_ = 0;
     };
 
     // Templated derived class for type-specific reading
