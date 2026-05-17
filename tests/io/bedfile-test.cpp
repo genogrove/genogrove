@@ -873,3 +873,40 @@ TEST_F(bedfileTest, hasNextOnPlainGzipFile) {
     reader.read_next(entry);
     EXPECT_FALSE(reader.has_next());
 }
+
+TEST_F(bedfileTest, embeddedNulInFieldPreserved) {
+    // Pins the bgzf_next_data_line fix (#346): line construction must use the
+    // length-counted ctor so embedded NULs survive into the parsed entry.
+    // The pre-fix `std::string(str.s)` would truncate the line at the first
+    // \0, silently dropping the trailing fields.
+    fs::path nul_bed = test_data_dir / "test_embedded_nul.bed";
+    {
+        std::ofstream out(nul_bed, std::ios::binary);
+        // BED6 with a NUL embedded in the name column. Layout:
+        //   chr1\t100\t200\tna<NUL>me\t0\t+\n
+        // Pre-fix the line truncates at the NUL, leaving only 4 fields;
+        // the bed_reader either fails or silently drops score+strand.
+        out << "chr1\t100\t200\tna";
+        out.put('\0');
+        out << "me\t0\t+\n";
+    }
+
+    gio::bed_reader reader(nul_bed);
+    gio::bed_entry entry;
+    ASSERT_TRUE(reader.read_next(entry));
+
+    // The name field should carry the embedded NUL — total length 5 bytes:
+    //   'n', 'a', '\0', 'm', 'e'
+    ASSERT_TRUE(entry.name.has_value());
+    EXPECT_EQ(entry.name->size(), 5u);
+    EXPECT_EQ((*entry.name)[2], '\0');
+
+    // Trailing fields must still parse — confirms the line wasn't truncated
+    // at the NUL (otherwise score / strand would be absent).
+    ASSERT_TRUE(entry.score.has_value());
+    EXPECT_EQ(*entry.score, 0);
+    ASSERT_TRUE(entry.strand.has_value());
+    EXPECT_EQ(*entry.strand, '+');
+
+    fs::remove(nul_bed);
+}
