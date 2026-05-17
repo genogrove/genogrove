@@ -7,6 +7,7 @@
 #define GENOGROVE_DATA_TYPE_FLANKING_QUERY_RESULT_HPP
 
 #include <genogrove/data_type/key.hpp>
+#include <genogrove/data_type/key_type_base.hpp>
 
 namespace genogrove::data_type {
 
@@ -35,10 +36,14 @@ namespace genogrove::data_type {
      * @tparam key_type The key type (must satisfy key_type_base concept)
      * @tparam data_type Optional associated data type (default: void)
      *
+     * @note Stored as `const`-pointers; callers cannot mutate the predecessor /
+     *       successor and corrupt B+ tree ordering. Code that needs a mutating
+     *       `key*` should re-acquire it via the pointer returned by
+     *       `insert_data()`.
      * @see grove::flanking()
      * @see query_result for the overlap-query result container
      */
-    template <typename key_type, typename data_type = void>
+    template <key_type_base key_type, typename data_type = void>
     class flanking_query_result {
         public:
             /**
@@ -49,18 +54,18 @@ namespace genogrove::data_type {
             /**
              * @brief Get the predecessor: largest non-overlapping key less than the query.
              *
-             * @return Pointer to the predecessor key, or nullptr if none exists
+             * @return Const-pointer to the predecessor key, or nullptr if none exists
              */
-            key<key_type, data_type>* get_predecessor() const noexcept {
+            const key<key_type, data_type>* get_predecessor() const noexcept {
                 return this->predecessor;
             }
 
             /**
              * @brief Get the successor: smallest non-overlapping key greater than the query.
              *
-             * @return Pointer to the successor key, or nullptr if none exists
+             * @return Const-pointer to the successor key, or nullptr if none exists
              */
-            key<key_type, data_type>* get_successor() const noexcept {
+            const key<key_type, data_type>* get_successor() const noexcept {
                 return this->successor;
             }
 
@@ -68,25 +73,28 @@ namespace genogrove::data_type {
              * @brief Set the predecessor pointer.
              *
              * Used internally during traversal as candidates are discovered and improved.
+             * Accepts a non-const `key*` for caller convenience; stored as const.
              *
              * @param k Pointer to a key, or nullptr
              */
-            void set_predecessor(key<key_type, data_type>* k) noexcept {
+            void set_predecessor(const key<key_type, data_type>* k) noexcept {
                 this->predecessor = k;
             }
 
             /**
              * @brief Set the successor pointer.
              *
+             * Accepts a non-const `key*` for caller convenience; stored as const.
+             *
              * @param k Pointer to a key, or nullptr
              */
-            void set_successor(key<key_type, data_type>* k) noexcept {
+            void set_successor(const key<key_type, data_type>* k) noexcept {
                 this->successor = k;
             }
 
         private:
-            key<key_type, data_type>* predecessor = nullptr;
-            key<key_type, data_type>* successor   = nullptr;
+            const key<key_type, data_type>* predecessor = nullptr;
+            const key<key_type, data_type>* successor   = nullptr;
     };
 
 }
