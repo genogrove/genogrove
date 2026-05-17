@@ -740,9 +740,13 @@ TEST_F(bedfileTest, iteratorCopyUnequalAfterOriginalAdvances) {
 }
 
 TEST_F(bedfileTest, iteratorBeginUnequalToEnd) {
+    // begin() consumes a record, so call it only once (project convention,
+    // see feedback_iterator_single_pass.md). End is default-constructed and
+    // consumes nothing.
     gio::bed_reader reader(bed3_path);
-    EXPECT_FALSE(reader.begin() == reader.end());
-    EXPECT_TRUE(reader.begin() != reader.end());
+    auto it = reader.begin();
+    EXPECT_FALSE(it == reader.end());
+    EXPECT_TRUE(it != reader.end());
 }
 
 TEST_F(bedfileTest, iteratorEndEqualsEnd) {
