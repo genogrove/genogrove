@@ -708,6 +708,62 @@ TEST_F(bedfileTest, iteratorPostIncrement) {
 }
 
 // ==========================================
+// Iterator equality (#325)
+// ==========================================
+
+TEST_F(bedfileTest, iteratorEqualToSelf) {
+    gio::bed_reader reader(bed3_path);
+    auto it = reader.begin();
+    EXPECT_TRUE(it == it);
+}
+
+TEST_F(bedfileTest, iteratorCopyEqualToOriginalBeforeAdvance) {
+    gio::bed_reader reader(bed3_path);
+    auto a = reader.begin();
+    auto b = a;
+    EXPECT_TRUE(a == b);
+    EXPECT_FALSE(a != b);
+}
+
+TEST_F(bedfileTest, iteratorCopyUnequalAfterOriginalAdvances) {
+    // Pre-#325 fix: this returned TRUE because operator== only checked
+    // at_end_ + reader_ identity. Post-fix the monotonic pos_ counter
+    // distinguishes the two iterators.
+    gio::bed_reader reader(bed3_path);
+    auto a = reader.begin();   // a → entry 1
+    auto b = a;                // b → entry 1 (copy)
+    ++a;                       // a consumes entry 2 from reader; a is now at pos 2, b at pos 1
+    EXPECT_FALSE(a == b);
+    EXPECT_TRUE(a != b);
+    EXPECT_EQ(a->chrom, "chr2");
+    EXPECT_EQ(b->chrom, "chr1");
+}
+
+TEST_F(bedfileTest, iteratorBeginUnequalToEnd) {
+    // begin() consumes a record, so call it only once (project convention,
+    // see feedback_iterator_single_pass.md). End is default-constructed and
+    // consumes nothing.
+    gio::bed_reader reader(bed3_path);
+    auto it = reader.begin();
+    EXPECT_FALSE(it == reader.end());
+    EXPECT_TRUE(it != reader.end());
+}
+
+TEST_F(bedfileTest, iteratorEndEqualsEnd) {
+    gio::bed_reader reader(bed3_path);
+    EXPECT_TRUE(reader.end() == reader.end());
+}
+
+TEST_F(bedfileTest, iteratorDrainedEqualsEnd) {
+    gio::bed_reader reader(bed3_path);
+    auto it = reader.begin();
+    ++it;
+    ++it;
+    ++it;   // past the last (3rd) entry — must transition to end
+    EXPECT_TRUE(it == reader.end());
+}
+
+// ==========================================
 // Mixed BED Format Tests (stale optional regression)
 // ==========================================
 
