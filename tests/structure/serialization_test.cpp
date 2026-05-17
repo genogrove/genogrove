@@ -11,12 +11,32 @@
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
+#include <streambuf>
+#include <string>
 
 #include <genogrove/structure/grove/grove.hpp>
 
 namespace gst = genogrove::structure;
 namespace gdt = genogrove::data_type;
 namespace fs = std::filesystem;
+
+namespace {
+
+// Streambuf that serves bytes via underflow but inherits the base class's
+// default seekoff (returns pos_type(off_type(-1)) → "not seekable"). Used by
+// the #323 regression test to simulate pipe/socket-like sources.
+class non_seekable_streambuf : public std::streambuf {
+public:
+    explicit non_seekable_streambuf(std::string data)
+        : data_(std::move(data)) {
+        setg(data_.data(), data_.data(), data_.data() + data_.size());
+    }
+private:
+    std::string data_;
+};
+
+} // namespace
 
 TEST(SerializationTest, FileStreamStateCleanAfterDeserialize) {
     // Regression test for #301: inflate_streambuf left failbit set on the
@@ -49,6 +69,36 @@ TEST(SerializationTest, FileStreamStateCleanAfterDeserialize) {
     }
 
     fs::remove(tmp_path);
+}
+
+TEST(SerializationTest, NonSeekableSourceWithTrailingDataThrows) {
+    // Regression test for #323: inflate_streambuf used to call source_.seekg()
+    // to rewind unconsumed bytes after Z_STREAM_END without checking the seek
+    // result. Non-seekable sources (pipes, sockets, custom non-seekable
+    // streambufs) silently failed the seek, dropping the trailing bytes. Now
+    // throws so the caller knows the "concatenated payloads" contract was
+    // violated.
+    //
+    // Type alias is required because EXPECT_THROW is a macro and the comma in
+    // `grove<gdt::interval, int>` would otherwise split the macro args.
+    using grove_t = gst::grove<gdt::interval, int>;
+
+    std::stringstream payload(std::ios::in | std::ios::out | std::ios::binary);
+    {
+        grove_t g(3);
+        g.insert_data("idx", gdt::interval{10, 20}, 1, gst::sorted);
+        g.serialize(payload);
+        payload.write("TEST", 4);   // trailing bytes that would normally be rewound
+        ASSERT_TRUE(payload.good());
+    }
+    std::string bytes = payload.str();
+
+    non_seekable_streambuf nsb(bytes);
+    std::istream is(&nsb);
+
+    EXPECT_THROW({
+        [[maybe_unused]] auto restored = grove_t::deserialize(is);
+    }, std::runtime_error);
 }
 
 TEST(SerializationTest, FileStreamStateCleanWithTrailingData) {

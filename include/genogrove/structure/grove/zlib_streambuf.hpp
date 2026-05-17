@@ -161,6 +161,16 @@ protected:
                 if (zs_.avail_in > 0) {
                     source_.seekg(-static_cast<std::streamoff>(zs_.avail_in),
                                   std::ios_base::cur);
+                    // Non-seekable sources (pipes, sockets, custom streambufs)
+                    // silently fail the seekg. Without this check the trailing
+                    // bytes would be lost without any error — the
+                    // "concatenated payloads" contract in CLAUDE.md silently
+                    // degrades. Throw so the caller knows.
+                    if (source_.fail()) {
+                        throw std::runtime_error(
+                            "inflate_streambuf: source stream is not seekable; "
+                            "concatenated payloads require a seekable source");
+                    }
                 }
                 break;
             }
