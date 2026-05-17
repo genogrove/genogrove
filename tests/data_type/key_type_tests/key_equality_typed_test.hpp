@@ -95,9 +95,33 @@ TYPED_TEST_P(key_equality_typed_test, equality_available_for_non_comparable_data
     static_assert(std::equality_comparable<gdt::key<key_t, void>>);
 }
 
+TYPED_TEST_P(key_equality_typed_test, ordering_compares_value_only) {
+    using key_t = TypeParam;
+    using traits = key_equality_test_support::key_equality_traits<key_t>;
+
+    const auto va = traits::value_a();
+    const auto vb = traits::value_b_different();
+
+    // Pick the smaller of the two trait values as the "low" side so the
+    // ordering assertions hold regardless of which order the traits return.
+    const auto& lo = (va < vb) ? va : vb;
+    const auto& hi = (va < vb) ? vb : va;
+
+    gdt::key<key_t, int> k_lo_a(lo, 1);
+    gdt::key<key_t, int> k_lo_b(lo, 2);   // same value, different data
+    gdt::key<key_t, int> k_hi  (hi, 1);
+
+    EXPECT_TRUE(k_lo_a < k_hi);
+    EXPECT_TRUE(k_hi   > k_lo_a);
+    EXPECT_FALSE(k_lo_a < k_lo_b)
+        << "Ordering compares value only; same value must not be strictly less.";
+    EXPECT_FALSE(k_lo_a > k_lo_b);
+}
+
 REGISTER_TYPED_TEST_SUITE_P(
     key_equality_typed_test,
     equality_compares_value_only,
-    equality_available_for_non_comparable_data);
+    equality_available_for_non_comparable_data,
+    ordering_compares_value_only);
 
 #endif // GENOGROVE_TESTS_DATA_TYPE_KEY_EQUALITY_TYPED_TEST_HPP

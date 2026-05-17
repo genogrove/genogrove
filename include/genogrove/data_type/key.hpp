@@ -285,25 +285,29 @@ namespace genogrove::data_type {
             }
 
             /**
-             * @brief Equality comparison operator.
+             * @brief Comparison operators.
              *
-             * Compares keys by their `value` only. The associated `data_type`
-             * is treated as decoration and ignored — two keys at the same
-             * spatial position with different data compare equal. This matches
-             * the B+ tree's notion of identity (the tree orders by `value`
-             * via `operator<`) and frees `data_type` from needing its own
-             * `operator==`.
+             * Comparisons are delegated to the wrapped `key_type` value;
+             * `data_type` is treated as decoration and ignored. This matches
+             * the B+ tree's notion of identity (the tree orders by `value`)
+             * and frees `data_type` from needing any comparison operators of
+             * its own. `<` and `>` are unconditionally available because the
+             * `key_type_base` concept already requires them on `key_type`.
              *
              * @param other Key to compare against
-             * @return true if `value == other.value`
-             *
-             * @note Only available when `key_type` is equality-comparable;
-             *       `data_type` has no constraint imposed by this operator.
              */
             bool operator==(const key& other) const
                 requires std::equality_comparable<key_type> {
                     return value == other.value;
                 }
+
+            bool operator<(const key& other) const {
+                return value < other.value;
+            }
+
+            bool operator>(const key& other) const {
+                return value > other.value;
+            }
 
         private:
             key_type value;   ///< The core key value (interval, genomic_coordinate, numeric, etc.)
