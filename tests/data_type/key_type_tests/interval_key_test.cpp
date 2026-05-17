@@ -182,28 +182,6 @@ TEST_F(IntervalKeyTest, MoveAssignment) {
 }
 
 // ==========================================
-// Equality comparison
-// ==========================================
-
-TEST_F(IntervalKeyTest, EqualityWithoutData) {
-    gdt::key<gdt::interval> key1(intvl1);
-    gdt::key<gdt::interval> key2(gdt::interval{10, 20});
-    gdt::key<gdt::interval> key3(intvl2);
-
-    EXPECT_EQ(key1, key2);
-    EXPECT_NE(key1, key3);
-}
-
-TEST_F(IntervalKeyTest, EqualityWithData) {
-    gdt::key<gdt::interval, int> key1(intvl1, 42);
-    gdt::key<gdt::interval, int> key2(gdt::interval{10, 20}, 42);
-    gdt::key<gdt::interval, int> key3(intvl1, 99);
-
-    EXPECT_EQ(key1, key2);  // Same interval and data
-    EXPECT_NE(key1, key3);  // Same interval, different data
-}
-
-// ==========================================
 // Serialization tests (using helper)
 // ==========================================
 

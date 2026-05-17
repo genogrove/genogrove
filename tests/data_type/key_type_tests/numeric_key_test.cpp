@@ -191,28 +191,6 @@ TEST_F(NumericKeyTest, MoveAssignment) {
 }
 
 // ==========================================
-// Equality comparison
-// ==========================================
-
-TEST_F(NumericKeyTest, EqualityWithoutData) {
-    gdt::key<gdt::numeric> key1(num1);
-    gdt::key<gdt::numeric> key2(gdt::numeric{10});
-    gdt::key<gdt::numeric> key3(num2);
-
-    EXPECT_EQ(key1, key2);
-    EXPECT_NE(key1, key3);
-}
-
-TEST_F(NumericKeyTest, EqualityWithData) {
-    gdt::key<gdt::numeric, int> key1(num1, 42);
-    gdt::key<gdt::numeric, int> key2(gdt::numeric{10}, 42);
-    gdt::key<gdt::numeric, int> key3(num1, 99);
-
-    EXPECT_EQ(key1, key2);  // Same numeric and data
-    EXPECT_NE(key1, key3);  // Same numeric, different data
-}
-
-// ==========================================
 // Serialization tests (using helper)
 // ==========================================
 

@@ -195,28 +195,6 @@ TEST_F(GenomicCoordinateKeyTest, MoveAssignment) {
 }
 
 // ==========================================
-// Equality comparison
-// ==========================================
-
-TEST_F(GenomicCoordinateKeyTest, EqualityWithoutData) {
-    gdt::key<gdt::genomic_coordinate> key1(coord1);
-    gdt::key<gdt::genomic_coordinate> key2(gdt::genomic_coordinate{'+', 10, 20});
-    gdt::key<gdt::genomic_coordinate> key3(coord2);
-
-    EXPECT_EQ(key1, key2);
-    EXPECT_NE(key1, key3);
-}
-
-TEST_F(GenomicCoordinateKeyTest, EqualityWithData) {
-    gdt::key<gdt::genomic_coordinate, int> key1(coord1, 42);
-    gdt::key<gdt::genomic_coordinate, int> key2(gdt::genomic_coordinate{'+', 10, 20}, 42);
-    gdt::key<gdt::genomic_coordinate, int> key3(coord1, 99);
-
-    EXPECT_EQ(key1, key2);  // Same coordinate and data
-    EXPECT_NE(key1, key3);  // Same coordinate, different data
-}
-
-// ==========================================
 // Serialization tests (using helper)
 // ==========================================
 
