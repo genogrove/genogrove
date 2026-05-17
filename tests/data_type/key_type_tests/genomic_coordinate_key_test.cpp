@@ -6,8 +6,8 @@
 // Gtest
 #include <gtest/gtest.h>
 
-// Shared typed-test suite for the generic key<> equality contract (#332).
-#include "key_equality_typed_test.hpp"
+// Shared typed-test suite for the generic key<> comparison contract (#332).
+#include "key_comparison_typed_test.hpp"
 
 // genogrove
 #include <genogrove/data_type/key.hpp>
@@ -259,12 +259,12 @@ TEST_F(GenomicCoordinateKeyTest, WildcardStrand) {
 }
 
 // =============================================================================
-// Generic equality contract (#332) — instantiated from the shared typed-test
+// Generic comparison contract (#332) — instantiated from the shared typed-test
 // =============================================================================
 
-namespace key_equality_test_support {
+namespace key_comparison_test_support {
 template<>
-struct key_equality_traits<gdt::genomic_coordinate> {
+struct key_comparison_traits<gdt::genomic_coordinate> {
     static gdt::genomic_coordinate value_a() {
         return gdt::genomic_coordinate{'+', 100, 200};
     }
@@ -274,7 +274,7 @@ struct key_equality_traits<gdt::genomic_coordinate> {
         return gdt::genomic_coordinate{'-', 100, 200};
     }
 };
-} // namespace key_equality_test_support
+} // namespace key_comparison_test_support
 
-using GenomicCoordinateKeyEqualityTypes = ::testing::Types<gdt::genomic_coordinate>;
-INSTANTIATE_TYPED_TEST_SUITE_P(GenomicCoordinate, key_equality_typed_test, GenomicCoordinateKeyEqualityTypes);
+using GenomicCoordinateKeyComparisonTypes = ::testing::Types<gdt::genomic_coordinate>;
+INSTANTIATE_TYPED_TEST_SUITE_P(GenomicCoordinate, key_comparison_typed_test, GenomicCoordinateKeyComparisonTypes);

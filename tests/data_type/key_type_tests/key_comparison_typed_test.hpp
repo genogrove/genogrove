@@ -3,22 +3,23 @@
  * See the LICENSE file in the root of the repository for more information.
  */
 
-// Shared typed-test suite for the generic `gdt::key<>` operator== contract.
-// Mirrors the per-key-type pattern from tests/structure/key_type_grove_test.hpp.
+// Shared typed-test suite for the generic `gdt::key<>` comparison
+// contract (operator==, operator<, operator>). Mirrors the per-key-type
+// pattern from tests/structure/key_type_grove_test.hpp.
 //
 // Per-type instantiation (in each <type>_key_test.cpp):
 //
 //   template<>
-//   struct key_equality_traits<gdt::interval> {
+//   struct key_comparison_traits<gdt::interval> {
 //       static gdt::interval value_a() { return gdt::interval{10, 20}; }
 //       static gdt::interval value_b_different() { return gdt::interval{30, 40}; }
 //   };
 //
-//   using IntervalKeyEqTypes = ::testing::Types<gdt::interval>;
-//   INSTANTIATE_TYPED_TEST_SUITE_P(Interval, key_equality_typed_test, IntervalKeyEqTypes);
+//   using IntervalKeyComparisonTypes = ::testing::Types<gdt::interval>;
+//   INSTANTIATE_TYPED_TEST_SUITE_P(Interval, key_comparison_typed_test, IntervalKeyComparisonTypes);
 
-#ifndef GENOGROVE_TESTS_DATA_TYPE_KEY_EQUALITY_TYPED_TEST_HPP
-#define GENOGROVE_TESTS_DATA_TYPE_KEY_EQUALITY_TYPED_TEST_HPP
+#ifndef GENOGROVE_TESTS_DATA_TYPE_KEY_COMPARISON_TYPED_TEST_HPP
+#define GENOGROVE_TESTS_DATA_TYPE_KEY_COMPARISON_TYPED_TEST_HPP
 
 #include <gtest/gtest.h>
 
@@ -30,7 +31,7 @@
 
 namespace gdt = genogrove::data_type;
 
-namespace key_equality_test_support {
+namespace key_comparison_test_support {
 
 // Data type with no operator==. Used to confirm key equality no longer
 // requires data_type to be equality-comparable after #332.
@@ -42,27 +43,28 @@ struct opaque_data {
 // Per-key-type traits providing two distinct sample values. Each
 // `<type>_key_test.cpp` specializes this for its own key type.
 template <typename KeyType>
-struct key_equality_traits;
+struct key_comparison_traits;
 
-} // namespace key_equality_test_support
+} // namespace key_comparison_test_support
 
 // =============================================================================
-// Typed test suite — equality contract for the generic `gdt::key<>` class
+// Typed test suite — comparison contract for the generic `gdt::key<>` class
 // =============================================================================
 //
-// Design decision (#332): key equality is determined purely by `value`. The
-// associated `data_type` is treated as decoration and ignored. This matches
-// the B+ tree's notion of identity (the tree orders by `value::operator<`)
-// and frees `data_type` from needing its own `operator==`.
+// Design decision (#332): all `gdt::key<>` comparisons (`==`, `<`, `>`) are
+// determined purely by `value`. The associated `data_type` is treated as
+// decoration and ignored. This matches the B+ tree's notion of identity
+// (the tree orders by `value::operator<`) and frees `data_type` from needing
+// any comparison operators of its own.
 
 template <typename KeyType>
-class key_equality_typed_test : public ::testing::Test {};
+class key_comparison_typed_test : public ::testing::Test {};
 
-TYPED_TEST_SUITE_P(key_equality_typed_test);
+TYPED_TEST_SUITE_P(key_comparison_typed_test);
 
-TYPED_TEST_P(key_equality_typed_test, equality_compares_value_only) {
+TYPED_TEST_P(key_comparison_typed_test, equality_compares_value_only) {
     using key_t = TypeParam;
-    using traits = key_equality_test_support::key_equality_traits<key_t>;
+    using traits = key_comparison_test_support::key_comparison_traits<key_t>;
 
     const auto va = traits::value_a();
     const auto vb = traits::value_b_different();
@@ -78,12 +80,12 @@ TYPED_TEST_P(key_equality_typed_test, equality_compares_value_only) {
         << "Different value should compare unequal regardless of data.";
 }
 
-TYPED_TEST_P(key_equality_typed_test, equality_available_for_non_comparable_data) {
+TYPED_TEST_P(key_comparison_typed_test, equality_available_for_non_comparable_data) {
     // Pre-#332 operator== called `data == other.data`, so any key with a
     // non-comparable data_type either failed to compile or had a broken
     // operator==. Post-fix the operator only touches value, so this works.
     using key_t = TypeParam;
-    using opaque = key_equality_test_support::opaque_data;
+    using opaque = key_comparison_test_support::opaque_data;
 
     static_assert(std::equality_comparable<gdt::key<key_t, opaque>>,
         "key<KeyType, opaque_data> must be equality_comparable even though "
@@ -95,9 +97,9 @@ TYPED_TEST_P(key_equality_typed_test, equality_available_for_non_comparable_data
     static_assert(std::equality_comparable<gdt::key<key_t, void>>);
 }
 
-TYPED_TEST_P(key_equality_typed_test, ordering_compares_value_only) {
+TYPED_TEST_P(key_comparison_typed_test, ordering_compares_value_only) {
     using key_t = TypeParam;
-    using traits = key_equality_test_support::key_equality_traits<key_t>;
+    using traits = key_comparison_test_support::key_comparison_traits<key_t>;
 
     const auto va = traits::value_a();
     const auto vb = traits::value_b_different();
@@ -119,9 +121,9 @@ TYPED_TEST_P(key_equality_typed_test, ordering_compares_value_only) {
 }
 
 REGISTER_TYPED_TEST_SUITE_P(
-    key_equality_typed_test,
+    key_comparison_typed_test,
     equality_compares_value_only,
     equality_available_for_non_comparable_data,
     ordering_compares_value_only);
 
-#endif // GENOGROVE_TESTS_DATA_TYPE_KEY_EQUALITY_TYPED_TEST_HPP
+#endif // GENOGROVE_TESTS_DATA_TYPE_KEY_COMPARISON_TYPED_TEST_HPP

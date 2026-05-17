@@ -6,8 +6,8 @@
 // Gtest
 #include <gtest/gtest.h>
 
-// Shared typed-test suite for the generic key<> equality contract (#332).
-#include "key_equality_typed_test.hpp"
+// Shared typed-test suite for the generic key<> comparison contract (#332).
+#include "key_comparison_typed_test.hpp"
 
 // genogrove
 #include <genogrove/data_type/key.hpp>
@@ -240,16 +240,16 @@ TEST_F(NumericKeyTest, ZeroValue) {
 }
 
 // =============================================================================
-// Generic equality contract (#332) — instantiated from the shared typed-test
+// Generic comparison contract (#332) — instantiated from the shared typed-test
 // =============================================================================
 
-namespace key_equality_test_support {
+namespace key_comparison_test_support {
 template<>
-struct key_equality_traits<gdt::numeric> {
+struct key_comparison_traits<gdt::numeric> {
     static gdt::numeric value_a()           { return gdt::numeric{42}; }
     static gdt::numeric value_b_different() { return gdt::numeric{99}; }
 };
-} // namespace key_equality_test_support
+} // namespace key_comparison_test_support
 
-using NumericKeyEqualityTypes = ::testing::Types<gdt::numeric>;
-INSTANTIATE_TYPED_TEST_SUITE_P(Numeric, key_equality_typed_test, NumericKeyEqualityTypes);
+using NumericKeyComparisonTypes = ::testing::Types<gdt::numeric>;
+INSTANTIATE_TYPED_TEST_SUITE_P(Numeric, key_comparison_typed_test, NumericKeyComparisonTypes);
