@@ -6,6 +6,9 @@
 // Gtest
 #include <gtest/gtest.h>
 
+// Shared typed-test suite for the generic key<> comparison contract (#332).
+#include "key_comparison_typed_test.hpp"
+
 // genogrove
 #include <genogrove/data_type/key.hpp>
 #include <genogrove/data_type/interval.hpp>
@@ -179,28 +182,6 @@ TEST_F(IntervalKeyTest, MoveAssignment) {
 }
 
 // ==========================================
-// Equality comparison
-// ==========================================
-
-TEST_F(IntervalKeyTest, EqualityWithoutData) {
-    gdt::key<gdt::interval> key1(intvl1);
-    gdt::key<gdt::interval> key2(gdt::interval{10, 20});
-    gdt::key<gdt::interval> key3(intvl2);
-
-    EXPECT_EQ(key1, key2);
-    EXPECT_NE(key1, key3);
-}
-
-TEST_F(IntervalKeyTest, EqualityWithData) {
-    gdt::key<gdt::interval, int> key1(intvl1, 42);
-    gdt::key<gdt::interval, int> key2(gdt::interval{10, 20}, 42);
-    gdt::key<gdt::interval, int> key3(intvl1, 99);
-
-    EXPECT_EQ(key1, key2);  // Same interval and data
-    EXPECT_NE(key1, key3);  // Same interval, different data
-}
-
-// ==========================================
 // Serialization tests (using helper)
 // ==========================================
 
@@ -229,3 +210,18 @@ TEST_F(IntervalKeyTest, SerializeWithCustomStruct) {
     gdt::key<gdt::interval, custom_data> key(intvl1, data);
     test_serialization_roundtrip(key);
 }
+
+// =============================================================================
+// Generic comparison contract (#332) — instantiated from the shared typed-test
+// =============================================================================
+
+namespace key_comparison_test_support {
+template<>
+struct key_comparison_traits<gdt::interval> {
+    static gdt::interval value_a()           { return gdt::interval{10, 20}; }
+    static gdt::interval value_b_different() { return gdt::interval{30, 40}; }
+};
+} // namespace key_comparison_test_support
+
+using IntervalKeyComparisonTypes = ::testing::Types<gdt::interval>;
+INSTANTIATE_TYPED_TEST_SUITE_P(Interval, key_comparison_typed_test, IntervalKeyComparisonTypes);

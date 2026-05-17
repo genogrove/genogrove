@@ -6,6 +6,9 @@
 // Gtest
 #include <gtest/gtest.h>
 
+// Shared typed-test suite for the generic key<> comparison contract (#332).
+#include "key_comparison_typed_test.hpp"
+
 // genogrove
 #include <genogrove/data_type/key.hpp>
 #include <genogrove/data_type/numeric.hpp>
@@ -188,28 +191,6 @@ TEST_F(NumericKeyTest, MoveAssignment) {
 }
 
 // ==========================================
-// Equality comparison
-// ==========================================
-
-TEST_F(NumericKeyTest, EqualityWithoutData) {
-    gdt::key<gdt::numeric> key1(num1);
-    gdt::key<gdt::numeric> key2(gdt::numeric{10});
-    gdt::key<gdt::numeric> key3(num2);
-
-    EXPECT_EQ(key1, key2);
-    EXPECT_NE(key1, key3);
-}
-
-TEST_F(NumericKeyTest, EqualityWithData) {
-    gdt::key<gdt::numeric, int> key1(num1, 42);
-    gdt::key<gdt::numeric, int> key2(gdt::numeric{10}, 42);
-    gdt::key<gdt::numeric, int> key3(num1, 99);
-
-    EXPECT_EQ(key1, key2);  // Same numeric and data
-    EXPECT_NE(key1, key3);  // Same numeric, different data
-}
-
-// ==========================================
 // Serialization tests (using helper)
 // ==========================================
 
@@ -257,3 +238,18 @@ TEST_F(NumericKeyTest, ZeroValue) {
     EXPECT_EQ(key.get_value().get_value(), 0);
     EXPECT_EQ(key.get_data(), "zero");
 }
+
+// =============================================================================
+// Generic comparison contract (#332) — instantiated from the shared typed-test
+// =============================================================================
+
+namespace key_comparison_test_support {
+template<>
+struct key_comparison_traits<gdt::numeric> {
+    static gdt::numeric value_a()           { return gdt::numeric{42}; }
+    static gdt::numeric value_b_different() { return gdt::numeric{99}; }
+};
+} // namespace key_comparison_test_support
+
+using NumericKeyComparisonTypes = ::testing::Types<gdt::numeric>;
+INSTANTIATE_TYPED_TEST_SUITE_P(Numeric, key_comparison_typed_test, NumericKeyComparisonTypes);

@@ -285,25 +285,29 @@ namespace genogrove::data_type {
             }
 
             /**
-             * @brief Equality comparison operator.
+             * @brief Comparison operators.
              *
-             * Compares keys based on their content:
-             * - When data_type is void: Compares only key values
-             * - When data_type is non-void: Compares both key values and data
+             * Comparisons are delegated to the wrapped `key_type` value;
+             * `data_type` is treated as decoration and ignored. This matches
+             * the B+ tree's notion of identity (the tree orders by `value`)
+             * and frees `data_type` from needing any comparison operators of
+             * its own. `<` and `>` are unconditionally available because the
+             * `key_type_base` concept already requires them on `key_type`.
              *
              * @param other Key to compare against
-             * @return true if keys are equal
-             *
-             * @note Only available when key_type is equality-comparable
              */
             bool operator==(const key& other) const
                 requires std::equality_comparable<key_type> {
-                    if constexpr (std::is_void_v<data_type>) {
-                        return value == other.value;
-                    } else {
-                        return value == other.value && data == other.data;
-                    }
+                    return value == other.value;
                 }
+
+            bool operator<(const key& other) const {
+                return value < other.value;
+            }
+
+            bool operator>(const key& other) const {
+                return value > other.value;
+            }
 
         private:
             key_type value;   ///< The core key value (interval, genomic_coordinate, numeric, etc.)

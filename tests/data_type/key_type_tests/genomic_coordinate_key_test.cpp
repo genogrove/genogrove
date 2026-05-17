@@ -6,6 +6,9 @@
 // Gtest
 #include <gtest/gtest.h>
 
+// Shared typed-test suite for the generic key<> comparison contract (#332).
+#include "key_comparison_typed_test.hpp"
+
 // genogrove
 #include <genogrove/data_type/key.hpp>
 #include <genogrove/data_type/genomic_coordinate.hpp>
@@ -192,28 +195,6 @@ TEST_F(GenomicCoordinateKeyTest, MoveAssignment) {
 }
 
 // ==========================================
-// Equality comparison
-// ==========================================
-
-TEST_F(GenomicCoordinateKeyTest, EqualityWithoutData) {
-    gdt::key<gdt::genomic_coordinate> key1(coord1);
-    gdt::key<gdt::genomic_coordinate> key2(gdt::genomic_coordinate{'+', 10, 20});
-    gdt::key<gdt::genomic_coordinate> key3(coord2);
-
-    EXPECT_EQ(key1, key2);
-    EXPECT_NE(key1, key3);
-}
-
-TEST_F(GenomicCoordinateKeyTest, EqualityWithData) {
-    gdt::key<gdt::genomic_coordinate, int> key1(coord1, 42);
-    gdt::key<gdt::genomic_coordinate, int> key2(gdt::genomic_coordinate{'+', 10, 20}, 42);
-    gdt::key<gdt::genomic_coordinate, int> key3(coord1, 99);
-
-    EXPECT_EQ(key1, key2);  // Same coordinate and data
-    EXPECT_NE(key1, key3);  // Same coordinate, different data
-}
-
-// ==========================================
 // Serialization tests (using helper)
 // ==========================================
 
@@ -276,3 +257,24 @@ TEST_F(GenomicCoordinateKeyTest, WildcardStrand) {
     EXPECT_EQ(key.get_value().get_strand(), '*');
     EXPECT_EQ(key.get_data(), "all strands");
 }
+
+// =============================================================================
+// Generic comparison contract (#332) — instantiated from the shared typed-test
+// =============================================================================
+
+namespace key_comparison_test_support {
+template<>
+struct key_comparison_traits<gdt::genomic_coordinate> {
+    static gdt::genomic_coordinate value_a() {
+        return gdt::genomic_coordinate{'+', 100, 200};
+    }
+    static gdt::genomic_coordinate value_b_different() {
+        // Different strand — exercises the strand-aware ordering distinct
+        // from start/end.
+        return gdt::genomic_coordinate{'-', 100, 200};
+    }
+};
+} // namespace key_comparison_test_support
+
+using GenomicCoordinateKeyComparisonTypes = ::testing::Types<gdt::genomic_coordinate>;
+INSTANTIATE_TYPED_TEST_SUITE_P(GenomicCoordinate, key_comparison_typed_test, GenomicCoordinateKeyComparisonTypes);
