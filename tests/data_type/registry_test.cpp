@@ -504,6 +504,32 @@ TEST_F(RegistryTest, DeserializeProvidesStrongExceptionGuaranteeOnTruncatedStrea
     EXPECT_EQ(reg.intern("gamma"), id_gamma);
 }
 
+TEST_F(RegistryTest, DeserializeRejectsCountExceedingIdCapacity) {
+    // Defensive check: a malformed / attacker-crafted stream advertising a
+    // count larger than id_type can represent would silently wrap ids on
+    // static_cast<id_type>(new_storage.size()) and pre-allocate pathological
+    // memory via reserve(). Reject loudly before the read loop instead.
+    auto& reg = gdt::registry<std::string>::instance();
+    auto id = reg.intern("kept");
+    ASSERT_EQ(reg.size(), 1u);
+
+    // Synthesize a header with count = null_id + 1 (one past the largest
+    // value intern() would ever allow). No entries follow — the count check
+    // must fire before the read loop tries to fetch any.
+    const uint64_t bad_count =
+        static_cast<uint64_t>(gdt::registry<std::string>::null_id) + 1u;
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    ss.write(reinterpret_cast<const char*>(&bad_count), sizeof(bad_count));
+
+    EXPECT_THROW({
+        gdt::registry<std::string>::deserialize(ss);
+    }, std::runtime_error);
+
+    // Strong exception guarantee: pre-existing state survived the rejection.
+    EXPECT_EQ(reg.size(), 1u);
+    EXPECT_EQ(reg.get(id), "kept");
+}
+
 TEST_F(RegistryTest, DeserializeReplacesExistingData) {
     auto& reg = gdt::registry<int>::instance();
 

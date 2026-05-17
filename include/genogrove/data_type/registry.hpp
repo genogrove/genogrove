@@ -256,13 +256,21 @@ class registry {
             throw std::runtime_error("Failed to deserialize registry: stream error reading count");
         }
 
+        // Reject counts that would exceed the id_type capacity or trigger a
+        // pathological reserve() on attacker-crafted / malformed streams.
+        // Matches the bound `intern()` enforces (storage.size() < null_id).
+        if (count > static_cast<uint64_t>(null_id)) {
+            throw std::runtime_error(
+                "Failed to deserialize registry: entry count exceeds id_type capacity");
+        }
+
         // Build into temporaries so a mid-load throw (truncated stream,
         // serializer<T>::read failure, T's ctor failure) doesn't leave the
         // singleton in a partial state. Holding no lock during the slow I/O
         // also stops the read loop from blocking concurrent readers.
         std::deque<T> new_storage;
         std::unordered_map<T, id_type> new_lookup;
-        new_lookup.reserve(count);
+        new_lookup.reserve(static_cast<std::size_t>(count));
 
         for (uint64_t i = 0; i < count; ++i) {
             T value = serializer<T>::read(is);
