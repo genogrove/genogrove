@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-05-17
+
 ### Added
 - **`gdt::registry<T, Tag>`**: optional phantom `Tag` template parameter discriminates singletons that share the same value type `T`, so two unrelated pools (e.g. transcript ids vs sample names, both `std::string`) get independent ID spaces without consumers having to wrap `T` in a strong-type struct. `Tag` defaults to `void`, so every existing `registry<T>` keeps its singleton and call sites are unchanged. Tag is type-level only — no storage, no runtime cost, no impact on the serialization wire format. ([#319](https://github.com/genogrove/genogrove/issues/319), [#320](https://github.com/genogrove/genogrove/pull/320))
 - **`grove::compact()`**: reclaims `key_storage` slots that `remove_key()` previously left behind (and orphan separator keys dropped by internal-node splits). Walks every B+ tree, copies live keys into a fresh deque, rewrites every node and every graph adjacency entry to the new pointers, then swaps the new storage in. External keys (`add_external_key`) are unaffected. O(N + E). **Invalidates every key pointer previously returned by `insert_data()` for indexed keys** — callers must rediscover keys via queries after compaction. Also adds `key_storage_size()` so callers can decide when compaction is worth running. ([#322](https://github.com/genogrove/genogrove/issues/322), [#388](https://github.com/genogrove/genogrove/pull/388))
