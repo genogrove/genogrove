@@ -241,29 +241,42 @@ class registry {
      * @brief Deserialize registry data from an input stream into the singleton.
      * @param is Input stream to read from.
      * @return Reference to the singleton (now populated with deserialized data).
-     * @note Clears existing data before loading; all previous IDs become invalid.
+     * @note Replaces existing data on success; all previous IDs become invalid.
      * @note Loaded entries keep their original IDs.
      * @note Thread-safe.
+     * @note Strong exception guarantee: if the stream throws or contains
+     *       truncated data, the singleton is left exactly as it was before
+     *       the call. The new state is built into local containers and only
+     *       move-assigned into the singleton after the read loop completes.
      */
     [[nodiscard]] static registry& deserialize(std::istream& is) {
-        auto& inst = instance();
-        std::lock_guard lock(inst.mtx);
-        inst.storage.clear();
-        inst.lookup.clear();
-
         uint64_t count;
         is.read(reinterpret_cast<char*>(&count), sizeof(count));
         if (!is) {
             throw std::runtime_error("Failed to deserialize registry: stream error reading count");
         }
 
+        // Build into temporaries so a mid-load throw (truncated stream,
+        // serializer<T>::read failure, T's ctor failure) doesn't leave the
+        // singleton in a partial state. Holding no lock during the slow I/O
+        // also stops the read loop from blocking concurrent readers.
+        std::deque<T> new_storage;
+        std::unordered_map<T, id_type> new_lookup;
+        new_lookup.reserve(count);
+
         for (uint64_t i = 0; i < count; ++i) {
             T value = serializer<T>::read(is);
-            auto id = static_cast<id_type>(inst.storage.size());
-            inst.storage.push_back(std::move(value));
-            inst.lookup.emplace(inst.storage.back(), id);
+            auto id = static_cast<id_type>(new_storage.size());
+            new_storage.push_back(std::move(value));
+            new_lookup.emplace(new_storage.back(), id);
         }
 
+        // Commit: noexcept move-assign of std::deque + std::unordered_map
+        // (both have propagate_on_container_move_assignment for std::allocator).
+        auto& inst = instance();
+        std::lock_guard lock(inst.mtx);
+        inst.storage = std::move(new_storage);
+        inst.lookup = std::move(new_lookup);
         return inst;
     }
 

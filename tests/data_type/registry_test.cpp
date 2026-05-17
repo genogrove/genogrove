@@ -451,6 +451,59 @@ TEST_F(RegistryTest, SerializeDeserializeEmptyRegistry) {
     EXPECT_TRUE(reg.empty());
 }
 
+TEST_F(RegistryTest, DeserializeProvidesStrongExceptionGuaranteeOnTruncatedStream) {
+    // Regression test for #330: deserialize used to clear the singleton's
+    // storage and lookup *before* reading entries. If serializer<T>::read
+    // threw partway through (truncated stream, malformed bytes, T ctor
+    // failure), the singleton was left with a partial dataset and subsequent
+    // intern() would allocate new ids on top of torso state.
+    auto& reg = gdt::registry<std::string>::instance();
+
+    // Build a valid serialized payload of 5 string entries, then drop it
+    // into the registry as the "incoming" stream we'll later truncate.
+    std::stringstream src;
+    {
+        std::ignore = reg.intern("one");
+        std::ignore = reg.intern("two");
+        std::ignore = reg.intern("three");
+        std::ignore = reg.intern("four");
+        std::ignore = reg.intern("five");
+        reg.serialize(src);
+        reg.clear();
+    }
+
+    // Populate the singleton with the "pre-existing" state we expect to
+    // survive a failed deserialize.
+    auto id_alpha = reg.intern("alpha");
+    auto id_beta  = reg.intern("beta");
+    auto id_gamma = reg.intern("gamma");
+    ASSERT_EQ(reg.size(), 3u);
+
+    // Truncate the serialized payload so the read hits EOF partway through
+    // the entry loop. Cutting at half guarantees we're past the 8-byte count
+    // header and into the string entries.
+    const std::string full_bytes = src.str();
+    ASSERT_GT(full_bytes.size(), sizeof(uint64_t));
+    std::stringstream truncated_ss(
+        full_bytes.substr(0, full_bytes.size() / 2),
+        std::ios::in | std::ios::binary);
+
+    EXPECT_THROW({
+        gdt::registry<std::string>::deserialize(truncated_ss);
+    }, std::runtime_error);
+
+    // Strong exception guarantee: singleton state is exactly what it was
+    // before the failed deserialize call.
+    EXPECT_EQ(reg.size(), 3u);
+    EXPECT_EQ(reg.get(id_alpha), "alpha");
+    EXPECT_EQ(reg.get(id_beta),  "beta");
+    EXPECT_EQ(reg.get(id_gamma), "gamma");
+    // Lookup is also intact — intern of an existing value returns the same id.
+    EXPECT_EQ(reg.intern("alpha"), id_alpha);
+    EXPECT_EQ(reg.intern("beta"),  id_beta);
+    EXPECT_EQ(reg.intern("gamma"), id_gamma);
+}
+
 TEST_F(RegistryTest, DeserializeReplacesExistingData) {
     auto& reg = gdt::registry<int>::instance();
 
