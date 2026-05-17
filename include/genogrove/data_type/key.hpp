@@ -287,22 +287,22 @@ namespace genogrove::data_type {
             /**
              * @brief Equality comparison operator.
              *
-             * Compares keys based on their content:
-             * - When data_type is void: Compares only key values
-             * - When data_type is non-void: Compares both key values and data
+             * Compares keys by their `value` only. The associated `data_type`
+             * is treated as decoration and ignored — two keys at the same
+             * spatial position with different data compare equal. This matches
+             * the B+ tree's notion of identity (the tree orders by `value`
+             * via `operator<`) and frees `data_type` from needing its own
+             * `operator==`.
              *
              * @param other Key to compare against
-             * @return true if keys are equal
+             * @return true if `value == other.value`
              *
-             * @note Only available when key_type is equality-comparable
+             * @note Only available when `key_type` is equality-comparable;
+             *       `data_type` has no constraint imposed by this operator.
              */
             bool operator==(const key& other) const
                 requires std::equality_comparable<key_type> {
-                    if constexpr (std::is_void_v<data_type>) {
-                        return value == other.value;
-                    } else {
-                        return value == other.value && data == other.data;
-                    }
+                    return value == other.value;
                 }
 
         private:

@@ -6,6 +6,9 @@
 // Gtest
 #include <gtest/gtest.h>
 
+// Shared typed-test suite for the generic key<> equality contract (#332).
+#include "key_equality_typed_test.hpp"
+
 // genogrove
 #include <genogrove/data_type/key.hpp>
 #include <genogrove/data_type/interval.hpp>
@@ -229,3 +232,18 @@ TEST_F(IntervalKeyTest, SerializeWithCustomStruct) {
     gdt::key<gdt::interval, custom_data> key(intvl1, data);
     test_serialization_roundtrip(key);
 }
+
+// =============================================================================
+// Generic equality contract (#332) — instantiated from the shared typed-test
+// =============================================================================
+
+namespace key_equality_test_support {
+template<>
+struct key_equality_traits<gdt::interval> {
+    static gdt::interval value_a()           { return gdt::interval{10, 20}; }
+    static gdt::interval value_b_different() { return gdt::interval{30, 40}; }
+};
+} // namespace key_equality_test_support
+
+using IntervalKeyEqualityTypes = ::testing::Types<gdt::interval>;
+INSTANTIATE_TYPED_TEST_SUITE_P(Interval, key_equality_typed_test, IntervalKeyEqualityTypes);

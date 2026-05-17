@@ -6,6 +6,9 @@
 // Gtest
 #include <gtest/gtest.h>
 
+// Shared typed-test suite for the generic key<> equality contract (#332).
+#include "key_equality_typed_test.hpp"
+
 // genogrove
 #include <genogrove/data_type/key.hpp>
 #include <genogrove/data_type/numeric.hpp>
@@ -257,3 +260,18 @@ TEST_F(NumericKeyTest, ZeroValue) {
     EXPECT_EQ(key.get_value().get_value(), 0);
     EXPECT_EQ(key.get_data(), "zero");
 }
+
+// =============================================================================
+// Generic equality contract (#332) — instantiated from the shared typed-test
+// =============================================================================
+
+namespace key_equality_test_support {
+template<>
+struct key_equality_traits<gdt::numeric> {
+    static gdt::numeric value_a()           { return gdt::numeric{42}; }
+    static gdt::numeric value_b_different() { return gdt::numeric{99}; }
+};
+} // namespace key_equality_test_support
+
+using NumericKeyEqualityTypes = ::testing::Types<gdt::numeric>;
+INSTANTIATE_TYPED_TEST_SUITE_P(Numeric, key_equality_typed_test, NumericKeyEqualityTypes);
