@@ -12,6 +12,7 @@
 
 // genogrove
 #include <genogrove/data_type/key.hpp>
+#include <genogrove/data_type/key_type_base.hpp>
 
 namespace genogrove::data_type {
     /**
@@ -44,12 +45,17 @@ namespace genogrove::data_type {
      * @tparam key_type Type satisfying key_type_base concept
      * @tparam data_type Optional type for associated data (default: void)
      *
-     * @note Keys are stored as raw pointers and remain valid as long as the grove exists
+     * @note Keys are stored as `const`-pointers and remain valid as long as the
+     *       grove exists; this prevents callers from mutating a key via
+     *       `result.get_keys()[i]->set_value(...)` and silently corrupting B+
+     *       tree ordering invariants. Code that needs a mutating `key*` (e.g.
+     *       passing into `add_edge`) should re-acquire it via the pointer
+     *       returned by the original `insert_data()` call.
      * @note This class does not own the key objects; they are owned by the grove
      * @see grove::intersect() for the primary usage of query_result
      * @see key for the wrapper type storing key_type and optional data_type
      */
-    template<typename key_type, typename data_type = void>
+    template<key_type_base key_type, typename data_type = void>
     class query_result {
         public:
             /**
@@ -74,17 +80,19 @@ namespace genogrove::data_type {
             /**
              * @brief Get all matching keys found by the query.
              *
-             * Returns a const reference to the vector of pointers to keys that
-             * overlapped with the query. The pointers reference keys owned by the
-             * grove and remain valid as long as the grove exists and the keys are
-             * not removed.
+             * Returns a const reference to the vector of `const`-pointers to
+             * keys that overlapped with the query. The pointers reference keys
+             * owned by the grove and remain valid as long as the grove exists
+             * and the keys are not removed.
              *
-             * @return Const reference to vector of pointers to matching keys (may be empty)
+             * @return Const reference to vector of const-pointers to matching keys (may be empty)
              *
+             * @note Pointers are `const` to prevent callers from mutating keys
+             *       and corrupting B+ tree ordering. See class-level note.
              * @note Pointers remain valid as long as the grove is not modified
              * @note Keys are stored in the order they were found during tree traversal
              */
-            const std::vector<key<key_type, data_type>*>& get_keys() const { return this->keys; }
+            const std::vector<const key<key_type, data_type>*>& get_keys() const { return this->keys; }
 
             /**
              * @brief Add a matching key to the result set.
@@ -97,8 +105,12 @@ namespace genogrove::data_type {
              *
              * @note This is primarily an internal method used during grove traversal
              * @note No ownership is transferred; the pointer is stored as-is
+             * @note Accepts a non-const `key*` for caller convenience (internal
+             *       search code holds non-const pointers); the pointer is stored
+             *       as `const key*` to enforce immutability through the public
+             *       `get_keys()` accessor.
              */
-            void add_key(key<key_type, data_type>* key) {
+            void add_key(const key<key_type, data_type>* key) {
                 if (key == nullptr) {
                     throw std::invalid_argument("query_result::add_key: key must not be nullptr");
                 }
@@ -106,8 +118,8 @@ namespace genogrove::data_type {
             }
 
         private:
-            key_type query;                              ///< The original query (stored by value)
-            std::vector<key<key_type, data_type>*> keys; ///< Pointers to matching keys (not owned)
+            key_type query;                                    ///< The original query (stored by value)
+            std::vector<const key<key_type, data_type>*> keys; ///< Const-pointers to matching keys (not owned)
     };
 }
 

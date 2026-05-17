@@ -8,9 +8,13 @@
 
 // Standard
 #include <string>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 // genogrove
 #include <genogrove/data_type/query_result.hpp>
+#include <genogrove/data_type/flanking_query_result.hpp>
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/data_type/numeric.hpp>
 #include <genogrove/data_type/genomic_coordinate.hpp>
@@ -143,4 +147,33 @@ TEST(query_result_test, add_null_key_throws) {
 
     EXPECT_THROW(results.add_key(nullptr), std::invalid_argument);
     EXPECT_TRUE(results.get_keys().empty());
+}
+
+// =============================================================================
+// const-correctness contract (#324)
+// =============================================================================
+
+// Pins the get_keys() return type: must be a const-reference to a vector of
+// `const key*`. Without the const, callers could mutate the underlying key
+// via `result.get_keys()[i]->set_value(...)` and silently corrupt B+ tree
+// ordering invariants. Compile-time check — fails at build time if the
+// signature drifts.
+TEST(query_result_test, get_keys_returns_const_pointer_vector) {
+    using result_t = gdt::query_result<gdt::interval, int>;
+    using returned_t = decltype(std::declval<const result_t&>().get_keys());
+    using expected_t = const std::vector<const gdt::key<gdt::interval, int>*>&;
+    static_assert(std::is_same_v<returned_t, expected_t>,
+        "query_result::get_keys() must return const std::vector<const key*>& "
+        "to prevent caller mutation of the underlying keys (#324).");
+}
+
+TEST(query_result_test, flanking_returns_const_pointers) {
+    using flank_t = gdt::flanking_query_result<gdt::interval, int>;
+    using pred_t = decltype(std::declval<const flank_t&>().get_predecessor());
+    using succ_t = decltype(std::declval<const flank_t&>().get_successor());
+    using expected_t = const gdt::key<gdt::interval, int>*;
+    static_assert(std::is_same_v<pred_t, expected_t>,
+        "flanking_query_result::get_predecessor() must return const key* (#324).");
+    static_assert(std::is_same_v<succ_t, expected_t>,
+        "flanking_query_result::get_successor() must return const key* (#324).");
 }
