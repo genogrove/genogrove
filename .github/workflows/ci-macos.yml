@@ -12,7 +12,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-14, macos-15]
-        build_type: [Debug, Release]
+        # PRs run Debug only for fast feedback; main runs both. Release-only
+        # bugs are rare (no LTO here, NDEBUG only deletes asserts) and get
+        # caught post-merge on the full main-branch matrix.
+        build_type: ${{ github.event_name == 'pull_request' && fromJSON('["Debug"]') || fromJSON('["Debug", "Release"]') }}
         include:
           - os: macos-14
             clang_version: "15"
