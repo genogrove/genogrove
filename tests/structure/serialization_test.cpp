@@ -78,9 +78,14 @@ TEST(SerializationTest, NonSeekableSourceWithTrailingDataThrows) {
     // streambufs) silently failed the seek, dropping the trailing bytes. Now
     // throws so the caller knows the "concatenated payloads" contract was
     // violated.
+    //
+    // Type alias is required because EXPECT_THROW is a macro and the comma in
+    // `grove<gdt::interval, int>` would otherwise split the macro args.
+    using grove_t = gst::grove<gdt::interval, int>;
+
     std::stringstream payload(std::ios::in | std::ios::out | std::ios::binary);
     {
-        gst::grove<gdt::interval, int> g(3);
+        grove_t g(3);
         g.insert_data("idx", gdt::interval{10, 20}, 1, gst::sorted);
         g.serialize(payload);
         payload.write("TEST", 4);   // trailing bytes that would normally be rewound
@@ -92,7 +97,7 @@ TEST(SerializationTest, NonSeekableSourceWithTrailingDataThrows) {
     std::istream is(&nsb);
 
     EXPECT_THROW({
-        [[maybe_unused]] auto restored = gst::grove<gdt::interval, int>::deserialize(is);
+        [[maybe_unused]] auto restored = grove_t::deserialize(is);
     }, std::runtime_error);
 }
 
