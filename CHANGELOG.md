@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-05-18
+
 ### Refactored
 - **`gdt::registry<>` Rule of Five completeness**: adds an explicit `~registry() = default;` declaration next to the four already-deleted copy/move members so the type's intent is unambiguous to readers — singleton, non-copyable, non-movable, defaulted destructor. No behavior change; the compiler-generated destructor is identical to the explicit defaulted one. ([#358](https://github.com/genogrove/genogrove/issues/358), [#402](https://github.com/genogrove/genogrove/pull/402))
 
