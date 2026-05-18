@@ -68,6 +68,11 @@ struct hash<ExperimentInfo> {
 
 class RegistryTest : public ::testing::Test {
   protected:
+    // Resets only the default-tag registries used across most tests.
+    // Tests that intern into tagged registries (registry<T, Tag, ...>) must
+    // reset those singletons themselves — at both setup and teardown — since
+    // this fixture cannot enumerate user-added tags. See e.g.
+    // `TaggedRegistriesAreIndependentSingletons` for the pattern.
     void SetUp() override {
         gdt::registry<SampleInfo>::reset();
         gdt::registry<ExperimentInfo>::reset();
