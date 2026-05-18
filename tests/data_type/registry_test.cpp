@@ -530,6 +530,35 @@ TEST_F(RegistryTest, DeserializeRejectsCountExceedingIdCapacity) {
     EXPECT_EQ(reg.get(id), "kept");
 }
 
+TEST_F(RegistryTest, DeserializeRejectsDuplicateKeys) {
+    // Defensive check: a legitimate serialize() can never emit duplicate keys
+    // because intern() deduplicates, so any stream with two entries sharing
+    // a key is malformed. The pre-fix bug was that emplace silently no-op'd
+    // on the second entry, leaving new_storage longer than new_lookup —
+    // benign in the historical Key == Payload branch (get() still worked),
+    // but the Key != Payload branch later dereferences a null pointer in
+    // serialize(). Reject the load instead and preserve the singleton.
+    auto& reg = gdt::registry<std::string>::instance();
+    auto id_kept = reg.intern("kept");
+    ASSERT_EQ(reg.size(), 1u);
+
+    // Build a stream by hand: count=2, then the same string written twice.
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    const uint64_t count = 2;
+    ss.write(reinterpret_cast<const char*>(&count), sizeof(count));
+    gdt::serializer<std::string>::write(ss, "dup");
+    gdt::serializer<std::string>::write(ss, "dup");
+
+    EXPECT_THROW({
+        gdt::registry<std::string>::deserialize(ss);
+    }, std::runtime_error);
+
+    // Strong exception guarantee: pre-existing singleton state is intact.
+    EXPECT_EQ(reg.size(), 1u);
+    EXPECT_EQ(reg.get(id_kept), "kept");
+    EXPECT_FALSE(reg.find("dup").has_value());
+}
+
 TEST_F(RegistryTest, DeserializeReplacesExistingData) {
     auto& reg = gdt::registry<int>::instance();
 
@@ -691,4 +720,213 @@ TEST_F(RegistryTest, DeserializeFromEmptyStream) {
     EXPECT_THROW({
         [[maybe_unused]] auto& result = gdt::registry<int>::deserialize(ss);
     }, std::runtime_error);
+}
+
+// --- registry<Key, Tag, Payload>: separate identity from payload (issue #400) ---
+
+// gene_info models the canonical motivating use case: identity is `gene_id`
+// alone, but the registry stores the full annotation record (name + biotype)
+// keyed on that id. Two distinct gene_info values with the same `gene_id`
+// must collapse to one slot, and the first payload written must win — later
+// duplicates with placeholder fields must reuse the existing id without
+// overwriting the canonical record.
+//
+// gene_info itself keeps its natural deep `operator==` — the partial-equality
+// footgun from the issue's workaround does not appear because identity is
+// expressed via the registry's Key parameter, not via the payload's operators.
+struct gene_info {
+    std::string gene_name;
+    std::string gene_biotype;
+
+    bool operator==(const gene_info& other) const {
+        return gene_name == other.gene_name && gene_biotype == other.gene_biotype;
+    }
+
+    void serialize(std::ostream& os) const {
+        gdt::serializer<std::string>::write(os, gene_name);
+        gdt::serializer<std::string>::write(os, gene_biotype);
+    }
+
+    [[nodiscard]] static gene_info deserialize(std::istream& is) {
+        gene_info g;
+        g.gene_name = gdt::serializer<std::string>::read(is);
+        g.gene_biotype = gdt::serializer<std::string>::read(is);
+        return g;
+    }
+};
+
+using gene_registry = gdt::registry<std::string, void, gene_info>;
+
+class KeyPayloadRegistryTest : public ::testing::Test {
+  protected:
+    void SetUp() override { gene_registry::reset(); }
+    void TearDown() override { gene_registry::reset(); }
+};
+
+TEST_F(KeyPayloadRegistryTest, InternStoresPayloadKeyedOnKey) {
+    auto& reg = gene_registry::instance();
+
+    auto id = reg.intern("ENSG001", {"FOO", "protein_coding"});
+
+    EXPECT_EQ(id, 0u);
+    EXPECT_EQ(reg.get(id).gene_name, "FOO");
+    EXPECT_EQ(reg.get(id).gene_biotype, "protein_coding");
+}
+
+TEST_F(KeyPayloadRegistryTest, DistinctKeysAllocateSequentialIds) {
+    auto& reg = gene_registry::instance();
+
+    auto id1 = reg.intern("ENSG001", {"FOO", "protein_coding"});
+    auto id2 = reg.intern("ENSG002", {"BAR", "lincRNA"});
+    auto id3 = reg.intern("ENSG003", {"BAZ", "miRNA"});
+
+    EXPECT_EQ(id1, 0u);
+    EXPECT_EQ(id2, 1u);
+    EXPECT_EQ(id3, 2u);
+    EXPECT_EQ(reg.size(), 3u);
+}
+
+TEST_F(KeyPayloadRegistryTest, FirstWriteWinsOnDuplicateKey) {
+    // The whole point of separating Key from Payload: when later sources
+    // re-emit the same identity with placeholder fields, the registry must
+    // hand back the existing id AND keep the canonical payload from the
+    // first write.
+    auto& reg = gene_registry::instance();
+
+    auto id1 = reg.intern("ENSG001", {"FOO", "protein_coding"});
+    auto id2 = reg.intern("ENSG001", {"placeholder_name", "placeholder_biotype"});
+    auto id3 = reg.intern("ENSG001", {"", ""});
+
+    EXPECT_EQ(id1, id2);
+    EXPECT_EQ(id1, id3);
+    EXPECT_EQ(reg.size(), 1u);
+
+    // Canonical record from the first intern survives untouched.
+    EXPECT_EQ(reg.get(id1).gene_name, "FOO");
+    EXPECT_EQ(reg.get(id1).gene_biotype, "protein_coding");
+}
+
+TEST_F(KeyPayloadRegistryTest, FindByKeyReturnsExistingId) {
+    auto& reg = gene_registry::instance();
+
+    auto id = reg.intern("ENSG001", {"FOO", "protein_coding"});
+    auto found = reg.find("ENSG001");
+
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(*found, id);
+
+    EXPECT_FALSE(reg.find("ENSG999").has_value());
+}
+
+TEST_F(KeyPayloadRegistryTest, GetReturnsPayloadNotKey) {
+    // Sanity check that the return type really is the payload — would not
+    // compile if get() handed back the Key (std::string) instead.
+    auto& reg = gene_registry::instance();
+    auto id = reg.intern("ENSG001", {"FOO", "protein_coding"});
+    const gene_info& g = reg.get(id);
+    EXPECT_EQ(g.gene_name, "FOO");
+}
+
+TEST_F(KeyPayloadRegistryTest, SerializeDeserializeRoundTripsKeyPayload) {
+    auto& reg = gene_registry::instance();
+
+    auto id1 = reg.intern("ENSG001", {"FOO", "protein_coding"});
+    auto id2 = reg.intern("ENSG002", {"BAR", "lincRNA"});
+
+    std::stringstream ss;
+    reg.serialize(ss);
+
+    reg.clear();
+    EXPECT_TRUE(reg.empty());
+
+    ss.seekg(0);
+    gene_registry::deserialize(ss);
+
+    EXPECT_EQ(reg.size(), 2u);
+    EXPECT_EQ(reg.get(id1).gene_name, "FOO");
+    EXPECT_EQ(reg.get(id1).gene_biotype, "protein_coding");
+    EXPECT_EQ(reg.get(id2).gene_name, "BAR");
+    EXPECT_EQ(reg.get(id2).gene_biotype, "lincRNA");
+
+    // Lookup must be rebuilt: re-interning a known key returns the same id,
+    // and the canonical payload still wins.
+    EXPECT_EQ(reg.intern("ENSG001", {"different", "different"}), id1);
+    EXPECT_EQ(reg.get(id1).gene_name, "FOO");
+
+    auto found = reg.find("ENSG002");
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(*found, id2);
+}
+
+TEST_F(KeyPayloadRegistryTest, TagDiscriminatesSingletonsAcrossKeyPayloadPools) {
+    // Two registries with the same (Key, Payload) but distinct Tag must
+    // back independent singletons — same identity in two different tagged
+    // pools allocates independent ids.
+    using gene_reg_a = gdt::registry<std::string, struct gene_tag_a, gene_info>;
+    using gene_reg_b = gdt::registry<std::string, struct gene_tag_b, gene_info>;
+
+    gene_reg_a::reset();
+    gene_reg_b::reset();
+
+    auto& a = gene_reg_a::instance();
+    auto& b = gene_reg_b::instance();
+
+    EXPECT_NE(static_cast<void*>(&a), static_cast<void*>(&b));
+
+    auto id_a = a.intern("ENSG001", {"FOO", "protein_coding"});
+    auto id_b = b.intern("ENSG001", {"BAR", "lincRNA"});
+
+    // Same key in different tagged pools — each starts at 0 with its own
+    // canonical payload.
+    EXPECT_EQ(id_a, 0u);
+    EXPECT_EQ(id_b, 0u);
+    EXPECT_EQ(a.get(id_a).gene_name, "FOO");
+    EXPECT_EQ(b.get(id_b).gene_name, "BAR");
+
+    gene_reg_a::reset();
+    gene_reg_b::reset();
+}
+
+TEST_F(KeyPayloadRegistryTest, ClearWipesBothStorageAndLookup) {
+    auto& reg = gene_registry::instance();
+
+    std::ignore = reg.intern("ENSG001", {"FOO", "protein_coding"});
+    std::ignore = reg.intern("ENSG002", {"BAR", "lincRNA"});
+    ASSERT_EQ(reg.size(), 2u);
+
+    reg.clear();
+
+    EXPECT_TRUE(reg.empty());
+    EXPECT_FALSE(reg.find("ENSG001").has_value());
+    // Next intern starts the id space over from 0.
+    EXPECT_EQ(reg.intern("ENSG999", {"NEW", "protein_coding"}), 0u);
+}
+
+TEST_F(KeyPayloadRegistryTest, DeserializeRejectsDuplicateKeys) {
+    // Same protection as RegistryTest.DeserializeRejectsDuplicateKeys but on
+    // the Key != Payload wire format. Without the duplicate-key check this
+    // load would leave new_storage longer than new_lookup, and the *next*
+    // serialize() would dereference a null pointer in the key_by_id index
+    // built from lookup. Reject the load and preserve the singleton.
+    auto& reg = gene_registry::instance();
+    auto id_kept = reg.intern("ENSG001", {"FOO", "protein_coding"});
+    ASSERT_EQ(reg.size(), 1u);
+
+    // Wire format for Key != Payload: count, then (key, payload) pairs.
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    const uint64_t count = 2;
+    ss.write(reinterpret_cast<const char*>(&count), sizeof(count));
+    gdt::serializer<std::string>::write(ss, "DUP_KEY");
+    gene_info{"first", "type_a"}.serialize(ss);
+    gdt::serializer<std::string>::write(ss, "DUP_KEY"); // duplicate key
+    gene_info{"second", "type_b"}.serialize(ss);
+
+    EXPECT_THROW({
+        gene_registry::deserialize(ss);
+    }, std::runtime_error);
+
+    // Strong exception guarantee: pre-existing singleton state is intact.
+    EXPECT_EQ(reg.size(), 1u);
+    EXPECT_EQ(reg.get(id_kept).gene_name, "FOO");
+    EXPECT_FALSE(reg.find("DUP_KEY").has_value());
 }
