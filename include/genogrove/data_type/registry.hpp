@@ -344,17 +344,29 @@ class registry {
         new_lookup.reserve(static_cast<std::size_t>(count));
 
         for (uint64_t i = 0; i < count; ++i) {
+            // Reject duplicate keys: emplace silently no-ops on the second
+            // insert, which would leave new_storage longer than new_lookup
+            // and (in the Key != Payload branch) cause serialize() to walk
+            // off the end of the key_by_id index with a null pointer.
+            // Throwing keeps the strong exception guarantee — the singleton
+            // is untouched until the commit block below.
             if constexpr (key_is_payload) {
                 Payload value = serializer<Payload>::read(is);
                 auto id = static_cast<id_type>(new_storage.size());
                 new_storage.push_back(std::move(value));
-                new_lookup.emplace(new_storage.back(), id);
+                if (!new_lookup.emplace(new_storage.back(), id).second) {
+                    throw std::runtime_error(
+                        "Failed to deserialize registry: duplicate key");
+                }
             } else {
                 Key k = serializer<Key>::read(is);
                 Payload p = serializer<Payload>::read(is);
                 auto id = static_cast<id_type>(new_storage.size());
+                if (!new_lookup.emplace(std::move(k), id).second) {
+                    throw std::runtime_error(
+                        "Failed to deserialize registry: duplicate key");
+                }
                 new_storage.push_back(std::move(p));
-                new_lookup.emplace(std::move(k), id);
             }
         }
 

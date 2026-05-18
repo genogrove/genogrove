@@ -530,6 +530,35 @@ TEST_F(RegistryTest, DeserializeRejectsCountExceedingIdCapacity) {
     EXPECT_EQ(reg.get(id), "kept");
 }
 
+TEST_F(RegistryTest, DeserializeRejectsDuplicateKeys) {
+    // Defensive check: a legitimate serialize() can never emit duplicate keys
+    // because intern() deduplicates, so any stream with two entries sharing
+    // a key is malformed. The pre-fix bug was that emplace silently no-op'd
+    // on the second entry, leaving new_storage longer than new_lookup —
+    // benign in the historical Key == Payload branch (get() still worked),
+    // but the Key != Payload branch later dereferences a null pointer in
+    // serialize(). Reject the load instead and preserve the singleton.
+    auto& reg = gdt::registry<std::string>::instance();
+    auto id_kept = reg.intern("kept");
+    ASSERT_EQ(reg.size(), 1u);
+
+    // Build a stream by hand: count=2, then the same string written twice.
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    const uint64_t count = 2;
+    ss.write(reinterpret_cast<const char*>(&count), sizeof(count));
+    gdt::serializer<std::string>::write(ss, "dup");
+    gdt::serializer<std::string>::write(ss, "dup");
+
+    EXPECT_THROW({
+        gdt::registry<std::string>::deserialize(ss);
+    }, std::runtime_error);
+
+    // Strong exception guarantee: pre-existing singleton state is intact.
+    EXPECT_EQ(reg.size(), 1u);
+    EXPECT_EQ(reg.get(id_kept), "kept");
+    EXPECT_FALSE(reg.find("dup").has_value());
+}
+
 TEST_F(RegistryTest, DeserializeReplacesExistingData) {
     auto& reg = gdt::registry<int>::instance();
 
@@ -871,4 +900,33 @@ TEST_F(KeyPayloadRegistryTest, ClearWipesBothStorageAndLookup) {
     EXPECT_FALSE(reg.find("ENSG001").has_value());
     // Next intern starts the id space over from 0.
     EXPECT_EQ(reg.intern("ENSG999", {"NEW", "protein_coding"}), 0u);
+}
+
+TEST_F(KeyPayloadRegistryTest, DeserializeRejectsDuplicateKeys) {
+    // Same protection as RegistryTest.DeserializeRejectsDuplicateKeys but on
+    // the Key != Payload wire format. Without the duplicate-key check this
+    // load would leave new_storage longer than new_lookup, and the *next*
+    // serialize() would dereference a null pointer in the key_by_id index
+    // built from lookup. Reject the load and preserve the singleton.
+    auto& reg = gene_registry::instance();
+    auto id_kept = reg.intern("ENSG001", {"FOO", "protein_coding"});
+    ASSERT_EQ(reg.size(), 1u);
+
+    // Wire format for Key != Payload: count, then (key, payload) pairs.
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    const uint64_t count = 2;
+    ss.write(reinterpret_cast<const char*>(&count), sizeof(count));
+    gdt::serializer<std::string>::write(ss, "DUP_KEY");
+    gene_info{"first", "type_a"}.serialize(ss);
+    gdt::serializer<std::string>::write(ss, "DUP_KEY"); // duplicate key
+    gene_info{"second", "type_b"}.serialize(ss);
+
+    EXPECT_THROW({
+        gene_registry::deserialize(ss);
+    }, std::runtime_error);
+
+    // Strong exception guarantee: pre-existing singleton state is intact.
+    EXPECT_EQ(reg.size(), 1u);
+    EXPECT_EQ(reg.get(id_kept).gene_name, "FOO");
+    EXPECT_FALSE(reg.find("DUP_KEY").has_value());
 }
