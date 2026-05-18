@@ -139,11 +139,15 @@ class registry {
         return inst;
     }
 
-    // Disable copy and move
+    // Rule of Five: singleton, so copy and move are explicitly deleted;
+    // destructor is defaulted to make the intent unambiguous to readers
+    // (the compiler-generated dtor is identical, so this is documentation,
+    // not behavior).
     registry(const registry&) = delete;
     registry& operator=(const registry&) = delete;
     registry(registry&&) = delete;
     registry& operator=(registry&&) = delete;
+    ~registry() = default;
 
     /**
      * @brief Intern a (key, payload) pair, returning its stable ID.
