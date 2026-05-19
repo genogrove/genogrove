@@ -22,6 +22,7 @@
 #include <genogrove/data_type/query_result.hpp>
 #include <genogrove/structure/grove/node.hpp>
 #include <genogrove/structure/grove/graph_overlay.hpp>
+#include <genogrove/structure/grove/pod_io.hpp>
 #include <genogrove/structure/grove/zlib_streambuf.hpp>
 
 namespace ggu = genogrove::utility;
@@ -67,6 +68,36 @@ namespace genogrove::structure {
 
         template<typename T>
         inline constexpr bool is_optional_v = is_optional<T>::value;
+
+        /// DFS pre-order: assign monotonic indices to every key reachable from `n`.
+        /// Used by grove::serialize to flatten the graph overlay into (src, tgt) pairs
+        /// whose indices match the order grove::deserialize repopulates key_storage.
+        template<typename key_type, typename data_type>
+        void index_keys_dfs(const node<key_type, data_type>* n,
+                            std::unordered_map<const gdt::key<key_type, data_type>*, uint32_t>& key_index,
+                            uint32_t& idx) {
+            for (const auto* k : n->get_keys()) { key_index[k] = idx++; }
+            if (!n->get_is_leaf()) {
+                for (const auto* child : n->get_children()) {
+                    index_keys_dfs(child, key_index, idx);
+                }
+            }
+        }
+
+        /// DFS pre-order: collect leaf nodes in left-to-right order.
+        /// Used during deserialization to rebuild the leaf chain.
+        template<typename key_type, typename data_type>
+        void collect_leaves(node<key_type, data_type>* n,
+                            std::vector<node<key_type, data_type>*>& leaves) {
+            if (n == nullptr) return;
+            if (n->get_is_leaf()) {
+                leaves.push_back(n);
+            } else {
+                for (auto* child : n->get_children()) {
+                    collect_leaves(child, leaves);
+                }
+            }
+        }
     }
 
 /**

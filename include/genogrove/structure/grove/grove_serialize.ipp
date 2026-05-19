@@ -61,22 +61,22 @@ public:
         std::ostream zos(&zbuf);
 
         // write the order
-        zos.write(reinterpret_cast<const char*>(&this->order), sizeof(this->order));
+        detail::write_pod(zos, this->order);
 
         // write the root nodes
         uint32_t number_root_nodes = static_cast<uint32_t>(this->root_nodes.size());
-        zos.write(reinterpret_cast<const char*>(&number_root_nodes), sizeof(number_root_nodes));
+        detail::write_pod(zos, number_root_nodes);
 
         for(const auto& [key, root] : this->root_nodes) {
             uint32_t index_name_length = static_cast<uint32_t>(key.size());
-            zos.write(reinterpret_cast<const char*>(&index_name_length), sizeof(index_name_length));
+            detail::write_pod(zos, index_name_length);
             zos.write(key.c_str(), index_name_length);
             root->serialize(zos);
         }
 
         // Write external keys
         uint32_t external_count = static_cast<uint32_t>(external_key_storage.size());
-        zos.write(reinterpret_cast<const char*>(&external_count), sizeof(external_count));
+        detail::write_pod(zos, external_count);
         for (const auto& key : external_key_storage) {
             key.serialize(zos);
         }
@@ -87,19 +87,14 @@ public:
         std::unordered_map<const gdt::key<key_type, data_type>*, uint32_t> key_index;
         {
             uint32_t idx = 0;
-            std::function<void(const node<key_type, data_type>*)> index_dfs =
-                [&](const node<key_type, data_type>* n) {
-                    for (const auto* k : n->get_keys()) { key_index[k] = idx++; }
-                    if (!n->get_is_leaf()) {
-                        for (const auto* child : n->get_children()) { index_dfs(child); }
-                    }
-                };
-            for (const auto& [name, root] : root_nodes) { index_dfs(root); }
+            for (const auto& [name, root] : root_nodes) {
+                detail::index_keys_dfs(root, key_index, idx);
+            }
             for (const auto& k : external_key_storage) { key_index[&k] = idx++; }
         }
 
         uint32_t total_edges = static_cast<uint32_t>(graph_data.edge_count());
-        zos.write(reinterpret_cast<const char*>(&total_edges), sizeof(total_edges));
+        detail::write_pod(zos, total_edges);
 
         auto write_edges_for = [&](const auto& storage) {
             for (const auto& k : storage) {
@@ -107,8 +102,8 @@ public:
                 for (const auto& e : edges) {
                     uint32_t src = key_index.at(&k);
                     uint32_t tgt = key_index.at(e.target);
-                    zos.write(reinterpret_cast<const char*>(&src), sizeof(src));
-                    zos.write(reinterpret_cast<const char*>(&tgt), sizeof(tgt));
+                    detail::write_pod(zos, src);
+                    detail::write_pod(zos, tgt);
                     if constexpr (!std::is_void_v<edge_data_type>) {
                         gdt::serializer<edge_data_type>::write(zos, e.metadata);
                     }
@@ -136,14 +131,14 @@ public:
         std::istream zis(&zbuf);
 
         int order;
-        zis.read(reinterpret_cast<char*>(&order), sizeof(order));
+        detail::read_pod(zis, order);
         if (!zis) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading order");
         }
         grove g(order);
 
         uint32_t number_root_nodes;
-        zis.read(reinterpret_cast<char*>(&number_root_nodes), sizeof(number_root_nodes));
+        detail::read_pod(zis, number_root_nodes);
         if (!zis) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading root node count");
         }
@@ -151,7 +146,7 @@ public:
         // Deserialize each root node
         for (uint32_t i = 0; i < number_root_nodes; ++i) {
             uint32_t index_name_length;
-            zis.read(reinterpret_cast<char*>(&index_name_length), sizeof(index_name_length));
+            detail::read_pod(zis, index_name_length);
             if (!zis) {
                 throw std::runtime_error("Failed to deserialize grove: stream error reading index name length");
             }
@@ -172,7 +167,7 @@ public:
 
         // Read external keys
         uint32_t external_count;
-        zis.read(reinterpret_cast<char*>(&external_count), sizeof(external_count));
+        detail::read_pod(zis, external_count);
         if (!zis) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading external key count");
         }
@@ -188,15 +183,15 @@ public:
         for (auto& k : g.external_key_storage) { key_by_index.push_back(&k); }
 
         uint32_t total_edges;
-        zis.read(reinterpret_cast<char*>(&total_edges), sizeof(total_edges));
+        detail::read_pod(zis, total_edges);
         if (!zis) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading edge count");
         }
 
         for (uint32_t i = 0; i < total_edges; ++i) {
             uint32_t src, tgt;
-            zis.read(reinterpret_cast<char*>(&src), sizeof(src));
-            zis.read(reinterpret_cast<char*>(&tgt), sizeof(tgt));
+            detail::read_pod(zis, src);
+            detail::read_pod(zis, tgt);
             if (!zis) {
                 throw std::runtime_error("Failed to deserialize grove: stream error reading edge");
             }
@@ -227,17 +222,7 @@ private:
 
         // Find all leaf nodes via DFS
         std::vector<node<key_type, data_type>*> leaves;
-        std::function<void(node<key_type, data_type>*)> collect_leaves = [&](node<key_type, data_type>* n) {
-            if (n == nullptr) return;
-            if (n->get_is_leaf()) {
-                leaves.push_back(n);
-            } else {
-                for (auto* child : n->get_children()) {
-                    collect_leaves(child);
-                }
-            }
-        };
-        collect_leaves(root);
+        detail::collect_leaves(root, leaves);
 
         // Link leaves together and count leaf keys
         for (size_t i = 0; i < leaves.size(); ++i) {
