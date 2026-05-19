@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+- **`bam_reader` internals**: `parse_alignment` now returns `void` (the previous `bool` return was always `true` and discarded at the call site; truncation still propagates via `throw`), and `compute_interval` now takes the already-parsed `cigar_string&` and reuses `cigar_element::consumes_reference()` instead of an inline CIGAR-op predicate — single source of truth for the reference-consuming op set. No behavior change: `parse_cigar` already filtered ops with code > 8, and the old inline predicate matched the same ops (M/D/N/=/X) the typed predicate now matches. ([#351](https://github.com/genogrove/genogrove/issues/351), [#352](https://github.com/genogrove/genogrove/issues/352), [#405](https://github.com/genogrove/genogrove/pull/405))
+
 ## [0.24.1] - 2026-05-18
 
 ### Refactored

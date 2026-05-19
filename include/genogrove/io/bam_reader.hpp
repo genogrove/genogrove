@@ -429,10 +429,10 @@ namespace genogrove::io {
         bool should_skip(const bam1_t* b) const;
 
         /// Parse alignment record into sam_entry
-        bool parse_alignment(const bam1_t* b, sam_entry& entry);
+        void parse_alignment(const bam1_t* b, sam_entry& entry);
 
         /// Compute reference interval from position and CIGAR
-        std::pair<size_t, size_t> compute_interval(int64_t pos, const bam1_t* b) const;
+        std::pair<size_t, size_t> compute_interval(int64_t pos, const cigar_string& cigar) const;
 
         /// Parse CIGAR string from bam1_t
         cigar_string parse_cigar(const bam1_t* b) const;
