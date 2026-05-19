@@ -19,9 +19,6 @@
 // cxxopts
 #include "cxxopts.hpp"
 
-namespace ggt = genogrove::data_type;
-namespace ggs = genogrove::structure;
-
 namespace subcalls {
     class intersect : public subcall {
     public:

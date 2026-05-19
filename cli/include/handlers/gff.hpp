@@ -12,12 +12,12 @@
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/gff_reader.hpp>
 
+namespace handlers {
+namespace gff {
+
 namespace gdt = genogrove::data_type;
 namespace ggs = genogrove::structure;
 namespace gio = genogrove::io;
-
-namespace handlers {
-namespace gff {
 
 // Insert GFF/GTF file entries into a grove
 void grove_insert(
