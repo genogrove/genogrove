@@ -12,7 +12,7 @@ public:
      * @param index The index name (e.g., chromosome name) where the data should be inserted
      * @param key_value The key value to insert (e.g., interval)
      * @param data_value The data associated with the key
-     * @param Tag to dispatch to sorted insertion algorithm
+     * @param sorted_t Tag to dispatch to sorted insertion algorithm
      * @note This assumes key_value is greater than all existing keys in the specified index
      * @return Pointer to the inserted key in the tree
      */

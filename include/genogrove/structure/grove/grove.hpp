@@ -139,7 +139,7 @@ class grove {
   public:
     /**
      * @brief Construct a grove with specified order
-     * @param order Determines the maximum number of k-1 keys and k children per node
+     * @param order Determines the maximum number of order-1 keys and order children per node
      * @throws std::invalid_argument if order < 3
      *
      * Order must be at least 3. With order == 2, `split_internal_node` would
