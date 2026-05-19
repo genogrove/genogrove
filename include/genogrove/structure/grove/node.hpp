@@ -21,6 +21,7 @@
 #include "genogrove/data_type/interval.hpp"
 #include "genogrove/data_type/key.hpp"
 #include "genogrove/data_type/serialization_traits.hpp"
+#include "genogrove/structure/grove/pod_io.hpp"
 
 namespace gdt = genogrove::data_type;
 
@@ -438,7 +439,7 @@ void node<key_type, data_type>::serialize(std::ostream& os) const {
     // Pack is_leaf into high bit of key count (saves 5B per node vs separate bool + size_t)
     uint32_t packed = static_cast<uint32_t>(keys.size());
     if (is_leaf) packed |= 0x80000000u;
-    os.write(reinterpret_cast<const char*>(&packed), sizeof(packed));
+    detail::write_pod(os, packed);
 
     // Write each key
     for (const auto* key_ptr : keys) {
@@ -454,7 +455,7 @@ void node<key_type, data_type>::serialize(std::ostream& os) const {
     // If not leaf, serialize children
     if (!is_leaf) {
         uint32_t num_children = static_cast<uint32_t>(children.size());
-        os.write(reinterpret_cast<const char*>(&num_children), sizeof(num_children));
+        detail::write_pod(os, num_children);
 
         for (auto* child : children) {
             child->serialize(os);
@@ -474,7 +475,7 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize(
 
     // Unpack is_leaf from high bit + key count from low 31 bits
     uint32_t packed;
-    is.read(reinterpret_cast<char*>(&packed), sizeof(packed));
+    detail::read_pod(is, packed);
     if (!is) {
         throw std::runtime_error("Failed to deserialize node: stream error reading packed header");
     }
@@ -501,7 +502,7 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize(
     // If not leaf, deserialize children
     if (!n->is_leaf) {
         uint32_t num_children;
-        is.read(reinterpret_cast<char*>(&num_children), sizeof(num_children));
+        detail::read_pod(is, num_children);
         if (!is) {
             throw std::runtime_error("Failed to deserialize node: stream error reading num_children");
         }
