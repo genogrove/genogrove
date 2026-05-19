@@ -311,10 +311,6 @@ TEST(kmerTest, maxK) {
     EXPECT_EQ(k32.get_k(), 32);
 }
 
-TEST(kmerTest, isKmerConstexpr) {
-    static_assert(gdt::kmer::is_kmer, "kmer::is_kmer should be true");
-}
-
 TEST(kmerTest, roundTripAllBases) {
     // Test round-trip for all single bases
     for (char base : {'A', 'C', 'G', 'T'}) {

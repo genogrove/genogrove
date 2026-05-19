@@ -104,11 +104,6 @@ namespace genogrove::data_type {
             }
 
             /**
-             * @brief Indicates this is a numeric type (enables type-specific operations).
-             */
-            static constexpr bool is_numeric = true;
-
-            /**
              * @brief Determine if two numeric values overlap.
              *
              * For point values, overlap occurs only when they are exactly equal.

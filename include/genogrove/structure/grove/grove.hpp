@@ -220,34 +220,6 @@ class grove {
     // =========================================================================
 
     /**
-     * @brief Replace the grove's root nodes with a new set
-     * @param root_nodes New map of root nodes to use
-     * @note Deletes all existing tree nodes, clears key storage, graph overlay,
-     *       and rightmost node cache to prevent dangling pointers and memory leaks
-     */
-    void set_root_nodes(std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>> root_nodes) {
-        for(auto& [_, root] : this->root_nodes) {
-            delete root;
-        }
-        this->root_nodes = std::move(root_nodes);
-        this->rightmost_nodes.clear();
-        this->key_storage.clear();
-        this->leaf_key_count = 0;
-        this->external_key_storage.clear();
-        this->graph_data = graph_overlay<key_type, data_type, edge_data_type>{};
-    }
-
-    /**
-     * @brief Set the rightmost leaf node for a given index
-     * @param key The index name (e.g., chromosome name)
-     * @param node Pointer to the new rightmost leaf node
-     * @note Updated automatically during node splits and insertions
-     */
-    void set_rightmost_node(std::string_view key, node<key_type, data_type>* node) {
-        this->rightmost_nodes[std::string(key)] = node;
-    }
-
-    /**
      * @brief Get the root node for a specific index
      * @param key The index name (e.g., chromosome name) to look up
      * @return Pointer to root node, or nullptr if index doesn't exist
