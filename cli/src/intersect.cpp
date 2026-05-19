@@ -7,12 +7,15 @@
 #include <handlers/bed.hpp>
 #include <fstream>
 #include <memory>
+#include <string_view>
 
+namespace gdt = genogrove::data_type;
+namespace ggs = genogrove::structure;
 namespace gio = genogrove::io;
 
 namespace subcalls {
 
-static constexpr const char* DEFAULT_TREE_ORDER = "3";
+constexpr std::string_view DEFAULT_TREE_ORDER = "3";
 
 cxxopts::Options intersect::parse_args(int argc, char** argv) {
     cxxopts::Options options("intersect", "Search for interval overlaps in the index");
@@ -24,7 +27,7 @@ cxxopts::Options intersect::parse_args(int argc, char** argv) {
             ("o,outputfile", "Write the index to the specified file",
              cxxopts::value<std::string>()->default_value("stdout"))
             ("k,order", "The order of the tree",
-             cxxopts::value<int>()->default_value(DEFAULT_TREE_ORDER))
+             cxxopts::value<int>()->default_value(std::string(DEFAULT_TREE_ORDER)))
             ("h,help", "Print the help")
             ;
     options.parse_positional({"queryfile", "targetfile"});
@@ -68,7 +71,6 @@ void intersect::validate(const cxxopts::ParseResult& args) {
 }
 
 void intersect::execute(const cxxopts::ParseResult& args) {
-    validate(args); // validate the arguments
     // first check if the targetfile has been indexed - exists targetfile.gg (skip this for now)
 
     // get parameters

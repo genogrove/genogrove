@@ -12,12 +12,12 @@
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/bed_reader.hpp>
 
+namespace handlers {
+namespace bed {
+
 namespace gdt = genogrove::data_type;
 namespace ggs = genogrove::structure;
 namespace gio = genogrove::io;
-
-namespace handlers {
-namespace bed {
 
 // Insert BED file entries into a grove
 void grove_insert(

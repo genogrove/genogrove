@@ -38,7 +38,7 @@ void print_general_help(const cxxopts::Options& options) {
 }
 
 int main(int argc, char** argv) {
-    cxxopts::Options options("genogrove", "...");
+    cxxopts::Options options("genogrove", "Index and query genomic intervals using grove B+ trees.");
     options.add_options()
         ("subcall", "The subcommand to run", cxxopts::value<std::string>())
         ("h,help", "Print help")

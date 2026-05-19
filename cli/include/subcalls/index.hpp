@@ -22,8 +22,6 @@
 // CXXopts
 #include <cxxopts.hpp>
 
-namespace ggs = genogrove::structure;
-
 namespace subcalls {
     class index : public subcall {
         public:
