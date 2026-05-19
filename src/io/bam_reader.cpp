@@ -177,7 +177,7 @@ namespace genogrove::io {
         return false;
     }
 
-    bool bam_reader::parse_alignment(const bam1_t* b, sam_entry& entry) {
+    void bam_reader::parse_alignment(const bam1_t* b, sam_entry& entry) {
         const bam1_core_t& c = b->core;
 
         // Query name (QNAME)
@@ -205,7 +205,7 @@ namespace genogrove::io {
             entry.start = 0;
             entry.end = 0;
         } else {
-            auto [iv_start, iv_end] = compute_interval(c.pos, b);
+            auto [iv_start, iv_end] = compute_interval(c.pos, entry.cigar);
             entry.start = iv_start;
             entry.end = iv_end;
         }
@@ -254,11 +254,9 @@ namespace genogrove::io {
             error_message_ = "Truncated auxiliary data at record " + std::to_string(record_num_);
             throw std::runtime_error(error_message_);
         }
-
-        return true;
     }
 
-    std::pair<size_t, size_t> bam_reader::compute_interval(int64_t pos, const bam1_t* b) const {
+    std::pair<size_t, size_t> bam_reader::compute_interval(int64_t pos, const cigar_string& cigar) const {
         // Calculate reference length consumed by CIGAR.
         // Pure soft-clip (e.g. "100S") and hard-clip-only secondary records
         // consume zero reference bases and return a zero-length half-open
@@ -266,18 +264,10 @@ namespace genogrove::io {
         // `sam_entry::consumes_reference()` and filter as appropriate;
         // converting to a closed `gdt::interval(start, end - 1)` is only
         // valid when `start < end`.
-        uint32_t* cigar = bam_get_cigar(b);
-        uint32_t n_cigar = b->core.n_cigar;
-
         int64_t ref_len = 0;
-        for (uint32_t i = 0; i < n_cigar; ++i) {
-            int op = bam_cigar_op(cigar[i]);
-            int len = bam_cigar_oplen(cigar[i]);
-
-            // Operations that consume reference bases: M, D, N, =, X
-            if (op == BAM_CMATCH || op == BAM_CDEL || op == BAM_CREF_SKIP ||
-                op == BAM_CEQUAL || op == BAM_CDIFF) {
-                ref_len += len;
+        for (const auto& e : cigar) {
+            if (e.consumes_reference()) {
+                ref_len += e.length;
             }
         }
 
