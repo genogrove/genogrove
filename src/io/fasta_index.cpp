@@ -51,7 +51,7 @@ namespace genogrove::io {
         }
 
         if (start >= end) {
-            throw std::runtime_error("Invalid region: start >= end for " + name);
+            throw std::out_of_range("Invalid region: start >= end for " + name);
         }
 
         // Guard against size_t→int narrowing (faidx_fetch_seq takes int)
