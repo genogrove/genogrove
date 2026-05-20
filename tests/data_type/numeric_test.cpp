@@ -293,7 +293,9 @@ TEST(numericTest, intMinMaxComparison) {
 }
 
 TEST(numericTest, defaultOverlapsWithIntMin) {
-    // Default value is INT_MIN
+    // A default-constructed numeric holds INT_MIN, so it is indistinguishable
+    // from a numeric holding the real value INT_MIN (see numeric's default
+    // ctor). This asserts that accepted behavior, not a desirable one.
     gdt::numeric def;
     gdt::numeric nmin(std::numeric_limits<int>::min());
 

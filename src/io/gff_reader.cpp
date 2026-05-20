@@ -225,6 +225,10 @@ namespace genogrove::io {
         const char* begin = score_s.c_str();
         char* end_ptr = nullptr;
         errno = 0;
+        // Initialized once on first use (thread-safe per C++11 static-init rules)
+        // and intentionally never freed: the locale must outlive every parse_score
+        // call, so it lives for the program's lifetime. freelocale() is deliberately
+        // omitted — this is a one-off allocation, not a leak that grows.
         static locale_t c_locale = []() {
             locale_t loc = newlocale(LC_ALL_MASK, "C", nullptr);
             if (!loc) throw std::runtime_error("newlocale failed");

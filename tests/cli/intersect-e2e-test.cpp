@@ -40,6 +40,9 @@ CmdResult run_command(const std::string& cmd) {
     std::array<char, 4096> buffer;
     result.output.clear();
 
+    // popen/pclose are POSIX, not ISO C++. This e2e test targets the
+    // Linux/macOS CI matrix only; an MSVC build would need _popen/_pclose
+    // (and the WIFEXITED decoding below is already guarded for _WIN32).
     FILE* pipe = popen(full_cmd.c_str(), "r");
     if(!pipe) {
         result.exit_code = -1;
