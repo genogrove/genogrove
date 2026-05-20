@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+- **Dead-code removal**: drops three unused symbols flagged by `/cpp-audit`. `grove::set_root_nodes` / `grove::set_rightmost_node` — private methods with zero call sites; `set_root_nodes` was an attractive nuisance (wiring it up would silently wipe the graph overlay, external keys, and `leaf_key_count`). `data_type/constants.hpp` — deleted; its lone `MAX_CHRM_BITS` constant was unreferenced, lived in a foreign `genogrove::core` namespace, and carried a comment that contradicted its value. `numeric::is_numeric` / `kmer::is_kmer` — trait tags that mirrored `interval::is_interval` but were never detected anywhere (only `is_interval` is consumed, by `grove_query` / `grove_flanking`); removed along with the tautological `kmerTest.isKmerConstexpr` test. No behavior change. ([#331](https://github.com/genogrove/genogrove/issues/331), [#348](https://github.com/genogrove/genogrove/issues/348), [#349](https://github.com/genogrove/genogrove/issues/349), [#409](https://github.com/genogrove/genogrove/pull/409))
+
 ### Changed
 - **`grove` public docstrings**: fixes two Doxygen-comment inconsistencies on the public `grove` API surface. `grove(int order)`'s `@param` line said "k-1 keys and k children" while the parameter is named `order` — now reads "order-1 keys and order children" against the actual identifier. `insert_data(…, sorted_t)`'s `@param` tag was bare (`@param Tag to dispatch...`), which Doxygen could not cross-reference; added the missing `sorted_t` parameter name. Comments-only; no public API or behavior change. ([#369](https://github.com/genogrove/genogrove/issues/369), [#370](https://github.com/genogrove/genogrove/issues/370), [#408](https://github.com/genogrove/genogrove/pull/408))
 
