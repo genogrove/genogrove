@@ -6,7 +6,6 @@
 #ifndef GENOGROVE_DATA_TYPE_ALL_HPP
 #define GENOGROVE_DATA_TYPE_ALL_HPP
 
-#include <genogrove/data_type/constants.hpp>
 #include <genogrove/data_type/genomic_coordinate.hpp>
 #include <genogrove/data_type/registry.hpp>
 #include <genogrove/data_type/interval.hpp>
@@ -39,7 +38,6 @@
  *   (comparison operators, overlaps(), aggregate(), to_string())
  * - **registry**: Template registry for shared metadata (per-type singleton)
  * - **serialization_traits**: Traits for type-specific serialization
- * - **constants**: Common constants and type definitions
  *
  * ## Key Type Requirements
  * All key types must satisfy the key_type_base concept by providing:

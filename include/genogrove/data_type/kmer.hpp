@@ -129,11 +129,6 @@ namespace genogrove::data_type {
             }
 
             /**
-             * @brief Indicates this is a k-mer type (enables type-specific operations).
-             */
-            static constexpr bool is_kmer = true;
-
-            /**
              * @brief Maximum supported k-mer length (32 for uint64_t storage).
              */
             static constexpr uint8_t max_k = 32;
