@@ -8,6 +8,7 @@
 
 // standard
 #include <string>
+#include <string_view>
 #include <filesystem>
 #include <optional>
 #include <vector>
