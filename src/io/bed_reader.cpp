@@ -27,7 +27,7 @@ namespace genogrove::io {
 
     // Helper function to parse comma-separated integers into a vector
     // Returns nullopt on parse error to distinguish from genuinely empty input
-    static std::optional<std::vector<size_t>> parse_csv(const std::string& str) {
+    static std::optional<std::vector<size_t>> parse_csv(std::string_view str) {
         std::vector<size_t> result;
         std::string_view sv(str);
         size_t pos = 0;
@@ -118,7 +118,7 @@ namespace genogrove::io {
         }
     }
 
-    bool bed_reader::parse_score(bed_entry& entry, const std::string& score_str) {
+    bool bed_reader::parse_score(bed_entry& entry, std::string_view score_str) {
         int score = 0;
         auto [ptr, ec] = std::from_chars(score_str.data(), score_str.data() + score_str.size(), score);
         if (ec != std::errc{} || ptr != score_str.data() + score_str.size()) {
@@ -136,7 +136,7 @@ namespace genogrove::io {
         return true;
     }
 
-    bool bed_reader::parse_strand(bed_entry& entry, const std::string& strand_str) {
+    bool bed_reader::parse_strand(bed_entry& entry, std::string_view strand_str) {
         if (strand_str.length() == 1
             && (strand_str[0] == '+' || strand_str[0] == '-' || strand_str[0] == '.')) {
             entry.strand = strand_str[0];
@@ -148,8 +148,8 @@ namespace genogrove::io {
         }
     }
 
-    bool bed_reader::parse_thickness(bed_entry& entry, const std::string& thick_start_str,
-                                     const std::string& thick_end_str,
+    bool bed_reader::parse_thickness(bed_entry& entry, std::string_view thick_start_str,
+                                     std::string_view thick_end_str,
                                      size_t start_num, size_t end_num) {
         uint64_t thick_start = 0;
         uint64_t thick_end = 0;
@@ -182,7 +182,7 @@ namespace genogrove::io {
         return true;
     }
 
-    bool bed_reader::parse_rgb(bed_entry& entry, const std::string& item_rgb_str) {
+    bool bed_reader::parse_rgb(bed_entry& entry, std::string_view item_rgb_str) {
         auto rgb_opt = parse_csv(item_rgb_str);
         if (!rgb_opt) {
             error_message = "Invalid RGB format (parse error) at line ";
@@ -217,8 +217,8 @@ namespace genogrove::io {
         return false;
     }
 
-    bool bed_reader::parse_blocks(bed_entry& entry, const std::string& block_count_str,
-                                  const std::string& block_sizes_str, const std::string& block_starts_str,
+    bool bed_reader::parse_blocks(bed_entry& entry, std::string_view block_count_str,
+                                  std::string_view block_sizes_str, std::string_view block_starts_str,
                                   size_t start_num, size_t end_num) {
         if (!std::ranges::all_of(block_count_str, ggu::is_digit)) {
             error_message = "Invalid block count format (non-integer) at line ";
@@ -226,10 +226,10 @@ namespace genogrove::io {
             return false;
         }
 
-        int block_count;
-        try {
-            block_count = std::stoi(block_count_str);
-        } catch(const std::exception&) {
+        int block_count = 0;
+        auto [bc_ptr, bc_ec] = std::from_chars(block_count_str.data(),
+            block_count_str.data() + block_count_str.size(), block_count);
+        if (bc_ec != std::errc{} || bc_ptr != block_count_str.data() + block_count_str.size()) {
             error_message = "Block count out of range at line ";
             error_message += std::to_string(line_num);
             return false;
@@ -295,12 +295,12 @@ namespace genogrove::io {
         // BED5: score
         auto score_f = ggu::next_field(line_sv, fpos);
         if (!score_f) return true;  // BED4
-        if (!parse_score(entry, std::string(*score_f))) return false;
+        if (!parse_score(entry, *score_f)) return false;
 
         // BED6: strand
         auto strand_f = ggu::next_field(line_sv, fpos);
         if (!strand_f) return true;  // BED5
-        if (!parse_strand(entry, std::string(*strand_f))) return false;
+        if (!parse_strand(entry, *strand_f)) return false;
 
         // BED9: thickStart, thickEnd, itemRgb (must appear as a complete group)
         auto thick_start_f = ggu::next_field(line_sv, fpos);
@@ -315,9 +315,9 @@ namespace genogrove::io {
                 return false;
             }
         }
-        if (!parse_thickness(entry, std::string(*thick_start_f),
-                             std::string(*thick_end_f), start_num, end_num)) return false;
-        if (!parse_rgb(entry, std::string(*item_rgb_f))) return false;
+        if (!parse_thickness(entry, *thick_start_f,
+                             *thick_end_f, start_num, end_num)) return false;
+        if (!parse_rgb(entry, *item_rgb_f)) return false;
 
         // BED12: blockCount, blockSizes, blockStarts (must appear as a complete group)
         auto block_count_f = ggu::next_field(line_sv, fpos);
@@ -332,9 +332,9 @@ namespace genogrove::io {
                 return false;
             }
         }
-        return parse_blocks(entry, std::string(*block_count_f),
-                            std::string(*block_sizes_f),
-                            std::string(*block_starts_f), start_num, end_num);
+        return parse_blocks(entry, *block_count_f,
+                            *block_sizes_f,
+                            *block_starts_f, start_num, end_num);
     }
 
     bool bed_reader::read_next(bed_entry& entry) {
