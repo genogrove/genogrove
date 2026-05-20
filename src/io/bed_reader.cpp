@@ -11,14 +11,18 @@
 #include <ranges>
 #include <charconv>
 #include <cstdint>
+#include <istream>
 #include <optional>
+#include <ostream>
 #include <vector>
 
 // genogrove
+#include <genogrove/data_type/serialization_traits.hpp>
 #include <genogrove/utility/char_utils.hpp>
 #include <genogrove/utility/tokenizer.hpp>
 
 namespace ggu = genogrove::utility;
+namespace gdt = genogrove::data_type;
 
 namespace genogrove::io {
 
@@ -425,6 +429,119 @@ namespace genogrove::io {
 
     size_t bed_reader::get_current_line() const {
         return line_num;
+    }
+
+    // ---- serialization ----
+
+    namespace {
+        // An optional is written as a 1-byte presence flag followed by the
+        // value (only when present).
+        template<typename T>
+        void write_optional(std::ostream& os, const std::optional<T>& opt) {
+            const uint8_t present = opt.has_value() ? 1 : 0;
+            os.write(reinterpret_cast<const char*>(&present), sizeof(present));
+            if (opt.has_value()) {
+                gdt::serializer<T>::write(os, *opt);
+            }
+            if (!os) {
+                throw std::runtime_error("Failed to serialize bed_entry: stream error");
+            }
+        }
+
+        template<typename T>
+        std::optional<T> read_optional(std::istream& is) {
+            uint8_t present = 0;
+            is.read(reinterpret_cast<char*>(&present), sizeof(present));
+            if (!is) {
+                throw std::runtime_error("Failed to deserialize bed_entry: stream error reading optional flag");
+            }
+            if (present == 0) {
+                return std::nullopt;
+            }
+            return gdt::serializer<T>::read(is);
+        }
+
+        // A vector is written as a 4-byte length followed by the elements.
+        void write_size_vector(std::ostream& os, const std::vector<size_t>& v) {
+            const uint32_t n = static_cast<uint32_t>(v.size());
+            os.write(reinterpret_cast<const char*>(&n), sizeof(n));
+            if (n > 0) {
+                os.write(reinterpret_cast<const char*>(v.data()),
+                         static_cast<std::streamsize>(n * sizeof(size_t)));
+            }
+            if (!os) {
+                throw std::runtime_error("Failed to serialize block_info: stream error");
+            }
+        }
+
+        std::vector<size_t> read_size_vector(std::istream& is) {
+            uint32_t n = 0;
+            is.read(reinterpret_cast<char*>(&n), sizeof(n));
+            if (!is) {
+                throw std::runtime_error("Failed to deserialize block_info: stream error reading vector length");
+            }
+            std::vector<size_t> v(n);
+            if (n > 0) {
+                is.read(reinterpret_cast<char*>(v.data()),
+                        static_cast<std::streamsize>(n * sizeof(size_t)));
+                if (!is) {
+                    throw std::runtime_error("Failed to deserialize block_info: stream error reading vector data");
+                }
+            }
+            return v;
+        }
+    } // namespace
+
+    void block_info::serialize(std::ostream& os) const {
+        os.write(reinterpret_cast<const char*>(&count), sizeof(count));
+        write_size_vector(os, sizes);
+        write_size_vector(os, starts);
+        if (!os) {
+            throw std::runtime_error("Failed to serialize block_info: stream error");
+        }
+    }
+
+    block_info block_info::deserialize(std::istream& is) {
+        block_info bi;
+        is.read(reinterpret_cast<char*>(&bi.count), sizeof(bi.count));
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize block_info: stream error reading count");
+        }
+        bi.sizes = read_size_vector(is);
+        bi.starts = read_size_vector(is);
+        return bi;
+    }
+
+    void bed_entry::serialize(std::ostream& os) const {
+        gdt::serializer<std::string>::write(os, chrom);
+        os.write(reinterpret_cast<const char*>(&start), sizeof(start));
+        os.write(reinterpret_cast<const char*>(&end), sizeof(end));
+        write_optional(os, name);
+        write_optional(os, score);
+        write_optional(os, strand);
+        write_optional(os, thickness);
+        write_optional(os, item_rgb);
+        write_optional(os, blocks);
+        if (!os) {
+            throw std::runtime_error("Failed to serialize bed_entry: stream error");
+        }
+    }
+
+    bed_entry bed_entry::deserialize(std::istream& is) {
+        bed_entry entry;
+        entry.chrom = gdt::serializer<std::string>::read(is);
+        is.read(reinterpret_cast<char*>(&entry.start), sizeof(entry.start));
+        is.read(reinterpret_cast<char*>(&entry.end), sizeof(entry.end));
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize bed_entry: stream error reading coordinates");
+        }
+        entry.name = read_optional<std::string>(is);
+        entry.score = read_optional<int>(is);
+        entry.strand = read_optional<char>(is);
+        entry.thickness = read_optional<thick_info>(is);
+        entry.item_rgb = read_optional<rgb_color>(is);
+        entry.blocks = read_optional<block_info>(is);
+        return entry;
     }
 
 }
