@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`get_current_line()` contract documentation**: `bam_reader::get_current_line()`'s docstring said "Number of records read so far", implying records *yielded* by `read_next()` — but it counts every record *consumed* from the file, including records dropped by `should_skip()`. Corrected the docstring to match (behavior is unchanged: counting skipped records is what makes the "record N" in error messages point at the real file position). Also added the previously-absent docstring on `file_reader_base::get_current_line()` defining the contract — a 1-based input-consumed position, reader-specific unit (physical line for BED/GFF including comments/blanks, record index for BAM including filtered records), reflecting input consumed rather than entries yielded. ([#328](https://github.com/genogrove/genogrove/issues/328), [#379](https://github.com/genogrove/genogrove/issues/379), [#413](https://github.com/genogrove/genogrove/pull/413))
+
 ### Changed
 - **`numeric` default-constructor docstring**: adds a `@warning` that the `INT_MIN` sentinel is in-band — a default-constructed `numeric` is indistinguishable from (and `overlaps()`) a `numeric` holding the real value `INT_MIN`. Documents an existing behavior; no code change. ([#383](https://github.com/genogrove/genogrove/issues/383), [#412](https://github.com/genogrove/genogrove/pull/412))
 

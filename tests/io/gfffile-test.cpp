@@ -204,6 +204,10 @@ TEST_F(gfffileTest, hasNextFunctionality) {
 }
 
 TEST_F(gfffileTest, lineCounter) {
+    // get_current_line() reports the 1-based physical line number, counting
+    // comment and blank lines even though they are not yielded as records.
+    // test_gff3.gff line 1 is the "##gff-version 3" directive, so the first
+    // data record reports line 2.
     gio::gff_reader reader(gff3_path);
     gio::gff_entry entry;
 

@@ -569,16 +569,29 @@ TEST_F(BamReaderTest, HasNextFunctionality) {
 }
 
 TEST_F(BamReaderTest, LineCounter) {
+    // get_current_line() counts every record consumed from the file,
+    // including records dropped by filters — it is the file position, not
+    // the number of records read_next() returned. test.sam's 5th record
+    // (read004) is unmapped, so under the default skip_unmapped option it
+    // is consumed-and-skipped: the 5th successful read_next() lands the
+    // counter on 6, not 5.
     gio::bam_reader reader(sam_path);
     gio::sam_entry entry;
 
     EXPECT_EQ(reader.get_current_line(), 0);
 
-    reader.read_next(entry);
+    reader.read_next(entry);                       // read001/99
     EXPECT_EQ(reader.get_current_line(), 1);
 
-    reader.read_next(entry);
+    reader.read_next(entry);                       // read001/147
     EXPECT_EQ(reader.get_current_line(), 2);
+
+    reader.read_next(entry);                       // read002
+    reader.read_next(entry);                       // read003
+    EXPECT_EQ(reader.get_current_line(), 4);
+
+    reader.read_next(entry);                       // read004 skipped, read005 yielded
+    EXPECT_EQ(reader.get_current_line(), 6);
 }
 
 // ==========================================

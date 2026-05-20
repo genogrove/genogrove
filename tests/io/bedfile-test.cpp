@@ -210,6 +210,10 @@ TEST_F(bedfileTest, hasNextFunctionality) {
 }
 
 TEST_F(bedfileTest, lineCounter) {
+    // get_current_line() reports the 1-based physical line number, counting
+    // comment and blank lines. test_bed3.bed has neither, so here the line
+    // number coincides with the record index. The comment-counting case is
+    // covered by gfffileTest.lineCounter.
     gio::bed_reader reader(bed3_path);
     gio::bed_entry entry;
 
