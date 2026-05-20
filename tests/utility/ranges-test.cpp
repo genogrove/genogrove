@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 #include <genogrove/utility/ranges.hpp>
 
-TEST(ranges, empty)
+TEST(ranges, basicLookup)
 {
     // create a range (unordered map)
     std::unordered_map<std::string, uint8_t> map = {{"a", 1}, {"b", 2},{"c", 3}};

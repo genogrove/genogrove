@@ -116,3 +116,73 @@ TEST(tokenizer, custom_delimiter_semicolon) {
     EXPECT_EQ(*f1, "gene_id \"ABC\"");
     EXPECT_EQ(*f2, " transcript_id \"XYZ\"");
 }
+
+TEST(tokenizer, gtf_field_simple_key_value) {
+    std::string_view line = "gene_id \"ABC\"; transcript_id \"XYZ\"";
+    size_t pos = 0;
+
+    auto f1 = ggu::next_gtf_field(line, pos);
+    auto f2 = ggu::next_gtf_field(line, pos);
+    auto f3 = ggu::next_gtf_field(line, pos);
+
+    ASSERT_TRUE(f1.has_value());
+    ASSERT_TRUE(f2.has_value());
+    EXPECT_FALSE(f3.has_value());
+
+    EXPECT_EQ(*f1, "gene_id \"ABC\"");
+    EXPECT_EQ(*f2, " transcript_id \"XYZ\"");
+}
+
+TEST(tokenizer, gtf_field_quoted_semicolons) {
+    // Semicolons inside double-quoted values must not split the field.
+    std::string_view line = "gene_id \"A;B;C\"; transcript_id \"X\"";
+    size_t pos = 0;
+
+    auto f1 = ggu::next_gtf_field(line, pos);
+    auto f2 = ggu::next_gtf_field(line, pos);
+    auto f3 = ggu::next_gtf_field(line, pos);
+
+    ASSERT_TRUE(f1.has_value());
+    ASSERT_TRUE(f2.has_value());
+    EXPECT_FALSE(f3.has_value());
+
+    EXPECT_EQ(*f1, "gene_id \"A;B;C\"");
+    EXPECT_EQ(*f2, " transcript_id \"X\"");
+}
+
+TEST(tokenizer, gtf_field_unbalanced_quote) {
+    // An unterminated quote leaves the tokenizer "in quotes" to end-of-line,
+    // so the whole remainder is returned as a single field (no crash).
+    std::string_view line = "gene_id \"unterminated";
+    size_t pos = 0;
+
+    auto f1 = ggu::next_gtf_field(line, pos);
+    auto f2 = ggu::next_gtf_field(line, pos);
+
+    ASSERT_TRUE(f1.has_value());
+    EXPECT_FALSE(f2.has_value());
+
+    EXPECT_EQ(*f1, "gene_id \"unterminated");
+}
+
+TEST(tokenizer, gtf_field_empty_string) {
+    std::string_view line = "";
+    size_t pos = 0;
+
+    EXPECT_FALSE(ggu::next_gtf_field(line, pos).has_value());
+}
+
+TEST(tokenizer, gtf_field_trailing_semicolon) {
+    // GTF attribute lines end with a trailing ';' — it must not yield an
+    // extra empty field.
+    std::string_view line = "gene_id \"ABC\";";
+    size_t pos = 0;
+
+    auto f1 = ggu::next_gtf_field(line, pos);
+    auto f2 = ggu::next_gtf_field(line, pos);
+
+    ASSERT_TRUE(f1.has_value());
+    EXPECT_FALSE(f2.has_value());
+
+    EXPECT_EQ(*f1, "gene_id \"ABC\"");
+}
