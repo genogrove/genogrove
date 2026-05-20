@@ -384,7 +384,12 @@ namespace genogrove::io {
         /**
          * @brief Get the current record number (1-based).
          *
-         * @return Number of records read so far
+         * Counts every record consumed from the file, including records
+         * dropped by the configured filters (see bam_reader_options) — it is
+         * the file position, not the count of records returned by read_next().
+         * If an unmapped record is skipped, the counter still advances past it.
+         *
+         * @return Index of the most recently consumed record (0 before the first read)
          */
         size_t get_current_line() const override;
 
