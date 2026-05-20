@@ -175,6 +175,30 @@ TEST(GroveRemoveTest, RemoveLastChildLeaf) {
     }
 }
 
+TEST(GroveRemoveTest, RemoveFirstChildLeaf) {
+    // Asymmetric mirror of RemoveLastChildLeaf: emptying the LEFTMOST leaf.
+    // With no left sibling to borrow from or merge into, the underflowing
+    // leaf must merge into its RIGHT sibling — exercises the dedicated
+    // branch in grove_remove.ipp that RemoveLastChildLeaf never reaches.
+    gst::grove<gdt::interval, int> grove(3);
+    auto keys = insert_intervals(grove, "chr1", 5);
+
+    // Walk to the leftmost leaf.
+    auto* root = grove.get_root_nodes().at("chr1");
+    auto* leaf = root;
+    while (!leaf->get_is_leaf()) leaf = leaf->get_child(0);
+
+    // Remove every key in it — triggers the "empty first child" merge path.
+    auto leaf_keys = leaf->get_keys();  // copy since we mutate
+    for (auto* k : leaf_keys) {
+        EXPECT_TRUE(grove.remove_key("chr1", k));
+        if (auto root_it = grove.get_root_nodes().find("chr1");
+            root_it != grove.get_root_nodes().end()) {
+            validate_grove_index(root_it->second, 3);
+        }
+    }
+}
+
 // =============================================================================
 // Rebalancing Tests — use order=3 (max 2 keys/node, min_keys=1)
 // =============================================================================
