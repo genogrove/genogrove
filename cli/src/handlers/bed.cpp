@@ -10,12 +10,18 @@ namespace bed {
 
 void grove_insert(
     ggs::grove<gdt::interval, gio::bed_entry>& grove,
-    const std::string& filepath
+    const std::string& filepath,
+    bool sorted
 ) {
     gio::bed_reader reader(filepath);
 
     for (const auto& entry : reader) {
-        grove.insert_data(entry.chrom, gdt::interval(entry.start, entry.end - 1), entry);
+        gdt::interval iv(entry.start, entry.end - 1);
+        if (sorted) {
+            grove.insert_data(entry.chrom, iv, entry, ggs::sorted);
+        } else {
+            grove.insert_data(entry.chrom, iv, entry);
+        }
     }
 }
 

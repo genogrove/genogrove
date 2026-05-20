@@ -4,10 +4,21 @@
  */
 
 #include <subcalls/index.hpp>
+#include <handlers/bed.hpp>
 
+#include <genogrove/io/filetype_detector.hpp>
+
+#include <chrono>
+#include <fstream>
+#include <iostream>
+#include <string>
 #include <string_view>
 
 namespace subcalls {
+
+namespace gdt = genogrove::data_type;
+namespace ggs = genogrove::structure;
+namespace gio = genogrove::io;
 
 constexpr std::string_view DEFAULT_TREE_ORDER = "3";
 
@@ -40,10 +51,60 @@ void index::validate(const cxxopts::ParseResult& args) {
     if(!std::filesystem::exists(inputfile)) {
         throw std::runtime_error("Error: file does not exist: " + inputfile);
     }
+
+    if(args.count("k")) {
+        int order = args["k"].as<int>();
+        if(order < 3) {
+            throw std::runtime_error("Error: order must be at least 3");
+        }
+    }
+
+    if(args.count("outputfile")) {
+        std::filesystem::path outputfile_path(args["outputfile"].as<std::string>());
+        auto parent = outputfile_path.parent_path();
+        if(!parent.empty() && !std::filesystem::exists(parent)) {
+            throw std::runtime_error("Error: parent directory does not exist: " + parent.string());
+        }
+    }
 }
 
 void index::execute(const cxxopts::ParseResult& args) {
-    throw std::runtime_error("Error: idx subcommand not yet implemented");
+    const std::string inputfile = args["inputfile"].as<std::string>();
+    const int order = args["k"].as<int>();
+    const bool sorted = args["sorted"].as<bool>();
+    const bool timed = args["timed"].as<bool>();
+
+    // Default the output path to <inputfile>.gg next to the source file.
+    const std::string outputfile = args.count("outputfile")
+        ? args["outputfile"].as<std::string>()
+        : inputfile + ".gg";
+
+    // Only BED input is supported for now.
+    auto [filetype, compression] = gio::filetype_detector().detect_filetype(inputfile);
+    if(filetype != gio::filetype::BED) {
+        throw std::runtime_error("Error: only BED format is currently supported");
+    }
+
+    const auto start_time = std::chrono::steady_clock::now();
+
+    ggs::grove<gdt::interval, gio::bed_entry> grove(order);
+    handlers::bed::grove_insert(grove, inputfile, sorted);
+
+    std::ofstream output(outputfile, std::ios::binary);
+    if(!output) {
+        throw std::runtime_error("Error: could not open output file: " + outputfile);
+    }
+    grove.serialize(output);
+    if(!output) {
+        throw std::runtime_error("Error: failed to write index to: " + outputfile);
+    }
+
+    if(timed) {
+        const auto elapsed = std::chrono::steady_clock::now() - start_time;
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+        std::cout << "Indexed in " << ms << " ms\n";
+    }
+    std::cout << "Index written to " << outputfile << "\n";
 }
 
 }

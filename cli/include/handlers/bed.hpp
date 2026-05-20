@@ -19,10 +19,13 @@ namespace gdt = genogrove::data_type;
 namespace ggs = genogrove::structure;
 namespace gio = genogrove::io;
 
-// Insert BED file entries into a grove
+// Insert BED file entries into a grove. When sorted is true, entries are
+// inserted via the sorted-append fast path — the caller asserts the file is
+// already ordered.
 void grove_insert(
     ggs::grove<gdt::interval, gio::bed_entry>& grove,
-    const std::string& filepath
+    const std::string& filepath,
+    bool sorted = false
 );
 
 // Intersect BED query file against a populated grove
