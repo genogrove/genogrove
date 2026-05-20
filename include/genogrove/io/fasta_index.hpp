@@ -80,7 +80,8 @@ namespace genogrove::io {
          * @param start 0-based start position (inclusive)
          * @param end 0-based end position (exclusive)
          * @return The nucleotide sequence for the region
-         * @throws std::out_of_range if name is not in the index
+         * @throws std::out_of_range if name is not in the index, or the region
+         *         is invalid (start >= end, or exceeds htslib's coordinate limit)
          * @throws std::runtime_error on fetch failure
          */
         [[nodiscard]] std::string fetch(const std::string& name, size_t start, size_t end) const;

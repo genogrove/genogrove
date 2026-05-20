@@ -145,8 +145,8 @@ TEST_F(fastaIndexTest, fetchEntireUnknownSequenceThrows) {
 
 TEST_F(fastaIndexTest, fetchInvalidRegionThrows) {
     gio::fasta_index fasta(fasta_path);
-    EXPECT_THROW(fasta.fetch("chr1", 10, 10), std::runtime_error);
-    EXPECT_THROW(fasta.fetch("chr1", 20, 10), std::runtime_error);
+    EXPECT_THROW(fasta.fetch("chr1", 10, 10), std::out_of_range);
+    EXPECT_THROW(fasta.fetch("chr1", 20, 10), std::out_of_range);
 }
 
 TEST_F(fastaIndexTest, sequenceNameOutOfRangeThrows) {
