@@ -61,6 +61,11 @@ namespace genogrove::data_type {
              * Uses the minimum representable value as a sentinel so that
              * max-based aggregation in internal nodes works correctly:
              * any real value will be greater than the default.
+             *
+             * @warning A default-constructed numeric and a numeric holding the
+             *          real value INT_MIN are indistinguishable, so `numeric{}`
+             *          compares equal to (and overlaps) `numeric{INT_MIN}`.
+             *          Don't rely on the default being distinct from stored data.
              */
             constexpr numeric() : value(std::numeric_limits<int>::min()) {}
 

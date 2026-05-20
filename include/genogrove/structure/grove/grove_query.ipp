@@ -46,9 +46,22 @@ private:
      * @param current The node to start searching from
      * @param query The query key to search for
      * @param result Reference to query_result where matching keys are accumulated
-     * @note Recurses into child nodes (bounded by tree depth O(log n))
-     * @note Walks the leaf sibling chain iteratively (unbounded, avoids stack overflow)
-     * @note Optimized for interval types with early termination when no overlap is possible
+     *
+     * Two phases:
+     * - **Internal descent (recursive).** At each internal node, picks the
+     *   single first child whose separator may overlap and recurses into it —
+     *   one child per level, so the recursion depth is the tree height
+     *   O(log n). It does NOT fan out across multiple children.
+     * - **Leaf walk (iterative).** Once at a leaf, walks the leaf sibling
+     *   chain via next pointers in a loop (unbounded length, so iterative to
+     *   avoid stack overflow), pruning for interval keys only when a leaf's
+     *   `first_key.start > query.end`.
+     *
+     * @note Correctness depends on two invariants: internal separators must
+     *       reflect `calc_subtree_range()` (so the single-child descent never
+     *       skips a subtree that contains a match), and the leaf chain must be
+     *       globally sorted by start (so the `first_key.start` prune is sound).
+     *       Both must hold after every split / rebalance.
      */
     void search_iter(node<key_type, data_type>* current, const key_type& query,
         gdt::query_result<key_type, data_type>& result) {
