@@ -340,7 +340,7 @@ class node {
      * @throws std::out_of_range if index is invalid
      */
     node* get_child(int index) {
-        if(index < 0 || index >= this->children.size()) {
+        if(index < 0 || static_cast<size_t>(index) >= this->children.size()) {
             throw std::out_of_range("child index out of range");
         }
         return this->children[index];
@@ -353,7 +353,7 @@ class node {
      * @throws std::out_of_range if index is invalid
      */
     node* get_child(int index) const {
-        if(index < 0 || index >= this->children.size()) {
+        if(index < 0 || static_cast<size_t>(index) >= this->children.size()) {
             throw std::out_of_range("child index out of range");
         }
         return this->children[index];
