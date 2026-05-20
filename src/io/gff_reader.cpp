@@ -151,7 +151,7 @@ namespace genogrove::io {
         }
     }
 
-    gff_format gff_reader::parse_attributes(const std::string& attr_string,
+    gff_format gff_reader::parse_attributes(std::string_view attr_string,
         std::map<std::string, std::string, std::less<>>& attributes) {
         attributes.clear();
 
@@ -159,7 +159,7 @@ namespace genogrove::io {
         size_t pos = 0;
 
         // Detect format: GFF3 uses '=' and ';', GTF uses ' "' and '";'
-        if (attr_string.find(" \"") != std::string::npos) {
+        if (attr_string.find(" \"") != std::string_view::npos) {
             // GTF format: key "value"; key "value";
             while (auto token_sv = ggu::next_gtf_field(sv, pos)) {
                 // Trim whitespace
@@ -329,12 +329,12 @@ namespace genogrove::io {
                     throw std::runtime_error(error_message);
                 }
 
-                // Read the rest of the line as attributes
-                std::string attributes_str;
+                // Read the rest of the line as attributes (view into line, no copy)
+                std::string_view attributes_sv;
                 if (fpos < line_sv.size()) {
                     auto attr_sv = line_sv.substr(fpos);
                     if (auto p = attr_sv.find_first_not_of(" \t"); p != std::string_view::npos) {
-                        attributes_str = std::string(attr_sv.substr(p));
+                        attributes_sv = attr_sv.substr(p);
                     }
                 }
 
@@ -385,8 +385,8 @@ namespace genogrove::io {
                 }
 
                 // Parse attributes and detect format
-                if (!attributes_str.empty()) {
-                    entry.format = parse_attributes(attributes_str, entry.attributes);
+                if (!attributes_sv.empty()) {
+                    entry.format = parse_attributes(attributes_sv, entry.attributes);
                 } else {
                     entry.attributes.clear();
                     entry.format = gff_format::UNKNOWN;
