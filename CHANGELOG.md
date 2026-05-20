@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+- **Explicit special members on the reader bases and `kstring_guard`**: `file_reader_base` and `file_reader<T>` never declared their own move members — `file_reader_base`'s virtual destructor suppressed implicit moves, so a derived reader's move silently fell through to the base's copy-assignment. Both bases now explicitly default-construct, delete copy (a polymorphic-base copy slices), and default move; `file_reader<T>` also defaults its destructor. `kstring_guard` gains explicit `= delete`d move members (already implicitly unavailable). No behavior change — the bases are stateless, so defaulted moves are identical to the prior copy path. ([#326](https://github.com/genogrove/genogrove/issues/326), [#375](https://github.com/genogrove/genogrove/issues/375), [#414](https://github.com/genogrove/genogrove/pull/414))
+
 ### Fixed
 - **`get_current_line()` contract documentation**: `bam_reader::get_current_line()`'s docstring said "Number of records read so far", implying records *yielded* by `read_next()` — but it counts every record *consumed* from the file, including records dropped by `should_skip()`. Corrected the docstring to match (behavior is unchanged: counting skipped records is what makes the "record N" in error messages point at the real file position). Also added the previously-absent docstring on `file_reader_base::get_current_line()` defining the contract — a 1-based input-consumed position, reader-specific unit (physical line for BED/GFF including comments/blanks, record index for BAM including filtered records), reflecting input consumed rather than entries yielded. ([#328](https://github.com/genogrove/genogrove/issues/328), [#379](https://github.com/genogrove/genogrove/issues/379), [#413](https://github.com/genogrove/genogrove/pull/413))
 
