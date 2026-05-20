@@ -19,6 +19,10 @@ struct kstring_guard {
 
     kstring_guard(const kstring_guard&) = delete;
     kstring_guard& operator=(const kstring_guard&) = delete;
+    // Already implicitly unavailable (the user-declared destructor suppresses
+    // implicit move generation); declared explicitly to state the intent.
+    kstring_guard(kstring_guard&&) = delete;
+    kstring_guard& operator=(kstring_guard&&) = delete;
 };
 
 }

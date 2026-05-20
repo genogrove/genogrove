@@ -27,7 +27,16 @@ namespace genogrove::io {
         /// advances it. Zero before the first read_next(). Intended for error
         /// messages and progress reporting, not for counting returned entries.
         virtual size_t get_current_line() const = 0;
+
+        file_reader_base() = default;
         virtual ~file_reader_base() = default;
+        // Polymorphic base: copying would slice. Move is explicitly defaulted
+        // so a derived reader's move moves *through* the base subobject rather
+        // than silently falling back to the base's copy-assignment.
+        file_reader_base(const file_reader_base&) = delete;
+        file_reader_base& operator=(const file_reader_base&) = delete;
+        file_reader_base(file_reader_base&&) = default;
+        file_reader_base& operator=(file_reader_base&&) = default;
     };
 
     // Forward declaration
@@ -141,6 +150,13 @@ namespace genogrove::io {
     class file_reader : public file_reader_base {
     public:
         using iterator = file_reader_iterator<EntryType>;
+
+        file_reader() = default;
+        ~file_reader() override = default;
+        file_reader(const file_reader&) = delete;
+        file_reader& operator=(const file_reader&) = delete;
+        file_reader(file_reader&&) = default;
+        file_reader& operator=(file_reader&&) = default;
 
         virtual bool read_next(EntryType& entry) = 0;
 
