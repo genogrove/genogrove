@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`numeric` default-constructor docstring**: adds a `@warning` that the `INT_MIN` sentinel is in-band — a default-constructed `numeric` is indistinguishable from (and `overlaps()`) a `numeric` holding the real value `INT_MIN`. Documents an existing behavior; no code change. ([#383](https://github.com/genogrove/genogrove/issues/383), [#412](https://github.com/genogrove/genogrove/pull/412))
+
 ## [0.24.2] - 2026-05-19
 
 ### Refactored
