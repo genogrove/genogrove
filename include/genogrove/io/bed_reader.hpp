@@ -10,6 +10,7 @@
 #include <string>
 #include <string_view>
 #include <filesystem>
+#include <iosfwd>
 #include <optional>
 #include <vector>
 
@@ -46,6 +47,9 @@ namespace genogrove::io {
         block_info() = default;
         block_info(int count, std::vector<size_t> sizes, std::vector<size_t> starts)
             : count(count), sizes(std::move(sizes)), starts(std::move(starts)) {}
+
+        void serialize(std::ostream& os) const;
+        [[nodiscard]] static block_info deserialize(std::istream& is);
     };
 
     /**
@@ -82,6 +86,9 @@ namespace genogrove::io {
         bed_entry() = default;
         bed_entry(std::string chrom, size_t start, size_t end)
             : chrom(std::move(chrom)), start(start), end(end) {}
+
+        void serialize(std::ostream& os) const;
+        [[nodiscard]] static bed_entry deserialize(std::istream& is);
     };
 
     /**

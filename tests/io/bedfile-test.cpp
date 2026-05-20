@@ -9,10 +9,14 @@
 // standard
 #include <filesystem>
 #include <fstream>
+#include <sstream>
+#include <vector>
 
 // genogrove
 #include <genogrove/io/filetype_detector.hpp>
 #include <genogrove/io/bed_reader.hpp>
+#include <genogrove/data_type/interval.hpp>
+#include <genogrove/structure/grove/grove.hpp>
 
 namespace fs = std::filesystem;
 namespace gio = genogrove::io;
@@ -969,4 +973,118 @@ TEST_F(bedfileTest, embeddedNulInFieldPreserved) {
     EXPECT_EQ(*entry.strand, '+');
 
     fs::remove(nul_bed);
+}
+
+// ==========================================
+// bed_entry serialization round-trip
+// ==========================================
+
+namespace {
+    gio::bed_entry roundtrip(const gio::bed_entry& in) {
+        std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+        in.serialize(ss);
+        return gio::bed_entry::deserialize(ss);
+    }
+}
+
+TEST(bedEntrySerialization, bed3RoundTrip) {
+    // No optional fields set — every presence flag must round-trip as absent.
+    gio::bed_entry in("chr1", 100, 200);
+    auto out = roundtrip(in);
+
+    EXPECT_EQ(out.chrom, "chr1");
+    EXPECT_EQ(out.start, 100u);
+    EXPECT_EQ(out.end, 200u);
+    EXPECT_FALSE(out.name.has_value());
+    EXPECT_FALSE(out.score.has_value());
+    EXPECT_FALSE(out.strand.has_value());
+    EXPECT_FALSE(out.thickness.has_value());
+    EXPECT_FALSE(out.item_rgb.has_value());
+    EXPECT_FALSE(out.blocks.has_value());
+}
+
+TEST(bedEntrySerialization, bed6RoundTrip) {
+    gio::bed_entry in("chr2", 1000, 2000);
+    in.name = "feature_A";
+    in.score = 500;
+    in.strand = '-';
+    auto out = roundtrip(in);
+
+    EXPECT_EQ(out.chrom, "chr2");
+    EXPECT_EQ(out.start, 1000u);
+    EXPECT_EQ(out.end, 2000u);
+    ASSERT_TRUE(out.name.has_value());
+    EXPECT_EQ(*out.name, "feature_A");
+    ASSERT_TRUE(out.score.has_value());
+    EXPECT_EQ(*out.score, 500);
+    ASSERT_TRUE(out.strand.has_value());
+    EXPECT_EQ(*out.strand, '-');
+    EXPECT_FALSE(out.thickness.has_value());
+}
+
+TEST(bedEntrySerialization, bed12RoundTrip) {
+    gio::bed_entry in("chrX", 0, 5000);
+    in.name = "tx1";
+    in.score = 0;
+    in.strand = '+';
+    in.thickness = gio::thick_info(10, 4990);
+    in.item_rgb = gio::rgb_color(255, 128, 0);
+    in.blocks = gio::block_info(3, {100, 200, 300}, {0, 1000, 4700});
+    auto out = roundtrip(in);
+
+    ASSERT_TRUE(out.thickness.has_value());
+    EXPECT_EQ(out.thickness->start, 10u);
+    EXPECT_EQ(out.thickness->end, 4990u);
+    ASSERT_TRUE(out.item_rgb.has_value());
+    EXPECT_EQ(out.item_rgb->red, 255);
+    EXPECT_EQ(out.item_rgb->green, 128);
+    EXPECT_EQ(out.item_rgb->blue, 0);
+    ASSERT_TRUE(out.blocks.has_value());
+    EXPECT_EQ(out.blocks->count, 3);
+    EXPECT_EQ(out.blocks->sizes, (std::vector<size_t>{100, 200, 300}));
+    EXPECT_EQ(out.blocks->starts, (std::vector<size_t>{0, 1000, 4700}));
+}
+
+TEST(bedEntrySerialization, preservesEmbeddedNulInName) {
+    // The string serializer is length-prefixed, so an embedded NUL in the
+    // name column must survive the round-trip.
+    gio::bed_entry in("chr1", 5, 10);
+    in.name = std::string("na\0me", 5);
+    auto out = roundtrip(in);
+
+    ASSERT_TRUE(out.name.has_value());
+    EXPECT_EQ(out.name->size(), 5u);
+    EXPECT_EQ((*out.name)[2], '\0');
+}
+
+TEST(bedEntrySerialization, groveRoundTrip) {
+    // End-to-end: a grove keyed on intervals with bed_entry payloads must
+    // serialize and deserialize with the payloads intact.
+    namespace ggs = genogrove::structure;
+    namespace gdt = genogrove::data_type;
+
+    ggs::grove<gdt::interval, gio::bed_entry> grove(4);
+    gio::bed_entry e1("chr1", 100, 200);
+    e1.name = "a";
+    e1.score = 10;
+    e1.strand = '+';
+    gio::bed_entry e2("chr1", 300, 400);
+    e2.blocks = gio::block_info(2, {5, 5}, {0, 50});
+    grove.insert_data("chr1", gdt::interval(100, 199), e1);
+    grove.insert_data("chr1", gdt::interval(300, 399), e2);
+
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    grove.serialize(ss);
+    auto restored = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(ss);
+
+    auto r1 = restored.intersect(gdt::interval(150, 150), "chr1");
+    ASSERT_EQ(r1.get_keys().size(), 1u);
+    EXPECT_EQ(r1.get_keys()[0]->get_data().name.value_or(""), "a");
+    EXPECT_EQ(r1.get_keys()[0]->get_data().strand.value_or(' '), '+');
+
+    auto r2 = restored.intersect(gdt::interval(350, 350), "chr1");
+    ASSERT_EQ(r2.get_keys().size(), 1u);
+    ASSERT_TRUE(r2.get_keys()[0]->get_data().blocks.has_value());
+    EXPECT_EQ(r2.get_keys()[0]->get_data().blocks->count, 2);
+    EXPECT_EQ(r2.get_keys()[0]->get_data().blocks->sizes, (std::vector<size_t>{5, 5}));
 }
