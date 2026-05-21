@@ -346,8 +346,12 @@ private:
             parent_separator = key_type::aggregate(parent_separator,
                 child->get_keys()[i]->get_value());
         }
-        gdt::key<key_type, data_type> parent_key{parent_separator};
-        auto* parent_key_ptr = allocate_key(parent_key);
+        // Promote key[mid] as the separator: reuse its existing key_storage
+        // slot, overwriting only its value with the aggregate range. Allocating
+        // a fresh key here would orphan key[mid]'s slot when resize(mid) drops
+        // it from the child below.
+        auto* parent_key_ptr = child->get_keys()[static_cast<size_t>(mid)];
+        parent_key_ptr->set_value(std::move(parent_separator));
 
         // Keys: left [0..mid-1], promote key[mid], right [mid+1..end]
         new_child->get_keys().assign(child->get_keys().begin() + mid + 1, child->get_keys().end());
