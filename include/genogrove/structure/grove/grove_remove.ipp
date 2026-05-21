@@ -103,7 +103,14 @@ private:
     /// Find a node's position in its parent's children vector
     int find_child_pos(node<key_type, data_type>* n) const {
         auto& siblings = n->get_parent()->get_children();
-        return static_cast<int>(std::ranges::find(siblings, n) - siblings.begin());
+        auto it = std::ranges::find(siblings, n);
+        if (it == siblings.end()) {
+            // Broken tree invariant: a node's parent must list it as a child.
+            // Returning end() - begin() here would hand back an out-of-range
+            // index and corrupt the caller silently.
+            throw std::runtime_error("find_child_pos: node is not among its parent's children");
+        }
+        return static_cast<int>(it - siblings.begin());
     }
 
     /**

@@ -443,8 +443,10 @@ namespace genogrove::io {
         cigar_string parse_cigar(const bam1_t* b) const;
 
         /// Parse auxiliary tags from bam1_t
-        /// Sets truncated=true if aux data was malformed/incomplete
-        sam_tags parse_tags(const bam1_t* b, bool& truncated) const;
+        /// Sets truncated=true if aux data was malformed/incomplete; on
+        /// truncation, last_tag is the name of the tag being parsed (empty if
+        /// truncation occurred between tags, before a tag name was read).
+        sam_tags parse_tags(const bam1_t* b, bool& truncated, std::string& last_tag) const;
 
         /// Parse a 'B'-type tag array, advancing aux past the consumed bytes
         /// Returns false if the array is truncated or malformed
