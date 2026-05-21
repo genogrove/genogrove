@@ -38,12 +38,12 @@ namespace genogrove::data_type {
      * - The grove owns the actual key objects; this class only references them
      *
      * ## Template Parameters
-     * - `key_type`: The type of the query and keys (e.g., interval, genomic_coordinate, numeric)
+     * - `Key`: The type of the query and keys (e.g., interval, genomic_coordinate, numeric)
      *   Must satisfy the key_type_base concept (comparison, overlap, aggregate, to_string)
-     * - `data_type`: Optional associated data type for keys (default: void for no data)
+     * - `Data`: Optional associated data type for keys (default: void for no data)
      *
-     * @tparam key_type Type satisfying key_type_base concept
-     * @tparam data_type Optional type for associated data (default: void)
+     * @tparam Key Type satisfying key_type_base concept
+     * @tparam Data Optional type for associated data (default: void)
      *
      * @note Keys are stored as `const`-pointers and remain valid as long as the
      *       grove exists; this prevents callers from mutating a key via
@@ -53,9 +53,9 @@ namespace genogrove::data_type {
      *       returned by the original `insert_data()` call.
      * @note This class does not own the key objects; they are owned by the grove
      * @see grove::intersect() for the primary usage of query_result
-     * @see key for the wrapper type storing key_type and optional data_type
+     * @see key for the wrapper type storing Key and optional Data
      */
-    template<key_type_base key_type, typename data_type = void>
+    template<key_type_base Key, typename Data = void>
     class query_result {
         public:
             /**
@@ -66,7 +66,7 @@ namespace genogrove::data_type {
              *
              * @param query The query used for intersection (stored by value)
              */
-            explicit query_result(key_type query) : query(query), keys{} {}
+            explicit query_result(Key query) : query(query), keys{} {}
 
             /**
              * @brief Get the original query that produced this result.
@@ -75,7 +75,7 @@ namespace genogrove::data_type {
              *
              * @return Const reference to the query value
              */
-            const key_type& get_query() const noexcept { return this->query; }
+            const Key& get_query() const noexcept { return this->query; }
 
             /**
              * @brief Get all matching keys found by the query.
@@ -92,7 +92,7 @@ namespace genogrove::data_type {
              * @note Pointers remain valid as long as the grove is not modified
              * @note Keys are stored in the order they were found during tree traversal
              */
-            const std::vector<const key<key_type, data_type>*>& get_keys() const { return this->keys; }
+            const std::vector<const key<Key, Data>*>& get_keys() const { return this->keys; }
 
             /**
              * @brief Add a matching key to the result set.
@@ -110,7 +110,7 @@ namespace genogrove::data_type {
              *       as `const key*` to enforce immutability through the public
              *       `get_keys()` accessor.
              */
-            void add_key(const key<key_type, data_type>* key) {
+            void add_key(const key<Key, Data>* key) {
                 if (key == nullptr) {
                     throw std::invalid_argument("query_result::add_key: key must not be nullptr");
                 }
@@ -118,8 +118,8 @@ namespace genogrove::data_type {
             }
 
         private:
-            key_type query;                                    ///< The original query (stored by value)
-            std::vector<const key<key_type, data_type>*> keys; ///< Const-pointers to matching keys (not owned)
+            Key query;                                    ///< The original query (stored by value)
+            std::vector<const key<Key, Data>*> keys; ///< Const-pointers to matching keys (not owned)
     };
 }
 

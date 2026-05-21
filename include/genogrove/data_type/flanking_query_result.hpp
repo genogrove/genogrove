@@ -33,8 +33,8 @@ namespace genogrove::data_type {
      * Pointers reference keys owned by the grove. They remain valid as long as the
      * grove exists and the referenced keys are not removed.
      *
-     * @tparam key_type The key type (must satisfy key_type_base concept)
-     * @tparam data_type Optional associated data type (default: void)
+     * @tparam Key The key type (must satisfy key_type_base concept)
+     * @tparam Data Optional associated data type (default: void)
      *
      * @note Stored as `const`-pointers; callers cannot mutate the predecessor /
      *       successor and corrupt B+ tree ordering. Code that needs a mutating
@@ -43,7 +43,7 @@ namespace genogrove::data_type {
      * @see grove::flanking()
      * @see query_result for the overlap-query result container
      */
-    template <key_type_base key_type, typename data_type = void>
+    template <key_type_base Key, typename Data = void>
     class flanking_query_result {
         public:
             /**
@@ -56,7 +56,7 @@ namespace genogrove::data_type {
              *
              * @return Const-pointer to the predecessor key, or nullptr if none exists
              */
-            const key<key_type, data_type>* get_predecessor() const noexcept {
+            const key<Key, Data>* get_predecessor() const noexcept {
                 return this->predecessor;
             }
 
@@ -65,7 +65,7 @@ namespace genogrove::data_type {
              *
              * @return Const-pointer to the successor key, or nullptr if none exists
              */
-            const key<key_type, data_type>* get_successor() const noexcept {
+            const key<Key, Data>* get_successor() const noexcept {
                 return this->successor;
             }
 
@@ -77,7 +77,7 @@ namespace genogrove::data_type {
              *
              * @param k Pointer to a key, or nullptr
              */
-            void set_predecessor(const key<key_type, data_type>* k) noexcept {
+            void set_predecessor(const key<Key, Data>* k) noexcept {
                 this->predecessor = k;
             }
 
@@ -88,13 +88,13 @@ namespace genogrove::data_type {
              *
              * @param k Pointer to a key, or nullptr
              */
-            void set_successor(const key<key_type, data_type>* k) noexcept {
+            void set_successor(const key<Key, Data>* k) noexcept {
                 this->successor = k;
             }
 
         private:
-            const key<key_type, data_type>* predecessor = nullptr;
-            const key<key_type, data_type>* successor   = nullptr;
+            const key<Key, Data>* predecessor = nullptr;
+            const key<Key, Data>* successor   = nullptr;
     };
 
 }

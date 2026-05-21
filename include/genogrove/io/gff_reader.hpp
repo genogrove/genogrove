@@ -108,7 +108,7 @@ namespace genogrove::io {
             : file_reader<gff_entry>(std::move(other)),
               bgzf_file(other.bgzf_file), line_num(other.line_num),
               error_message(std::move(other.error_message)),
-              options_(other.options_) {
+              options(other.options) {
             other.bgzf_file = nullptr;
         }
         gff_reader& operator=(gff_reader&& other) noexcept {
@@ -118,7 +118,7 @@ namespace genogrove::io {
                 bgzf_file = other.bgzf_file;
                 line_num = other.line_num;
                 error_message = std::move(other.error_message);
-                options_ = other.options_;
+                options = other.options;
                 other.bgzf_file = nullptr;
             }
             return *this;
@@ -134,7 +134,7 @@ namespace genogrove::io {
         BGZF* bgzf_file;
         size_t line_num;
         std::string error_message;
-        gff_reader_options options_;
+        gff_reader_options options;
 
         // Helper to parse attributes (handles both GFF3 and GTF formats)
         // Returns the detected format

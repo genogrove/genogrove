@@ -420,15 +420,15 @@ namespace genogrove::io {
         ~bam_reader() override;
 
     private:
-        samFile* sam_file_;             ///< htslib file handle
-        bam_hdr_t* header_;             ///< SAM header
-        bam1_t* alignment_;             ///< Reusable alignment record
-        bam_reader_options options_;    ///< Reader options
-        std::string header_text_;       ///< Cached header text
-        std::vector<std::string> ref_names_; ///< Reference sequence names
-        size_t record_num_;             ///< Current record number
-        std::string error_message_;     ///< Last error message
-        bool at_eof_;                   ///< EOF flag
+        samFile* sam_file;             ///< htslib file handle
+        bam_hdr_t* header;             ///< SAM header
+        bam1_t* alignment;             ///< Reusable alignment record
+        bam_reader_options options;    ///< Reader options
+        std::string header_text;       ///< Cached header text
+        std::vector<std::string> ref_names; ///< Reference sequence names
+        size_t record_num;             ///< Current record number
+        std::string error_message;     ///< Last error message
+        bool at_eof;                   ///< EOF flag
 
         /// Apply filters and check if record should be skipped
         bool should_skip(const bam1_t* b) const;
