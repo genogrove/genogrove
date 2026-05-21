@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.3] - 2026-05-21
+
 ### Added
 - **`intersect` searches a prebuilt index (`-i`)**: `intersect` now accepts a prebuilt `.gg` index via `-i/--indexfile` and searches it directly, so the source BED file is not needed. `-t` (build the grove from a target BED) and `-i` are alternatives — at least one is required. ([#422](https://github.com/genogrove/genogrove/issues/422), [#423](https://github.com/genogrove/genogrove/pull/423))
 - **`idx` CLI subcommand**: `genogrove idx <file.bed>` reads a BED file, builds an interval grove, and serializes it to a zlib-compressed `.gg` index file (default `<input>.gg`, or `-o <path>`) — previously the subcommand threw `"not yet implemented"`. Honors `-k` (tree order), `-s` (sorted-append fast path), and `-t` (indexing time); non-BED input is rejected. ([#343](https://github.com/genogrove/genogrove/issues/343), [#421](https://github.com/genogrove/genogrove/pull/421))
