@@ -83,7 +83,7 @@ namespace genogrove::io {
         : gff_reader(fpath, gff_reader_options::defaults()) {}
 
     gff_reader::gff_reader(const std::filesystem::path& fpath, const gff_reader_options& options)
-        : bgzf_file(nullptr), line_num(0), options_(options) {
+        : bgzf_file(nullptr), line_num(0), options(options) {
         // note this handles both raw and gzipped files
         bgzf_file = bgzf_open(fpath.c_str(), "r");
         if(!bgzf_file) {
@@ -329,7 +329,7 @@ namespace genogrove::io {
                 if (!seqid_f || !source_f || !type_f || !start_f || !end_f ||
                     !score_f || !strand_f || !phase_f) {
                     error_message = "Invalid GFF line format at line " + std::to_string(line_num);
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
@@ -347,7 +347,7 @@ namespace genogrove::io {
                    !std::ranges::all_of(*start_f, ggu::is_digit) ||
                    !std::ranges::all_of(*end_f, ggu::is_digit)) {
                     error_message = "Invalid coordinate format at line " + std::to_string(line_num);
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
@@ -358,13 +358,13 @@ namespace genogrove::io {
                 auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end);
                 if (ec1 != std::errc{} || ec2 != std::errc{}) {
                     error_message = "Coordinate out of range at line " + std::to_string(line_num);
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
                 if (start > end) {
                     error_message = "Start coordinate is greater than end coordinate at line " + std::to_string(line_num);
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
@@ -376,15 +376,15 @@ namespace genogrove::io {
 
                 // Parse score, strand, and phase
                 if (!parse_score(entry, *score_f)) {
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
                 if (!parse_strand(entry, *strand_f)) {
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
                 if (!parse_phase(entry, *phase_f)) {
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
@@ -397,9 +397,9 @@ namespace genogrove::io {
                 }
 
                 // Validate mandatory GTF2 attributes if enabled
-                if (options_.validate_gtf && entry.format == gff_format::GTF) {
+                if (options.validate_gtf && entry.format == gff_format::GTF) {
                     if (!validate_gtf_attributes(entry)) {
-                        if (options_.skip_invalid_lines) continue;
+                        if (options.skip_invalid_lines) continue;
                         throw std::runtime_error(error_message);
                     }
                 }
@@ -409,7 +409,7 @@ namespace genogrove::io {
                 throw; // re-throw our own exceptions
             } catch (const std::exception&) {
                 error_message = "Failed to parse line at " + std::to_string(line_num) + ": " + line;
-                if (options_.skip_invalid_lines) continue;
+                if (options.skip_invalid_lines) continue;
                 throw std::runtime_error(error_message);
             }
         }

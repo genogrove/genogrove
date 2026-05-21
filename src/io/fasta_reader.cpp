@@ -23,21 +23,21 @@ namespace genogrove::io {
 
     fasta_reader::fasta_reader(const std::filesystem::path& path,
                                      const fasta_reader_options& options)
-        : gz_file_(nullptr)
-        , kseq_(nullptr)
-        , record_num_(0)
-        , at_eof_(false)
-        , options_(options) {
+        : gz_file(nullptr)
+        , kseq(nullptr)
+        , record_num(0)
+        , at_eof(false)
+        , options(options) {
 
-        gz_file_ = gzopen(path.c_str(), "r");
-        if (!gz_file_) {
+        gz_file = gzopen(path.c_str(), "r");
+        if (!gz_file) {
             throw std::runtime_error("Failed to open file: " + path.string());
         }
 
-        kseq_ = static_cast<void*>(kseq_init(gz_file_));
-        if (!kseq_) {
-            gzclose(gz_file_);
-            gz_file_ = nullptr;
+        kseq = static_cast<void*>(kseq_init(gz_file));
+        if (!kseq) {
+            gzclose(gz_file);
+            gz_file = nullptr;
             throw std::runtime_error("Failed to initialize sequence parser for: " + path.string());
         }
     }
@@ -47,26 +47,26 @@ namespace genogrove::io {
     }
 
     void fasta_reader::cleanup() {
-        if (kseq_) {
-            kseq_destroy(as_kseq(kseq_));
-            kseq_ = nullptr;
+        if (kseq) {
+            kseq_destroy(as_kseq(kseq));
+            kseq = nullptr;
         }
-        if (gz_file_) {
-            gzclose(gz_file_);
-            gz_file_ = nullptr;
+        if (gz_file) {
+            gzclose(gz_file);
+            gz_file = nullptr;
         }
     }
 
     fasta_reader::fasta_reader(fasta_reader&& other) noexcept
         : file_reader<fasta_entry>(std::move(other))
-        , gz_file_(other.gz_file_)
-        , kseq_(other.kseq_)
-        , record_num_(other.record_num_)
-        , error_message_(std::move(other.error_message_))
-        , at_eof_(other.at_eof_)
-        , options_(other.options_) {
-        other.gz_file_ = nullptr;
-        other.kseq_ = nullptr;
+        , gz_file(other.gz_file)
+        , kseq(other.kseq)
+        , record_num(other.record_num)
+        , error_message(std::move(other.error_message))
+        , at_eof(other.at_eof)
+        , options(other.options) {
+        other.gz_file = nullptr;
+        other.kseq = nullptr;
     }
 
     fasta_reader& fasta_reader::operator=(fasta_reader&& other) noexcept {
@@ -74,44 +74,44 @@ namespace genogrove::io {
             file_reader<fasta_entry>::operator=(std::move(other));
             cleanup();
 
-            gz_file_ = other.gz_file_;
-            kseq_ = other.kseq_;
-            record_num_ = other.record_num_;
-            error_message_ = std::move(other.error_message_);
-            at_eof_ = other.at_eof_;
-            options_ = other.options_;
+            gz_file = other.gz_file;
+            kseq = other.kseq;
+            record_num = other.record_num;
+            error_message = std::move(other.error_message);
+            at_eof = other.at_eof;
+            options = other.options;
 
-            other.gz_file_ = nullptr;
-            other.kseq_ = nullptr;
+            other.gz_file = nullptr;
+            other.kseq = nullptr;
         }
         return *this;
     }
 
     bool fasta_reader::read_next(fasta_entry& entry) {
-        if (!kseq_ || at_eof_) {
+        if (!kseq || at_eof) {
             return false;
         }
 
         while (true) {
-            error_message_.clear();
+            error_message.clear();
 
-            kseq_t* ks = as_kseq(kseq_);
+            kseq_t* ks = as_kseq(kseq);
             int ret = kseq_read(ks);
             if (ret < 0) {
                 if (ret == -1) {
                     // EOF
-                    at_eof_ = true;
+                    at_eof = true;
                     return false;
                 } else if (ret == -2) {
-                    error_message_ = "Truncated quality string at record " + std::to_string(record_num_ + 1);
-                    throw std::runtime_error(error_message_);
+                    error_message = "Truncated quality string at record " + std::to_string(record_num + 1);
+                    throw std::runtime_error(error_message);
                 } else {
-                    error_message_ = "I/O error reading sequence record after record " + std::to_string(record_num_);
-                    throw std::runtime_error(error_message_);
+                    error_message = "I/O error reading sequence record after record " + std::to_string(record_num);
+                    throw std::runtime_error(error_message);
                 }
             }
 
-            record_num_++;
+            record_num++;
 
             // Extract fields from kseq
             entry.name = std::string(ks->name.s, ks->name.l);
@@ -125,7 +125,7 @@ namespace genogrove::io {
             }
 
             // Apply filters
-            if (options_.skip_empty_sequences && entry.sequence.empty()) {
+            if (options.skip_empty_sequences && entry.sequence.empty()) {
                 continue;
             }
 
@@ -134,15 +134,15 @@ namespace genogrove::io {
     }
 
     bool fasta_reader::has_next() {
-        return !at_eof_ && kseq_ != nullptr;
+        return !at_eof && kseq != nullptr;
     }
 
     std::string fasta_reader::get_error_message() const {
-        return error_message_;
+        return error_message;
     }
 
     size_t fasta_reader::get_current_line() const {
-        return record_num_;
+        return record_num;
     }
 
 } // namespace genogrove::io

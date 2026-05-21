@@ -15,24 +15,24 @@ namespace genogrove::io {
         : bam_reader(path, bam_reader_options::defaults()) {}
 
     bam_reader::bam_reader(const std::filesystem::path& path, const bam_reader_options& options)
-        : sam_file_(nullptr)
-        , header_(nullptr)
-        , alignment_(nullptr)
-        , options_(options)
-        , record_num_(0)
-        , at_eof_(false) {
+        : sam_file(nullptr)
+        , header(nullptr)
+        , alignment(nullptr)
+        , options(options)
+        , record_num(0)
+        , at_eof(false) {
 
         // Open the file with htslib (auto-detects SAM/BAM/CRAM)
-        sam_file_ = sam_open(path.c_str(), "r");
-        if (!sam_file_) {
+        sam_file = sam_open(path.c_str(), "r");
+        if (!sam_file) {
             throw std::runtime_error("Failed to open file: " + path.string());
         }
 
         // Read the header
-        header_ = sam_hdr_read(sam_file_);
-        if (!header_) {
-            hts_close(sam_file_);
-            sam_file_ = nullptr;
+        header = sam_hdr_read(sam_file);
+        if (!header) {
+            hts_close(sam_file);
+            sam_file = nullptr;
             throw std::runtime_error("Failed to read header from: " + path.string());
         }
 
@@ -40,19 +40,19 @@ namespace genogrove::io {
         // the constructor hasn't completed so the destructor won't run — clean up manually.
         try {
             // Cache header text
-            if (header_->text) {
-                header_text_ = std::string(header_->text, header_->l_text);
+            if (header->text) {
+                header_text = std::string(header->text, header->l_text);
             }
 
             // Cache reference names
-            ref_names_.reserve(header_->n_targets);
-            for (int i = 0; i < header_->n_targets; ++i) {
-                ref_names_.emplace_back(header_->target_name[i]);
+            ref_names.reserve(header->n_targets);
+            for (int i = 0; i < header->n_targets; ++i) {
+                ref_names.emplace_back(header->target_name[i]);
             }
 
             // Allocate reusable alignment structure
-            alignment_ = bam_init1();
-            if (!alignment_) {
+            alignment = bam_init1();
+            if (!alignment) {
                 throw std::runtime_error("Failed to allocate alignment structure");
             }
         } catch (...) {
@@ -66,35 +66,35 @@ namespace genogrove::io {
     }
 
     void bam_reader::cleanup() {
-        if (alignment_) {
-            bam_destroy1(alignment_);
-            alignment_ = nullptr;
+        if (alignment) {
+            bam_destroy1(alignment);
+            alignment = nullptr;
         }
-        if (header_) {
-            bam_hdr_destroy(header_);
-            header_ = nullptr;
+        if (header) {
+            bam_hdr_destroy(header);
+            header = nullptr;
         }
-        if (sam_file_) {
-            hts_close(sam_file_);
-            sam_file_ = nullptr;
+        if (sam_file) {
+            hts_close(sam_file);
+            sam_file = nullptr;
         }
     }
 
     bam_reader::bam_reader(bam_reader&& other) noexcept
         : file_reader<sam_entry>(std::move(other))
-        , sam_file_(other.sam_file_)
-        , header_(other.header_)
-        , alignment_(other.alignment_)
-        , options_(other.options_)
-        , header_text_(std::move(other.header_text_))
-        , ref_names_(std::move(other.ref_names_))
-        , record_num_(other.record_num_)
-        , error_message_(std::move(other.error_message_))
-        , at_eof_(other.at_eof_) {
+        , sam_file(other.sam_file)
+        , header(other.header)
+        , alignment(other.alignment)
+        , options(other.options)
+        , header_text(std::move(other.header_text))
+        , ref_names(std::move(other.ref_names))
+        , record_num(other.record_num)
+        , error_message(std::move(other.error_message))
+        , at_eof(other.at_eof) {
         // Null out source pointers
-        other.sam_file_ = nullptr;
-        other.header_ = nullptr;
-        other.alignment_ = nullptr;
+        other.sam_file = nullptr;
+        other.header = nullptr;
+        other.alignment = nullptr;
     }
 
     bam_reader& bam_reader::operator=(bam_reader&& other) noexcept {
@@ -102,19 +102,19 @@ namespace genogrove::io {
             file_reader<sam_entry>::operator=(std::move(other));
             cleanup();
 
-            sam_file_ = other.sam_file_;
-            header_ = other.header_;
-            alignment_ = other.alignment_;
-            options_ = other.options_;
-            header_text_ = std::move(other.header_text_);
-            ref_names_ = std::move(other.ref_names_);
-            record_num_ = other.record_num_;
-            error_message_ = std::move(other.error_message_);
-            at_eof_ = other.at_eof_;
+            sam_file = other.sam_file;
+            header = other.header;
+            alignment = other.alignment;
+            options = other.options;
+            header_text = std::move(other.header_text);
+            ref_names = std::move(other.ref_names);
+            record_num = other.record_num;
+            error_message = std::move(other.error_message);
+            at_eof = other.at_eof;
 
-            other.sam_file_ = nullptr;
-            other.header_ = nullptr;
-            other.alignment_ = nullptr;
+            other.sam_file = nullptr;
+            other.header = nullptr;
+            other.alignment = nullptr;
         }
         return *this;
     }
@@ -122,22 +122,22 @@ namespace genogrove::io {
     bool bam_reader::should_skip(const bam1_t* b) const {
         uint16_t flag = b->core.flag;
 
-        if (options_.skip_unmapped && (flag & BAM_FUNMAP)) {
+        if (options.skip_unmapped && (flag & BAM_FUNMAP)) {
             return true;
         }
-        if (options_.skip_secondary && (flag & BAM_FSECONDARY)) {
+        if (options.skip_secondary && (flag & BAM_FSECONDARY)) {
             return true;
         }
-        if (options_.skip_supplementary && (flag & BAM_FSUPPLEMENTARY)) {
+        if (options.skip_supplementary && (flag & BAM_FSUPPLEMENTARY)) {
             return true;
         }
-        if (options_.skip_qc_fail && (flag & BAM_FQCFAIL)) {
+        if (options.skip_qc_fail && (flag & BAM_FQCFAIL)) {
             return true;
         }
-        if (options_.skip_duplicates && (flag & BAM_FDUP)) {
+        if (options.skip_duplicates && (flag & BAM_FDUP)) {
             return true;
         }
-        if (options_.min_mapq > 0 && b->core.qual < options_.min_mapq) {
+        if (options.min_mapq > 0 && b->core.qual < options.min_mapq) {
             return true;
         }
 
@@ -146,34 +146,34 @@ namespace genogrove::io {
 
     bool bam_reader::read_next(sam_entry& entry) {
         // Unconditional clear honors the file_reader_base contract: any path
-        // that sets error_message_ must either throw or return false. After a
+        // that sets error_message must either throw or return false. After a
         // successful read or a clean EOF, get_error_message() reads empty.
-        error_message_.clear();
+        error_message.clear();
 
-        if (!sam_file_ || at_eof_) {
+        if (!sam_file || at_eof) {
             return false;
         }
 
         // Read records until we find one that passes filters
         int ret;
-        while ((ret = sam_read1(sam_file_, header_, alignment_)) >= 0) {
-            record_num_++;
+        while ((ret = sam_read1(sam_file, header, alignment)) >= 0) {
+            record_num++;
 
-            if (should_skip(alignment_)) {
+            if (should_skip(alignment)) {
                 continue;
             }
 
-            parse_alignment(alignment_, entry);
+            parse_alignment(alignment, entry);
             return true;
         }
 
         // Check for error vs EOF
         if (ret < -1) {
-            error_message_ = "I/O error reading alignment record after record " + std::to_string(record_num_);
-            throw std::runtime_error(error_message_);
+            error_message = "I/O error reading alignment record after record " + std::to_string(record_num);
+            throw std::runtime_error(error_message);
         }
 
-        at_eof_ = true;
+        at_eof = true;
         return false;
     }
 
@@ -184,8 +184,8 @@ namespace genogrove::io {
         entry.qname = bam_get_qname(b);
 
         // Reference name (RNAME)
-        if (c.tid >= 0 && c.tid < header_->n_targets) {
-            entry.chrom = header_->target_name[c.tid];
+        if (c.tid >= 0 && c.tid < header->n_targets) {
+            entry.chrom = header->target_name[c.tid];
         } else {
             entry.chrom = "*";
         }
@@ -231,11 +231,11 @@ namespace genogrove::io {
         // Mate information for paired reads
         if (c.flag & BAM_FPAIRED) {
             mate_info mate;
-            if (c.mtid >= 0 && c.mtid < header_->n_targets) {
+            if (c.mtid >= 0 && c.mtid < header->n_targets) {
                 if (c.mtid == c.tid) {
                     mate.chrom = "=";  // Same reference as read
                 } else {
-                    mate.chrom = header_->target_name[c.mtid];
+                    mate.chrom = header->target_name[c.mtid];
                 }
             } else {
                 mate.chrom = "*";
@@ -251,8 +251,8 @@ namespace genogrove::io {
         bool aux_truncated = false;
         entry.tags = parse_tags(b, aux_truncated);
         if (aux_truncated) {
-            error_message_ = "Truncated auxiliary data at record " + std::to_string(record_num_);
-            throw std::runtime_error(error_message_);
+            error_message = "Truncated auxiliary data at record " + std::to_string(record_num);
+            throw std::runtime_error(error_message);
         }
     }
 
@@ -456,23 +456,23 @@ namespace genogrove::io {
     }
 
     bool bam_reader::has_next() {
-        return !at_eof_ && sam_file_ != nullptr;
+        return !at_eof && sam_file != nullptr;
     }
 
     std::string bam_reader::get_error_message() const {
-        return error_message_;
+        return error_message;
     }
 
     size_t bam_reader::get_current_line() const {
-        return record_num_;
+        return record_num;
     }
 
     const std::string& bam_reader::get_header() const {
-        return header_text_;
+        return header_text;
     }
 
     const std::vector<std::string>& bam_reader::get_reference_names() const {
-        return ref_names_;
+        return ref_names;
     }
 
 } // namespace genogrove::io

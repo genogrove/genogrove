@@ -94,12 +94,12 @@ namespace genogrove::io {
         ~fasta_reader() override;
 
     private:
-        gzFile gz_file_;
-        void* kseq_;                ///< Opaque pointer to kseq_t (macro-generated type)
-        size_t record_num_;
-        std::string error_message_;
-        bool at_eof_;
-        fasta_reader_options options_;
+        gzFile gz_file;
+        void* kseq;                ///< Opaque pointer to kseq_t (macro-generated type)
+        size_t record_num;
+        std::string error_message;
+        bool at_eof;
+        fasta_reader_options options;
 
         void cleanup();
     };

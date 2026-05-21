@@ -60,7 +60,7 @@ namespace genogrove::io {
         : bed_reader(fpath, bed_reader_options::defaults()) {}
 
     bed_reader::bed_reader(const std::filesystem::path& fpath, const bed_reader_options& options)
-        : bgzf_file(nullptr), line_num(0), options_(options) {
+        : bgzf_file(nullptr), line_num(0), options(options) {
         // note this handles both raw and gzipped files
         bgzf_file = bgzf_open(fpath.c_str(), "r"); // open file
         if(!bgzf_file) {
@@ -367,7 +367,7 @@ namespace genogrove::io {
             try {
                 if (!chrom_f || !start_f || !end_f) {
                     error_message = "Invalid line format at line " + std::to_string(line_num);
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
@@ -377,7 +377,7 @@ namespace genogrove::io {
                     !std::ranges::all_of(*start_f, ggu::is_digit) ||
                     !std::ranges::all_of(*end_f, ggu::is_digit)) {
                     error_message = "Invalid coordinate format at line " + std::to_string(line_num);
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
@@ -388,13 +388,13 @@ namespace genogrove::io {
                 auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
                 if (ec1 != std::errc{} || ec2 != std::errc{}) {
                     error_message = "Coordinate out of range at line " + std::to_string(line_num);
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
                 if (start_num >= end_num) {
                     error_message = "Start coordinate is greater than or equal to the end coordinate at line " + std::to_string(line_num);
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
                 entry.chrom = std::string(*chrom_f);
@@ -404,7 +404,7 @@ namespace genogrove::io {
                 // Parse optional BED fields (BED4 through BED12)
                 if (!parse_optional_fields(line_sv, fpos, entry, start_num, end_num)) {
                     // error_message already set by parse_* helper
-                    if (options_.skip_invalid_lines) continue;
+                    if (options.skip_invalid_lines) continue;
                     throw std::runtime_error(error_message);
                 }
 
@@ -413,7 +413,7 @@ namespace genogrove::io {
                 throw; // re-throw our own exceptions
             } catch (std::exception &e) {
                 error_message = "Failed to parse line at " + std::to_string(line_num) + ": " + line;
-                if (options_.skip_invalid_lines) continue;
+                if (options.skip_invalid_lines) continue;
                 throw std::runtime_error(error_message);
             }
         }

@@ -27,13 +27,13 @@ namespace genogrove::structure::detail {
 class deflate_streambuf : public std::streambuf {
 public:
     explicit deflate_streambuf(std::ostream& sink)
-        : sink_(sink) {
-        zs_ = {};
-        int ret = deflateInit(&zs_, Z_DEFAULT_COMPRESSION);
+        : sink(sink) {
+        zs = {};
+        int ret = deflateInit(&zs, Z_DEFAULT_COMPRESSION);
         if (ret != Z_OK) {
             throw std::runtime_error("deflateInit failed");
         }
-        setp(in_buf_.data(), in_buf_.data() + in_buf_.size());
+        setp(in_buf.data(), in_buf.data() + in_buf.size());
     }
 
     deflate_streambuf(const deflate_streambuf&) = delete;
@@ -42,13 +42,13 @@ public:
     deflate_streambuf& operator=(deflate_streambuf&&) = delete;
 
     ~deflate_streambuf() override {
-        deflateEnd(&zs_);
+        deflateEnd(&zs);
     }
 
     void finish() {
         compress(Z_FINISH);
-        deflateEnd(&zs_);
-        zs_ = {};  // prevent double-free in destructor
+        deflateEnd(&zs);
+        zs = {};  // prevent double-free in destructor
     }
 
 protected:
@@ -68,34 +68,34 @@ protected:
 
 private:
     void compress(int flush) {
-        zs_.avail_in = static_cast<uInt>(pptr() - pbase());
-        zs_.next_in = reinterpret_cast<Bytef*>(pbase());
+        zs.avail_in = static_cast<uInt>(pptr() - pbase());
+        zs.next_in = reinterpret_cast<Bytef*>(pbase());
 
         int ret;
         do {
-            zs_.avail_out = static_cast<uInt>(out_buf_.size());
-            zs_.next_out = reinterpret_cast<Bytef*>(out_buf_.data());
-            ret = deflate(&zs_, flush);
+            zs.avail_out = static_cast<uInt>(out_buf.size());
+            zs.next_out = reinterpret_cast<Bytef*>(out_buf.data());
+            ret = deflate(&zs, flush);
             if (ret != Z_OK && ret != Z_STREAM_END) {
-                throw std::runtime_error("deflate failed: " + std::string(zs_.msg ? zs_.msg : "unknown error"));
+                throw std::runtime_error("deflate failed: " + std::string(zs.msg ? zs.msg : "unknown error"));
             }
-            auto have = out_buf_.size() - zs_.avail_out;
+            auto have = out_buf.size() - zs.avail_out;
             if (have > 0) {
-                sink_.write(out_buf_.data(), static_cast<std::streamsize>(have));
-                if (!sink_) {
+                sink.write(out_buf.data(), static_cast<std::streamsize>(have));
+                if (!sink) {
                     throw std::runtime_error("Failed to write compressed data to stream");
                 }
             }
-        } while (ret != Z_STREAM_END && (zs_.avail_out == 0 || flush == Z_FINISH));
+        } while (ret != Z_STREAM_END && (zs.avail_out == 0 || flush == Z_FINISH));
 
-        setp(in_buf_.data(), in_buf_.data() + in_buf_.size());
+        setp(in_buf.data(), in_buf.data() + in_buf.size());
     }
 
     static constexpr std::size_t buf_size = 16384;
-    std::array<char, buf_size> in_buf_{};
-    std::array<char, buf_size> out_buf_{};
-    z_stream zs_{};
-    std::ostream& sink_;
+    std::array<char, buf_size> in_buf{};
+    std::array<char, buf_size> out_buf{};
+    z_stream zs{};
+    std::ostream& sink;
 };
 
 /**
@@ -107,13 +107,13 @@ private:
 class inflate_streambuf : public std::streambuf {
 public:
     explicit inflate_streambuf(std::istream& source)
-        : source_(source) {
-        zs_ = {};
-        int ret = inflateInit(&zs_);
+        : source(source) {
+        zs = {};
+        int ret = inflateInit(&zs);
         if (ret != Z_OK) {
             throw std::runtime_error("inflateInit failed");
         }
-        setg(out_buf_.data(), out_buf_.data(), out_buf_.data());
+        setg(out_buf.data(), out_buf.data(), out_buf.data());
     }
 
     inflate_streambuf(const inflate_streambuf&) = delete;
@@ -122,7 +122,7 @@ public:
     inflate_streambuf& operator=(inflate_streambuf&&) = delete;
 
     ~inflate_streambuf() override {
-        inflateEnd(&zs_);
+        inflateEnd(&zs);
     }
 
 protected:
@@ -131,42 +131,42 @@ protected:
             return traits_type::to_int_type(*gptr());
         }
 
-        if (stream_ended_) {
+        if (stream_ended) {
             return traits_type::eof();
         }
 
-        zs_.avail_out = static_cast<uInt>(out_buf_.size());
-        zs_.next_out = reinterpret_cast<Bytef*>(out_buf_.data());
+        zs.avail_out = static_cast<uInt>(out_buf.size());
+        zs.next_out = reinterpret_cast<Bytef*>(out_buf.data());
 
-        while (zs_.avail_out > 0) {
-            if (zs_.avail_in == 0) {
-                source_.read(in_buf_.data(), static_cast<std::streamsize>(in_buf_.size()));
-                auto bytes_read = source_.gcount();
+        while (zs.avail_out > 0) {
+            if (zs.avail_in == 0) {
+                source.read(in_buf.data(), static_cast<std::streamsize>(in_buf.size()));
+                auto bytes_read = source.gcount();
                 if (bytes_read == 0) {
-                    if (source_.bad()) {
+                    if (source.bad()) {
                         throw std::runtime_error("inflate: I/O error reading compressed stream");
                     }
                     throw std::runtime_error("inflate: unexpected EOF in compressed stream (truncated input)");
                 }
-                zs_.avail_in = static_cast<uInt>(bytes_read);
-                zs_.next_in = reinterpret_cast<Bytef*>(in_buf_.data());
+                zs.avail_in = static_cast<uInt>(bytes_read);
+                zs.next_in = reinterpret_cast<Bytef*>(in_buf.data());
             }
 
-            int ret = inflate(&zs_, Z_NO_FLUSH);
+            int ret = inflate(&zs, Z_NO_FLUSH);
             if (ret == Z_STREAM_END) {
-                stream_ended_ = true;
-                // Clear eofbit/failbit from the last partial source_.read(),
+                stream_ended = true;
+                // Clear eofbit/failbit from the last partial source.read(),
                 // then seek back unconsumed bytes so trailing data remains readable.
-                source_.clear();
-                if (zs_.avail_in > 0) {
-                    source_.seekg(-static_cast<std::streamoff>(zs_.avail_in),
+                source.clear();
+                if (zs.avail_in > 0) {
+                    source.seekg(-static_cast<std::streamoff>(zs.avail_in),
                                   std::ios_base::cur);
                     // Non-seekable sources (pipes, sockets, custom streambufs)
                     // silently fail the seekg. Without this check the trailing
                     // bytes would be lost without any error — the
                     // "concatenated payloads" contract in CLAUDE.md silently
                     // degrades. Throw so the caller knows.
-                    if (source_.fail()) {
+                    if (source.fail()) {
                         throw std::runtime_error(
                             "inflate_streambuf: source stream is not seekable; "
                             "concatenated payloads require a seekable source");
@@ -175,26 +175,26 @@ protected:
                 break;
             }
             if (ret != Z_OK) {
-                throw std::runtime_error("inflate failed: " + std::string(zs_.msg ? zs_.msg : "unknown error"));
+                throw std::runtime_error("inflate failed: " + std::string(zs.msg ? zs.msg : "unknown error"));
             }
         }
 
-        auto have = out_buf_.size() - zs_.avail_out;
+        auto have = out_buf.size() - zs.avail_out;
         if (have == 0) {
             return traits_type::eof();
         }
 
-        setg(out_buf_.data(), out_buf_.data(), out_buf_.data() + have);
+        setg(out_buf.data(), out_buf.data(), out_buf.data() + have);
         return traits_type::to_int_type(*gptr());
     }
 
 private:
     static constexpr std::size_t buf_size = 16384;
-    std::array<char, buf_size> in_buf_{};
-    std::array<char, buf_size> out_buf_{};
-    z_stream zs_{};
-    std::istream& source_;
-    bool stream_ended_ = false;
+    std::array<char, buf_size> in_buf{};
+    std::array<char, buf_size> out_buf{};
+    z_stream zs{};
+    std::istream& source;
+    bool stream_ended = false;
 };
 
 } // namespace genogrove::structure::detail

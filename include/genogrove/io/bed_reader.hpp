@@ -126,7 +126,7 @@ namespace genogrove::io {
             : file_reader<bed_entry>(std::move(other)),
               bgzf_file(other.bgzf_file), line_num(other.line_num),
               error_message(std::move(other.error_message)),
-              options_(other.options_) {
+              options(other.options) {
             other.bgzf_file = nullptr;
         }
         bed_reader& operator=(bed_reader&& other) noexcept {
@@ -136,7 +136,7 @@ namespace genogrove::io {
                 bgzf_file = other.bgzf_file;
                 line_num = other.line_num;
                 error_message = std::move(other.error_message);
-                options_ = other.options_;
+                options = other.options;
                 other.bgzf_file = nullptr;
             }
             return *this;
@@ -152,7 +152,7 @@ namespace genogrove::io {
         BGZF* bgzf_file;
         size_t line_num;
         std::string error_message;
-        bed_reader_options options_;
+        bed_reader_options options;
 
         // Helper functions for parsing BED fields
         bool parse_score(bed_entry& entry, std::string_view score_str);
