@@ -752,14 +752,18 @@ TEST(GroveCompactTest, PreservesIndexedKeysWithoutRemoval) {
     gst::grove<gdt::interval, int> grove(4);
     insert_intervals(grove, "chr1", 20);
 
+    // 20 keys in an order-4 grove builds a multi-level tree, so the build
+    // exercised split_internal_node. With no remove_key() calls and no slots
+    // orphaned by internal-node splits (#389 fixed split_internal_node to reuse
+    // the promoted key's slot), compact() has nothing to reclaim — so
+    // key_storage_size() is invariant across it.
+    const size_t before_compact = grove.key_storage_size();
     grove.compact();
+    EXPECT_EQ(grove.key_storage_size(), before_compact);
     EXPECT_EQ(grove.indexed_vertex_count(), 20u);
 
     // Queries find every inserted interval — pointers were rewritten but
-    // values are intact. (`key_storage_size()` may shrink even without any
-    // `remove_key()` calls because `split_internal_node` drops the promoted
-    // key without reclaiming its slot — a pre-existing leak that `compact()`
-    // also happens to clean up. Don't assert size invariance.)
+    // values are intact.
     for (int i = 0; i < 20; ++i) {
         const size_t start = static_cast<size_t>(i * 10);
         auto result = grove.intersect(gdt::interval{start, start + 5}, "chr1");
