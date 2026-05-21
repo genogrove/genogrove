@@ -460,21 +460,16 @@ private:
         std::vector<std::unique_ptr<node<key_type, data_type>>> leaves;
         inserted_keys.reserve(data.size());
 
-        // Distribute data evenly across leaves so no leaf violates leaf_min_keys.
-        // num_leaves = ceil(N / (order - 1)). Each leaf gets floor(N / num_leaves)
-        // keys, with the first (N % num_leaves) leaves getting one extra.
-        const size_t total = data.size();
-        const int max_per_leaf = this->order - 1;
-        const size_t num_leaves = ceil_div(static_cast<int>(total), max_per_leaf);
-        const size_t base_per_leaf = total / num_leaves;
-        const size_t extra_leaves = total % num_leaves;
+        // Spread the data evenly across leaves — a greedy (order-1)-per-leaf
+        // packing could leave the final leaf underfull (below leaf_min_keys).
+        const even_distribution leaf_dist = distribute_evenly(data.size(), this->order - 1);
 
         auto it = data.begin();
-        for (size_t leaf_idx = 0; leaf_idx < num_leaves; ++leaf_idx) {
+        for (size_t leaf_idx = 0; leaf_idx < leaf_dist.num_groups; ++leaf_idx) {
             auto leaf = std::make_unique<node<key_type, data_type>>(this->order);
             leaf->set_is_leaf(true);
 
-            const size_t keys_in_this_leaf = base_per_leaf + (leaf_idx < extra_leaves ? 1 : 0);
+            const size_t keys_in_this_leaf = leaf_dist.count_for(leaf_idx);
             for (size_t i = 0; i < keys_in_this_leaf; ++i) {
                 gdt::key<key_type, data_type> key(it->first, it->second);
                 auto* key_ptr = allocate_key(key);
@@ -516,22 +511,18 @@ private:
             std::vector<std::unique_ptr<node<key_type, data_type>>> parent_layer;
             std::vector<key_type> parent_ranges;
 
-            // Distribute children evenly across parents so no parent violates
-            // internal_min_keys. num_parents = ceil(child_count / order). Each
-            // parent gets floor(child_count / num_parents) children, with the
-            // first (child_count % num_parents) parents getting one extra.
-            const size_t child_count = current_layer.size();
-            const size_t num_parents = ceil_div(static_cast<int>(child_count), this->order);
-            const size_t base_per_parent = child_count / num_parents;
-            const size_t extra_parents = child_count % num_parents;
+            // Spread the children evenly across parents — a greedy
+            // order-per-parent packing could leave the final parent underfull
+            // (below internal_min_keys).
+            const even_distribution parent_dist =
+                distribute_evenly(current_layer.size(), this->order);
 
             size_t child_idx = 0;
-            for (size_t parent_idx = 0; parent_idx < num_parents; ++parent_idx) {
+            for (size_t parent_idx = 0; parent_idx < parent_dist.num_groups; ++parent_idx) {
                 auto parent = std::make_unique<node<key_type, data_type>>(this->order);
                 parent->set_is_leaf(false);
 
-                const size_t children_in_this_parent =
-                    base_per_parent + (parent_idx < extra_parents ? 1 : 0);
+                const size_t children_in_this_parent = parent_dist.count_for(parent_idx);
                 const size_t first_child_idx = child_idx;
 
                 for (size_t i = 0; i < children_in_this_parent; ++i) {
