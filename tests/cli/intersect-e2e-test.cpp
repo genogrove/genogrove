@@ -71,6 +71,7 @@ protected:
     fs::path target_path;
     fs::path query_path;
     fs::path tmp_output;
+    fs::path tmp_index;
 
     void SetUp() override {
         cli_path = GENOGROVE_CLI_PATH;
@@ -78,6 +79,7 @@ protected:
         target_path = test_data_dir / "target.bed";
         query_path = test_data_dir / "query.bed";
         tmp_output = fs::temp_directory_path() / "genogrove_e2e_test_output.bed";
+        tmp_index = fs::temp_directory_path() / "genogrove_e2e_test_index.gg";
 
         ASSERT_TRUE(fs::exists(cli_path)) << "CLI binary not found: " << cli_path;
         ASSERT_TRUE(fs::exists(target_path)) << "Target test data not found: " << target_path;
@@ -87,6 +89,9 @@ protected:
     void TearDown() override {
         if(fs::exists(tmp_output)) {
             fs::remove(tmp_output);
+        }
+        if(fs::exists(tmp_index)) {
+            fs::remove(tmp_index);
         }
     }
 
@@ -166,10 +171,12 @@ TEST_F(CLIIntersectE2ETest, MissingQueryfile) {
     EXPECT_NE(result.output.find("queryfile is required"), std::string::npos);
 }
 
-TEST_F(CLIIntersectE2ETest, MissingTargetfile) {
+TEST_F(CLIIntersectE2ETest, MissingTargetAndIndex) {
+    // With neither -t nor -i, intersect has nothing to search against.
     auto result = run_command(cli("isec -q \"" + query_path.string() + "\""));
     EXPECT_NE(result.exit_code, 0);
-    EXPECT_NE(result.output.find("targetfile is required"), std::string::npos);
+    EXPECT_NE(result.output.find("target file (-t) or a prebuilt index (-i)"),
+              std::string::npos);
 }
 
 TEST_F(CLIIntersectE2ETest, NonexistentQueryfile) {
@@ -208,4 +215,27 @@ TEST_F(CLIIntersectE2ETest, HelpFlag) {
     EXPECT_NE(result.output.find("intersect"), std::string::npos);
     EXPECT_NE(result.output.find("--outputfile"), std::string::npos);
     EXPECT_NE(result.output.find("--order"), std::string::npos);
+}
+
+// ==========================================
+// Prebuilt index (-i)
+// ==========================================
+
+TEST_F(CLIIntersectE2ETest, IntersectWithPrebuiltIndex) {
+    // Build an index with `idx`, then search it via `intersect -i` with no -t,
+    // which proves the prebuilt index — not a target file — was consumed.
+    auto idx_result = run_command(cli(
+        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
+    ));
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
+    ASSERT_TRUE(fs::exists(tmp_index));
+
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -i \"" + tmp_index.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    // Same overlaps as the build-from-target path.
+    EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos);
+    EXPECT_NE(result.output.find("chr1\t600\t900"), std::string::npos);
+    EXPECT_EQ(result.output.find("chr2"), std::string::npos);
 }

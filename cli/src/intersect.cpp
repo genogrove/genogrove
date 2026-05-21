@@ -5,13 +5,44 @@
 
 #include <subcalls/intersect.hpp>
 #include <handlers/bed.hpp>
+
+#include <genogrove/io/filetype_detector.hpp>
+
 #include <fstream>
 #include <memory>
+#include <string>
 #include <string_view>
 
 namespace gdt = genogrove::data_type;
 namespace ggs = genogrove::structure;
 namespace gio = genogrove::io;
+
+namespace {
+
+// Deserialize a grove from a prebuilt .gg index file.
+ggs::grove<gdt::interval, gio::bed_entry> load_index(const std::string& index_path) {
+    std::ifstream in(index_path, std::ios::binary);
+    if(!in) {
+        throw std::runtime_error("Error: could not open index file: " + index_path);
+    }
+    return ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
+}
+
+// Build a grove from a target BED file. Only BED is supported for now.
+ggs::grove<gdt::interval, gio::bed_entry> build_from_target(
+        const std::string& targetfile, int order) {
+    auto [target_filetype, target_compression] =
+        gio::filetype_detector().detect_filetype(targetfile);
+    if(target_filetype != gio::filetype::BED) {
+        throw std::runtime_error(
+            "Error: only BED format is currently supported for target files");
+    }
+    ggs::grove<gdt::interval, gio::bed_entry> grove(order);
+    handlers::bed::grove_insert(grove, targetfile);
+    return grove;
+}
+
+} // namespace
 
 namespace subcalls {
 
@@ -22,7 +53,9 @@ cxxopts::Options intersect::parse_args(int argc, char** argv) {
     options.add_options()
             ("q,queryfile", "The query file to be indexed",
              cxxopts::value<std::string>())
-            ("t,targetfile", "The target file to be index/searched against",
+            ("t,targetfile", "The target BED file to build the grove from",
+                    cxxopts::value<std::string>())
+            ("i,indexfile", "A prebuilt .gg index to search against",
                     cxxopts::value<std::string>())
             ("o,outputfile", "Write the index to the specified file",
              cxxopts::value<std::string>()->default_value("stdout"))
@@ -43,12 +76,23 @@ void intersect::validate(const cxxopts::ParseResult& args) {
         throw std::runtime_error("Error: file does not exist: " + queryfile);
     }
 
-    if(!args.count("targetfile")) {
-        throw std::runtime_error("Error: targetfile is required");
+    const bool has_target = args.count("targetfile") != 0;
+    const bool has_index = args.count("indexfile") != 0;
+    if(!has_target && !has_index) {
+        throw std::runtime_error(
+            "Error: a target file (-t) or a prebuilt index (-i) is required");
     }
-    auto targetfile = args["targetfile"].as<std::string>();
-    if(!std::filesystem::exists(targetfile)) {
-        throw std::runtime_error("Error: file does not exist: " + targetfile);
+    if(has_target) {
+        auto targetfile = args["targetfile"].as<std::string>();
+        if(!std::filesystem::exists(targetfile)) {
+            throw std::runtime_error("Error: file does not exist: " + targetfile);
+        }
+    }
+    if(has_index) {
+        auto indexfile = args["indexfile"].as<std::string>();
+        if(!std::filesystem::exists(indexfile)) {
+            throw std::runtime_error("Error: file does not exist: " + indexfile);
+        }
     }
 
     if(args.count("outputfile")) {
@@ -71,11 +115,8 @@ void intersect::validate(const cxxopts::ParseResult& args) {
 }
 
 void intersect::execute(const cxxopts::ParseResult& args) {
-    // first check if the targetfile has been indexed - exists targetfile.gg (skip this for now)
-
     // get parameters
     std::string queryfile = args["queryfile"].as<std::string>();
-    std::string targetfile = args["targetfile"].as<std::string>();
     int k = args["k"].as<int>();
 
     // stream for output (either to stdout or to file)
@@ -92,30 +133,20 @@ void intersect::execute(const cxxopts::ParseResult& args) {
         }
     }
 
-    // Detect file types
+    // The query file is always parsed — only BED is supported.
     auto [query_filetype, query_compression] = gio::filetype_detector().detect_filetype(queryfile);
-    auto [target_filetype, target_compression] = gio::filetype_detector().detect_filetype(targetfile);
-
-    // Only support BED files for now
-    switch(target_filetype) {
-        case gio::filetype::BED:
-            break;
-        default:
-            throw std::runtime_error("Error: only BED format is currently supported for target files");
+    if(query_filetype != gio::filetype::BED) {
+        throw std::runtime_error("Error: only BED format is currently supported for query files");
     }
 
-    switch(query_filetype) {
-        case gio::filetype::BED:
-            break;
-        default:
-            throw std::runtime_error("Error: only BED format is currently supported for query files");
-    }
+    // Use the prebuilt index when given (-i); otherwise build the grove from
+    // the target BED file (-t). validate() guarantees at least one is present;
+    // when both are given, the explicit index wins.
+    auto grove = args.count("indexfile")
+        ? load_index(args["indexfile"].as<std::string>())
+        : build_from_target(args["targetfile"].as<std::string>(), k);
 
-    // Create grove and populate with target file
-    ggs::grove<gdt::interval, gio::bed_entry> grove(k);
-    handlers::bed::grove_insert(grove, targetfile);
-
-    // Intersect query file with the populated grove
+    // Intersect query file with the target grove
     handlers::bed::grove_intersect(grove, queryfile, *outputStream);
 }
 
