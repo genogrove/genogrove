@@ -239,3 +239,19 @@ TEST_F(CLIIntersectE2ETest, IntersectWithPrebuiltIndex) {
     EXPECT_NE(result.output.find("chr1\t600\t900"), std::string::npos);
     EXPECT_EQ(result.output.find("chr2"), std::string::npos);
 }
+
+TEST_F(CLIIntersectE2ETest, IntersectIgnoresTargetWhenIndexGiven) {
+    // -i takes precedence over -t: a nonexistent -t must not fail when a
+    // valid index is supplied, since the target is ignored.
+    auto idx_result = run_command(cli(
+        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
+    ));
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
+
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -t /nonexistent/path.bed -i \"" +
+        tmp_index.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos);
+}

@@ -82,7 +82,9 @@ void intersect::validate(const cxxopts::ParseResult& args) {
         throw std::runtime_error(
             "Error: a target file (-t) or a prebuilt index (-i) is required");
     }
-    if(has_target) {
+    // When an index is given it takes precedence and the target is ignored,
+    // so only the target actually in use is required to exist.
+    if(has_target && !has_index) {
         auto targetfile = args["targetfile"].as<std::string>();
         if(!std::filesystem::exists(targetfile)) {
             throw std::runtime_error("Error: file does not exist: " + targetfile);
