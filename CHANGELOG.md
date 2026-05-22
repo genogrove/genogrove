@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **`[[nodiscard]]` on reader observers and `graph_overlay::get_edge_list`**: the `file_reader` observers `has_next` / `get_error_message` / `get_current_line` (base and all four reader overrides) and `graph_overlay::get_edge_list` are now `[[nodiscard]]`, so discarding their result is flagged by the compiler. ([#359](https://github.com/genogrove/genogrove/issues/359), [#373](https://github.com/genogrove/genogrove/issues/373), [#432](https://github.com/genogrove/genogrove/pull/432))
+- **`kmer` constexpr API and `key<T, void>` default construction**: `kmer::encode_base`, `kmer::is_valid`, and the `kmer(encoding, k)` constructor are now `constexpr` (usable in constant expressions). `key<T, void>` — a key with no associated data — is now default-constructible; previously the default constructor's `requires` clause excluded the void-data form. ([#365](https://github.com/genogrove/genogrove/issues/365), [#381](https://github.com/genogrove/genogrove/issues/381), [#433](https://github.com/genogrove/genogrove/pull/433))
 
 ## [0.24.3] - 2026-05-21
 
