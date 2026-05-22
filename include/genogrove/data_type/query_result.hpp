@@ -8,6 +8,7 @@
 
 // Standard
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 // genogrove
@@ -66,7 +67,7 @@ namespace genogrove::data_type {
              *
              * @param query The query used for intersection (stored by value)
              */
-            explicit query_result(key_t query) : query(query), keys{} {}
+            explicit query_result(key_t query) : query(std::move(query)), keys{} {}
 
             /**
              * @brief Get the original query that produced this result.
