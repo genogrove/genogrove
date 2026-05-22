@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`find_child_pos` rejects a broken tree invariant**: it returned `siblings.size()` (an out-of-range index) when a node was not among its parent's children; it now throws `std::runtime_error` instead of silently handing back a bad index. ([#374](https://github.com/genogrove/genogrove/issues/374), [#430](https://github.com/genogrove/genogrove/pull/430))
 - **`bam_reader` names the tag in a truncated-aux-data error**: `parse_tags` now reports the last-attempted tag, and `read_next`'s "Truncated auxiliary data at record N" error appends ", last tag: XX" so malformed BAM auxiliary data is diagnosable. ([#355](https://github.com/genogrove/genogrove/issues/355), [#430](https://github.com/genogrove/genogrove/pull/430))
 
+### Changed
+- **`[[nodiscard]]` on reader observers and `graph_overlay::get_edge_list`**: the `file_reader` observers `has_next` / `get_error_message` / `get_current_line` (base and all four reader overrides) and `graph_overlay::get_edge_list` are now `[[nodiscard]]`, so discarding their result is flagged by the compiler. ([#359](https://github.com/genogrove/genogrove/issues/359), [#373](https://github.com/genogrove/genogrove/issues/373), [#432](https://github.com/genogrove/genogrove/pull/432))
+
 ## [0.24.3] - 2026-05-21
 
 ### Added
