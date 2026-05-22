@@ -372,14 +372,14 @@ namespace genogrove::io {
          * @return true if more records may be available
          * @note This is a best-effort check; read_next() is authoritative
          */
-        bool has_next() override;
+        [[nodiscard]] bool has_next() override;
 
         /**
          * @brief Get the last error message.
          *
          * @return Error message string, empty if no error
          */
-        std::string get_error_message() const override;
+        [[nodiscard]] std::string get_error_message() const override;
 
         /**
          * @brief Get the current record number (1-based).
@@ -391,7 +391,7 @@ namespace genogrove::io {
          *
          * @return Index of the most recently consumed record (0 before the first read)
          */
-        size_t get_current_line() const override;
+        [[nodiscard]] size_t get_current_line() const override;
 
         /**
          * @brief Get the SAM header text.

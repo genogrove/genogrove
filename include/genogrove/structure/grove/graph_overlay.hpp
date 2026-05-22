@@ -167,7 +167,7 @@ class graph_overlay {
      * @param source Pointer to source key
      * @return Const reference to vector of edges (empty if no edges)
      */
-    const std::vector<edge>& get_edge_list(const gdt::key<key_type, data_type>* source) const {
+    [[nodiscard]] const std::vector<edge>& get_edge_list(const gdt::key<key_type, data_type>* source) const {
         static const std::vector<edge> empty_edges;
         auto it = adjacency.find(source);
         return (it != adjacency.end()) ? it->second : empty_edges;
