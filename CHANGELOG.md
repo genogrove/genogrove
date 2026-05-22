@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+- **Perf micro-opts in `query_result` and `fasta_index`**: `query_result`'s constructor moves its by-value query parameter into the member instead of copying it; `fasta_index::fetch(name)` resolves the sequence name once (via `sequence_length`) rather than twice — the post-validation fetch logic is now shared through a `fetch_region` helper. No behavior change. ([#356](https://github.com/genogrove/genogrove/issues/356), [#366](https://github.com/genogrove/genogrove/issues/366), [#431](https://github.com/genogrove/genogrove/pull/431))
+
 ### Fixed
 - **`find_child_pos` rejects a broken tree invariant**: it returned `siblings.size()` (an out-of-range index) when a node was not among its parent's children; it now throws `std::runtime_error` instead of silently handing back a bad index. ([#374](https://github.com/genogrove/genogrove/issues/374), [#430](https://github.com/genogrove/genogrove/pull/430))
 - **`bam_reader` names the tag in a truncated-aux-data error**: `parse_tags` now reports the last-attempted tag, and `read_next`'s "Truncated auxiliary data at record N" error appends ", last tag: XX" so malformed BAM auxiliary data is diagnosable. ([#355](https://github.com/genogrove/genogrove/issues/355), [#430](https://github.com/genogrove/genogrove/pull/430))
