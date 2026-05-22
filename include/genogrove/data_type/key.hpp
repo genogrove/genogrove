@@ -90,6 +90,16 @@ namespace genogrove::data_type {
                 std::default_initializable<data_t> : value{}, data{} {}
 
             /**
+             * @brief Default constructor for the data-less form (data_t = void).
+             *
+             * The requires clause above needs data_t to be default-initializable,
+             * which void is not — so key<T, void> needs its own default ctor.
+             * `data` is std::monostate here and is value-initialized implicitly.
+             */
+            key() requires (std::default_initializable<key_t> && std::is_void_v<data_t>)
+                : value{} {}
+
+            /**
              * @brief Construct a key with the specified key value.
              *
              * When data_t is void: Creates a key with only the value.

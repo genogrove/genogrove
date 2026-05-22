@@ -6,9 +6,11 @@
 #ifndef GENOGROVE_DATA_TYPE_KMER_HPP
 #define GENOGROVE_DATA_TYPE_KMER_HPP
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 
@@ -88,7 +90,16 @@ namespace genogrove::data_type {
              * @param encoding 2-bit encoded k-mer value
              * @param k Length of the k-mer (1-32)
              */
-            kmer(uint64_t encoding, uint8_t k);
+            constexpr kmer(uint64_t encoding, uint8_t k) : encoding(encoding), k(k) {
+                if (k > max_k) {
+                    throw std::invalid_argument("K-mer length exceeds maximum of 32");
+                }
+                // Mask encoding to only the bits needed for k bases
+                if (k < max_k) {
+                    uint64_t mask = (1ULL << (2 * k)) - 1;
+                    this->encoding = encoding & mask;
+                }
+            }
 
 
             ~kmer() = default;
@@ -221,7 +232,17 @@ namespace genogrove::data_type {
              * @return 2-bit encoding (0-3)
              * @throws std::invalid_argument if base is not A, C, G, or T
              */
-            static uint8_t encode_base(char base);
+            static constexpr uint8_t encode_base(char base) {
+                switch (base) {
+                    case 'A': case 'a': return 0;
+                    case 'C': case 'c': return 1;
+                    case 'G': case 'g': return 2;
+                    case 'T': case 't': return 3;
+                    default:
+                        throw std::invalid_argument(
+                            std::string("Invalid nucleotide: ") + base);
+                }
+            }
 
             /**
              * @brief Decode a 2-bit value to its nucleotide character.
@@ -240,7 +261,12 @@ namespace genogrove::data_type {
              * @param sequence DNA sequence to validate
              * @return true if sequence contains only A, C, G, T (case insensitive)
              */
-            [[nodiscard]] static bool is_valid(std::string_view sequence);
+            [[nodiscard]] static constexpr bool is_valid(std::string_view sequence) {
+                return std::ranges::all_of(sequence, [](char c) {
+                    return c == 'A' || c == 'a' || c == 'C' || c == 'c'
+                        || c == 'G' || c == 'g' || c == 'T' || c == 't';
+                });
+            }
 
         private:
             uint64_t encoding;  ///< 2-bit encoded k-mer (A=00, C=01, G=10, T=11)
