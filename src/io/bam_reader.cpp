@@ -346,6 +346,10 @@ namespace genogrove::io {
         const uint8_t* aux_end = b->data + b->l_data;
 
         while (aux < aux_end) {
+            // Reset per tag: a truncation reached before the tag name is read
+            // is between tags, so last_tag must not carry over a prior tag.
+            last_tag.clear();
+
             // Each tag needs at least 3 bytes: 2-char name + 1-byte type
             if (aux + 3 > aux_end) {
                 truncated = true;
