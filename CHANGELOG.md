@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`find_child_pos` rejects a broken tree invariant**: it returned `siblings.size()` (an out-of-range index) when a node was not among its parent's children; it now throws `std::runtime_error` instead of silently handing back a bad index. ([#374](https://github.com/genogrove/genogrove/issues/374), [#430](https://github.com/genogrove/genogrove/pull/430))
+- **`bam_reader` names the tag in a truncated-aux-data error**: `parse_tags` now reports the last-attempted tag, and `read_next`'s "Truncated auxiliary data at record N" error appends ", last tag: XX" so malformed BAM auxiliary data is diagnosable. ([#355](https://github.com/genogrove/genogrove/issues/355), [#430](https://github.com/genogrove/genogrove/pull/430))
+
 ## [0.24.3] - 2026-05-21
 
 ### Added

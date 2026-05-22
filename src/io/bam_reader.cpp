@@ -249,9 +249,13 @@ namespace genogrove::io {
 
         // Auxiliary tags
         bool aux_truncated = false;
-        entry.tags = parse_tags(b, aux_truncated);
+        std::string last_aux_tag;
+        entry.tags = parse_tags(b, aux_truncated, last_aux_tag);
         if (aux_truncated) {
             error_message = "Truncated auxiliary data at record " + std::to_string(record_num);
+            if (!last_aux_tag.empty()) {
+                error_message += ", last tag: " + last_aux_tag;
+            }
             throw std::runtime_error(error_message);
         }
     }
@@ -333,14 +337,19 @@ namespace genogrove::io {
         }
     }
 
-    sam_tags bam_reader::parse_tags(const bam1_t* b, bool& truncated) const {
+    sam_tags bam_reader::parse_tags(const bam1_t* b, bool& truncated, std::string& last_tag) const {
         sam_tags result;
         truncated = false;
+        last_tag.clear();
 
         const uint8_t* aux = bam_get_aux(b);
         const uint8_t* aux_end = b->data + b->l_data;
 
         while (aux < aux_end) {
+            // Reset per tag: a truncation reached before the tag name is read
+            // is between tags, so last_tag must not carry over a prior tag.
+            last_tag.clear();
+
             // Each tag needs at least 3 bytes: 2-char name + 1-byte type
             if (aux + 3 > aux_end) {
                 truncated = true;
@@ -349,6 +358,7 @@ namespace genogrove::io {
 
             // Tag name (2 chars)
             std::string key(reinterpret_cast<const char*>(aux), 2);
+            last_tag = key;  // reported if a later step in this tag truncates
 
             aux += 2;
             char type = static_cast<char>(*aux++);
