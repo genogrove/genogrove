@@ -45,44 +45,55 @@ namespace genogrove::io {
         return *this;
     }
 
+    namespace {
+        // Fetch [start, end) from a sequence whose name has already been
+        // verified to exist in the index. Shared by both fetch() overloads so
+        // the name is resolved only once per call.
+        std::string fetch_region(faidx_t* fai, const std::string& name,
+                                 size_t start, size_t end) {
+            if (start >= end) {
+                throw std::out_of_range("Invalid region: start >= end for " + name);
+            }
+
+            // Guard against size_t→int narrowing (faidx_fetch_seq takes int)
+            constexpr auto kIntMax = static_cast<size_t>(std::numeric_limits<int>::max());
+            if (start > kIntMax || (end - 1) > kIntMax) {
+                throw std::out_of_range("Region exceeds htslib coordinate limit for " + name);
+            }
+
+            // faidx_fetch_seq uses 0-based inclusive coordinates
+            int len = 0;
+            char* seq = faidx_fetch_seq(fai, name.c_str(),
+                                        static_cast<int>(start),
+                                        static_cast<int>(end - 1),
+                                        &len);
+            if (!seq || len < 0) {
+                std::free(seq);
+                throw std::runtime_error("Failed to fetch region " + name +
+                                         ":" + std::to_string(start) + "-" + std::to_string(end));
+            }
+
+            std::string result(seq, static_cast<size_t>(len));
+            std::free(seq);
+            return result;
+        }
+    } // namespace
+
     std::string fasta_index::fetch(const std::string& name, size_t start, size_t end) const {
         if (!faidx_has_seq(fai_, name.c_str())) {
             throw std::out_of_range("Sequence not found in index: " + name);
         }
-
-        if (start >= end) {
-            throw std::out_of_range("Invalid region: start >= end for " + name);
-        }
-
-        // Guard against size_t→int narrowing (faidx_fetch_seq takes int)
-        constexpr auto kIntMax = static_cast<size_t>(std::numeric_limits<int>::max());
-        if (start > kIntMax || (end - 1) > kIntMax) {
-            throw std::out_of_range("Region exceeds htslib coordinate limit for " + name);
-        }
-
-        // faidx_fetch_seq uses 0-based inclusive coordinates
-        int len = 0;
-        char* seq = faidx_fetch_seq(fai_, name.c_str(),
-                                    static_cast<int>(start),
-                                    static_cast<int>(end - 1),
-                                    &len);
-        if (!seq || len < 0) {
-            std::free(seq);
-            throw std::runtime_error("Failed to fetch region " + name +
-                                     ":" + std::to_string(start) + "-" + std::to_string(end));
-        }
-
-        std::string result(seq, static_cast<size_t>(len));
-        std::free(seq);
-        return result;
+        return fetch_region(fai_, name, start, end);
     }
 
     std::string fasta_index::fetch(const std::string& name) const {
+        // sequence_length() already resolves the name (and throws if absent),
+        // so the whole-sequence path skips fetch()'s redundant faidx_has_seq.
         size_t len = sequence_length(name);
         if (len == 0) {
             return {};
         }
-        return fetch(name, 0, len);
+        return fetch_region(fai_, name, 0, len);
     }
 
     size_t fasta_index::sequence_count() const {
