@@ -88,9 +88,9 @@ namespace genogrove::io {
         fasta_reader& operator=(fasta_reader&& other) noexcept;
 
         bool read_next(fasta_entry& entry) override;
-        bool has_next() override;
-        std::string get_error_message() const override;
-        size_t get_current_line() const override;
+        [[nodiscard]] bool has_next() override;
+        [[nodiscard]] std::string get_error_message() const override;
+        [[nodiscard]] size_t get_current_line() const override;
         ~fasta_reader() override;
 
     private:

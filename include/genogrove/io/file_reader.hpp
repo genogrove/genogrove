@@ -17,7 +17,7 @@ namespace genogrove::io {
         [[nodiscard]] virtual bool has_next() = 0;
         /// Returns the error message from the most recent read_next() call.
         /// Cleared at the start of each read_next(); empty if the last read succeeded.
-        virtual std::string get_error_message() const = 0;
+        [[nodiscard]] virtual std::string get_error_message() const = 0;
         /// Returns the 1-based position the reader has consumed up to in its input.
         /// The unit is reader-specific: the physical line number for the text
         /// readers (BED/GFF — comment and blank lines are counted), or the record
@@ -26,7 +26,7 @@ namespace genogrove::io {
         /// read_next() — a skipped comment line or a filtered-out record still
         /// advances it. Zero before the first read_next(). Intended for error
         /// messages and progress reporting, not for counting returned entries.
-        virtual size_t get_current_line() const = 0;
+        [[nodiscard]] virtual size_t get_current_line() const = 0;
 
         file_reader_base() = default;
         virtual ~file_reader_base() = default;

@@ -125,9 +125,9 @@ namespace genogrove::io {
         }
 
         bool read_next(gff_entry& entry) override;
-        bool has_next() override;
-        std::string get_error_message() const override;
-        size_t get_current_line() const override;
+        [[nodiscard]] bool has_next() override;
+        [[nodiscard]] std::string get_error_message() const override;
+        [[nodiscard]] size_t get_current_line() const override;
         ~gff_reader() override;
 
     private:
