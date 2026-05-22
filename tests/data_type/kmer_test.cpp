@@ -28,6 +28,21 @@ TEST(kmerTest, defaultConstructor) {
     EXPECT_EQ(k.to_string(), "");
 }
 
+TEST(kmerTest, constexprApi) {
+    // #365: encode_base, is_valid, and the (encoding, k) constructor are
+    // constexpr — these static_asserts evaluate them at compile time and
+    // fail to compile if the constexpr is ever dropped.
+    static_assert(gdt::kmer::encode_base('A') == 0);
+    static_assert(gdt::kmer::encode_base('c') == 1);
+    static_assert(gdt::kmer::encode_base('G') == 2);
+    static_assert(gdt::kmer::encode_base('t') == 3);
+    static_assert(gdt::kmer::is_valid("ACGT"));
+    static_assert(gdt::kmer::is_valid("acgt"));
+    static_assert(!gdt::kmer::is_valid("ACGN"));
+    static_assert(gdt::kmer(27, 4).get_k() == 4);
+    static_assert(gdt::kmer(27, 4).get_encoding() == 27);
+}
+
 TEST(kmerTest, stringConstructor) {
     gdt::kmer k1("ACGT");
     EXPECT_EQ(k1.get_k(), 4);
