@@ -46,12 +46,12 @@ namespace genogrove::data_type {
      * @tparam key_t Type satisfying key_type_base concept
      * @tparam data_t Optional type for associated data (default: void)
      *
-     * @note Keys are stored as `const`-pointers and remain valid as long as the
-     *       grove exists; this prevents callers from mutating a key via
-     *       `result.get_keys()[i]->set_value(...)` and silently corrupting B+
-     *       tree ordering invariants. Code that needs a mutating `key*` (e.g.
-     *       passing into `add_edge`) should re-acquire it via the pointer
-     *       returned by the original `insert_data()` call.
+     * @note Keys are stored as non-const pointers so callers can feed them directly
+     *       back into mutating graph operations such as `grove::add_edge` and
+     *       `grove::link_if` without a `const_cast`. Mutating a key's value via
+     *       `key::set_value()` corrupts B+ tree ordering — that footgun is also
+     *       reachable through the pointer returned by `insert_data()`, so
+     *       restricting it here alone provides no real protection.
      * @note This class does not own the key objects; they are owned by the grove
      * @see grove::intersect() for the primary usage of query_result
      * @see key for the wrapper type storing key_t and optional data_t
@@ -81,19 +81,17 @@ namespace genogrove::data_type {
             /**
              * @brief Get all matching keys found by the query.
              *
-             * Returns a const reference to the vector of `const`-pointers to
-             * keys that overlapped with the query. The pointers reference keys
-             * owned by the grove and remain valid as long as the grove exists
-             * and the keys are not removed.
+             * Returns a const reference to the vector of pointers to keys that
+             * overlapped with the query. The pointers reference keys owned by
+             * the grove and remain valid as long as the grove exists and the
+             * keys are not removed.
              *
-             * @return Const reference to vector of const-pointers to matching keys (may be empty)
+             * @return Const reference to vector of pointers to matching keys (may be empty)
              *
-             * @note Pointers are `const` to prevent callers from mutating keys
-             *       and corrupting B+ tree ordering. See class-level note.
              * @note Pointers remain valid as long as the grove is not modified
              * @note Keys are stored in the order they were found during tree traversal
              */
-            const std::vector<const key<key_t, data_t>*>& get_keys() const { return this->keys; }
+            const std::vector<key<key_t, data_t>*>& get_keys() const { return this->keys; }
 
             /**
              * @brief Add a matching key to the result set.
@@ -106,12 +104,8 @@ namespace genogrove::data_type {
              *
              * @note This is primarily an internal method used during grove traversal
              * @note No ownership is transferred; the pointer is stored as-is
-             * @note Accepts a non-const `key*` for caller convenience (internal
-             *       search code holds non-const pointers); the pointer is stored
-             *       as `const key*` to enforce immutability through the public
-             *       `get_keys()` accessor.
              */
-            void add_key(const key<key_t, data_t>* key) {
+            void add_key(key<key_t, data_t>* key) {
                 if (key == nullptr) {
                     throw std::invalid_argument("query_result::add_key: key must not be nullptr");
                 }
@@ -119,8 +113,8 @@ namespace genogrove::data_type {
             }
 
         private:
-            key_t query;                                    ///< The original query (stored by value)
-            std::vector<const key<key_t, data_t>*> keys; ///< Const-pointers to matching keys (not owned)
+            key_t query;                                ///< The original query (stored by value)
+            std::vector<key<key_t, data_t>*> keys;      ///< Pointers to matching keys (not owned)
     };
 }
 

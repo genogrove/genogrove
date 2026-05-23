@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+- **Revert `query_result` / `flanking_query_result` to non-const key pointers**: `query_result::get_keys()` now returns `const std::vector<key<...>*>&` (non-const pointers) and `flanking_query_result::get_predecessor()` / `get_successor()` return `key<...>*` again, restoring pre-v0.24.x ergonomics. Callers can feed result keys straight back into `grove::add_edge` / `grove::link_if` without a `const_cast`. The const-pointer hardening from #324 / #397 only protected one of several entry points to the same ordering-corruption footgun — `insert_data()` already hands out a mutable pointer — while making the idiomatic call sites uglier; restricting it at `query_result` / `flanking_query_result` alone provided no real protection. ([#435](https://github.com/genogrove/genogrove/issues/435), [#436](https://github.com/genogrove/genogrove/pull/436))
+
 ## [0.24.4] - 2026-05-22
 
 ### Refactored
