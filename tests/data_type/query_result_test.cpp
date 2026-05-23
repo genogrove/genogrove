@@ -150,30 +150,33 @@ TEST(query_result_test, add_null_key_throws) {
 }
 
 // =============================================================================
-// const-correctness contract (#324)
+// Pointer-type contract (#435)
 // =============================================================================
 
 // Pins the get_keys() return type: must be a const-reference to a vector of
-// `const key*`. Without the const, callers could mutate the underlying key
-// via `result.get_keys()[i]->set_value(...)` and silently corrupt B+ tree
-// ordering invariants. Compile-time check — fails at build time if the
-// signature drifts.
-TEST(query_result_test, get_keys_returns_const_pointer_vector) {
+// non-const `key*`, so callers can feed result keys straight back into
+// mutating graph operations (`add_edge`, `link_if`, …) without a
+// `const_cast`. The const-pointer variant introduced in #324 was reverted in
+// #435 because it only blocked one of several entry points to the same
+// ordering-corruption footgun (insert_data() already hands out a mutable
+// pointer) while making the idiomatic call sites uglier.
+TEST(query_result_test, get_keys_returns_non_const_pointer_vector) {
     using result_t = gdt::query_result<gdt::interval, int>;
     using returned_t = decltype(std::declval<const result_t&>().get_keys());
-    using expected_t = const std::vector<const gdt::key<gdt::interval, int>*>&;
+    using expected_t = const std::vector<gdt::key<gdt::interval, int>*>&;
     static_assert(std::is_same_v<returned_t, expected_t>,
-        "query_result::get_keys() must return const std::vector<const key*>& "
-        "to prevent caller mutation of the underlying keys (#324).");
+        "query_result::get_keys() must return const std::vector<key*>& "
+        "so callers can pass result keys back into mutating graph ops "
+        "without a const_cast (#435).");
 }
 
-TEST(query_result_test, flanking_returns_const_pointers) {
+TEST(query_result_test, flanking_returns_non_const_pointers) {
     using flank_t = gdt::flanking_query_result<gdt::interval, int>;
     using pred_t = decltype(std::declval<const flank_t&>().get_predecessor());
     using succ_t = decltype(std::declval<const flank_t&>().get_successor());
-    using expected_t = const gdt::key<gdt::interval, int>*;
+    using expected_t = gdt::key<gdt::interval, int>*;
     static_assert(std::is_same_v<pred_t, expected_t>,
-        "flanking_query_result::get_predecessor() must return const key* (#324).");
+        "flanking_query_result::get_predecessor() must return key* (#435).");
     static_assert(std::is_same_v<succ_t, expected_t>,
-        "flanking_query_result::get_successor() must return const key* (#324).");
+        "flanking_query_result::get_successor() must return key* (#435).");
 }

@@ -36,10 +36,9 @@ namespace genogrove::data_type {
      * @tparam key_t The key type (must satisfy key_type_base concept)
      * @tparam data_t Optional associated data type (default: void)
      *
-     * @note Stored as `const`-pointers; callers cannot mutate the predecessor /
-     *       successor and corrupt B+ tree ordering. Code that needs a mutating
-     *       `key*` should re-acquire it via the pointer returned by
-     *       `insert_data()`.
+     * @note Stored as non-const pointers so callers can feed them directly into
+     *       mutating graph operations such as `grove::add_edge` without a
+     *       `const_cast`.
      * @see grove::flanking()
      * @see query_result for the overlap-query result container
      */
@@ -54,18 +53,18 @@ namespace genogrove::data_type {
             /**
              * @brief Get the predecessor: largest non-overlapping key less than the query.
              *
-             * @return Const-pointer to the predecessor key, or nullptr if none exists
+             * @return Pointer to the predecessor key, or nullptr if none exists
              */
-            const key<key_t, data_t>* get_predecessor() const noexcept {
+            key<key_t, data_t>* get_predecessor() const noexcept {
                 return this->predecessor;
             }
 
             /**
              * @brief Get the successor: smallest non-overlapping key greater than the query.
              *
-             * @return Const-pointer to the successor key, or nullptr if none exists
+             * @return Pointer to the successor key, or nullptr if none exists
              */
-            const key<key_t, data_t>* get_successor() const noexcept {
+            key<key_t, data_t>* get_successor() const noexcept {
                 return this->successor;
             }
 
@@ -73,28 +72,25 @@ namespace genogrove::data_type {
              * @brief Set the predecessor pointer.
              *
              * Used internally during traversal as candidates are discovered and improved.
-             * Accepts a non-const `key*` for caller convenience; stored as const.
              *
              * @param k Pointer to a key, or nullptr
              */
-            void set_predecessor(const key<key_t, data_t>* k) noexcept {
+            void set_predecessor(key<key_t, data_t>* k) noexcept {
                 this->predecessor = k;
             }
 
             /**
              * @brief Set the successor pointer.
              *
-             * Accepts a non-const `key*` for caller convenience; stored as const.
-             *
              * @param k Pointer to a key, or nullptr
              */
-            void set_successor(const key<key_t, data_t>* k) noexcept {
+            void set_successor(key<key_t, data_t>* k) noexcept {
                 this->successor = k;
             }
 
         private:
-            const key<key_t, data_t>* predecessor = nullptr;
-            const key<key_t, data_t>* successor   = nullptr;
+            key<key_t, data_t>* predecessor = nullptr;
+            key<key_t, data_t>* successor   = nullptr;
     };
 
 }
