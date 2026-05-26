@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`.gg` index format header**: indices written by `idx` now carry a 12-byte header (`magic = GROV`, format version `0.1`, library-version triple, payload-type tag, 2 reserved bytes) preceding the zlib-compressed grove. `intersect -i` reads and validates this header before deserialising — bad magic, an unsupported `(format_major, format_minor)`, or an unknown `payload_type` throw `std::runtime_error`; library-version fields are informational and never trigger rejection. Pre-existing `.gg` files written before this change no longer parse and must be re-indexed (per the no-backwards-compatibility-for-serialization policy). ([#424](https://github.com/genogrove/genogrove/issues/424), [#438](https://github.com/genogrove/genogrove/pull/438))
+
 ## [0.24.5] - 2026-05-22
 
 ### Refactored
