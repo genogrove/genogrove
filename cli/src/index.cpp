@@ -7,6 +7,7 @@
 #include <handlers/bed.hpp>
 
 #include <genogrove/io/filetype_detector.hpp>
+#include <genogrove/io/gg_format.hpp>
 
 #include <chrono>
 #include <fstream>
@@ -25,7 +26,7 @@ constexpr std::string_view DEFAULT_TREE_ORDER = "3";
 cxxopts::Options index::parse_args(int argc, char** argv) {
     cxxopts::Options options("genogrove index", "index an interval file");
     options.add_options()
-            ("inputfile", "The input file to be indexed",
+            ("inputfile", "The input file to be indexe                                                                                                                                                                                                                                                                                                                d",
                     cxxopts::value<std::string>())
             ("o,outputfile", "Write the index to the specified file",
                     cxxopts::value<std::string>())
@@ -94,6 +95,7 @@ void index::execute(const cxxopts::ParseResult& args) {
     if(!output) {
         throw std::runtime_error("Error: could not open output file: " + outputfile);
     }
+    gio::gg_header::current(gio::gg_payload_type::BED).write(output);
     grove.serialize(output);
     if(!output) {
         throw std::runtime_error("Error: failed to write index to: " + outputfile);
