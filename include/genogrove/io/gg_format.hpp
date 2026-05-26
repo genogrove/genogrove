@@ -54,7 +54,7 @@ namespace genogrove::io {
 
         /// Build a header stamped with the current library version and the
         /// given payload type. Use this at the writer side.
-        static gg_header current(gg_payload_type payload_type);
+        [[nodiscard]] static gg_header current(gg_payload_type payload_type);
 
         /// Write the 12-byte header to a binary output stream.
         /// Throws std::runtime_error if the stream is in a bad state after writing.
@@ -70,7 +70,7 @@ namespace genogrove::io {
         ///
         /// A library-version difference (lib_major/minor/patch) does NOT cause
         /// rejection — those fields are informational and the read succeeds.
-        static gg_header read(std::istream& is);
+        [[nodiscard]] static gg_header read(std::istream& is);
     };
 
 } // namespace genogrove::io
