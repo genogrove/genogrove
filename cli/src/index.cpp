@@ -26,7 +26,7 @@ constexpr std::string_view DEFAULT_TREE_ORDER = "3";
 cxxopts::Options index::parse_args(int argc, char** argv) {
     cxxopts::Options options("genogrove index", "index an interval file");
     options.add_options()
-            ("inputfile", "The input file to be indexe                                                                                                                                                                                                                                                                                                                d",
+            ("inputfile", "The input file to be indexed",
                     cxxopts::value<std::string>())
             ("o,outputfile", "Write the index to the specified file",
                     cxxopts::value<std::string>())
