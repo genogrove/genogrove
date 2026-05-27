@@ -458,6 +458,9 @@ namespace genogrove::io {
             if (present == 0) {
                 return std::nullopt;
             }
+            if (present != 1) {
+                throw std::runtime_error("Failed to deserialize bed_entry: invalid optional presence flag");
+            }
             return gdt::serializer<T>::read(is);
         }
 

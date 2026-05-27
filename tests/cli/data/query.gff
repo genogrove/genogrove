@@ -1,0 +1,4 @@
+##gff-version 3
+chr1	test	exon	151	250	.	+	.	ID=q1;Parent=gene1
+chr1	test	exon	851	950	.	-	.	ID=q2;Parent=gene2
+chr2	test	exon	501	600	.	+	.	ID=q3

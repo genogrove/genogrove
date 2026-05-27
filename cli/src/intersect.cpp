@@ -5,6 +5,7 @@
 
 #include <subcalls/intersect.hpp>
 #include <handlers/bed.hpp>
+#include <handlers/gff.hpp>
 
 #include <genogrove/io/filetype_detector.hpp>
 #include <genogrove/io/gg_format.hpp>
@@ -20,32 +21,8 @@ namespace gio = genogrove::io;
 
 namespace {
 
-// Deserialize a grove from a prebuilt .gg index file.
-ggs::grove<gdt::interval, gio::bed_entry> load_index(const std::string& index_path) {
-    std::ifstream in(index_path, std::ios::binary);
-    if(!in) {
-        throw std::runtime_error("Error: could not open index file: " + index_path);
-    }
-    const auto header = gio::gg_header::read(in);
-    if(header.payload_type != gio::gg_payload_type::BED) {
-        throw std::runtime_error(
-            "Error: index payload type is not BED (only BED indexes are currently supported)");
-    }
-    return ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
-}
-
-// Build a grove from a target BED file. Only BED is supported for now.
-ggs::grove<gdt::interval, gio::bed_entry> build_from_target(
-        const std::string& targetfile, int order) {
-    auto [target_filetype, target_compression] =
-        gio::filetype_detector().detect_filetype(targetfile);
-    if(target_filetype != gio::filetype::BED) {
-        throw std::runtime_error(
-            "Error: only BED format is currently supported for target files");
-    }
-    ggs::grove<gdt::interval, gio::bed_entry> grove(order);
-    handlers::bed::grove_insert(grove, targetfile);
-    return grove;
+bool is_gff_or_gtf(gio::filetype t) {
+    return t == gio::filetype::GFF || t == gio::filetype::GTF;
 }
 
 } // namespace
@@ -123,15 +100,14 @@ void intersect::validate(const cxxopts::ParseResult& args) {
 }
 
 void intersect::execute(const cxxopts::ParseResult& args) {
-    // get parameters
-    std::string queryfile = args["queryfile"].as<std::string>();
-    int k = args["k"].as<int>();
+    const std::string queryfile = args["queryfile"].as<std::string>();
+    const int k = args["k"].as<int>();
 
-    // stream for output (either to stdout or to file)
+    // Output stream: either stdout (default) or a user-specified file.
     std::unique_ptr<std::ofstream> output_file;
     std::ostream* outputStream = &std::cout;
     if(args.count("outputfile")) {
-        std::string outputfile = args["outputfile"].as<std::string>();
+        const std::string outputfile = args["outputfile"].as<std::string>();
         if(outputfile != "stdout") {
             output_file = std::make_unique<std::ofstream>(outputfile);
             if(!output_file->is_open()) {
@@ -141,21 +117,62 @@ void intersect::execute(const cxxopts::ParseResult& args) {
         }
     }
 
-    // The query file is always parsed — only BED is supported.
+    // The query file is parsed by the matching handler below; the choice of
+    // handler depends on the index/target payload type, so the query type is
+    // validated inside each branch.
     auto [query_filetype, query_compression] = gio::filetype_detector().detect_filetype(queryfile);
-    if(query_filetype != gio::filetype::BED) {
-        throw std::runtime_error("Error: only BED format is currently supported for query files");
+
+    // validate() guarantees at least one of -i / -t is present; when both are
+    // given, the explicit index wins.
+    if(args.count("indexfile")) {
+        const std::string index_path = args["indexfile"].as<std::string>();
+        std::ifstream in(index_path, std::ios::binary);
+        if(!in) {
+            throw std::runtime_error("Error: could not open index file: " + index_path);
+        }
+        const auto header = gio::gg_header::read(in);
+
+        if(header.payload_type == gio::gg_payload_type::BED) {
+            if(query_filetype != gio::filetype::BED) {
+                throw std::runtime_error(
+                    "Error: query file must be BED to query a BED index");
+            }
+            auto grove = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
+            handlers::bed::grove_intersect(grove, queryfile, *outputStream);
+        } else {  // GFF — gg_header::read() rejects any other value
+            if(!is_gff_or_gtf(query_filetype)) {
+                throw std::runtime_error(
+                    "Error: query file must be GFF or GTF to query a GFF index");
+            }
+            auto grove = ggs::grove<gdt::interval, gio::gff_entry>::deserialize(in);
+            handlers::gff::grove_intersect(grove, queryfile, *outputStream);
+        }
+    } else {
+        const std::string targetfile = args["targetfile"].as<std::string>();
+        auto [target_filetype, target_compression] =
+            gio::filetype_detector().detect_filetype(targetfile);
+
+        if(target_filetype == gio::filetype::BED) {
+            if(query_filetype != gio::filetype::BED) {
+                throw std::runtime_error(
+                    "Error: query file must be BED for a BED target");
+            }
+            ggs::grove<gdt::interval, gio::bed_entry> grove(k);
+            handlers::bed::grove_insert(grove, targetfile);
+            handlers::bed::grove_intersect(grove, queryfile, *outputStream);
+        } else if(is_gff_or_gtf(target_filetype)) {
+            if(!is_gff_or_gtf(query_filetype)) {
+                throw std::runtime_error(
+                    "Error: query file must be GFF or GTF for a GFF target");
+            }
+            ggs::grove<gdt::interval, gio::gff_entry> grove(k);
+            handlers::gff::grove_insert(grove, targetfile);
+            handlers::gff::grove_intersect(grove, queryfile, *outputStream);
+        } else {
+            throw std::runtime_error(
+                "Error: unsupported target format (only BED, GFF, and GTF are supported)");
+        }
     }
-
-    // Use the prebuilt index when given (-i); otherwise build the grove from
-    // the target BED file (-t). validate() guarantees at least one is present;
-    // when both are given, the explicit index wins.
-    auto grove = args.count("indexfile")
-        ? load_index(args["indexfile"].as<std::string>())
-        : build_from_target(args["targetfile"].as<std::string>(), k);
-
-    // Intersect query file with the target grove
-    handlers::bed::grove_intersect(grove, queryfile, *outputStream);
 }
 
 }

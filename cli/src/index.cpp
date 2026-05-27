@@ -5,6 +5,7 @@
 
 #include <subcalls/index.hpp>
 #include <handlers/bed.hpp>
+#include <handlers/gff.hpp>
 
 #include <genogrove/io/filetype_detector.hpp>
 #include <genogrove/io/gg_format.hpp>
@@ -80,25 +81,49 @@ void index::execute(const cxxopts::ParseResult& args) {
         ? args["outputfile"].as<std::string>()
         : inputfile + ".gg";
 
-    // Only BED input is supported for now.
+    // Dispatch on input file type — BED and GFF/GTF are supported. Validate
+    // the type before any output side-effect so an unsupported input never
+    // truncates an existing .gg at outputfile.
     auto [filetype, compression] = gio::filetype_detector().detect_filetype(inputfile);
-    if(filetype != gio::filetype::BED) {
-        throw std::runtime_error("Error: only BED format is currently supported");
+    if(filetype != gio::filetype::BED &&
+       filetype != gio::filetype::GFF &&
+       filetype != gio::filetype::GTF) {
+        throw std::runtime_error(
+            "Error: unsupported input format (only BED, GFF, and GTF are supported)");
     }
 
     const auto start_time = std::chrono::steady_clock::now();
 
-    ggs::grove<gdt::interval, gio::bed_entry> grove(order);
-    handlers::bed::grove_insert(grove, inputfile, sorted);
+    // Build the grove in memory first, then open the output file and write
+    // the header + serialised payload. This way a parse error or malformed
+    // input row aborts before the output is opened, leaving any pre-existing
+    // .gg at outputfile intact.
+    if(filetype == gio::filetype::BED) {
+        ggs::grove<gdt::interval, gio::bed_entry> grove(order);
+        handlers::bed::grove_insert(grove, inputfile, sorted);
 
-    std::ofstream output(outputfile, std::ios::binary);
-    if(!output) {
-        throw std::runtime_error("Error: could not open output file: " + outputfile);
-    }
-    gio::gg_header::current(gio::gg_payload_type::BED).write(output);
-    grove.serialize(output);
-    if(!output) {
-        throw std::runtime_error("Error: failed to write index to: " + outputfile);
+        std::ofstream output(outputfile, std::ios::binary);
+        if(!output) {
+            throw std::runtime_error("Error: could not open output file: " + outputfile);
+        }
+        gio::gg_header::current(gio::gg_payload_type::BED).write(output);
+        grove.serialize(output);
+        if(!output) {
+            throw std::runtime_error("Error: failed to write index to: " + outputfile);
+        }
+    } else {  // GFF or GTF (validated above)
+        ggs::grove<gdt::interval, gio::gff_entry> grove(order);
+        handlers::gff::grove_insert(grove, inputfile, sorted);
+
+        std::ofstream output(outputfile, std::ios::binary);
+        if(!output) {
+            throw std::runtime_error("Error: could not open output file: " + outputfile);
+        }
+        gio::gg_header::current(gio::gg_payload_type::GFF).write(output);
+        grove.serialize(output);
+        if(!output) {
+            throw std::runtime_error("Error: failed to write index to: " + outputfile);
+        }
     }
 
     if(timed) {

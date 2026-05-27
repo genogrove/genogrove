@@ -69,6 +69,13 @@ namespace genogrove::io {
 
         // Check if this entry is in GFF3 format
         bool is_gff3() const { return format == gff_format::GFF3; }
+
+        // Serialize this entry to a binary output stream. Used by
+        // grove<gdt::interval, gff_entry>::serialize().
+        void serialize(std::ostream& os) const;
+
+        // Deserialize an entry from a binary input stream produced by serialize().
+        [[nodiscard]] static gff_entry deserialize(std::istream& is);
     };
 
     /**
