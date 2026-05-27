@@ -459,8 +459,18 @@ namespace genogrove::io {
             if (present == 0) {
                 return std::nullopt;
             }
+            if (present != 1) {
+                throw std::runtime_error("Failed to deserialize gff_entry: invalid optional presence flag");
+            }
             return gdt::serializer<T>::read(is);
         }
+
+        // Sanity bound on the attribute-count field. 4096 attributes per
+        // record is orders of magnitude beyond any plausible GFF row (real
+        // rows are tens of attributes); anything larger is a corrupt stream
+        // and would otherwise OOM the process trying to read up to 4 billion
+        // (key, value) pairs from a uint32_t count.
+        static constexpr uint32_t MAX_ATTRIBUTES_PER_RECORD = 4096;
 
         // The attributes map is written as a 4-byte count followed by
         // (key, value) pairs, both as length-prefixed strings.
@@ -482,6 +492,10 @@ namespace genogrove::io {
             is.read(reinterpret_cast<char*>(&n), sizeof(n));
             if (!is) {
                 throw std::runtime_error("Failed to deserialize gff_entry: stream error reading attributes count");
+            }
+            if (n > MAX_ATTRIBUTES_PER_RECORD) {
+                throw std::runtime_error(
+                    "Failed to deserialize gff_entry: unreasonable attribute count");
             }
             std::map<std::string, std::string, std::less<>> m;
             for (uint32_t i = 0; i < n; ++i) {
