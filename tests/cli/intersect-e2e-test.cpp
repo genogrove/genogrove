@@ -70,20 +70,28 @@ protected:
     fs::path test_data_dir;
     fs::path target_path;
     fs::path query_path;
+    fs::path gff_target_path;
+    fs::path gff_query_path;
     fs::path tmp_output;
     fs::path tmp_index;
+    fs::path tmp_gff_index;
 
     void SetUp() override {
         cli_path = GENOGROVE_CLI_PATH;
         test_data_dir = fs::current_path() / "cli" / "data";
         target_path = test_data_dir / "target.bed";
         query_path = test_data_dir / "query.bed";
+        gff_target_path = test_data_dir / "target.gff";
+        gff_query_path = test_data_dir / "query.gff";
         tmp_output = fs::temp_directory_path() / "genogrove_e2e_test_output.bed";
         tmp_index = fs::temp_directory_path() / "genogrove_e2e_test_index.gg";
+        tmp_gff_index = fs::temp_directory_path() / "genogrove_e2e_test_index_gff.gg";
 
         ASSERT_TRUE(fs::exists(cli_path)) << "CLI binary not found: " << cli_path;
         ASSERT_TRUE(fs::exists(target_path)) << "Target test data not found: " << target_path;
         ASSERT_TRUE(fs::exists(query_path)) << "Query test data not found: " << query_path;
+        ASSERT_TRUE(fs::exists(gff_target_path)) << "GFF target test data not found: " << gff_target_path;
+        ASSERT_TRUE(fs::exists(gff_query_path)) << "GFF query test data not found: " << gff_query_path;
     }
 
     void TearDown() override {
@@ -92,6 +100,9 @@ protected:
         }
         if(fs::exists(tmp_index)) {
             fs::remove(tmp_index);
+        }
+        if(fs::exists(tmp_gff_index)) {
+            fs::remove(tmp_gff_index);
         }
     }
 
@@ -254,4 +265,70 @@ TEST_F(CLIIntersectE2ETest, IntersectIgnoresTargetWhenIndexGiven) {
     ));
     EXPECT_EQ(result.exit_code, 0) << result.output;
     EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos);
+}
+
+// ==========================================
+// GFF intersect (matched query/target types)
+// ==========================================
+
+TEST_F(CLIIntersectE2ETest, GffIntersectFromTarget) {
+    // Build the grove on the fly from a GFF target and query with a GFF file.
+    auto result = run_command(cli(
+        "isec -q \"" + gff_query_path.string() +
+        "\" -t \"" + gff_target_path.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    // chr1:151-250 overlaps gene1 at chr1:101-500
+    EXPECT_NE(result.output.find("chr1\t101\t500"), std::string::npos);
+    // chr1:851-950 overlaps gene2 at chr1:601-900
+    EXPECT_NE(result.output.find("chr1\t601\t900"), std::string::npos);
+    // chr2:501-600 does NOT overlap gene3 at chr2:201-400
+    EXPECT_EQ(result.output.find("chr2"), std::string::npos);
+}
+
+TEST_F(CLIIntersectE2ETest, GffIntersectWithPrebuiltIndex) {
+    // Build a GFF .gg, then intersect via -i — the .gg header tells intersect
+    // it's a GFF payload so it dispatches to the GFF handler.
+    auto idx_result = run_command(cli(
+        "idx \"" + gff_target_path.string() + "\" -o \"" + tmp_gff_index.string() + "\""
+    ));
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
+    ASSERT_TRUE(fs::exists(tmp_gff_index));
+
+    auto result = run_command(cli(
+        "isec -q \"" + gff_query_path.string() + "\" -i \"" + tmp_gff_index.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("chr1\t101\t500"), std::string::npos);
+    EXPECT_NE(result.output.find("chr1\t601\t900"), std::string::npos);
+    EXPECT_EQ(result.output.find("chr2"), std::string::npos);
+}
+
+// ==========================================
+// Cross-type queries are not yet supported (tracked in #439)
+// ==========================================
+
+TEST_F(CLIIntersectE2ETest, RejectsBedQueryAgainstGffTarget) {
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() +
+        "\" -t \"" + gff_target_path.string() + "\""
+    ));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("query file must be GFF or GTF"),
+              std::string::npos);
+}
+
+TEST_F(CLIIntersectE2ETest, RejectsGffQueryAgainstBedIndex) {
+    // Build a BED index, then try to query it with a GFF file.
+    auto idx_result = run_command(cli(
+        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
+    ));
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
+
+    auto result = run_command(cli(
+        "isec -q \"" + gff_query_path.string() + "\" -i \"" + tmp_index.string() + "\""
+    ));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("query file must be BED"),
+              std::string::npos);
 }

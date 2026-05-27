@@ -11,13 +11,16 @@
 #include <cerrno>
 #include <charconv>
 #include <clocale>
+#include <cstdint>
 #include <cstdlib>
 #include <ranges>
 
 // genogrove
+#include <genogrove/data_type/serialization_traits.hpp>
 #include <genogrove/utility/char_utils.hpp>
 #include <genogrove/utility/tokenizer.hpp>
 
+namespace gdt = genogrove::data_type;
 namespace ggu = genogrove::utility;
 
 namespace genogrove::io {
@@ -425,6 +428,112 @@ namespace genogrove::io {
 
     size_t gff_reader::get_current_line() const {
         return line_num;
+    }
+
+    // ==========================================
+    // gff_entry serialization
+    // ==========================================
+
+    namespace {
+        // An optional is written as a 1-byte presence flag followed by the
+        // value (only when present). Mirrors the bed_entry encoding.
+        template<typename T>
+        void write_optional(std::ostream& os, const std::optional<T>& opt) {
+            const uint8_t present = opt.has_value() ? 1 : 0;
+            os.write(reinterpret_cast<const char*>(&present), sizeof(present));
+            if (opt.has_value()) {
+                gdt::serializer<T>::write(os, *opt);
+            }
+            if (!os) {
+                throw std::runtime_error("Failed to serialize gff_entry: stream error");
+            }
+        }
+
+        template<typename T>
+        std::optional<T> read_optional(std::istream& is) {
+            uint8_t present = 0;
+            is.read(reinterpret_cast<char*>(&present), sizeof(present));
+            if (!is) {
+                throw std::runtime_error("Failed to deserialize gff_entry: stream error reading optional flag");
+            }
+            if (present == 0) {
+                return std::nullopt;
+            }
+            return gdt::serializer<T>::read(is);
+        }
+
+        // The attributes map is written as a 4-byte count followed by
+        // (key, value) pairs, both as length-prefixed strings.
+        void write_string_map(std::ostream& os,
+                              const std::map<std::string, std::string, std::less<>>& m) {
+            const uint32_t n = static_cast<uint32_t>(m.size());
+            os.write(reinterpret_cast<const char*>(&n), sizeof(n));
+            for (const auto& [k, v] : m) {
+                gdt::serializer<std::string>::write(os, k);
+                gdt::serializer<std::string>::write(os, v);
+            }
+            if (!os) {
+                throw std::runtime_error("Failed to serialize gff_entry: stream error writing attributes");
+            }
+        }
+
+        std::map<std::string, std::string, std::less<>> read_string_map(std::istream& is) {
+            uint32_t n = 0;
+            is.read(reinterpret_cast<char*>(&n), sizeof(n));
+            if (!is) {
+                throw std::runtime_error("Failed to deserialize gff_entry: stream error reading attributes count");
+            }
+            std::map<std::string, std::string, std::less<>> m;
+            for (uint32_t i = 0; i < n; ++i) {
+                std::string k = gdt::serializer<std::string>::read(is);
+                std::string v = gdt::serializer<std::string>::read(is);
+                m.emplace(std::move(k), std::move(v));
+            }
+            return m;
+        }
+    } // namespace
+
+    void gff_entry::serialize(std::ostream& os) const {
+        gdt::serializer<std::string>::write(os, seqid);
+        gdt::serializer<std::string>::write(os, source);
+        gdt::serializer<std::string>::write(os, type);
+        os.write(reinterpret_cast<const char*>(&start), sizeof(start));
+        os.write(reinterpret_cast<const char*>(&end), sizeof(end));
+        write_optional(os, score);
+        write_optional(os, strand);
+        write_optional(os, phase);
+        write_string_map(os, attributes);
+        const uint8_t fmt = static_cast<uint8_t>(format);
+        os.write(reinterpret_cast<const char*>(&fmt), sizeof(fmt));
+        if (!os) {
+            throw std::runtime_error("Failed to serialize gff_entry: stream error");
+        }
+    }
+
+    gff_entry gff_entry::deserialize(std::istream& is) {
+        gff_entry entry;
+        entry.seqid = gdt::serializer<std::string>::read(is);
+        entry.source = gdt::serializer<std::string>::read(is);
+        entry.type = gdt::serializer<std::string>::read(is);
+        is.read(reinterpret_cast<char*>(&entry.start), sizeof(entry.start));
+        is.read(reinterpret_cast<char*>(&entry.end), sizeof(entry.end));
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize gff_entry: stream error reading coordinates");
+        }
+        entry.score = read_optional<double>(is);
+        entry.strand = read_optional<char>(is);
+        entry.phase = read_optional<int>(is);
+        entry.attributes = read_string_map(is);
+        uint8_t fmt = 0;
+        is.read(reinterpret_cast<char*>(&fmt), sizeof(fmt));
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize gff_entry: stream error reading format");
+        }
+        if (fmt > static_cast<uint8_t>(gff_format::UNKNOWN)) {
+            throw std::runtime_error("Failed to deserialize gff_entry: unknown gff_format value");
+        }
+        entry.format = static_cast<gff_format>(fmt);
+        return entry;
     }
 
 }

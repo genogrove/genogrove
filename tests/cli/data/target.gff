@@ -1,0 +1,4 @@
+##gff-version 3
+chr1	test	gene	101	500	.	+	.	ID=gene1
+chr1	test	gene	601	900	.	-	.	ID=gene2
+chr2	test	gene	201	400	.	+	.	ID=gene3

@@ -19,6 +19,7 @@
 // genogrove
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/bed_reader.hpp>
+#include <genogrove/io/gff_reader.hpp>
 #include <genogrove/io/gg_format.hpp>
 #include <genogrove/structure/grove/grove.hpp>
 
@@ -82,21 +83,29 @@ protected:
     std::string cli_path;
     fs::path test_data_dir;
     fs::path target_path;
+    fs::path gff_target_path;
     fs::path tmp_output;
+    fs::path tmp_gff_output;
 
     void SetUp() override {
         cli_path = GENOGROVE_CLI_PATH;
         test_data_dir = fs::current_path() / "cli" / "data";
         target_path = test_data_dir / "target.bed";
+        gff_target_path = test_data_dir / "target.gff";
         tmp_output = fs::temp_directory_path() / "genogrove_idx_test.gg";
+        tmp_gff_output = fs::temp_directory_path() / "genogrove_idx_test_gff.gg";
 
         ASSERT_TRUE(fs::exists(cli_path)) << "CLI binary not found: " << cli_path;
         ASSERT_TRUE(fs::exists(target_path)) << "Test data not found: " << target_path;
+        ASSERT_TRUE(fs::exists(gff_target_path)) << "GFF test data not found: " << gff_target_path;
     }
 
     void TearDown() override {
         if(fs::exists(tmp_output)) {
             fs::remove(tmp_output);
+        }
+        if(fs::exists(tmp_gff_output)) {
+            fs::remove(tmp_gff_output);
         }
     }
 
@@ -190,6 +199,55 @@ TEST_F(CLIIndexE2ETest, IndexFileStartsWithGROVMagic) {
     EXPECT_EQ(magic[1], 'R');
     EXPECT_EQ(magic[2], 'O');
     EXPECT_EQ(magic[3], 'V');
+}
+
+// ==========================================
+// idx accepts a GFF input and stamps gg_payload_type::GFF in the header
+// ==========================================
+
+TEST_F(CLIIndexE2ETest, IndexProducesDeserializableGffGrove) {
+    auto result = run_command(cli(
+        "idx \"" + gff_target_path.string() + "\" -o \"" + tmp_gff_output.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    ASSERT_TRUE(fs::exists(tmp_gff_output));
+
+    std::ifstream in(tmp_gff_output, std::ios::binary);
+    ASSERT_TRUE(in.is_open());
+    const auto header = gio::gg_header::read(in);
+    EXPECT_EQ(header.payload_type, gio::gg_payload_type::GFF);
+
+    auto grove = ggs::grove<gdt::interval, gio::gff_entry>::deserialize(in);
+    EXPECT_EQ(grove.indexed_vertex_count(), 3u);
+
+    // chr1:101-500 (gene1) is stored as interval [101, 500]; a query at 200
+    // must return it with the original GFF payload intact.
+    auto hits = grove.intersect(gdt::interval(200, 200), "chr1");
+    ASSERT_EQ(hits.get_keys().size(), 1u);
+    EXPECT_EQ(hits.get_keys()[0]->get_data().seqid, "chr1");
+    EXPECT_EQ(hits.get_keys()[0]->get_data().type, "gene");
+    EXPECT_EQ(hits.get_keys()[0]->get_data().attributes.at("ID"), "gene1");
+    EXPECT_EQ(hits.get_keys()[0]->get_data().format, gio::gff_format::GFF3);
+}
+
+// ==========================================
+// idx rejects formats other than BED / GFF / GTF
+// ==========================================
+
+TEST_F(CLIIndexE2ETest, IndexRejectsUnsupportedFormat) {
+    fs::path fake_path = fs::temp_directory_path() / "genogrove_idx_unsupported.txt";
+    {
+        std::ofstream out(fake_path);
+        out << "hello world\n";
+    }
+
+    auto result = run_command(cli(
+        "idx \"" + fake_path.string() + "\" -o \"" + tmp_output.string() + "\""
+    ));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("unsupported input format"), std::string::npos);
+
+    fs::remove(fake_path);
 }
 
 // ==========================================
