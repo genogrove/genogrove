@@ -19,6 +19,7 @@
 // genogrove
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/bed_reader.hpp>
+#include <genogrove/io/gg_format.hpp>
 #include <genogrove/structure/grove/grove.hpp>
 
 namespace fs = std::filesystem;
@@ -119,6 +120,8 @@ TEST_F(CLIIndexE2ETest, IndexProducesDeserializableGrove) {
     // The .gg must deserialize back into a grove holding target.bed's 3 records.
     std::ifstream in(tmp_output, std::ios::binary);
     ASSERT_TRUE(in.is_open());
+    const auto header = gio::gg_header::read(in);
+    EXPECT_EQ(header.payload_type, gio::gg_payload_type::BED);
     auto grove = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
     EXPECT_EQ(grove.indexed_vertex_count(), 3u);
 
@@ -163,8 +166,30 @@ TEST_F(CLIIndexE2ETest, IndexSortedFlagProducesSameRecordCount) {
     ASSERT_TRUE(fs::exists(tmp_output));
 
     std::ifstream in(tmp_output, std::ios::binary);
+    (void)gio::gg_header::read(in);
     auto grove = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
     EXPECT_EQ(grove.indexed_vertex_count(), 3u);
+}
+
+// ==========================================
+// idx writes the .gg header magic so produced files are identifiable
+// ==========================================
+
+TEST_F(CLIIndexE2ETest, IndexFileStartsWithGROVMagic) {
+    auto result = run_command(cli(
+        "idx \"" + target_path.string() + "\" -o \"" + tmp_output.string() + "\""
+    ));
+    ASSERT_EQ(result.exit_code, 0) << result.output;
+    ASSERT_TRUE(fs::exists(tmp_output));
+
+    std::ifstream in(tmp_output, std::ios::binary);
+    ASSERT_TRUE(in.is_open());
+    std::array<char, 4> magic{};
+    in.read(magic.data(), magic.size());
+    EXPECT_EQ(magic[0], 'G');
+    EXPECT_EQ(magic[1], 'R');
+    EXPECT_EQ(magic[2], 'O');
+    EXPECT_EQ(magic[3], 'V');
 }
 
 // ==========================================

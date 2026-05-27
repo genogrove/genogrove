@@ -7,6 +7,7 @@
 #include <handlers/bed.hpp>
 
 #include <genogrove/io/filetype_detector.hpp>
+#include <genogrove/io/gg_format.hpp>
 
 #include <chrono>
 #include <fstream>
@@ -94,6 +95,7 @@ void index::execute(const cxxopts::ParseResult& args) {
     if(!output) {
         throw std::runtime_error("Error: could not open output file: " + outputfile);
     }
+    gio::gg_header::current(gio::gg_payload_type::BED).write(output);
     grove.serialize(output);
     if(!output) {
         throw std::runtime_error("Error: failed to write index to: " + outputfile);

@@ -7,6 +7,7 @@
 #include <handlers/bed.hpp>
 
 #include <genogrove/io/filetype_detector.hpp>
+#include <genogrove/io/gg_format.hpp>
 
 #include <fstream>
 #include <memory>
@@ -24,6 +25,11 @@ ggs::grove<gdt::interval, gio::bed_entry> load_index(const std::string& index_pa
     std::ifstream in(index_path, std::ios::binary);
     if(!in) {
         throw std::runtime_error("Error: could not open index file: " + index_path);
+    }
+    const auto header = gio::gg_header::read(in);
+    if(header.payload_type != gio::gg_payload_type::BED) {
+        throw std::runtime_error(
+            "Error: index payload type is not BED (only BED indexes are currently supported)");
     }
     return ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
 }
