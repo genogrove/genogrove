@@ -342,6 +342,36 @@ TEST_F(CLIIndexE2ETest, IndexWithLinksDuplicateBedNameFails) {
     fs::remove(some_links);
 }
 
+TEST_F(CLIIndexE2ETest, IndexWithLinksDeduplicatesRepeatedEdges) {
+    // graph_overlay::add_edge appends unconditionally, so a duplicated TSV row
+    // would otherwise produce a parallel edge. apply_to_grove collapses
+    // repeats — the same (source, target) pair must yield out_degree 1.
+    fs::path dup_edge_links = fs::temp_directory_path() / "genogrove_idx_dup_edge_links.tsv";
+    {
+        std::ofstream out(dup_edge_links);
+        out << "geneA\tgeneB\n"
+            << "geneA\tgeneB\n";  // same edge twice
+    }
+
+    auto result = run_command(cli(
+        "idx \"" + links_target_path.string() + "\" --links \"" + dup_edge_links.string() +
+        "\" -o \"" + tmp_links_output.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+
+    std::ifstream in(tmp_links_output, std::ios::binary);
+    ASSERT_TRUE(in.is_open());
+    (void)gio::gg_header::read(in);
+    auto grove = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
+
+    auto a_hits = grove.intersect(gdt::interval(300, 300), "chr1");
+    ASSERT_EQ(a_hits.get_keys().size(), 1u);
+    auto* geneA = a_hits.get_keys()[0];
+    EXPECT_EQ(grove.out_degree(geneA), 1u);  // not 2
+
+    fs::remove(dup_edge_links);
+}
+
 TEST_F(CLIIndexE2ETest, IndexLinksRejectsGffInput) {
     auto result = run_command(cli(
         "idx \"" + gff_target_path.string() + "\" --links \"" + links_path.string() +

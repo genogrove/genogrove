@@ -31,8 +31,10 @@ namespace gio = genogrove::io;
 parse_links_tsv(std::istream& is);
 
 // Read a TSV from the given path and, for each (nameA, nameB) row, look both
-// names up in name_map and call `grove.add_edge(keyA, keyB)`. Returns the
-// number of edges added.
+// names up in name_map and call `grove.add_edge(keyA, keyB)`. Repeated rows
+// for the same (source, target) pair are collapsed — `graph_overlay` does not
+// deduplicate, so this avoids silently doubling an edge from a duplicated
+// line. Returns the number of distinct edges added.
 //
 // Throws std::runtime_error on:
 //   - file open failure

@@ -7,10 +7,12 @@
 
 #include <fstream>
 #include <istream>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace handlers {
 namespace links {
@@ -76,6 +78,15 @@ size_t apply_to_grove(
     }
     const auto rows = parse_links_tsv(in);
 
+    // graph_overlay::add_edge does not deduplicate — calling it twice with the
+    // same (source, target) appends a parallel edge. A links file is a
+    // user-authored list, so a repeated row is almost certainly a mistake;
+    // collapse repeats here so each distinct edge is added at most once.
+    // Names are still resolved on every row, so a typo on a duplicate line is
+    // still reported.
+    using key_ptr = gdt::key<gdt::interval, gio::bed_entry>*;
+    std::set<std::pair<key_ptr, key_ptr>> seen;
+
     size_t edges_added = 0;
     for (const auto& [name_a, name_b] : rows) {
         const auto it_a = name_map.find(std::string_view(name_a));
@@ -90,8 +101,10 @@ size_t apply_to_grove(
                 "Error: links file references name '" + name_b +
                 "' which is not present as a BED record name");
         }
-        grove.add_edge(it_a->second, it_b->second);
-        ++edges_added;
+        if (seen.emplace(it_a->second, it_b->second).second) {
+            grove.add_edge(it_a->second, it_b->second);
+            ++edges_added;
+        }
     }
     return edges_added;
 }
