@@ -6,6 +6,7 @@
 #include <subcalls/index.hpp>
 #include <handlers/bed.hpp>
 #include <handlers/gff.hpp>
+#include <handlers/links.hpp>
 
 #include <genogrove/io/filetype_detector.hpp>
 #include <genogrove/io/gg_format.hpp>
@@ -37,6 +38,10 @@ cxxopts::Options index::parse_args(int argc, char** argv) {
                     cxxopts::value<bool>()->default_value("false"))
             ("t,timed", "Measure the time taken for indexing",
                     cxxopts::value<bool>()->default_value("false"))
+            ("l,links", "Optional TSV (nameA<TAB>nameB, # comments) of directed edges "
+                        "to attach to the grove's graph overlay. Names match BED column 4 "
+                        "and must be unique. BED input only.",
+                    cxxopts::value<std::string>())
             ("h,help", "Print help")
             ;
     options.parse_positional({"inputfile"});
@@ -68,6 +73,13 @@ void index::validate(const cxxopts::ParseResult& args) {
             throw std::runtime_error("Error: parent directory does not exist: " + parent.string());
         }
     }
+
+    if(args.count("links")) {
+        const auto links_path = args["links"].as<std::string>();
+        if(!std::filesystem::exists(links_path)) {
+            throw std::runtime_error("Error: links file does not exist: " + links_path);
+        }
+    }
 }
 
 void index::execute(const cxxopts::ParseResult& args) {
@@ -92,6 +104,14 @@ void index::execute(const cxxopts::ParseResult& args) {
             "Error: unsupported input format (only BED, GFF, and GTF are supported)");
     }
 
+    const bool has_links = args.count("links") != 0;
+    if(has_links && filetype != gio::filetype::BED) {
+        throw std::runtime_error(
+            "Error: --links is currently only supported for BED input "
+            "(GFF/GTF support tracked at "
+            "https://github.com/genogrove/genogrove/issues/441)");
+    }
+
     const auto start_time = std::chrono::steady_clock::now();
 
     // Build the grove in memory first, then open the output file and write
@@ -100,7 +120,17 @@ void index::execute(const cxxopts::ParseResult& args) {
     // .gg at outputfile intact.
     if(filetype == gio::filetype::BED) {
         ggs::grove<gdt::interval, gio::bed_entry> grove(order);
-        handlers::bed::grove_insert(grove, inputfile, sorted);
+
+        // Only build the name->key map when --links was requested. Without
+        // --links the map is null and grove_insert pays no extra cost.
+        handlers::bed::name_to_key_map name_map;
+        handlers::bed::grove_insert(
+            grove, inputfile, sorted, has_links ? &name_map : nullptr);
+
+        if(has_links) {
+            handlers::links::apply_to_grove(
+                grove, args["links"].as<std::string>(), name_map);
+        }
 
         std::ofstream output(outputfile, std::ios::binary);
         if(!output) {

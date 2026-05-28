@@ -129,6 +129,7 @@ if(BUILD_CLI)
     set(CLI_HANDLER_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../cli/src/handlers/bed.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../cli/src/handlers/gff.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../cli/src/handlers/links.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../cli/src/intersect.cpp
     )
     add_executable(genogrove_cli_tests ${TEST_SOURCES_CLI} ${CLI_HANDLER_SOURCES})
