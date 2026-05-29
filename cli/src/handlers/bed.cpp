@@ -11,16 +11,26 @@ namespace bed {
 void grove_insert(
     ggs::grove<gdt::interval, gio::bed_entry>& grove,
     const std::string& filepath,
-    bool sorted
+    bool sorted,
+    name_to_key_map* name_map
 ) {
     gio::bed_reader reader(filepath);
 
     for (const auto& entry : reader) {
         gdt::interval iv(entry.start, entry.end - 1);
-        if (sorted) {
-            grove.insert_data(entry.chrom, iv, entry, ggs::sorted);
-        } else {
-            grove.insert_data(entry.chrom, iv, entry);
+        gdt::key<gdt::interval, gio::bed_entry>* key_ptr = sorted
+            ? grove.insert_data(entry.chrom, iv, entry, ggs::sorted)
+            : grove.insert_data(entry.chrom, iv, entry);
+
+        if (name_map && key_ptr->get_data().name.has_value()) {
+            const auto& name_str = *key_ptr->get_data().name;
+            std::string_view name_view(name_str.data(), name_str.size());
+            auto [it, inserted] = name_map->emplace(name_view, key_ptr);
+            if (!inserted) {
+                throw std::runtime_error(
+                    "Error: duplicate BED name '" + std::string(name_view) +
+                    "' (names must be unique to use --links)");
+            }
         }
     }
 }
