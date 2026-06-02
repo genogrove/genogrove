@@ -16,11 +16,12 @@ public:
      * @note This assumes key_value is greater than all existing keys in the specified index
      * @return Pointer to the inserted key in the tree
      */
+    template <typename D = data_type>
     gdt::key<key_type, data_type>* insert_data(
         std::string_view index,
         key_type key_value,
-        data_type data_value,
-        sorted_t) requires(!std::is_void_v<data_type>) {
+        D data_value,
+        sorted_t) requires(!std::is_void_v<D>) {
         return insert_data_sorted(index, key_value, data_value);
     }
 
@@ -32,10 +33,11 @@ public:
      * @return Pointer to the inserted key in the tree
      * @note Uses standard tree traversal (O(log n)). For sorted data, use sorted tag for better performance.
      */
+    template <typename D = data_type>
     gdt::key<key_type, data_type>* insert_data(
         std::string_view index,
         key_type key_value,
-        data_type data_value) requires (!std::is_void_v<data_type>) {
+        D data_value) requires (!std::is_void_v<D>) {
             gdt::key<key_type, data_type> key(key_value, data_value);
             return insert(index, key);
         }
@@ -382,8 +384,9 @@ private:
      * @note Assumes key_value is greater than all existing keys in the specified index
      * @note This is a helper function called by insert_data(..., sorted_t)
      */
-    gdt::key<key_type, data_type>* insert_data_sorted(std::string_view index, key_type key_value, data_type data_value)
-        requires (!std::is_void_v<data_type>) {
+    template <typename D = data_type>
+    gdt::key<key_type, data_type>* insert_data_sorted(std::string_view index, key_type key_value, D data_value)
+        requires (!std::is_void_v<D>) {
             gdt::key<key_type, data_type> key(key_value, data_value); // create the key object
             return insert_sorted(index, key);
     }
