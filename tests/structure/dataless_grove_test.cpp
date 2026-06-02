@@ -30,6 +30,19 @@ namespace gdt = genogrove::data_type;
 static_assert(sizeof(gst::grove<gdt::interval>) > 0,
               "dataless grove<interval> must be a complete type (#444)");
 
+// A dataless grove must NOT expose the data-carrying overloads — overload
+// probing must report them as not callable, rather than selecting them and
+// then failing hard in the body (the constraint gates on the grove's own
+// data_type, not the deduced argument type). Guards the regression surfaced by
+// the Codex review on #445.
+static_assert(!requires(gst::grove<gdt::interval> g, gdt::interval iv) {
+    g.insert_data("chr1", iv, 1);
+}, "dataless grove must not expose a data-carrying insert_data overload");
+
+static_assert(!requires(gst::grove<gdt::interval> g, gdt::interval iv) {
+    g.add_external_key(iv, 1);
+}, "dataless grove must not expose a data-carrying add_external_key overload");
+
 TEST(DatalessGroveTest, InsertAndQuery) {
     gst::grove<gdt::interval> g(3);
 

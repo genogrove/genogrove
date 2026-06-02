@@ -192,7 +192,7 @@ public:
      */
     template <typename D = data_type>
     gdt::key<key_type, data_type>* add_external_key(key_type key_value, D data_value)
-        requires (!std::is_void_v<D>) {
+        requires (!std::is_void_v<data_type>) {
         external_key_storage.emplace_back(std::move(key_value), std::move(data_value));
         return &external_key_storage.back();
     }
