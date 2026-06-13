@@ -58,7 +58,11 @@ public:
      * @note CRITICAL PRECONDITION (append mode): All keys must be strictly greater
      *       than any existing key in the index
      * @note This is the fastest bulk insert - skips both sorting and sorted checking
-     * @throws std::runtime_error if precondition is violated in append mode
+     * @warning The append-mode precondition is the caller's responsibility and is
+     *          NOT enforced: appending a key that is not strictly greater than the
+     *          existing maximum silently corrupts B+ tree ordering, so later
+     *          intersect() calls may return wrong results. It does not throw or
+     *          segfault — the structure stays valid, only the ordering is wrong.
      * @see build_tree_bottom_up() for bottom-up construction
      * @see insert_sorted() for single-key rightmost insertion behavior
      */
@@ -145,7 +149,11 @@ public:
      *       than any existing key in the index
      * @note Data is always sorted (O(n log n)) before insertion
      * @note For pre-sorted data, use the sorted tag variant to skip sorting: insert_data(index, data, sorted, bulk)
-     * @throws std::runtime_error if precondition is violated in append mode
+     * @warning The append-mode precondition is the caller's responsibility and is
+     *          NOT enforced: if, after sorting, any key is not strictly greater than
+     *          the existing maximum, B+ tree ordering is silently corrupted and later
+     *          intersect() calls may return wrong results. It does not throw or
+     *          segfault — the structure stays valid, only the ordering is wrong.
      *
      * Example usage:
      * @code
