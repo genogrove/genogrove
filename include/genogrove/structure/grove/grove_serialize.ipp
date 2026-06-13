@@ -52,6 +52,20 @@ public:
     }
 
     /**
+     * @brief Write the entire grove (all indexed trees) to a stream in SIF format.
+     * @param os Output stream to write to
+     * @note Node-less public entry point: walks the grove's own roots, so callers
+     *       need no access to internal node pointers. Each index's tree is written
+     *       in turn; an empty grove produces no output. Index iteration order follows
+     *       the underlying hash map and is not guaranteed stable across runs.
+     */
+    void grove_to_sif(std::ostream& os) const {
+        for (const auto& [index, root] : root_nodes) {
+            grove_to_sif(os, root);
+        }
+    }
+
+    /**
      * @brief Serialize the grove to a zlib-compressed binary output stream
      * @param os Output stream to write compressed data to
      * @note The output is always zlib-compressed
