@@ -1,0 +1,12 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##contig=<ID=chr1,length=248956422>
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total depth">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency per ALT">
+##INFO=<ID=GENE,Number=1,Type=String,Description="Overlapping gene">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">
+##FORMAT=<ID=VAF,Number=1,Type=Float,Description="Variant allele fraction">
+##FORMAT=<ID=BC,Number=1,Type=String,Description="Barcode">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	s1
+chr1	50	.	A	G,T	.	PASS	DP=20;AF=0.3,0.1;GENE=BRCA1	GT:AD:VAF:BC	1/2:5,8,7:0.45:foo
