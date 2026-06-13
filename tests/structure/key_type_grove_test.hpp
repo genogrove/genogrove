@@ -1051,6 +1051,20 @@ TYPED_TEST_P(grove_typed_test, grove_to_sif_output) {
     std::ostringstream empty_ss;
     this->grove.grove_to_sif(empty_ss, nullptr);
     EXPECT_TRUE(empty_ss.str().empty());
+
+    // Node-less overload walks the grove's own roots. The test grove has a
+    // single index, so its output must match the per-root overload exactly.
+    std::ostringstream whole_ss;
+    this->grove.grove_to_sif(whole_ss);
+    EXPECT_EQ(whole_ss.str(), output);
+}
+
+TYPED_TEST_P(grove_typed_test, grove_to_sif_empty_grove) {
+    // The node-less overload on a grove with no indices produces no output.
+    gst::grove<TypeParam, int> empty_grove(10);
+    std::ostringstream ss;
+    empty_grove.grove_to_sif(ss);
+    EXPECT_TRUE(ss.str().empty());
 }
 
 TYPED_TEST_P(grove_typed_test, serialization_compressed_smaller) {
@@ -1213,6 +1227,7 @@ REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     internal_node_split_invariants,
     internal_node_split_regular_insert,
     grove_to_sif_output,
+    grove_to_sif_empty_grove,
     serialization_compressed_smaller,
     serialization_back_to_back_streams,
     graph_edge_creation,
