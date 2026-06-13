@@ -28,12 +28,14 @@ protected:
     fs::path vcf_path;
     fs::path rich_path;
     fs::path gz_path;
+    fs::path haploid_path;
 
     void SetUp() override {
         test_data_dir = fs::current_path() / "io" / "data";
         vcf_path = test_data_dir / "test.vcf";
         rich_path = test_data_dir / "test_rich.vcf";
         gz_path = test_data_dir / "test.vcf.gz";
+        haploid_path = test_data_dir / "test_haploid.vcf";
     }
 };
 
@@ -404,4 +406,57 @@ TEST_F(VcfReaderTest, MoveAssignment) {
     EXPECT_EQ(target.get_sample_names().size(), 2u);
     std::vector<gio::vcf_entry> entries(target.begin(), target.end());
     EXPECT_EQ(entries.size(), 3u);
+}
+
+// ==========================================
+// Sentinel trimming: haploid sample with
+// Number=R / Number=A FORMAT padding
+// ==========================================
+
+TEST_F(VcfReaderTest, HaploidSampleNoVectorEndSentinel) {
+    // test_haploid.vcf has a diploid sample (s_diploid: GT=0/1, AD=5,8) and a
+    // haploid sample (s_haploid: GT=1, AD=7).  For a biallelic site, Number=R
+    // means 2 values (REF+ALT).  htslib pads the haploid sample's AD slice to
+    // width 2 with bcf_int32_vector_end.  The reader must trim that sentinel so
+    // the published vector has exactly one element.
+    gio::vcf_reader reader(haploid_path);
+    std::vector<gio::vcf_entry> entries(reader.begin(), reader.end());
+
+    ASSERT_EQ(entries.size(), 1u);
+    ASSERT_EQ(entries[0].samples.size(), 2u);
+
+    // s_diploid: AD=[5, 8] — two values, no sentinel.
+    const auto& ad_diploid =
+        std::get<std::vector<int32_t>>(entries[0].samples[0].fields.at("AD"));
+    ASSERT_EQ(ad_diploid.size(), 2u);
+    EXPECT_EQ(ad_diploid[0], 5);
+    EXPECT_EQ(ad_diploid[1], 8);
+
+    // s_haploid: AD=[7] — sentinel trimmed; must NOT contain bcf_int32_vector_end.
+    const auto& ad_haploid =
+        std::get<std::vector<int32_t>>(entries[0].samples[1].fields.at("AD"));
+    ASSERT_EQ(ad_haploid.size(), 1u);
+    EXPECT_EQ(ad_haploid[0], 7);
+}
+
+TEST_F(VcfReaderTest, HaploidSampleFloatNoVectorEndSentinel) {
+    // Same fixture: VAF is Number=A (one value per ALT).  For a biallelic site
+    // Number=A=1, so both samples should have exactly 1 float value.  If the
+    // haploid sample's slice were padded, bcf_float_vector_end would appear; the
+    // reader must trim it.
+    gio::vcf_reader reader(haploid_path);
+    std::vector<gio::vcf_entry> entries(reader.begin(), reader.end());
+
+    ASSERT_EQ(entries.size(), 1u);
+    ASSERT_EQ(entries[0].samples.size(), 2u);
+
+    const auto& vaf_diploid =
+        std::get<std::vector<float>>(entries[0].samples[0].fields.at("VAF"));
+    ASSERT_EQ(vaf_diploid.size(), 1u);
+    EXPECT_FLOAT_EQ(vaf_diploid[0], 0.6f);
+
+    const auto& vaf_haploid =
+        std::get<std::vector<float>>(entries[0].samples[1].fields.at("VAF"));
+    ASSERT_EQ(vaf_haploid.size(), 1u);
+    EXPECT_FLOAT_EQ(vaf_haploid[0], 0.9f);
 }

@@ -1,0 +1,9 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##contig=<ID=chr1,length=248956422>
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total depth">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths for REF and ALT">
+##FORMAT=<ID=VAF,Number=A,Type=Float,Description="Variant allele fraction per ALT">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	s_diploid	s_haploid
+chr1	100	.	A	G	50	PASS	DP=15	GT:AD:VAF	0/1:5,8:0.6	1:7:0.9

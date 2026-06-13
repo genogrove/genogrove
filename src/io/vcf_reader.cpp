@@ -375,8 +375,13 @@ namespace genogrove::io {
                     if (n <= 0) break;
                     const int per = n / n_samples;
                     for (int s = 0; s < n_samples; ++s) {
-                        entry.samples[s].fields[key] =
-                            std::vector<int32_t>(int_buf + s * per, int_buf + (s + 1) * per);
+                        const int32_t* begin = int_buf + s * per;
+                        const int32_t* end_ptr = int_buf + (s + 1) * per;
+                        // Trim trailing bcf_int32_vector_end padding sentinels.
+                        while (end_ptr > begin && *(end_ptr - 1) == bcf_int32_vector_end) {
+                            --end_ptr;
+                        }
+                        entry.samples[s].fields[key] = std::vector<int32_t>(begin, end_ptr);
                     }
                     break;
                 }
@@ -386,8 +391,13 @@ namespace genogrove::io {
                     if (n <= 0) break;
                     const int per = n / n_samples;
                     for (int s = 0; s < n_samples; ++s) {
-                        entry.samples[s].fields[key] =
-                            std::vector<float>(float_buf + s * per, float_buf + (s + 1) * per);
+                        const float* begin = float_buf + s * per;
+                        const float* end_ptr = float_buf + (s + 1) * per;
+                        // Trim trailing bcf_float_vector_end padding sentinels.
+                        while (end_ptr > begin && bcf_float_is_vector_end(*(end_ptr - 1))) {
+                            --end_ptr;
+                        }
+                        entry.samples[s].fields[key] = std::vector<float>(begin, end_ptr);
                     }
                     break;
                 }
