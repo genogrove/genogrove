@@ -111,7 +111,7 @@ namespace genogrove::io {
         size_t end = 0;                     ///< 0-based exclusive end (pos + len(REF))
         std::string id;                     ///< ID, empty when "."
         std::string ref;                    ///< REF allele
-        std::vector<std::string> alt;       ///< ALT alleles (empty for monomorphic / "<*>")
+        std::vector<std::string> alt;       ///< ALT alleles. Empty for monomorphic records (ALT "."), which htslib collapses to REF only. Symbolic alleles (`<*>`, `<NON_REF>`, `*`) are kept verbatim; is_snp()/is_indel() ignore them.
         float qual = 0.0f;                  ///< QUAL score (valid only if !qual_missing)
         bool qual_missing = true;           ///< True when QUAL is "." (missing)
         std::vector<std::string> filter;    ///< FILTER entries; ["PASS"] when passed, empty when "."
@@ -127,15 +127,29 @@ namespace genogrove::io {
                    (filter.size() == 1 && filter.front() == "PASS");
         }
 
-        /// True if this is a simple biallelic SNP (single-base REF and ALT).
-        [[nodiscard]] bool is_snp() const {
-            return ref.size() == 1 && alt.size() == 1 && alt.front().size() == 1;
+        /// True for VCF symbolic / non-sequence ALT alleles — angle-bracket
+        /// symbolic (`<DEL>`, `<*>`, `<NON_REF>`), the `*` spanning-deletion
+        /// marker, the `.` missing marker, or breakend notation (`[` / `]`).
+        /// These are not comparable as plain sequences, so the SNP/indel
+        /// predicates below ignore them.
+        [[nodiscard]] static bool is_symbolic_allele(const std::string& a) {
+            if (a.empty()) return true;
+            const char c = a.front();
+            if (c == '<' || c == '*' || c == '.') return true;
+            return a.find('[') != std::string::npos || a.find(']') != std::string::npos;
         }
 
-        /// True if any ALT allele differs in length from REF (insertion/deletion).
+        /// True if this is a simple biallelic SNP (single-base sequence REF and ALT).
+        [[nodiscard]] bool is_snp() const {
+            return ref.size() == 1 && alt.size() == 1 &&
+                   alt.front().size() == 1 && !is_symbolic_allele(alt.front());
+        }
+
+        /// True if any sequence ALT allele differs in length from REF
+        /// (insertion/deletion). Symbolic alleles are ignored.
         [[nodiscard]] bool is_indel() const {
             for (const auto& a : alt) {
-                if (a.size() != ref.size()) return true;
+                if (!is_symbolic_allele(a) && a.size() != ref.size()) return true;
             }
             return false;
         }

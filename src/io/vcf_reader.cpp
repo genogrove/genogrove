@@ -373,10 +373,19 @@ namespace genogrove::io {
                 case BCF_HT_INT: {
                     int n = bcf_get_format_int32(header, rec, key, &int_buf, &n_int_buf);
                     if (n <= 0) break;
+                    // htslib returns a flat n_samples * max_width buffer, right-
+                    // padding samples that carry fewer values with the sentinel
+                    // bcf_int32_vector_end. Keep only each sample's real values.
                     const int per = n / n_samples;
                     for (int s = 0; s < n_samples; ++s) {
-                        entry.samples[s].fields[key] =
-                            std::vector<int32_t>(int_buf + s * per, int_buf + (s + 1) * per);
+                        const int32_t* p = int_buf + s * per;
+                        std::vector<int32_t> vals;
+                        vals.reserve(per);
+                        for (int j = 0; j < per; ++j) {
+                            if (p[j] == bcf_int32_vector_end) break;
+                            vals.push_back(p[j]);
+                        }
+                        entry.samples[s].fields[key] = std::move(vals);
                     }
                     break;
                 }
@@ -386,8 +395,14 @@ namespace genogrove::io {
                     if (n <= 0) break;
                     const int per = n / n_samples;
                     for (int s = 0; s < n_samples; ++s) {
-                        entry.samples[s].fields[key] =
-                            std::vector<float>(float_buf + s * per, float_buf + (s + 1) * per);
+                        const float* p = float_buf + s * per;
+                        std::vector<float> vals;
+                        vals.reserve(per);
+                        for (int j = 0; j < per; ++j) {
+                            if (bcf_float_is_vector_end(p[j])) break;
+                            vals.push_back(p[j]);
+                        }
+                        entry.samples[s].fields[key] = std::move(vals);
                     }
                     break;
                 }

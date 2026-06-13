@@ -28,12 +28,14 @@ protected:
     fs::path vcf_path;
     fs::path rich_path;
     fs::path gz_path;
+    fs::path edge_path;
 
     void SetUp() override {
         test_data_dir = fs::current_path() / "io" / "data";
         vcf_path = test_data_dir / "test.vcf";
         rich_path = test_data_dir / "test_rich.vcf";
         gz_path = test_data_dir / "test.vcf.gz";
+        edge_path = test_data_dir / "test_edge.vcf";
     }
 };
 
@@ -275,6 +277,64 @@ TEST_F(VcfReaderTest, FormatFloatStringAndMultiValuedInt) {
 
     // String FORMAT field
     EXPECT_EQ(std::get<std::string>(s.fields.at("BC")), "foo");
+}
+
+// ==========================================
+// htslib sentinel padding / symbolic alleles
+// ==========================================
+
+TEST_F(VcfReaderTest, RaggedFormatTrimsVectorEndPadding) {
+    // The haploid "hap" sample carries one AD value; htslib right-pads it to
+    // the diploid sample's width with bcf_int32_vector_end. That sentinel must
+    // not surface as a real value.
+    gio::vcf_reader reader(edge_path);
+    std::vector<gio::vcf_entry> entries(reader.begin(), reader.end());
+    ASSERT_FALSE(entries.empty());
+
+    const auto& hap = std::get<std::vector<int32_t>>(entries[0].samples[0].fields.at("AD"));
+    ASSERT_EQ(hap.size(), 1u);          // padding trimmed, not [7, -2147483647]
+    EXPECT_EQ(hap[0], 7);
+
+    const auto& dip = std::get<std::vector<int32_t>>(entries[0].samples[1].fields.at("AD"));
+    ASSERT_EQ(dip.size(), 2u);
+    EXPECT_EQ(dip[0], 3);
+    EXPECT_EQ(dip[1], 4);
+}
+
+TEST_F(VcfReaderTest, SymbolicAlleleNotClassifiedAsIndel) {
+    gio::vcf_reader reader(edge_path);
+    std::vector<gio::vcf_entry> entries(reader.begin(), reader.end());
+    ASSERT_EQ(entries.size(), 2u);
+
+    const auto& e = entries[1];
+    ASSERT_EQ(e.alt.size(), 1u);
+    EXPECT_EQ(e.alt[0], "<NON_REF>");   // symbolic allele kept verbatim
+    EXPECT_FALSE(e.is_indel());         // not a length-comparable indel
+    EXPECT_FALSE(e.is_snp());
+    EXPECT_TRUE(gio::vcf_entry::is_symbolic_allele("<NON_REF>"));
+    EXPECT_TRUE(gio::vcf_entry::is_symbolic_allele("*"));
+    EXPECT_FALSE(gio::vcf_entry::is_symbolic_allele("ACGT"));
+}
+
+TEST_F(VcfReaderTest, MonomorphicAltYieldsEmptyAlt) {
+    // ALT "." is collapsed by htslib to REF only -> no ALT alleles.
+    fs::path mono = test_data_dir / "test_monomorphic.vcf";
+    {
+        std::ofstream out(mono);
+        out << "##fileformat=VCFv4.2\n";
+        out << "##contig=<ID=chr1,length=1000000>\n";
+        out << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
+        out << "chr1\t5\t.\tA\t.\t.\t.\t.\n";
+    }
+
+    gio::vcf_reader reader(mono);
+    std::vector<gio::vcf_entry> entries(reader.begin(), reader.end());
+    ASSERT_EQ(entries.size(), 1u);
+    EXPECT_TRUE(entries[0].alt.empty());
+    EXPECT_FALSE(entries[0].is_snp());
+    EXPECT_FALSE(entries[0].is_indel());
+
+    fs::remove(mono);
 }
 
 // ==========================================
