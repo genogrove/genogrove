@@ -1,0 +1,15 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##FILTER=<ID=q10,Description="Quality below 10">
+##contig=<ID=chr1,length=248956422>
+##contig=<ID=chr2,length=242193529>
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total depth">
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency">
+##INFO=<ID=DB,Number=0,Type=Flag,Description="dbSNP membership">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	sample1	sample2
+chr1	100	rs1	A	G	50.5	PASS	DP=30;AF=0.25;DB	GT:DP:GQ	0/1:15:99	1|1:18:80
+chr1	200	.	C	T	5.0	q10	DP=12;AF=0.10	GT:DP:GQ	0/0:10:60	./.:0:0
+chr2	300	rs2	AT	A	88.0	PASS	DP=44;AF=0.50	GT:DP:GQ	0|1:22:90	1/1:25:95
