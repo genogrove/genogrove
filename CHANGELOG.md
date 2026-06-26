@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Cleared Doxygen warnings in public header comments**: escaped the SAM `@HD`/`@SQ`/`@RG`/`@PG` tags in `bam_reader::get_header()` (Doxygen read them as commands), backticked `##`/`#CHROM` in `vcf_reader::get_header()` (the leading `#` was read as a link request), and converted the `@param` lines documenting the unnamed `sorted_t`/`bulk_t` dispatch tags in `grove_insert.ipp` to `@note` prose (they had no matching argument name). Comment-only; no behavior change. ([#454](https://github.com/genogrove/genogrove/issues/454), [#455](https://github.com/genogrove/genogrove/pull/455))
+
 ## [0.24.7] - 2026-06-13
 
 ### Added

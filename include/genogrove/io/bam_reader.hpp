@@ -396,7 +396,7 @@ namespace genogrove::io {
         /**
          * @brief Get the SAM header text.
          *
-         * @return Full header text including all @HD, @SQ, @RG, @PG lines
+         * @return Full header text including all @@HD, @@SQ, @@RG, @@PG lines
          */
         [[nodiscard]] const std::string& get_header() const;
 

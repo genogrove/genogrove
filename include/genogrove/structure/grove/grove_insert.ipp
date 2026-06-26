@@ -12,7 +12,7 @@ public:
      * @param index The index name (e.g., chromosome name) where the data should be inserted
      * @param key_value The key value to insert (e.g., interval)
      * @param data_value The data associated with the key
-     * @param sorted_t Tag to dispatch to sorted insertion algorithm
+     * @note The trailing sorted_t tag dispatches to the sorted insertion path
      * @note This assumes key_value is greater than all existing keys in the specified index
      * @return Pointer to the inserted key in the tree
      */
@@ -47,8 +47,7 @@ public:
      * @tparam Container A container type holding pairs of (key_type, data_type)
      * @param index The index name (e.g., chromosome name) where data should be inserted
      * @param data Container of sorted (key, data) pairs
-     * @param sorted_t Tag indicating data is already sorted
-     * @param bulk_t Tag for bulk insertion
+     * @note The trailing sorted_t / bulk_t tags dispatch to the sorted bulk insertion path
      * @return Vector of pointers to all inserted keys (in insertion order)
      *
      * @note HYBRID APPROACH:
@@ -138,7 +137,7 @@ public:
      * @tparam Container A container type holding pairs of (key_type, data_type)
      * @param index The index name (e.g., chromosome name) where data should be inserted
      * @param data Container of (key, data) pairs
-     * @param bulk_t Tag for bulk insertion
+     * @note The trailing bulk_t tag dispatches to the bulk insertion path
      * @return Vector of pointers to all inserted keys (in insertion order)
      *
      * @note HYBRID APPROACH:
