@@ -240,7 +240,7 @@ namespace genogrove::io {
          */
         [[nodiscard]] size_t get_current_line() const override;
 
-        /// Full VCF header text (all ## meta lines and the #CHROM column line).
+        /// Full VCF header text (all `##` meta lines and the `#CHROM` column line).
         [[nodiscard]] const std::string& get_header() const;
 
         /// Sample names from the header, in column order (empty for sites-only VCFs).
