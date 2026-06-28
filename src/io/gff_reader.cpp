@@ -313,108 +313,94 @@ namespace genogrove::io {
             error_message.clear();
             auto line_opt = bgzf_next_data_line(bgzf_file, line_num);
             if (!line_opt) return false;  // EOF
-            const std::string& line = *line_opt;
 
-            // parse the line
-            std::string_view line_sv(line);
-            size_t fpos = 0;
+            if (parse_line(*line_opt, entry)) return true;
+            // Invalid line: error_message already set by parse_line.
+            if (options.skip_invalid_lines) continue;
+            throw std::runtime_error(error_message);
+        }
+    }
 
-            auto seqid_f = ggu::next_field(line_sv, fpos);
-            auto source_f = ggu::next_field(line_sv, fpos);
-            auto type_f = ggu::next_field(line_sv, fpos);
-            auto start_f = ggu::next_field(line_sv, fpos);
-            auto end_f = ggu::next_field(line_sv, fpos);
-            auto score_f = ggu::next_field(line_sv, fpos);
-            auto strand_f = ggu::next_field(line_sv, fpos);
-            auto phase_f = ggu::next_field(line_sv, fpos);
+    bool gff_reader::parse_line(const std::string& line, gff_entry& entry) {
+        std::string_view line_sv(line);
+        size_t fpos = 0;
 
-            try {
-                if (!seqid_f || !source_f || !type_f || !start_f || !end_f ||
-                    !score_f || !strand_f || !phase_f) {
-                    error_message = "Invalid GFF line format at line " + std::to_string(line_num);
-                    if (options.skip_invalid_lines) continue;
-                    throw std::runtime_error(error_message);
-                }
+        auto seqid_f = ggu::next_field(line_sv, fpos);
+        auto source_f = ggu::next_field(line_sv, fpos);
+        auto type_f = ggu::next_field(line_sv, fpos);
+        auto start_f = ggu::next_field(line_sv, fpos);
+        auto end_f = ggu::next_field(line_sv, fpos);
+        auto score_f = ggu::next_field(line_sv, fpos);
+        auto strand_f = ggu::next_field(line_sv, fpos);
+        auto phase_f = ggu::next_field(line_sv, fpos);
 
-                // Read the rest of the line as attributes (view into line, no copy)
-                std::string_view attributes_sv;
-                if (fpos < line_sv.size()) {
-                    auto attr_sv = line_sv.substr(fpos);
-                    if (auto p = attr_sv.find_first_not_of(" \t"); p != std::string_view::npos) {
-                        attributes_sv = attr_sv.substr(p);
-                    }
-                }
-
-                // Validate start and end are integers
-                if(start_f->empty() || end_f->empty() ||
-                   !std::ranges::all_of(*start_f, ggu::is_digit) ||
-                   !std::ranges::all_of(*end_f, ggu::is_digit)) {
-                    error_message = "Invalid coordinate format at line " + std::to_string(line_num);
-                    if (options.skip_invalid_lines) continue;
-                    throw std::runtime_error(error_message);
-                }
-
-                // Parse coordinates (stored as 1-based inclusive, native GFF format)
-                size_t start = 0;
-                size_t end = 0;
-                auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start);
-                auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end);
-                if (ec1 != std::errc{} || ec2 != std::errc{}) {
-                    error_message = "Coordinate out of range at line " + std::to_string(line_num);
-                    if (options.skip_invalid_lines) continue;
-                    throw std::runtime_error(error_message);
-                }
-
-                if (start > end) {
-                    error_message = "Start coordinate is greater than end coordinate at line " + std::to_string(line_num);
-                    if (options.skip_invalid_lines) continue;
-                    throw std::runtime_error(error_message);
-                }
-
-                entry.seqid = std::string(*seqid_f);
-                entry.source = std::string(*source_f);
-                entry.type = std::string(*type_f);
-                entry.start = start;
-                entry.end = end;
-
-                // Parse score, strand, and phase
-                if (!parse_score(entry, *score_f)) {
-                    if (options.skip_invalid_lines) continue;
-                    throw std::runtime_error(error_message);
-                }
-                if (!parse_strand(entry, *strand_f)) {
-                    if (options.skip_invalid_lines) continue;
-                    throw std::runtime_error(error_message);
-                }
-                if (!parse_phase(entry, *phase_f)) {
-                    if (options.skip_invalid_lines) continue;
-                    throw std::runtime_error(error_message);
-                }
-
-                // Parse attributes and detect format
-                if (!attributes_sv.empty()) {
-                    entry.format = parse_attributes(attributes_sv, entry.attributes);
-                } else {
-                    entry.attributes.clear();
-                    entry.format = gff_format::UNKNOWN;
-                }
-
-                // Validate mandatory GTF2 attributes if enabled
-                if (options.validate_gtf && entry.format == gff_format::GTF) {
-                    if (!validate_gtf_attributes(entry)) {
-                        if (options.skip_invalid_lines) continue;
-                        throw std::runtime_error(error_message);
-                    }
-                }
-
-                return true;
-            } catch (std::runtime_error&) {
-                throw; // re-throw our own exceptions
-            } catch (const std::exception&) {
-                error_message = "Failed to parse line at " + std::to_string(line_num) + ": " + line;
-                if (options.skip_invalid_lines) continue;
-                throw std::runtime_error(error_message);
+        try {
+            if (!seqid_f || !source_f || !type_f || !start_f || !end_f ||
+                !score_f || !strand_f || !phase_f) {
+                error_message = "Invalid GFF line format at line " + std::to_string(line_num);
+                return false;
             }
+
+            // Read the rest of the line as attributes (view into line, no copy)
+            std::string_view attributes_sv;
+            if (fpos < line_sv.size()) {
+                auto attr_sv = line_sv.substr(fpos);
+                if (auto p = attr_sv.find_first_not_of(" \t"); p != std::string_view::npos) {
+                    attributes_sv = attr_sv.substr(p);
+                }
+            }
+
+            // Validate start and end are integers
+            if(start_f->empty() || end_f->empty() ||
+               !std::ranges::all_of(*start_f, ggu::is_digit) ||
+               !std::ranges::all_of(*end_f, ggu::is_digit)) {
+                error_message = "Invalid coordinate format at line " + std::to_string(line_num);
+                return false;
+            }
+
+            // Parse coordinates (stored as 1-based inclusive, native GFF format)
+            size_t start = 0;
+            size_t end = 0;
+            auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start);
+            auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end);
+            if (ec1 != std::errc{} || ec2 != std::errc{}) {
+                error_message = "Coordinate out of range at line " + std::to_string(line_num);
+                return false;
+            }
+
+            if (start > end) {
+                error_message = "Start coordinate is greater than end coordinate at line " + std::to_string(line_num);
+                return false;
+            }
+
+            entry.seqid = std::string(*seqid_f);
+            entry.source = std::string(*source_f);
+            entry.type = std::string(*type_f);
+            entry.start = start;
+            entry.end = end;
+
+            // Parse score, strand, and phase
+            if (!parse_score(entry, *score_f)) return false;
+            if (!parse_strand(entry, *strand_f)) return false;
+            if (!parse_phase(entry, *phase_f)) return false;
+
+            // Parse attributes and detect format
+            if (!attributes_sv.empty()) {
+                entry.format = parse_attributes(attributes_sv, entry.attributes);
+            } else {
+                entry.attributes.clear();
+                entry.format = gff_format::UNKNOWN;
+            }
+
+            // Validate mandatory GTF2 attributes if enabled
+            if (options.validate_gtf && entry.format == gff_format::GTF) {
+                if (!validate_gtf_attributes(entry)) return false;
+            }
+
+            return true;
+        } catch (const std::exception&) {
+            error_message = "Failed to parse line at " + std::to_string(line_num) + ": " + line;
+            return false;
         }
     }
 
