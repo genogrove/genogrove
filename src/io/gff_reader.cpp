@@ -398,6 +398,8 @@ namespace genogrove::io {
             }
 
             return true;
+        } catch (const std::runtime_error&) {
+            throw;  // propagate infrastructure errors (e.g. newlocale failure), as before
         } catch (const std::exception&) {
             error_message = "Failed to parse line at " + std::to_string(line_num) + ": " + line;
             return false;
