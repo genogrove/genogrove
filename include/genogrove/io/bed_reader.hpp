@@ -167,6 +167,11 @@ namespace genogrove::io {
         // Parse optional BED fields (BED4 through BED12)
         bool parse_optional_fields(std::string_view line_sv, size_t& fpos,
                                    bed_entry& entry, size_t start_num, size_t end_num);
+
+        // Parse a single data line into an entry. Returns false and sets
+        // error_message on an invalid line (the caller decides skip vs throw).
+        // Shared by every line source (streaming, and the region path in #456).
+        bool parse_line(const std::string& line, bed_entry& entry);
     };
 
 }

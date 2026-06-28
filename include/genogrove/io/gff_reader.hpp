@@ -154,6 +154,11 @@ namespace genogrove::io {
 
         // Validate mandatory GTF2 attributes (gene_id, transcript_id)
         bool validate_gtf_attributes(const gff_entry& entry);
+
+        // Parse a single data line into an entry. Returns false and sets
+        // error_message on an invalid line (the caller decides skip vs throw).
+        // Shared by every line source (streaming, and the region path in #456).
+        bool parse_line(const std::string& line, gff_entry& entry);
     };
 
 }

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Cleared Doxygen warnings in public header comments**: escaped the SAM `@HD`/`@SQ`/`@RG`/`@PG` tags in `bam_reader::get_header()` (Doxygen read them as commands), backticked `##`/`#CHROM` in `vcf_reader::get_header()` (the leading `#` was read as a link request), and converted the `@param` lines documenting the unnamed `sorted_t`/`bulk_t` dispatch tags in `grove_insert.ipp` to `@note` prose (they had no matching argument name). Comment-only; no behavior change. ([#454](https://github.com/genogrove/genogrove/issues/454), [#455](https://github.com/genogrove/genogrove/pull/455))
 
+### Refactored
+- **Extracted a shared `parse_line` helper in `gff_reader` and `bed_reader`**: pulled the per-line field-split, coordinate validation, and field parsing out of `read_next` into a private `parse_line(line, entry)` for both readers, so the streaming path and the upcoming tabix-backed region path ([#456](https://github.com/genogrove/genogrove/issues/456)) share one parser instead of copying it. `read_next` now fetches a line and delegates, owning the skip-vs-throw policy in one place; `parse_line` returns `false` and sets `error_message` on an invalid line. Error-message text and `skip_invalid_lines` semantics are unchanged — including the `catch (std::runtime_error&) { throw; }` layer that propagates infrastructure errors (e.g. a `newlocale` failure in `gff_reader::parse_score`) rather than swallowing them as skipped lines. ([#457](https://github.com/genogrove/genogrove/issues/457), [#459](https://github.com/genogrove/genogrove/pull/459))
+
 ## [0.24.7] - 2026-06-13
 
 ### Added
