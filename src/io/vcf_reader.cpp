@@ -19,6 +19,8 @@ namespace genogrove::io {
         : vcf_file(nullptr)
         , header(nullptr)
         , record(nullptr)
+        , idx(nullptr)
+        , region_itr(nullptr)
         , options(options)
         , record_num(0)
         , at_eof(false)
@@ -78,6 +80,25 @@ namespace genogrove::io {
             if (!record) {
                 throw std::runtime_error("Failed to allocate VCF record structure");
             }
+
+            // Region mode: seek to the requested locus via the index. read_next()
+            // then pulls only overlapping records through bcf_itr_next(). Streaming
+            // mode (empty region) leaves idx/region_itr null. HTS_FMT_TBI makes
+            // hts_idx_load try .csi first, then .tbi — so both CSI-indexed BCF/VCF
+            // and tabix-indexed bgzip VCF work.
+            if (!this->options.region.empty()) {
+                idx = hts_idx_load(path.c_str(), HTS_FMT_TBI);
+                if (!idx) {
+                    throw std::runtime_error(
+                        "Region access requires a CSI/TBI-indexed bgzip VCF or BCF: " + path.string());
+                }
+                region_itr = bcf_itr_querys(idx, header, this->options.region.c_str());
+                if (!region_itr) {
+                    throw std::runtime_error(
+                        "Invalid region '" + this->options.region +
+                        "' (or its sequence is not in the index) for " + path.string());
+                }
+            }
         } catch (...) {
             cleanup();
             throw;
@@ -89,6 +110,14 @@ namespace genogrove::io {
     }
 
     void vcf_reader::cleanup() {
+        if (region_itr) {        // destroy the iterator before the index it references
+            hts_itr_destroy(region_itr);
+            region_itr = nullptr;
+        }
+        if (idx) {
+            hts_idx_destroy(idx);
+            idx = nullptr;
+        }
         if (record) {
             bcf_destroy(record);
             record = nullptr;
@@ -112,6 +141,8 @@ namespace genogrove::io {
         , vcf_file(other.vcf_file)
         , header(other.header)
         , record(other.record)
+        , idx(other.idx)
+        , region_itr(other.region_itr)
         , options(other.options)
         , header_text(std::move(other.header_text))
         , sample_names(std::move(other.sample_names))
@@ -131,6 +162,8 @@ namespace genogrove::io {
         other.vcf_file = nullptr;
         other.header = nullptr;
         other.record = nullptr;
+        other.idx = nullptr;
+        other.region_itr = nullptr;
         other.int_buf = nullptr;   other.n_int_buf = 0;
         other.float_buf = nullptr; other.n_float_buf = 0;
         other.str_buf = nullptr;   other.n_str_buf = 0;
@@ -145,6 +178,8 @@ namespace genogrove::io {
             vcf_file = other.vcf_file;
             header = other.header;
             record = other.record;
+            idx = other.idx;
+            region_itr = other.region_itr;
             options = other.options;
             header_text = std::move(other.header_text);
             sample_names = std::move(other.sample_names);
@@ -160,6 +195,8 @@ namespace genogrove::io {
             other.vcf_file = nullptr;
             other.header = nullptr;
             other.record = nullptr;
+            other.idx = nullptr;
+            other.region_itr = nullptr;
             other.int_buf = nullptr;   other.n_int_buf = 0;
             other.float_buf = nullptr; other.n_float_buf = 0;
             other.str_buf = nullptr;   other.n_str_buf = 0;
@@ -191,8 +228,12 @@ namespace genogrove::io {
             return false;
         }
 
+        // Region mode pulls only overlapping records via the iterator; streaming
+        // mode reads sequentially. Both return >= 0 on success, -1 at EOF, and
+        // < -1 on a critical error, so the skip/parse loop below is shared.
         int ret;
-        while ((ret = bcf_read(vcf_file, header, record)) == 0) {
+        while ((ret = region_itr ? bcf_itr_next(vcf_file, region_itr, record)
+                                 : bcf_read(vcf_file, header, record)) >= 0) {
             record_num++;
 
             // Need FILTER before deciding to skip; unpack up to FILTER.
@@ -206,7 +247,7 @@ namespace genogrove::io {
             return true;
         }
 
-        // ret != 0: either EOF (-1) or a critical error (< -1).
+        // ret < 0: either EOF (-1) or a critical error (< -1).
         if (ret < -1) {
             error_message = "I/O error reading VCF record after record " + std::to_string(record_num);
             throw std::runtime_error(error_message);

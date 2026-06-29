@@ -465,3 +465,46 @@ TEST_F(VcfReaderTest, MoveAssignment) {
     std::vector<gio::vcf_entry> entries(target.begin(), target.end());
     EXPECT_EQ(entries.size(), 3u);
 }
+// ==========================================
+// Region access (bcf_itr) — #458
+// ==========================================
+
+TEST_F(VcfReaderTest, RegionReturnsOnlyOverlappingRecords) {
+    // test_region.vcf.gz is bgzip+tabix-indexed; chr1 has POS 100, 150, 5000.
+    // chr1:90-160 (1-based) overlaps the first two only.
+    fs::path region_gz = test_data_dir / "test_region.vcf.gz";
+    gio::vcf_reader reader(region_gz, {.region = "chr1:90-160"});
+
+    std::vector<gio::vcf_entry> entries(reader.begin(), reader.end());
+    EXPECT_TRUE(reader.get_error_message().empty()) << reader.get_error_message();
+
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0].start, 99u);   // POS 100 -> 0-based 99
+    EXPECT_EQ(entries[1].start, 149u);  // POS 150 -> 0-based 149
+}
+
+TEST_F(VcfReaderTest, RegionOnDifferentChromIsIsolated) {
+    fs::path region_gz = test_data_dir / "test_region.vcf.gz";
+    gio::vcf_reader reader(region_gz, {.region = "chr2"});
+
+    std::vector<gio::vcf_entry> entries(reader.begin(), reader.end());
+
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0].chrom, "chr2");
+    EXPECT_EQ(entries[1].chrom, "chr2");
+}
+
+TEST_F(VcfReaderTest, RegionWithNoOverlapYieldsNoRecords) {
+    // chr1:300-400 falls in the gap between POS 150 and POS 5000.
+    fs::path region_gz = test_data_dir / "test_region.vcf.gz";
+    gio::vcf_reader reader(region_gz, {.region = "chr1:300-400"});
+
+    std::vector<gio::vcf_entry> entries(reader.begin(), reader.end());
+    EXPECT_TRUE(reader.get_error_message().empty()) << reader.get_error_message();
+    EXPECT_TRUE(entries.empty());
+}
+
+TEST_F(VcfReaderTest, RegionOnNonIndexedFileThrows) {
+    // Plain (uncompressed, unindexed) VCF cannot be seeked by region.
+    EXPECT_THROW(gio::vcf_reader(vcf_path, {.region = "chr1:1-1000"}), std::runtime_error);
+}

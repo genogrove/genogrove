@@ -167,6 +167,7 @@ namespace genogrove::io {
         bool parse_info = true;       ///< Parse INFO fields into vcf_entry::info
         bool parse_samples = true;    ///< Parse FORMAT / per-sample genotype columns
         bool skip_filtered = false;   ///< Skip records whose FILTER is not PASS/"."
+        std::string region;           ///< htslib region string ("chr:start-end", 1-based inclusive); empty = read the whole file. Requires a CSI/TBI-indexed bgzip VCF or a BCF.
 
         /// Factory method for default options.
         [[nodiscard]] static vcf_reader_options defaults() {
@@ -264,6 +265,8 @@ namespace genogrove::io {
         htsFile* vcf_file;                  ///< htslib file handle
         bcf_hdr_t* header;                  ///< VCF/BCF header
         bcf1_t* record;                     ///< Reusable record
+        hts_idx_t* idx;                     ///< Region index (.csi/.tbi); null in streaming mode (#458)
+        hts_itr_t* region_itr;              ///< Region iterator; null in streaming mode (#458)
         vcf_reader_options options;         ///< Reader options
         std::string header_text;            ///< Cached header text
         std::vector<std::string> sample_names; ///< Sample names from the header
