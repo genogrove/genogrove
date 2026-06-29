@@ -21,6 +21,7 @@
 
 // htslib
 #include <htslib/vcf.h>
+#include <htslib/tbx.h>
 
 namespace genogrove::io {
 
@@ -167,6 +168,7 @@ namespace genogrove::io {
         bool parse_info = true;       ///< Parse INFO fields into vcf_entry::info
         bool parse_samples = true;    ///< Parse FORMAT / per-sample genotype columns
         bool skip_filtered = false;   ///< Skip records whose FILTER is not PASS/"."
+        std::string region;           ///< htslib region string ("chr:start-end", 1-based inclusive); empty = read the whole file. Requires a CSI/TBI-indexed bgzip VCF or a BCF.
 
         /// Factory method for default options.
         [[nodiscard]] static vcf_reader_options defaults() {
@@ -264,6 +266,14 @@ namespace genogrove::io {
         htsFile* vcf_file;                  ///< htslib file handle
         bcf_hdr_t* header;                  ///< VCF/BCF header
         bcf1_t* record;                     ///< Reusable record
+        // Region mode (#458): set only when options.region is non-empty. Binary
+        // BCF uses the bcf_itr path (idx + region_itr); text bgzip VCF uses the
+        // tbx path (tbx + region_itr), reading lines into region_ks for
+        // vcf_parse() — bcf_itr_next() decodes binary and fails on text VCF.
+        hts_idx_t* idx;                     ///< BCF (.csi) region index; null otherwise
+        tbx_t* tbx;                         ///< VCF-text (.tbi/.csi) region index; null otherwise
+        hts_itr_t* region_itr;              ///< Region iterator (bcf or tbx); null in streaming mode
+        kstring_t region_ks = {0, 0, nullptr};  ///< Reusable text-line buffer for the tbx path
         vcf_reader_options options;         ///< Reader options
         std::string header_text;            ///< Cached header text
         std::vector<std::string> sample_names; ///< Sample names from the header
