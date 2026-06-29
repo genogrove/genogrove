@@ -87,6 +87,14 @@ namespace genogrove::io {
 
     gff_reader::gff_reader(const std::filesystem::path& fpath, const gff_reader_options& options)
         : bgzf_file(nullptr), line_num(0), options(options) {
+        // Region mode: read only the records overlapping the requested locus via
+        // a tabix index. No streaming handle and no first-line validation —
+        // tabix_reader validates the index/region and throws on failure.
+        if (!this->options.region.empty()) {
+            region_reader = std::make_unique<tabix_reader>(fpath, this->options.region);
+            return;
+        }
+
         // note this handles both raw and gzipped files
         bgzf_file = bgzf_open(fpath.c_str(), "r");
         if(!bgzf_file) {
@@ -311,8 +319,9 @@ namespace genogrove::io {
     bool gff_reader::read_next(gff_entry& entry) {
         while (true) {
             error_message.clear();
-            auto line_opt = bgzf_next_data_line(bgzf_file, line_num);
-            if (!line_opt) return false;  // EOF
+            auto line_opt = region_reader ? region_reader->next_line(line_num)
+                                          : bgzf_next_data_line(bgzf_file, line_num);
+            if (!line_opt) return false;  // EOF / end of region
 
             if (parse_line(*line_opt, entry)) return true;
             // Invalid line: error_message already set by parse_line.
@@ -407,6 +416,7 @@ namespace genogrove::io {
     }
 
     bool gff_reader::has_next() {
+        if (region_reader) return !region_reader->exhausted();
         return bgzf_has_next(bgzf_file);
     }
 

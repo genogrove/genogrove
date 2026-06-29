@@ -12,12 +12,11 @@
 #include <filesystem>
 #include <optional>
 #include <map>
+#include <memory>
 
 // genogrove
 #include <genogrove/io/file_reader.hpp>
-
-// htslib
-#include <htslib/bgzf.h>
+#include <genogrove/io/bgzf_utils.hpp>
 
 namespace genogrove::io {
 
@@ -97,6 +96,7 @@ namespace genogrove::io {
     struct gff_reader_options {
         bool skip_invalid_lines = false;    ///< Skip invalid lines instead of throwing
         bool validate_gtf = false;          ///< Validate mandatory GTF2 attributes (gene_id, transcript_id)
+        std::string region;                 ///< htslib region string ("chr:start-end"); empty = stream the whole file. Requires a bgzip+tabix-indexed input.
 
         [[nodiscard]] static gff_reader_options defaults() { return {}; }
     };
@@ -115,7 +115,8 @@ namespace genogrove::io {
             : file_reader<gff_entry>(std::move(other)),
               bgzf_file(other.bgzf_file), line_num(other.line_num),
               error_message(std::move(other.error_message)),
-              options(other.options) {
+              options(std::move(other.options)),
+              region_reader(std::move(other.region_reader)) {
             other.bgzf_file = nullptr;
         }
         gff_reader& operator=(gff_reader&& other) noexcept {
@@ -125,7 +126,8 @@ namespace genogrove::io {
                 bgzf_file = other.bgzf_file;
                 line_num = other.line_num;
                 error_message = std::move(other.error_message);
-                options = other.options;
+                options = std::move(other.options);
+                region_reader = std::move(other.region_reader);
                 other.bgzf_file = nullptr;
             }
             return *this;
@@ -142,6 +144,9 @@ namespace genogrove::io {
         size_t line_num;
         std::string error_message;
         gff_reader_options options;
+        // Non-null only when options.region is set: lines come from this tabix
+        // region iterator instead of the streaming bgzf_file. See #456.
+        std::unique_ptr<tabix_reader> region_reader;
 
         // Helper to parse attributes (handles both GFF3 and GTF formats)
         // Returns the detected format

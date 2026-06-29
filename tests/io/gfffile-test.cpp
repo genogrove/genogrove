@@ -1143,3 +1143,47 @@ TEST(gffEntrySerialization, groveRoundTrip) {
     EXPECT_EQ(r2.get_keys()[0]->get_data().type, "exon");
     EXPECT_EQ(r2.get_keys()[0]->get_data().attributes.at("Parent"), "gene1");
 }
+
+// ==========================================
+// Region access (tabix) — #456
+// ==========================================
+
+TEST_F(gfffileTest, regionReturnsOnlyOverlappingRecords) {
+    // test_region.gff.gz is bgzip+tabix-indexed; chr1 has gene 101-200,
+    // exon 151-250, gene 5001-6000. chr1:140-160 overlaps the first two.
+    fs::path region_gz = test_data_dir / "test_region.gff.gz";
+    gio::gff_reader reader(region_gz, {.region = "chr1:140-160"});
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) entries.push_back(entry);
+    EXPECT_TRUE(reader.get_error_message().empty()) << reader.get_error_message();
+
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0].type, "gene");
+    EXPECT_EQ(entries[1].type, "exon");
+}
+
+TEST_F(gfffileTest, regionOnDifferentChromIsIsolated) {
+    fs::path region_gz = test_data_dir / "test_region.gff.gz";
+    gio::gff_reader reader(region_gz, {.region = "chr2"});
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) entries.push_back(entry);
+
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0].seqid, "chr2");
+    EXPECT_EQ(entries[1].seqid, "chr2");
+}
+
+TEST_F(gfffileTest, regionWithNoOverlapYieldsNoRecords) {
+    fs::path region_gz = test_data_dir / "test_region.gff.gz";
+    gio::gff_reader reader(region_gz, {.region = "chr1:300-400"});
+
+    EXPECT_FALSE(reader.has_next());
+    EXPECT_EQ(reader.begin(), reader.end());
+}
+
+TEST_F(gfffileTest, regionOnNonIndexedFileThrows) {
+    fs::path plain = test_data_dir / "test_gff3.gff";
+    EXPECT_THROW(gio::gff_reader(plain, {.region = "chr1:1-1000"}), std::runtime_error);
+}

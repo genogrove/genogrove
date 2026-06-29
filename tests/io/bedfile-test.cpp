@@ -1088,3 +1088,49 @@ TEST(bedEntrySerialization, groveRoundTrip) {
     EXPECT_EQ(r2.get_keys()[0]->get_data().blocks->count, 2);
     EXPECT_EQ(r2.get_keys()[0]->get_data().blocks->sizes, (std::vector<size_t>{5, 5}));
 }
+
+// ==========================================
+// Region access (tabix) — #456
+// ==========================================
+
+TEST_F(bedfileTest, regionReturnsOnlyOverlappingRecords) {
+    // test_region.bed.gz is bgzip+tabix-indexed; chr1 has [100,200), [150,250),
+    // [5000,6000). The region chr1:140-160 overlaps the first two only.
+    fs::path region_gz = test_data_dir / "test_region.bed.gz";
+    gio::bed_reader reader(region_gz, {.region = "chr1:140-160"});
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) entries.push_back(entry);
+    EXPECT_TRUE(reader.get_error_message().empty()) << reader.get_error_message();
+
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0].name.value_or(""), "a");
+    EXPECT_EQ(entries[1].name.value_or(""), "b");
+}
+
+TEST_F(bedfileTest, regionOnDifferentChromIsIsolated) {
+    fs::path region_gz = test_data_dir / "test_region.bed.gz";
+    gio::bed_reader reader(region_gz, {.region = "chr2"});
+
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) entries.push_back(entry);
+
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0].chrom, "chr2");
+    EXPECT_EQ(entries[1].chrom, "chr2");
+}
+
+TEST_F(bedfileTest, regionWithNoOverlapYieldsNoRecords) {
+    // chr1:300-400 falls in the gap between [150,250) and [5000,6000).
+    fs::path region_gz = test_data_dir / "test_region.bed.gz";
+    gio::bed_reader reader(region_gz, {.region = "chr1:300-400"});
+
+    EXPECT_FALSE(reader.has_next());
+    EXPECT_EQ(reader.begin(), reader.end());
+}
+
+TEST_F(bedfileTest, regionOnNonIndexedFileThrows) {
+    // Plain (uncompressed, unindexed) BED cannot be seeked by region.
+    fs::path plain = test_data_dir / "test_bed3.bed";
+    EXPECT_THROW(gio::bed_reader(plain, {.region = "chr1:1-1000"}), std::runtime_error);
+}

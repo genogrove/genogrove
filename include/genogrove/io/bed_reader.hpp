@@ -13,12 +13,11 @@
 #include <iosfwd>
 #include <optional>
 #include <vector>
+#include <memory>
 
 // genogrove
 #include <genogrove/io/file_reader.hpp>
-
-// htslib
-#include <htslib/bgzf.h>
+#include <genogrove/io/bgzf_utils.hpp>
 
 namespace genogrove::io {
     struct rgb_color {
@@ -108,6 +107,7 @@ namespace genogrove::io {
      */
     struct bed_reader_options {
         bool skip_invalid_lines = false;    ///< Skip invalid lines instead of throwing
+        std::string region;                 ///< htslib region string ("chr:start-end"); empty = stream the whole file. Requires a bgzip+tabix-indexed input.
 
         [[nodiscard]] static bed_reader_options defaults() { return {}; }
     };
@@ -126,7 +126,8 @@ namespace genogrove::io {
             : file_reader<bed_entry>(std::move(other)),
               bgzf_file(other.bgzf_file), line_num(other.line_num),
               error_message(std::move(other.error_message)),
-              options(other.options) {
+              options(std::move(other.options)),
+              region_reader(std::move(other.region_reader)) {
             other.bgzf_file = nullptr;
         }
         bed_reader& operator=(bed_reader&& other) noexcept {
@@ -136,7 +137,8 @@ namespace genogrove::io {
                 bgzf_file = other.bgzf_file;
                 line_num = other.line_num;
                 error_message = std::move(other.error_message);
-                options = other.options;
+                options = std::move(other.options);
+                region_reader = std::move(other.region_reader);
                 other.bgzf_file = nullptr;
             }
             return *this;
@@ -153,6 +155,9 @@ namespace genogrove::io {
         size_t line_num;
         std::string error_message;
         bed_reader_options options;
+        // Non-null only when options.region is set: lines come from this tabix
+        // region iterator instead of the streaming bgzf_file. See #456.
+        std::unique_ptr<tabix_reader> region_reader;
 
         // Helper functions for parsing BED fields
         bool parse_score(bed_entry& entry, std::string_view score_str);
