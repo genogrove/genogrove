@@ -428,12 +428,7 @@ namespace genogrove::io {
     }
 
     bool bed_reader::has_next() {
-        // ponytail: region mode is optimistic — tabix has no cheap peek, so this
-        // reports true until next_line() has actually hit end-of-region. The
-        // iterator still terminates correctly (read_next() returns false on the
-        // empty region); add a one-record lookahead only if a precise pre-read
-        // has_next() is ever needed.
-        if (region_reader) return !region_reader->exhausted();
+        if (region_reader) return region_reader->has_next();
         return bgzf_has_next(bgzf_file);
     }
 

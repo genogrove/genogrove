@@ -107,7 +107,7 @@ namespace genogrove::io {
      */
     struct bed_reader_options {
         bool skip_invalid_lines = false;    ///< Skip invalid lines instead of throwing
-        std::string region;                 ///< htslib region string ("chr:start-end"); empty = stream the whole file. Requires a bgzip+tabix-indexed input.
+        std::string region;                 ///< htslib/tabix region string ("chr:start-end"), in tabix query coordinates (1-based, inclusive) — not BED's 0-based half-open convention. Empty = stream the whole file. Requires a bgzip+tabix-indexed input.
 
         [[nodiscard]] static bed_reader_options defaults() { return {}; }
     };

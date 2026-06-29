@@ -59,15 +59,23 @@ namespace genogrove::io {
         /// line_num per record. Throws std::runtime_error on I/O error.
         std::optional<std::string> next_line(size_t& line_num);
 
-        /// True once next_line() has reported end-of-region.
-        [[nodiscard]] bool exhausted() const { return exhausted_; }
+        /// Precise "more records remain in the region" check: prefetches one
+        /// record if needed (held until the next next_line() consumes it), so
+        /// it matches the peek-based streaming has_next() — true iff a
+        /// subsequent next_line() will return a line. Throws on I/O error.
+        [[nodiscard]] bool has_next();
 
     private:
+        /// Pull the next region line straight from the iterator (no lookahead),
+        /// setting exhausted_ at end-of-region. Throws std::runtime_error on I/O error.
+        std::optional<std::string> fetch_raw();
+
         htsFile* fp = nullptr;
         tbx_t* tbx = nullptr;
         hts_itr_t* itr = nullptr;
         kstring_t buf = {0, 0, nullptr};
         bool exhausted_ = false;
+        std::optional<std::string> lookahead_;  // one-record prefetch for has_next()
     };
 
 }

@@ -1122,15 +1122,31 @@ TEST_F(bedfileTest, regionOnDifferentChromIsIsolated) {
 
 TEST_F(bedfileTest, regionWithNoOverlapYieldsNoRecords) {
     // chr1:300-400 falls in the gap between [150,250) and [5000,6000).
-    // (has_next() is optimistic in region mode — tabix has no cheap peek — so
-    // the contract is "iteration yields nothing", not "has_next() == false".)
     fs::path region_gz = test_data_dir / "test_region.bed.gz";
     gio::bed_reader reader(region_gz, {.region = "chr1:300-400"});
+
+    // has_next() prefetches, so it is precise even before the first read.
+    EXPECT_FALSE(reader.has_next());
 
     std::vector<gio::bed_entry> entries;
     for (const auto& entry : reader) entries.push_back(entry);
     EXPECT_TRUE(reader.get_error_message().empty()) << reader.get_error_message();
     EXPECT_TRUE(entries.empty());
+}
+
+TEST_F(bedfileTest, regionHasNextIsPreciseMidIteration) {
+    // chr1:140-160 overlaps exactly two records; has_next() must flip to false
+    // right after the second read, not one record later (matches streaming).
+    fs::path region_gz = test_data_dir / "test_region.bed.gz";
+    gio::bed_reader reader(region_gz, {.region = "chr1:140-160"});
+
+    gio::bed_entry entry;
+    EXPECT_TRUE(reader.has_next());
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_TRUE(reader.has_next());
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_FALSE(reader.has_next());
+    EXPECT_FALSE(reader.read_next(entry));
 }
 
 TEST_F(bedfileTest, regionOnNonIndexedFileThrows) {
