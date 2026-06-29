@@ -21,6 +21,7 @@
 
 // htslib
 #include <htslib/vcf.h>
+#include <htslib/tbx.h>
 
 namespace genogrove::io {
 
@@ -265,8 +266,14 @@ namespace genogrove::io {
         htsFile* vcf_file;                  ///< htslib file handle
         bcf_hdr_t* header;                  ///< VCF/BCF header
         bcf1_t* record;                     ///< Reusable record
-        hts_idx_t* idx;                     ///< Region index (.csi/.tbi); null in streaming mode (#458)
-        hts_itr_t* region_itr;              ///< Region iterator; null in streaming mode (#458)
+        // Region mode (#458): set only when options.region is non-empty. Binary
+        // BCF uses the bcf_itr path (idx + region_itr); text bgzip VCF uses the
+        // tbx path (tbx + region_itr), reading lines into region_ks for
+        // vcf_parse() — bcf_itr_next() decodes binary and fails on text VCF.
+        hts_idx_t* idx;                     ///< BCF (.csi) region index; null otherwise
+        tbx_t* tbx;                         ///< VCF-text (.tbi/.csi) region index; null otherwise
+        hts_itr_t* region_itr;              ///< Region iterator (bcf or tbx); null in streaming mode
+        kstring_t region_ks = {0, 0, nullptr};  ///< Reusable text-line buffer for the tbx path
         vcf_reader_options options;         ///< Reader options
         std::string header_text;            ///< Cached header text
         std::vector<std::string> sample_names; ///< Sample names from the header

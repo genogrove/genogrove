@@ -20,6 +20,7 @@ namespace genogrove::io {
         , header(nullptr)
         , record(nullptr)
         , idx(nullptr)
+        , tbx(nullptr)
         , region_itr(nullptr)
         , options(options)
         , record_num(0)
@@ -82,17 +83,28 @@ namespace genogrove::io {
             }
 
             // Region mode: seek to the requested locus via the index. read_next()
-            // then pulls only overlapping records through bcf_itr_next(). Streaming
-            // mode (empty region) leaves idx/region_itr null. HTS_FMT_TBI makes
-            // hts_idx_load try .csi first, then .tbi — so both CSI-indexed BCF/VCF
-            // and tabix-indexed bgzip VCF work.
+            // then pulls only overlapping records. Streaming mode (empty region)
+            // leaves the index/iterator null. The path differs by format: binary
+            // BCF is read with bcf_itr_next() over a CSI index; text bgzip VCF is
+            // read with tbx_itr_next() + vcf_parse() over a tabix index, because
+            // bcf_itr_next() decodes binary records and errors on text VCF.
             if (!this->options.region.empty()) {
-                idx = hts_idx_load(path.c_str(), HTS_FMT_TBI);
-                if (!idx) {
-                    throw std::runtime_error(
-                        "Region access requires a CSI/TBI-indexed bgzip VCF or BCF: " + path.string());
+                if (vcf_file->format.format == bcf) {
+                    idx = bcf_index_load(path.c_str());
+                    if (!idx) {
+                        throw std::runtime_error(
+                            "Region access requires a CSI-indexed BCF: " + path.string());
+                    }
+                    region_itr = bcf_itr_querys(idx, header, this->options.region.c_str());
+                } else {
+                    tbx = tbx_index_load(path.c_str());
+                    if (!tbx) {
+                        throw std::runtime_error(
+                            "Region access requires a bgzip-compressed, tabix-indexed (.tbi/.csi) VCF: " +
+                            path.string());
+                    }
+                    region_itr = tbx_itr_querys(tbx, this->options.region.c_str());
                 }
-                region_itr = bcf_itr_querys(idx, header, this->options.region.c_str());
                 if (!region_itr) {
                     throw std::runtime_error(
                         "Invalid region '" + this->options.region +
@@ -118,6 +130,12 @@ namespace genogrove::io {
             hts_idx_destroy(idx);
             idx = nullptr;
         }
+        if (tbx) {
+            tbx_destroy(tbx);
+            tbx = nullptr;
+        }
+        free(region_ks.s);
+        region_ks = {0, 0, nullptr};
         if (record) {
             bcf_destroy(record);
             record = nullptr;
@@ -142,7 +160,9 @@ namespace genogrove::io {
         , header(other.header)
         , record(other.record)
         , idx(other.idx)
+        , tbx(other.tbx)
         , region_itr(other.region_itr)
+        , region_ks(other.region_ks)
         , options(other.options)
         , header_text(std::move(other.header_text))
         , sample_names(std::move(other.sample_names))
@@ -163,7 +183,9 @@ namespace genogrove::io {
         other.header = nullptr;
         other.record = nullptr;
         other.idx = nullptr;
+        other.tbx = nullptr;
         other.region_itr = nullptr;
+        other.region_ks = {0, 0, nullptr};  // we took the buffer; don't double-free
         other.int_buf = nullptr;   other.n_int_buf = 0;
         other.float_buf = nullptr; other.n_float_buf = 0;
         other.str_buf = nullptr;   other.n_str_buf = 0;
@@ -179,7 +201,9 @@ namespace genogrove::io {
             header = other.header;
             record = other.record;
             idx = other.idx;
+            tbx = other.tbx;
             region_itr = other.region_itr;
+            region_ks = other.region_ks;
             options = other.options;
             header_text = std::move(other.header_text);
             sample_names = std::move(other.sample_names);
@@ -196,7 +220,9 @@ namespace genogrove::io {
             other.header = nullptr;
             other.record = nullptr;
             other.idx = nullptr;
+            other.tbx = nullptr;
             other.region_itr = nullptr;
+            other.region_ks = {0, 0, nullptr};  // we took the buffer; don't double-free
             other.int_buf = nullptr;   other.n_int_buf = 0;
             other.float_buf = nullptr; other.n_float_buf = 0;
             other.str_buf = nullptr;   other.n_str_buf = 0;
@@ -228,12 +254,26 @@ namespace genogrove::io {
             return false;
         }
 
-        // Region mode pulls only overlapping records via the iterator; streaming
-        // mode reads sequentially. Both return >= 0 on success, -1 at EOF, and
-        // < -1 on a critical error, so the skip/parse loop below is shared.
+        // Fetch one raw record from the active source. All three return >= 0 on
+        // success, -1 at EOF, and < -1 on a critical error, so the skip/parse
+        // loop below is shared:
+        //   - tbx set     -> text VCF region: read a line, then vcf_parse() it
+        //   - region_itr  -> binary BCF region: bcf_itr_next()
+        //   - neither     -> streaming: bcf_read()
+        auto read_raw = [&]() -> int {
+            if (tbx) {
+                int r = tbx_itr_next(vcf_file, tbx, region_itr, &region_ks);
+                if (r >= 0 && vcf_parse(&region_ks, header, record) < 0) {
+                    return -2;  // malformed line -> surface as a critical error
+                }
+                return r;
+            }
+            if (region_itr) return bcf_itr_next(vcf_file, region_itr, record);
+            return bcf_read(vcf_file, header, record);
+        };
+
         int ret;
-        while ((ret = region_itr ? bcf_itr_next(vcf_file, region_itr, record)
-                                 : bcf_read(vcf_file, header, record)) >= 0) {
+        while ((ret = read_raw()) >= 0) {
             record_num++;
 
             // Need FILTER before deciding to skip; unpack up to FILTER.
