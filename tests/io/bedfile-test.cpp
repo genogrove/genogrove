@@ -1122,11 +1122,15 @@ TEST_F(bedfileTest, regionOnDifferentChromIsIsolated) {
 
 TEST_F(bedfileTest, regionWithNoOverlapYieldsNoRecords) {
     // chr1:300-400 falls in the gap between [150,250) and [5000,6000).
+    // (has_next() is optimistic in region mode — tabix has no cheap peek — so
+    // the contract is "iteration yields nothing", not "has_next() == false".)
     fs::path region_gz = test_data_dir / "test_region.bed.gz";
     gio::bed_reader reader(region_gz, {.region = "chr1:300-400"});
 
-    EXPECT_FALSE(reader.has_next());
-    EXPECT_EQ(reader.begin(), reader.end());
+    std::vector<gio::bed_entry> entries;
+    for (const auto& entry : reader) entries.push_back(entry);
+    EXPECT_TRUE(reader.get_error_message().empty()) << reader.get_error_message();
+    EXPECT_TRUE(entries.empty());
 }
 
 TEST_F(bedfileTest, regionOnNonIndexedFileThrows) {
