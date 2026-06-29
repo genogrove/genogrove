@@ -1143,3 +1143,67 @@ TEST(gffEntrySerialization, groveRoundTrip) {
     EXPECT_EQ(r2.get_keys()[0]->get_data().type, "exon");
     EXPECT_EQ(r2.get_keys()[0]->get_data().attributes.at("Parent"), "gene1");
 }
+
+// ==========================================
+// Region access (tabix) — #456
+// ==========================================
+
+TEST_F(gfffileTest, regionReturnsOnlyOverlappingRecords) {
+    // test_region.gff.gz is bgzip+tabix-indexed; chr1 has gene 101-200,
+    // exon 151-250, gene 5001-6000. chr1:140-160 overlaps the first two.
+    fs::path region_gz = test_data_dir / "test_region.gff.gz";
+    gio::gff_reader reader(region_gz, {.region = "chr1:140-160"});
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) entries.push_back(entry);
+    EXPECT_TRUE(reader.get_error_message().empty()) << reader.get_error_message();
+
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0].type, "gene");
+    EXPECT_EQ(entries[1].type, "exon");
+}
+
+TEST_F(gfffileTest, regionOnDifferentChromIsIsolated) {
+    fs::path region_gz = test_data_dir / "test_region.gff.gz";
+    gio::gff_reader reader(region_gz, {.region = "chr2"});
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) entries.push_back(entry);
+
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0].seqid, "chr2");
+    EXPECT_EQ(entries[1].seqid, "chr2");
+}
+
+TEST_F(gfffileTest, regionWithNoOverlapYieldsNoRecords) {
+    fs::path region_gz = test_data_dir / "test_region.gff.gz";
+    gio::gff_reader reader(region_gz, {.region = "chr1:300-400"});
+
+    // has_next() prefetches, so it is precise even before the first read.
+    EXPECT_FALSE(reader.has_next());
+
+    std::vector<gio::gff_entry> entries;
+    for (const auto& entry : reader) entries.push_back(entry);
+    EXPECT_TRUE(reader.get_error_message().empty()) << reader.get_error_message();
+    EXPECT_TRUE(entries.empty());
+}
+
+TEST_F(gfffileTest, regionHasNextIsPreciseMidIteration) {
+    // chr1:140-160 overlaps exactly two records; has_next() must flip to false
+    // right after the second read, not one record later (matches streaming).
+    fs::path region_gz = test_data_dir / "test_region.gff.gz";
+    gio::gff_reader reader(region_gz, {.region = "chr1:140-160"});
+
+    gio::gff_entry entry;
+    EXPECT_TRUE(reader.has_next());
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_TRUE(reader.has_next());
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_FALSE(reader.has_next());
+    EXPECT_FALSE(reader.read_next(entry));
+}
+
+TEST_F(gfffileTest, regionOnNonIndexedFileThrows) {
+    fs::path plain = test_data_dir / "test_gff3.gff";
+    EXPECT_THROW(gio::gff_reader(plain, {.region = "chr1:1-1000"}), std::runtime_error);
+}
