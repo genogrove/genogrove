@@ -8,6 +8,7 @@
 
 // standard
 #include <algorithm>
+#include <cstdint>
 #include <deque>
 #include <istream>
 #include <memory>
@@ -15,12 +16,14 @@
 #include <ranges>
 #include <stdexcept>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 // genogrove
 #include "genogrove/data_type/interval.hpp"
 #include "genogrove/data_type/key.hpp"
 #include "genogrove/data_type/serialization_traits.hpp"
+#include "genogrove/structure/grove/gg_block_format.hpp"
 #include "genogrove/structure/grove/pod_io.hpp"
 
 namespace gdt = genogrove::data_type;
@@ -364,29 +367,45 @@ class node {
     // =========================================================================
 
     /**
-     * @brief Serialize this node to an output stream
-     * @param os Output stream to write serialized data to
+     * @brief Serialize this node's own block (non-recursive)
+     * @param os Output stream to write the block's structural bytes to
+     * @param node_to_block Map from every node pointer to its assigned block_id
      *
-     * Writes the node's structure and content to the stream in binary format,
-     * allowing the node to be persisted and later restored.
+     * Writes: a packed header (is_leaf flag + key count), then each key's value
+     * (and data if data_type != void), then the block references — child
+     * block_ids for an internal node, or the single next-leaf block_id (or
+     * detail::no_block) for a leaf. Children are NOT recursed into; each node is
+     * its own independently-addressable block (see grove::serialize).
+     *
+     * @note Per-key graph edges are NOT written here — they live in the grove's
+     *       overlay, not the node. grove::serialize appends a leaf's edges to the
+     *       leaf block after this structural part.
+     * @throws std::runtime_error if a referenced child/next node is absent from
+     *         node_to_block, or on stream error.
      */
-    void serialize(std::ostream& os) const;
+    void serialize_block(std::ostream& os,
+        const std::unordered_map<const node<key_type, data_type>*, detail::block_id>& node_to_block) const;
 
     /**
-     * @brief Deserialize a node from an input stream
-     * @param is Input stream to read serialized data from
-     * @param order The B+ tree order to use for the deserialized node
-     * @param key_storage Deque to allocate keys into for stable pointer addresses
-     * @return Pointer to the newly created and populated node
+     * @brief Parse this node's own block written by serialize_block (non-recursive)
+     * @param is Input stream positioned at the start of the block's structural bytes
+     * @param order The B+ tree order to construct the node with
+     * @param key_storage Deque to emplace keys into for stable pointer addresses
+     * @param out_child_ids Filled with child block_ids for an internal node (empty for a leaf)
+     * @param out_next_id Set to the next-leaf block_id for a leaf (detail::no_block otherwise)
+     * @return Pointer to the newly created node with keys populated
      *
-     * Reads serialized node data from the stream and reconstructs the node
-     * structure, including keys and child relationships. Keys are placed directly
-     * into the provided deque (owned by the grove) rather than heap-allocated,
-     * ensuring pointer stability and single-owner semantics.
+     * Reads only this node's own bytes. Child pointers and the leaf `next` pointer
+     * are left null; the numeric block references are returned via the out-params
+     * for the caller (grove::deserialize) to resolve once every block is parsed.
+     * Keys are emplaced into key_storage (owned by the grove) rather than
+     * heap-allocated, preserving pointer stability and single-owner semantics.
      */
-    [[nodiscard]] static node<key_type, data_type>* deserialize(
+    [[nodiscard]] static node<key_type, data_type>* deserialize_block(
         std::istream& is, int order,
-        std::deque<gdt::key<key_type, data_type>>& key_storage);
+        std::deque<gdt::key<key_type, data_type>>& key_storage,
+        std::vector<detail::block_id>& out_child_ids,
+        detail::block_id& out_next_id);
 
     // =========================================================================
     // Debugging & Utilities
@@ -435,54 +454,73 @@ class node {
 namespace genogrove::structure {
 
 template<typename key_type, typename data_type>
-void node<key_type, data_type>::serialize(std::ostream& os) const {
+void node<key_type, data_type>::serialize_block(std::ostream& os,
+        const std::unordered_map<const node<key_type, data_type>*, detail::block_id>& node_to_block) const {
     // Pack is_leaf into high bit of key count (saves 5B per node vs separate bool + size_t)
     uint32_t packed = static_cast<uint32_t>(keys.size());
     if (is_leaf) packed |= 0x80000000u;
     detail::write_pod(os, packed);
 
-    // Write each key
+    // Write each key: value (+ data if present). NOTE: per-key edges are written
+    // by grove::serialize after this structural part, not here.
     for (const auto* key_ptr : keys) {
-        // Serialize key_type value (requires member serialize method)
         key_ptr->get_value().serialize(os);
-
-        // Serialize data_type if not void (uses serialization_traits)
         if constexpr (!std::is_void_v<data_type>) {
             gdt::serializer<data_type>::write(os, key_ptr->get_data());
         }
     }
 
-    // If not leaf, serialize children
-    if (!is_leaf) {
+    if (is_leaf) {
+        // A leaf references its successor by block_id (no_block if it is the last
+        // leaf in this index's chain). Children are recursed into by the grove as
+        // separate blocks, so nothing recursive happens here.
+        detail::block_id next_id = detail::no_block;
+        if (next != nullptr) {
+            auto it = node_to_block.find(next);
+            if (it == node_to_block.end()) {
+                throw std::runtime_error("Failed to serialize node block: next leaf missing from block map");
+            }
+            next_id = it->second;
+        }
+        detail::write_pod(os, next_id);
+    } else {
         uint32_t num_children = static_cast<uint32_t>(children.size());
         detail::write_pod(os, num_children);
-
-        for (auto* child : children) {
-            child->serialize(os);
+        for (const auto* child : children) {
+            auto it = node_to_block.find(child);
+            if (it == node_to_block.end()) {
+                throw std::runtime_error("Failed to serialize node block: child missing from block map");
+            }
+            detail::block_id child_id = it->second;
+            detail::write_pod(os, child_id);
         }
     }
 
     if (!os) {
-        throw std::runtime_error("Failed to serialize node: stream error");
+        throw std::runtime_error("Failed to serialize node block: stream error");
     }
 }
 
 template<typename key_type, typename data_type>
-node<key_type, data_type>* node<key_type, data_type>::deserialize(
+node<key_type, data_type>* node<key_type, data_type>::deserialize_block(
         std::istream& is, int order,
-        std::deque<gdt::key<key_type, data_type>>& key_storage) {
+        std::deque<gdt::key<key_type, data_type>>& key_storage,
+        std::vector<detail::block_id>& out_child_ids,
+        detail::block_id& out_next_id) {
     auto n = std::make_unique<node<key_type, data_type>>(order);
+    out_child_ids.clear();
+    out_next_id = detail::no_block;
 
     // Unpack is_leaf from high bit + key count from low 31 bits
     uint32_t packed;
     detail::read_pod(is, packed);
     if (!is) {
-        throw std::runtime_error("Failed to deserialize node: stream error reading packed header");
+        throw std::runtime_error("Failed to deserialize node block: stream error reading packed header");
     }
     n->is_leaf = (packed & 0x80000000u) != 0;
     uint32_t num_keys = packed & 0x7FFFFFFFu;
     if (num_keys >= static_cast<uint32_t>(order)) {
-        throw std::runtime_error("Failed to deserialize node: num_keys exceeds order");
+        throw std::runtime_error("Failed to deserialize node block: num_keys exceeds order");
     }
 
     // Read each key directly into grove's deque for stable pointer addresses
@@ -499,22 +537,30 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize(
         n->keys.push_back(&key_storage.back());
     }
 
-    // If not leaf, deserialize children
-    if (!n->is_leaf) {
+    // Read block references (numeric, unresolved). The caller links them once
+    // every block has been parsed. Child pointers / next stay null here.
+    if (n->is_leaf) {
+        detail::read_pod(is, out_next_id);
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize node block: stream error reading next id");
+        }
+    } else {
         uint32_t num_children;
         detail::read_pod(is, num_children);
         if (!is) {
-            throw std::runtime_error("Failed to deserialize node: stream error reading num_children");
+            throw std::runtime_error("Failed to deserialize node block: stream error reading child count");
         }
         if (num_children > static_cast<uint32_t>(order)) {
-            throw std::runtime_error("Failed to deserialize node: num_children exceeds order");
+            throw std::runtime_error("Failed to deserialize node block: num_children exceeds order");
         }
-
-        n->children.reserve(num_children);
+        out_child_ids.reserve(num_children);
         for (uint32_t i = 0; i < num_children; ++i) {
-            auto* child = node<key_type, data_type>::deserialize(is, order, key_storage);
-            child->parent = n.get();
-            n->children.push_back(child);
+            detail::block_id child_id;
+            detail::read_pod(is, child_id);
+            if (!is) {
+                throw std::runtime_error("Failed to deserialize node block: stream error reading child id");
+            }
+            out_child_ids.push_back(child_id);
         }
     }
 
