@@ -165,8 +165,8 @@ TEST(SerializationTest, DistributedExternalBlocksRoundTrip) {
         key_t* ext5 = nullptr;
         key_t* ext1029 = nullptr;
         key_t* ext1100 = nullptr;
-        for (int i = 0; i < N; ++i) {
-            key_t* p = g.add_external_key(gdt::interval{10 + i, 11 + i}, i);
+        for (size_t i = 0; i < static_cast<size_t>(N); ++i) {
+            key_t* p = g.add_external_key(gdt::interval{10 + i, 11 + i}, static_cast<int>(i));
             if (i == 5) ext5 = p;
             if (i == 1029) ext1029 = p;
             if (i == 1100) ext1100 = p;
