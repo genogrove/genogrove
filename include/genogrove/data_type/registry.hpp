@@ -324,7 +324,11 @@ class registry {
      *       the call. The new state is built into local containers and only
      *       move-assigned into the singleton after the read loop completes.
      */
-    [[nodiscard]] static registry& deserialize(std::istream& is) {
+    // Not [[nodiscard]]: this mutates the singleton in place (its purpose is the
+    // side effect); the returned reference is a convenience callers may ignore
+    // and reach via instance() instead. Contrast grove::deserialize, which
+    // returns a fresh object by value and is [[nodiscard]].
+    static registry& deserialize(std::istream& is) {
         uint64_t count;
         is.read(reinterpret_cast<char*>(&count), sizeof(count));
         if (!is) {
