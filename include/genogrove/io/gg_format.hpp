@@ -22,27 +22,34 @@ namespace genogrove::io {
     /// On-disk header for a serialised grove (.gg file).
     ///
     /// The header is 12 bytes of plain (uncompressed) data preceding the
-    /// zlib-compressed grove payload, so a .gg file can be identified and
+    /// block-structured grove payload, so a .gg file can be identified and
     /// validated without decompressing first.
     ///
     /// Layout:
     ///   offset  size  field
     ///        0     4  magic           = "GROV"
-    ///        4     1  format_major    = 0   (pre-1.0; any change may break compatibility)
-    ///        5     1  format_minor    = 1
+    ///        4     1  format_major    = 0   (pre-1.0; format still evolving, may break)
+    ///        5     1  format_minor    = 2   (block-structured payload; see grove serialize)
     ///        6     1  lib_major       = genogrove_VERSION_MAJOR (informational)
     ///        7     1  lib_minor       = genogrove_VERSION_MINOR (informational)
     ///        8     1  lib_patch       = genogrove_VERSION_PATCH (informational)
     ///        9     1  payload_type    (BED = 0x01, GFF = 0x02)
     ///       10     2  reserved        (zero)
     ///
-    /// While CURRENT_FORMAT_MAJOR == 0, read() requires an exact match on
-    /// (format_major, format_minor) and throws std::runtime_error otherwise.
-    /// The lib_* fields are informational only and never cause rejection.
+    /// Format 0.2 is the block-structured, random-access-capable payload:
+    /// a plain directory (per-index root block ids + block metadata) followed by
+    /// independently zlib-compressed, length-prefixed node and external-key
+    /// blocks. The earlier
+    /// whole-file zlib stream (0.1) is not readable by this build — no
+    /// serialization back-compat is maintained; regenerate the index.
+    ///
+    /// While format_major == 0 the format is still evolving. read() requires an
+    /// exact match on (format_major, format_minor) and throws std::runtime_error
+    /// otherwise. The lib_* fields are informational only and never cause rejection.
     struct gg_header {
         static constexpr std::array<char, 4> MAGIC = {'G', 'R', 'O', 'V'};
         static constexpr uint8_t CURRENT_FORMAT_MAJOR = 0;
-        static constexpr uint8_t CURRENT_FORMAT_MINOR = 1;
+        static constexpr uint8_t CURRENT_FORMAT_MINOR = 2;
         static constexpr std::size_t SIZE = 12;
 
         uint8_t format_major = CURRENT_FORMAT_MAJOR;

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Block-structured grove serialization (format 0.2)**: `grove::serialize`/`deserialize` now write a block-structured `.gg` payload instead of a single whole-file zlib stream — each B+ tree node is an independently zlib-compressed, length-prefixed block, external keys are distributed into fixed-size blocks (512/block), and references (child, next-leaf, edge target) are encoded as block ids with a key's global id `(block_id, slot)` doubling as its own locator (so the graph overlay needs no separate key→block index). This is the on-disk foundation for random-access (partial) deserialization; this PR ships the eager reader that round-trips identically. The `.gg` header is bumped to format 0.2 and the 0.1 whole-file stream is no longer readable — no serialization back-compat, regenerate existing indexes. Because each block is inflated from an isolated buffer of exactly its length, the eager reader now reads the source sequentially only: it works on non-seekable sources and preserves trailing data (superseding the [#323](https://github.com/genogrove/genogrove/issues/323) seek-back path). Adds distributed-external-block, cross-chromosome-edge, external-only, and empty-grove round-trip tests. ([#463](https://github.com/genogrove/genogrove/issues/463), [#464](https://github.com/genogrove/genogrove/pull/464))
+
 ## [0.24.8] - 2026-06-29
 
 ### Added
