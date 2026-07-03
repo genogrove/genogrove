@@ -12,9 +12,9 @@
 namespace genogrove::structure::detail {
 
 /// Identifier of a single serialized block within a grove stream. Every node
-/// (internal or leaf) is one block; external keys occupy one final block. A
-/// block_id is a dense index in [0, num_blocks) and doubles as the high half of
-/// a key's global id (block_id, slot).
+/// (internal or leaf) is one block; external keys occupy one or more fixed-size
+/// blocks after the node blocks. A block_id is a dense index in [0, num_blocks)
+/// and doubles as the high half of a key's global id (block_id, slot).
 using block_id = std::uint32_t;
 
 /// Sentinel meaning "no block here" — used for the `next` reference of the last

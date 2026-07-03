@@ -72,7 +72,7 @@ TEST(SerializationTest, FileStreamStateCleanAfterDeserialize) {
 }
 
 TEST(SerializationTest, NonSeekableSourceWithTrailingDataRoundTrips) {
-    // Format 1.0 (block-structured) reads each block from an isolated buffer of
+    // Format 0.2 (block-structured) reads each block from an isolated buffer of
     // exactly its length-prefixed size, so the eager deserialize path only ever
     // reads the source stream sequentially — it never seeks it. That makes the
     // eager path work on non-seekable sources (pipes, sockets), and leaves

@@ -264,6 +264,11 @@ public:
         if (!is) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading order");
         }
+        // Validate here (as std::runtime_error, like every other malformed-stream
+        // path) rather than letting grove(order) throw std::invalid_argument.
+        if (order < 3) {
+            throw std::runtime_error("Failed to deserialize grove: order must be >= 3");
+        }
         grove g(order);
 
         uint32_t num_indices;
@@ -348,120 +353,159 @@ public:
             }
         };
 
-        // ---- read every block (length-prefixed, independently compressed) ----
-        for (detail::block_id b = 0; b < num_blocks; ++b) {
-            uint64_t clen;
-            detail::read_pod(is, clen);
-            if (!is) {
-                throw std::runtime_error("Failed to deserialize grove: stream error reading block length");
-            }
-            std::string cbuf(static_cast<size_t>(clen), '\0');
-            is.read(cbuf.data(), static_cast<std::streamsize>(clen));
-            if (is.gcount() != static_cast<std::streamsize>(clen)) {
-                throw std::runtime_error("Failed to deserialize grove: truncated block");
-            }
-            std::istringstream bs(cbuf, std::ios::binary);
-            detail::inflate_streambuf zbuf(bs);
-            std::istream zis(&zbuf);
+        // Node destructors recursively delete children, so on any failure we
+        // free every parsed node whose parent is still null (roots free their
+        // subtrees; non-root nodes are freed via their parent). g.root_nodes is
+        // assigned only on success (below), so this cleanup never races grove's
+        // own ownership. Counts are accumulated for directory validation.
+        uint64_t actual_leaf_key_count = 0;
+        decltype(g.root_nodes) local_roots;
+        decltype(g.rightmost_nodes) local_rightmost;
+        try {
+            // ---- read every block (length-prefixed, independently compressed) ----
+            for (detail::block_id b = 0; b < num_blocks; ++b) {
+                uint64_t clen;
+                detail::read_pod(is, clen);
+                if (!is) {
+                    throw std::runtime_error("Failed to deserialize grove: stream error reading block length");
+                }
+                // clen is file-controlled: reject a value that would overflow the
+                // signed streamsize cast (a negative read count is UB) before it
+                // sizes the buffer.
+                if (clen > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
+                    throw std::runtime_error("Failed to deserialize grove: block length out of range");
+                }
+                std::string cbuf(static_cast<size_t>(clen), '\0');
+                is.read(cbuf.data(), static_cast<std::streamsize>(clen));
+                if (is.gcount() != static_cast<std::streamsize>(clen)) {
+                    throw std::runtime_error("Failed to deserialize grove: truncated block");
+                }
+                std::istringstream bs(cbuf, std::ios::binary);
+                detail::inflate_streambuf zbuf(bs);
+                std::istream zis(&zbuf);
 
-            if (b < ext_block_begin) {
-                node<key_type, data_type>* n = node<key_type, data_type>::deserialize_block(
-                    zis, order, g.key_storage, child_ids[b], next_ids[b]);
-                block_node[b] = n;
-                if (n->get_is_leaf()) {
-                    for (auto* k : n->get_keys()) {
+                if (b < ext_block_begin) {
+                    node<key_type, data_type>* n = node<key_type, data_type>::deserialize_block(
+                        zis, order, g.key_storage, child_ids[b], next_ids[b]);
+                    block_node[b] = n;
+                    if (n->get_is_leaf()) {
+                        actual_leaf_key_count += n->get_keys().size();
+                        for (auto* k : n->get_keys()) {
+                            read_key_edges(zis, k);
+                        }
+                    }
+                } else {
+                    uint32_t cnt;
+                    detail::read_pod(zis, cnt);
+                    if (!zis) {
+                        throw std::runtime_error("Failed to deserialize grove: stream error reading external block count");
+                    }
+                    auto& ekeys = ext_block_keys[b - ext_block_begin];
+                    ekeys.reserve(cnt);
+                    for (uint32_t i = 0; i < cnt; ++i) {
+                        key_type key_value = key_type::deserialize(zis);
+                        if constexpr (std::is_void_v<data_type>) {
+                            g.external_key_storage.emplace_back(key_value);
+                        } else {
+                            data_type data_value = gdt::serializer<data_type>::read(zis);
+                            g.external_key_storage.emplace_back(key_value, data_value);
+                        }
+                        ekeys.push_back(&g.external_key_storage.back());
+                    }
+                    for (auto* k : ekeys) {
                         read_key_edges(zis, k);
                     }
                 }
-            } else {
-                uint32_t cnt;
-                detail::read_pod(zis, cnt);
-                if (!zis) {
-                    throw std::runtime_error("Failed to deserialize grove: stream error reading external block count");
+            }
+
+            // ---- link child / next references ----
+            for (detail::block_id b = 0; b < ext_block_begin; ++b) {
+                node<key_type, data_type>* n = block_node[b];
+                if (n == nullptr) {
+                    throw std::runtime_error("Failed to deserialize grove: missing node block");
                 }
-                auto& ekeys = ext_block_keys[b - ext_block_begin];
-                ekeys.reserve(cnt);
-                for (uint32_t i = 0; i < cnt; ++i) {
-                    key_type key_value = key_type::deserialize(zis);
-                    if constexpr (std::is_void_v<data_type>) {
-                        g.external_key_storage.emplace_back(key_value);
-                    } else {
-                        data_type data_value = gdt::serializer<data_type>::read(zis);
-                        g.external_key_storage.emplace_back(key_value, data_value);
+                if (!n->get_is_leaf()) {
+                    auto& kids = n->get_children();
+                    kids.reserve(child_ids[b].size());
+                    for (detail::block_id cid : child_ids[b]) {
+                        if (cid >= ext_block_begin || block_node[cid] == nullptr) {
+                            throw std::runtime_error("Failed to deserialize grove: invalid child block id");
+                        }
+                        // push before set_parent: if push_back throws, the child
+                        // stays parent-less and is freed directly by the guard
+                        // (never both directly and via this parent's subtree).
+                        kids.push_back(block_node[cid]);
+                        block_node[cid]->set_parent(n);
                     }
-                    ekeys.push_back(&g.external_key_storage.back());
-                }
-                for (auto* k : ekeys) {
-                    read_key_edges(zis, k);
+                } else {
+                    detail::block_id nid = next_ids[b];
+                    if (nid != detail::no_block) {
+                        if (nid >= ext_block_begin || block_node[nid] == nullptr) {
+                            throw std::runtime_error("Failed to deserialize grove: invalid next block id");
+                        }
+                        n->set_next(block_node[nid]);
+                    }
                 }
             }
+
+            // ---- roots + rightmost leaves (staged; committed to g below) ----
+            for (const auto& [name, root_id] : index_roots) {
+                if (root_id >= ext_block_begin || block_node[root_id] == nullptr) {
+                    throw std::runtime_error("Failed to deserialize grove: invalid root block id");
+                }
+                node<key_type, data_type>* root = block_node[root_id];
+                local_roots[name] = root;
+                node<key_type, data_type>* cur = root;
+                while (!cur->get_is_leaf() && !cur->get_children().empty()) {
+                    cur = cur->get_children().back();
+                }
+                local_rightmost[name] = cur;
+            }
+
+            // ---- resolve graph edges ----
+            auto resolve_target = [&](detail::block_id tb, uint32_t ts) -> gdt::key<key_type, data_type>* {
+                if (tb < ext_block_begin) {
+                    node<key_type, data_type>* tn = block_node[tb];
+                    if (tn == nullptr || !tn->get_is_leaf() || ts >= tn->get_keys().size()) {
+                        throw std::runtime_error("Failed to deserialize grove: invalid edge target");
+                    }
+                    return tn->get_keys()[ts];
+                }
+                detail::block_id ei = tb - ext_block_begin;
+                if (ei >= ext_block_keys.size() || ts >= ext_block_keys[ei].size()) {
+                    throw std::runtime_error("Failed to deserialize grove: invalid external edge target");
+                }
+                return ext_block_keys[ei][ts];
+            };
+            for (auto& pe : pending) {
+                gdt::key<key_type, data_type>* tgt = resolve_target(pe.tb, pe.ts);
+                if constexpr (std::is_void_v<edge_data_type>) {
+                    g.graph_data.add_edge(pe.src, tgt);
+                } else {
+                    g.graph_data.add_edge(pe.src, tgt, std::move(pe.meta));
+                }
+            }
+
+            // ---- validate the directory counts against what was parsed ----
+            if (actual_leaf_key_count != leaf_count_field) {
+                throw std::runtime_error("Failed to deserialize grove: leaf key count mismatch");
+            }
+            if (static_cast<uint64_t>(g.external_key_storage.size()) != external_count_field) {
+                throw std::runtime_error("Failed to deserialize grove: external key count mismatch");
+            }
+        } catch (...) {
+            for (auto* n : block_node) {
+                if (n != nullptr && n->get_parent() == nullptr) {
+                    delete n;
+                }
+            }
+            throw;
         }
 
-        // ---- link child / next references ----
-        for (detail::block_id b = 0; b < ext_block_begin; ++b) {
-            node<key_type, data_type>* n = block_node[b];
-            if (n == nullptr) {
-                throw std::runtime_error("Failed to deserialize grove: missing node block");
-            }
-            if (!n->get_is_leaf()) {
-                auto& kids = n->get_children();
-                kids.reserve(child_ids[b].size());
-                for (detail::block_id cid : child_ids[b]) {
-                    if (cid >= ext_block_begin || block_node[cid] == nullptr) {
-                        throw std::runtime_error("Failed to deserialize grove: invalid child block id");
-                    }
-                    block_node[cid]->set_parent(n);
-                    kids.push_back(block_node[cid]);
-                }
-            } else {
-                detail::block_id nid = next_ids[b];
-                if (nid != detail::no_block) {
-                    if (nid >= ext_block_begin || block_node[nid] == nullptr) {
-                        throw std::runtime_error("Failed to deserialize grove: invalid next block id");
-                    }
-                    n->set_next(block_node[nid]);
-                }
-            }
-        }
-
-        // ---- roots + rightmost leaves ----
-        for (const auto& [name, root_id] : index_roots) {
-            if (root_id >= ext_block_begin || block_node[root_id] == nullptr) {
-                throw std::runtime_error("Failed to deserialize grove: invalid root block id");
-            }
-            node<key_type, data_type>* root = block_node[root_id];
-            g.root_nodes[name] = root;
-            node<key_type, data_type>* cur = root;
-            while (!cur->get_is_leaf() && !cur->get_children().empty()) {
-                cur = cur->get_children().back();
-            }
-            g.rightmost_nodes[name] = cur;
-        }
+        // ---- commit: grove takes ownership of the trees ----
+        g.root_nodes = std::move(local_roots);
+        g.rightmost_nodes = std::move(local_rightmost);
         g.leaf_key_count = static_cast<size_t>(leaf_count_field);
-
-        // ---- resolve graph edges ----
-        auto resolve_target = [&](detail::block_id tb, uint32_t ts) -> gdt::key<key_type, data_type>* {
-            if (tb < ext_block_begin) {
-                node<key_type, data_type>* tn = block_node[tb];
-                if (tn == nullptr || !tn->get_is_leaf() || ts >= tn->get_keys().size()) {
-                    throw std::runtime_error("Failed to deserialize grove: invalid edge target");
-                }
-                return tn->get_keys()[ts];
-            }
-            detail::block_id ei = tb - ext_block_begin;
-            if (ei >= ext_block_keys.size() || ts >= ext_block_keys[ei].size()) {
-                throw std::runtime_error("Failed to deserialize grove: invalid external edge target");
-            }
-            return ext_block_keys[ei][ts];
-        };
-        for (auto& pe : pending) {
-            gdt::key<key_type, data_type>* tgt = resolve_target(pe.tb, pe.ts);
-            if constexpr (std::is_void_v<edge_data_type>) {
-                g.graph_data.add_edge(pe.src, tgt);
-            } else {
-                g.graph_data.add_edge(pe.src, tgt, std::move(pe.meta));
-            }
-        }
 
         return g;
     }

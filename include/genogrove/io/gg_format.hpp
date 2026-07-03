@@ -38,7 +38,8 @@ namespace genogrove::io {
     ///
     /// Format 0.2 is the block-structured, random-access-capable payload:
     /// a plain directory (per-index root block ids + block metadata) followed by
-    /// independently zlib-compressed, length-prefixed node blocks. The earlier
+    /// independently zlib-compressed, length-prefixed node and external-key
+    /// blocks. The earlier
     /// whole-file zlib stream (0.1) is not readable by this build — no
     /// serialization back-compat is maintained; regenerate the index.
     ///
