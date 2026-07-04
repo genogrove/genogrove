@@ -160,51 +160,7 @@ public:
             }
         };
 
-        auto compress_block = [](auto&& write_fn) -> std::string {
-            std::ostringstream comp(std::ios::binary);
-            {
-                detail::deflate_streambuf zbuf(comp);
-                std::ostream zos(&zbuf);
-                write_fn(zos);
-                if (!zos) {
-                    throw std::runtime_error("Failed to serialize grove: block stream error");
-                }
-                zbuf.finish();
-            }
-            return comp.str();
-        };
-
-        std::vector<std::string> block_bytes;
-        block_bytes.reserve(num_blocks);
-
-        for (detail::block_id b = 0; b < ext_block_begin; ++b) {
-            const node<key_type, data_type>* n = node_blocks[b];
-            block_bytes.push_back(compress_block([&](std::ostream& zos) {
-                n->serialize_block(zos, node_to_block);
-                if (n->get_is_leaf()) {
-                    write_key_edges(zos, n->get_keys().begin(), n->get_keys().end());
-                }
-            }));
-        }
-        for (const auto& [start, end] : ext_ranges) {
-            block_bytes.push_back(compress_block([&](std::ostream& zos) {
-                uint32_t cnt = static_cast<uint32_t>(end - start);
-                detail::write_pod(zos, cnt);
-                std::vector<key_ptr> keyptrs;
-                keyptrs.reserve(cnt);
-                for (size_t j = start; j < end; ++j) {
-                    const auto& k = external_key_storage[j];
-                    k.get_value().serialize(zos);
-                    if constexpr (!std::is_void_v<data_type>) {
-                        gdt::serializer<data_type>::write(zos, k.get_data());
-                    }
-                    keyptrs.push_back(&k);
-                }
-                write_key_edges(zos, keyptrs.begin(), keyptrs.end());
-            }));
-        }
-
-        // ---- Phase 3: write magic + directory + length-prefixed blocks ----
+        // ---- Phase 2: write magic + directory ----
         os.write(detail::grove_stream_magic.data(),
                  static_cast<std::streamsize>(detail::grove_stream_magic.size()));
 
@@ -226,10 +182,52 @@ public:
         uint64_t external_count_field = static_cast<uint64_t>(external_key_storage.size());
         detail::write_pod(os, external_count_field);
 
-        for (const auto& bytes : block_bytes) {
-            uint64_t clen = static_cast<uint64_t>(bytes.size());
+        // ---- Phase 3: compress each block and write it directly ----
+        // One deflate state and one uncompressed-scratch stream reused across all
+        // blocks (deflateReset per block, no per-block deflateInit or stream
+        // construction), each block written length-prefixed as it is produced —
+        // no whole-payload buffering.
+        detail::block_deflater deflater;
+        std::string comp;
+        std::ostringstream raw(std::ios::binary);
+        auto write_block = [&](auto&& write_fn) {
+            raw.str(std::string());  // reset content + put pointer, reuse capacity
+            raw.clear();             // clear any residual state flags
+            write_fn(raw);
+            if (!raw) {
+                throw std::runtime_error("Failed to serialize grove: block stream error");
+            }
+            deflater.compress(raw.view(), comp);  // view(): compress without a copy
+            uint64_t clen = static_cast<uint64_t>(comp.size());
             detail::write_pod(os, clen);
-            os.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+            os.write(comp.data(), static_cast<std::streamsize>(comp.size()));
+        };
+
+        for (detail::block_id b = 0; b < ext_block_begin; ++b) {
+            const node<key_type, data_type>* n = node_blocks[b];
+            write_block([&](std::ostream& zos) {
+                n->serialize_block(zos, node_to_block);
+                if (n->get_is_leaf()) {
+                    write_key_edges(zos, n->get_keys().begin(), n->get_keys().end());
+                }
+            });
+        }
+        for (const auto& [start, end] : ext_ranges) {
+            write_block([&](std::ostream& zos) {
+                uint32_t cnt = static_cast<uint32_t>(end - start);
+                detail::write_pod(zos, cnt);
+                std::vector<key_ptr> keyptrs;
+                keyptrs.reserve(cnt);
+                for (size_t j = start; j < end; ++j) {
+                    const auto& k = external_key_storage[j];
+                    k.get_value().serialize(zos);
+                    if constexpr (!std::is_void_v<data_type>) {
+                        gdt::serializer<data_type>::write(zos, k.get_data());
+                    }
+                    keyptrs.push_back(&k);
+                }
+                write_key_edges(zos, keyptrs.begin(), keyptrs.end());
+            });
         }
 
         if (!os) {
@@ -361,6 +359,11 @@ public:
         uint64_t actual_leaf_key_count = 0;
         decltype(g.root_nodes) local_roots;
         decltype(g.rightmost_nodes) local_rightmost;
+        // One inflate state and two scratch buffers reused across all blocks
+        // (inflateReset per block, no per-block inflateInit or buffer copy).
+        detail::block_inflater inflater;
+        std::string comp_buf;
+        std::string raw_buf;
         try {
             // ---- read every block (length-prefixed, independently compressed) ----
             for (detail::block_id b = 0; b < num_blocks; ++b) {
@@ -375,14 +378,14 @@ public:
                 if (clen > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
                     throw std::runtime_error("Failed to deserialize grove: block length out of range");
                 }
-                std::string cbuf(static_cast<size_t>(clen), '\0');
-                is.read(cbuf.data(), static_cast<std::streamsize>(clen));
+                comp_buf.resize(static_cast<size_t>(clen));
+                is.read(comp_buf.data(), static_cast<std::streamsize>(clen));
                 if (is.gcount() != static_cast<std::streamsize>(clen)) {
                     throw std::runtime_error("Failed to deserialize grove: truncated block");
                 }
-                std::istringstream bs(cbuf, std::ios::binary);
-                detail::inflate_streambuf zbuf(bs);
-                std::istream zis(&zbuf);
+                inflater.decompress(comp_buf.data(), static_cast<size_t>(clen), raw_buf);
+                detail::memory_streambuf mb(raw_buf.data(), raw_buf.size());
+                std::istream zis(&mb);
 
                 if (b < ext_block_begin) {
                     node<key_type, data_type>* n = node<key_type, data_type>::deserialize_block(
