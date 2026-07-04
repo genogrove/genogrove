@@ -183,19 +183,21 @@ public:
         detail::write_pod(os, external_count_field);
 
         // ---- Phase 3: compress each block and write it directly ----
-        // One deflate state reused across all blocks (deflateReset per block, no
-        // per-block deflateInit), and each block is written length-prefixed as it
-        // is produced — no whole-payload buffering.
+        // One deflate state and one uncompressed-scratch stream reused across all
+        // blocks (deflateReset per block, no per-block deflateInit or stream
+        // construction), each block written length-prefixed as it is produced —
+        // no whole-payload buffering.
         detail::block_deflater deflater;
         std::string comp;
+        std::ostringstream raw(std::ios::binary);
         auto write_block = [&](auto&& write_fn) {
-            std::ostringstream raw(std::ios::binary);
+            raw.str(std::string());  // reset content + put pointer, reuse capacity
+            raw.clear();             // clear any residual state flags
             write_fn(raw);
             if (!raw) {
                 throw std::runtime_error("Failed to serialize grove: block stream error");
             }
-            std::string raw_str = raw.str();
-            deflater.compress(raw_str, comp);
+            deflater.compress(raw.view(), comp);  // view(): compress without a copy
             uint64_t clen = static_cast<uint64_t>(comp.size());
             detail::write_pod(os, clen);
             os.write(comp.data(), static_cast<std::streamsize>(comp.size()));
