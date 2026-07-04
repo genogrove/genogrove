@@ -386,7 +386,7 @@ TEST_F(RegistryTest, SerializeDeserializeInts) {
     EXPECT_TRUE(reg.empty());
 
     ss.seekg(0);
-    gdt::registry<int>::deserialize(ss);
+    std::ignore = gdt::registry<int>::deserialize(ss);
 
     EXPECT_EQ(reg.size(), 3u);
     EXPECT_EQ(reg.get(0), 10);
@@ -408,7 +408,7 @@ TEST_F(RegistryTest, SerializeDeserializeStrings) {
     EXPECT_TRUE(reg.empty());
 
     ss.seekg(0);
-    gdt::registry<std::string>::deserialize(ss);
+    std::ignore = gdt::registry<std::string>::deserialize(ss);
 
     EXPECT_EQ(reg.size(), 3u);
     EXPECT_EQ(reg.get(0), "first");
@@ -427,7 +427,7 @@ TEST_F(RegistryTest, SerializeDeserializeRebuildsLookup) {
 
     reg.clear();
     ss.seekg(0);
-    gdt::registry<std::string>::deserialize(ss);
+    std::ignore = gdt::registry<std::string>::deserialize(ss);
 
     // Interning a previously-known value after deserialize must return the
     // original id, not allocate a new one — proves the lookup map was rebuilt.
@@ -451,7 +451,7 @@ TEST_F(RegistryTest, SerializeDeserializeEmptyRegistry) {
     EXPECT_EQ(reg.size(), 1u);
 
     ss.seekg(0);
-    gdt::registry<int>::deserialize(ss);
+    std::ignore = gdt::registry<int>::deserialize(ss);
 
     EXPECT_TRUE(reg.empty());
 }
@@ -494,7 +494,7 @@ TEST_F(RegistryTest, DeserializeProvidesStrongExceptionGuaranteeOnTruncatedStrea
         std::ios::in | std::ios::binary);
 
     EXPECT_THROW({
-        gdt::registry<std::string>::deserialize(truncated_ss);
+        std::ignore = gdt::registry<std::string>::deserialize(truncated_ss);
     }, std::runtime_error);
 
     // Strong exception guarantee: singleton state is exactly what it was
@@ -527,7 +527,7 @@ TEST_F(RegistryTest, DeserializeRejectsCountExceedingIdCapacity) {
     ss.write(reinterpret_cast<const char*>(&bad_count), sizeof(bad_count));
 
     EXPECT_THROW({
-        gdt::registry<std::string>::deserialize(ss);
+        std::ignore = gdt::registry<std::string>::deserialize(ss);
     }, std::runtime_error);
 
     // Strong exception guarantee: pre-existing state survived the rejection.
@@ -555,7 +555,7 @@ TEST_F(RegistryTest, DeserializeRejectsDuplicateKeys) {
     gdt::serializer<std::string>::write(ss, "dup");
 
     EXPECT_THROW({
-        gdt::registry<std::string>::deserialize(ss);
+        std::ignore = gdt::registry<std::string>::deserialize(ss);
     }, std::runtime_error);
 
     // Strong exception guarantee: pre-existing singleton state is intact.
@@ -578,7 +578,7 @@ TEST_F(RegistryTest, DeserializeReplacesExistingData) {
     EXPECT_EQ(reg.size(), 4u);
 
     ss.seekg(0);
-    gdt::registry<int>::deserialize(ss);
+    std::ignore = gdt::registry<int>::deserialize(ss);
 
     EXPECT_EQ(reg.size(), 2u);
     EXPECT_EQ(reg.get(0), 100);
@@ -845,7 +845,7 @@ TEST_F(KeyPayloadRegistryTest, SerializeDeserializeRoundTripsKeyPayload) {
     EXPECT_TRUE(reg.empty());
 
     ss.seekg(0);
-    gene_registry::deserialize(ss);
+    std::ignore = gene_registry::deserialize(ss);
 
     EXPECT_EQ(reg.size(), 2u);
     EXPECT_EQ(reg.get(id1).gene_name, "FOO");
@@ -927,7 +927,7 @@ TEST_F(KeyPayloadRegistryTest, DeserializeRejectsDuplicateKeys) {
     gene_info{"second", "type_b"}.serialize(ss);
 
     EXPECT_THROW({
-        gene_registry::deserialize(ss);
+        std::ignore = gene_registry::deserialize(ss);
     }, std::runtime_error);
 
     // Strong exception guarantee: pre-existing singleton state is intact.
