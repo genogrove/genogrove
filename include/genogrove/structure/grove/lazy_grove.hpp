@@ -71,8 +71,10 @@ class lazy_grove {
 
     lazy_grove(const lazy_grove&) = delete;
     lazy_grove& operator=(const lazy_grove&) = delete;
-    lazy_grove(lazy_grove&&) = default;
-    lazy_grove& operator=(lazy_grove&&) = default;
+    // Non-movable: block_inflater owns a z_stream and is move-deleted. open()
+    // returns by value via guaranteed copy elision, so no move is ever needed.
+    lazy_grove(lazy_grove&&) = delete;
+    lazy_grove& operator=(lazy_grove&&) = delete;
     ~lazy_grove() = default;  // unique_ptr frees each loaded node; children are
                               // never linked in lazy mode, so no recursive delete.
 
@@ -242,6 +244,12 @@ class lazy_grove {
 
     // Seek to block b, read its length prefix, and inflate it into raw_buf.
     void read_block_raw(detail::block_id b) {
+        // Choke point for every block load. A malformed edge target can reach
+        // load_external with an id past the block count, so bound-check here
+        // before indexing block_offsets (load_node is already guarded separately).
+        if (b >= num_blocks) {
+            throw std::runtime_error("lazy_grove: block id out of range");
+        }
         std::istream& is = *file;
         is.clear();
         is.seekg(static_cast<std::streamoff>(block_offsets[b]), std::ios::beg);
@@ -392,7 +400,6 @@ class lazy_grove {
             return g->load_node(nid);
         }
     };
-    friend struct lazy_resolver;
 };
 
 }  // namespace genogrove::structure

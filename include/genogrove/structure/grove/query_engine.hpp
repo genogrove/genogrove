@@ -6,6 +6,7 @@
 #ifndef GENOGROVE_STRUCTURE_GROVE_QUERY_ENGINE_HPP
 #define GENOGROVE_STRUCTURE_GROVE_QUERY_ENGINE_HPP
 
+#include <concepts>
 #include <cstddef>
 
 #include "genogrove/data_type/key.hpp"
