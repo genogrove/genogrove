@@ -250,7 +250,7 @@ private:
             // inserted key's range. The last child has no separator — its range
             // is implicit as the catch-all. Without this, a separator set at
             // split time can become stale when a later insert adds a key that
-            // extends the child's subtree range, causing search_iter to skip
+            // extends the child's subtree range, causing search_overlaps to skip
             // over the child during routing.
             if (child_index < static_cast<int>(node->get_keys().size())) {
                 auto* sep = node->get_keys()[child_index];

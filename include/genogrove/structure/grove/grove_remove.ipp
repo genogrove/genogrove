@@ -116,7 +116,7 @@ private:
     /**
      * @brief Find the leaf node containing a specific key pointer
      *
-     * Uses search_iter-style routing with overlap check to navigate to the
+     * Uses search_overlaps-style routing with overlap check to navigate to the
      * correct subtree, then walks the leaf chain to find the exact leaf by
      * pointer identity.
      */
