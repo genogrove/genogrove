@@ -554,7 +554,7 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize_block(
             throw std::runtime_error("Failed to deserialize node block: num_children exceeds order");
         }
         // B+ tree invariant: an internal node with k separator keys has k+1
-        // children (search_iter descends via get_child(i) for i up to keys.size()).
+        // children (search_overlaps descends via get_child(i) for i up to keys.size()).
         if (num_children != num_keys + 1) {
             throw std::runtime_error("Failed to deserialize node block: child count does not match key count");
         }

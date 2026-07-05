@@ -30,6 +30,7 @@
 #include <genogrove/structure/grove/node.hpp>
 #include <genogrove/structure/grove/graph_overlay.hpp>
 #include <genogrove/structure/grove/pod_io.hpp>
+#include <genogrove/structure/grove/query_engine.hpp>
 #include <genogrove/structure/grove/zlib_streambuf.hpp>
 
 namespace ggu = genogrove::utility;
