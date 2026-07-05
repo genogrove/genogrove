@@ -343,6 +343,58 @@ def plot_serialization_size(metrics: Dict[str, List[Tuple]], output_dir: Path):
         save_plot(fig, output_dir, 'BM_serialization_size_bytes_per_interval')
 
 
+def plot_lazy_vs_eager_read(metrics: Dict[str, List[Tuple]], output_dir: Path):
+    """Compare read+query latency: eager deserialize vs lazy open, at a fixed order."""
+    eager = metrics.get('BM_lazy_read_eager', [])
+    lazy = metrics.get('BM_lazy_read_lazy', [])
+    if not eager or not lazy:
+        return
+
+    # Pick one representative order shared by both (prefer 32, else the largest).
+    orders = sorted(set(o for _, o, *_ in lazy) & set(o for _, o, *_ in eager))
+    if not orders:
+        return
+    order = 32 if 32 in orders else orders[-1]
+
+    def series(data):
+        pts = sorted((size, t) for size, o, t, *_ in data if o == order and t > 0)
+        return {size: t for size, t in pts}
+
+    e = series(eager)
+    l = series(lazy)
+    sizes = sorted(set(e) & set(l))
+    if not sizes:
+        return
+
+    # Plot 1: time vs size (log-log), both paths.
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.plot(sizes, [e[s] for s in sizes], marker='o', linewidth=2, markersize=8,
+            color='#e74c3c', label='Eager (deserialize + query)')
+    ax.plot(sizes, [l[s] for s in sizes], marker='s', linewidth=2, markersize=8,
+            color='#2ecc71', label='Lazy (open + query)')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.set_xlabel('Dataset Size (# intervals)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Read + query time (µs)', fontsize=12, fontweight='bold')
+    ax.set_title(f'Read + Query: Lazy vs Eager (order {order})', fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3, which='both')
+    save_plot(fig, output_dir, 'lazy_read_time_vs_size')
+
+    # Plot 2: speedup factor vs size.
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.plot(sizes, [e[s] / l[s] for s in sizes], marker='D', linewidth=2, markersize=8,
+            color='#3498db')
+    ax.axhline(1.0, color='gray', linestyle='--', linewidth=1, label='parity')
+    ax.set_xscale('log')
+    ax.set_xlabel('Dataset Size (# intervals)', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Speedup (eager time / lazy time)', fontsize=12, fontweight='bold')
+    ax.set_title(f'Lazy Read Speedup over Eager (order {order})', fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    save_plot(fig, output_dir, 'lazy_read_speedup')
+
+
 # ----------------------------
 # Section definitions for HTML
 # ----------------------------
@@ -389,6 +441,12 @@ SECTIONS = [
         'bench_type': 'BM_serialization_size',
         'plots': [],  # special handling
     },
+    {
+        'id': 'lazy-read',
+        'title': 'Lazy vs Eager Read',
+        'bench_type': None,  # special handling
+        'plots': [],
+    },
 ]
 
 PLOT_TITLES = {
@@ -412,6 +470,9 @@ def generate_html_index(output_dir: Path, metrics: Dict[str, List[Tuple]]):
             # Need at least 2 creation modes
             creation_modes = sum(1 for k in metrics if k.startswith('BM_grove_creation_'))
             if creation_modes >= 2:
+                active_sections.append(section)
+        elif section['id'] == 'lazy-read':
+            if 'BM_lazy_read_lazy' in metrics and 'BM_lazy_read_eager' in metrics:
                 active_sections.append(section)
         elif section['bench_type'] is not None and section['bench_type'] in metrics:
             active_sections.append(section)
@@ -526,6 +587,10 @@ def generate_html_index(output_dir: Path, metrics: Dict[str, List[Tuple]]):
             html += plot_card('BM_serialization_size_size_vs_dataset', 'Total Serialized Size vs Dataset')
             html += plot_card('BM_serialization_size_bytes_per_interval', 'Bytes per Interval vs Order')
 
+        elif section['id'] == 'lazy-read':
+            html += plot_card('lazy_read_time_vs_size', 'Read + Query: Lazy vs Eager')
+            html += plot_card('lazy_read_speedup', 'Lazy Read Speedup')
+
         else:
             bt = section['bench_type']
             for plot_suffix in section['plots']:
@@ -593,6 +658,10 @@ def main():
     # Generate serialization size plots
     print("\nGenerating serialization size plots...")
     plot_serialization_size(metrics, output_dir)
+
+    # Generate lazy vs eager read comparison
+    print("\nGenerating lazy vs eager read plots...")
+    plot_lazy_vs_eager_read(metrics, output_dir)
 
     # Generate HTML index
     generate_html_index(output_dir, metrics)
