@@ -9,8 +9,10 @@
 
 #include <genogrove/io/filetype_detector.hpp>
 #include <genogrove/io/gg_format.hpp>
+#include <genogrove/structure/grove/grove_view.hpp>
 
 #include <fstream>
+#include <ios>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -40,6 +42,9 @@ cxxopts::Options intersect::parse_args(int argc, char** argv) {
                     cxxopts::value<std::string>())
             ("i,indexfile", "A prebuilt .gg index to search against",
                     cxxopts::value<std::string>())
+            ("in-place", "Query the prebuilt index (-i) in place: read only the "
+                         "blocks each query touches instead of loading the whole "
+                         "file into memory (requires -i)")
             ("o,outputfile", "Write the index to the specified file",
              cxxopts::value<std::string>()->default_value("stdout"))
             ("k,order", "The order of the tree",
@@ -78,6 +83,13 @@ void intersect::validate(const cxxopts::ParseResult& args) {
         if(!std::filesystem::exists(indexfile)) {
             throw std::runtime_error("Error: file does not exist: " + indexfile);
         }
+    }
+
+    // --in-place reads a prebuilt index on demand; a target (-t) is built in
+    // memory, so it has no on-disk index to read in place.
+    if(args.count("in-place") && !has_index) {
+        throw std::runtime_error(
+            "Error: --in-place requires a prebuilt index (-i)");
     }
 
     if(args.count("outputfile")) {
@@ -131,21 +143,37 @@ void intersect::execute(const cxxopts::ParseResult& args) {
             throw std::runtime_error("Error: could not open index file: " + index_path);
         }
         const auto header = gio::gg_header::read(in);
+        // --in-place queries the file on disk via grove_view instead of loading
+        // it all; the grove stream begins right after the gg_header.
+        const bool in_place = args.count("in-place") != 0;
+        const auto data_offset = static_cast<std::streamoff>(gio::gg_header::SIZE);
 
         if(header.payload_type == gio::gg_payload_type::BED) {
             if(query_filetype != gio::filetype::BED) {
                 throw std::runtime_error(
                     "Error: query file must be BED to query a BED index");
             }
-            auto grove = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
-            handlers::bed::grove_intersect(grove, queryfile, *outputStream);
+            if(in_place) {
+                auto grove = ggs::grove_view<gdt::interval, gio::bed_entry>::open(
+                    index_path, data_offset);
+                handlers::bed::grove_intersect(grove, queryfile, *outputStream);
+            } else {
+                auto grove = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
+                handlers::bed::grove_intersect(grove, queryfile, *outputStream);
+            }
         } else {  // GFF — gg_header::read() rejects any other value
             if(!is_gff_or_gtf(query_filetype)) {
                 throw std::runtime_error(
                     "Error: query file must be GFF or GTF to query a GFF index");
             }
-            auto grove = ggs::grove<gdt::interval, gio::gff_entry>::deserialize(in);
-            handlers::gff::grove_intersect(grove, queryfile, *outputStream);
+            if(in_place) {
+                auto grove = ggs::grove_view<gdt::interval, gio::gff_entry>::open(
+                    index_path, data_offset);
+                handlers::gff::grove_intersect(grove, queryfile, *outputStream);
+            } else {
+                auto grove = ggs::grove<gdt::interval, gio::gff_entry>::deserialize(in);
+                handlers::gff::grove_intersect(grove, queryfile, *outputStream);
+            }
         }
     } else {
         const std::string targetfile = args["targetfile"].as<std::string>();

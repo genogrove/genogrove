@@ -226,6 +226,7 @@ TEST_F(CLIIntersectE2ETest, HelpFlag) {
     EXPECT_NE(result.output.find("intersect"), std::string::npos);
     EXPECT_NE(result.output.find("--outputfile"), std::string::npos);
     EXPECT_NE(result.output.find("--order"), std::string::npos);
+    EXPECT_NE(result.output.find("--in-place"), std::string::npos);
 }
 
 // ==========================================
@@ -249,6 +250,36 @@ TEST_F(CLIIntersectE2ETest, IntersectWithPrebuiltIndex) {
     EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos);
     EXPECT_NE(result.output.find("chr1\t600\t900"), std::string::npos);
     EXPECT_EQ(result.output.find("chr2"), std::string::npos);
+}
+
+TEST_F(CLIIntersectE2ETest, IntersectWithPrebuiltIndexInPlace) {
+    // --in-place reads the .gg on disk via grove_view instead of loading it
+    // whole; results must be identical to the eager -i path.
+    auto idx_result = run_command(cli(
+        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
+    ));
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
+
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -i \"" + tmp_index.string() +
+        "\" --in-place"
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos);
+    EXPECT_NE(result.output.find("chr1\t600\t900"), std::string::npos);
+    EXPECT_EQ(result.output.find("chr2"), std::string::npos);
+}
+
+TEST_F(CLIIntersectE2ETest, InPlaceRequiresIndex) {
+    // --in-place has nothing to read in place without a prebuilt index (-i);
+    // a -t target is built in memory.
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -t \"" + target_path.string() +
+        "\" --in-place"
+    ));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("--in-place requires a prebuilt index"),
+              std::string::npos);
 }
 
 TEST_F(CLIIntersectE2ETest, IntersectIgnoresTargetWhenIndexGiven) {
@@ -297,6 +328,23 @@ TEST_F(CLIIntersectE2ETest, GffIntersectWithPrebuiltIndex) {
 
     auto result = run_command(cli(
         "isec -q \"" + gff_query_path.string() + "\" -i \"" + tmp_gff_index.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("chr1\t101\t500"), std::string::npos);
+    EXPECT_NE(result.output.find("chr1\t601\t900"), std::string::npos);
+    EXPECT_EQ(result.output.find("chr2"), std::string::npos);
+}
+
+TEST_F(CLIIntersectE2ETest, GffIntersectWithPrebuiltIndexInPlace) {
+    // GFF payload read in place: same dispatch + results as the eager -i path.
+    auto idx_result = run_command(cli(
+        "idx \"" + gff_target_path.string() + "\" -o \"" + tmp_gff_index.string() + "\""
+    ));
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
+
+    auto result = run_command(cli(
+        "isec -q \"" + gff_query_path.string() + "\" -i \"" + tmp_gff_index.string() +
+        "\" --in-place"
     ));
     EXPECT_EQ(result.exit_code, 0) << result.output;
     EXPECT_NE(result.output.find("chr1\t101\t500"), std::string::npos);

@@ -229,6 +229,16 @@ TEST_F(CLIIntersectTest, ValidateValidArgs) {
     EXPECT_NO_FATAL_FAILURE(isec.validate(args));
 }
 
+TEST_F(CLIIntersectTest, ValidateInPlaceWithoutIndexThrows) {
+    // --in-place needs a prebuilt index (-i); with only a target (-t) there is
+    // no on-disk index to read in place.
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-t", target_path.string(), "--in-place"
+    });
+    subcalls::intersect isec;
+    EXPECT_THROW(isec.validate(args), std::runtime_error);
+}
+
 // ==========================================
 // Output File Test
 // ==========================================

@@ -35,24 +35,5 @@ void grove_insert(
     }
 }
 
-void grove_intersect(
-    ggs::grove<gdt::interval, gio::bed_entry>& grove,
-    const std::string& queryfile,
-    std::ostream& output
-) {
-    gio::bed_reader reader(queryfile);
-
-    for (const auto& query_entry : reader) {
-        gdt::interval query(query_entry.start, query_entry.end - 1);
-        auto results = grove.intersect(query, query_entry.chrom);
-
-        for(auto* result : results.get_keys()) {
-            output << result->get_data().chrom << "\t"
-                   << result->get_data().start << "\t"
-                   << result->get_data().end << "\n";
-        }
-    }
-}
-
 } // namespace bed
 } // namespace handlers
