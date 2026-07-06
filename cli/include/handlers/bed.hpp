@@ -14,6 +14,7 @@
 #include <genogrove/data_type/key.hpp>
 #include <genogrove/io/bed_reader.hpp>
 #include <genogrove/structure/grove/grove.hpp>
+#include <handlers/queryable.hpp>
 
 namespace handlers {
 namespace bed {
@@ -50,10 +51,9 @@ void grove_insert(
 );
 
 // Intersect a BED query file against a populated grove and write hits.
-// Templated on the grove type so both the in-memory grove<> and the
-// partial-read grove_view<> — which share the same intersect()/get_keys()
-// API — can be queried through one implementation.
-template <typename grove_type>
+// Constrained on interval_queryable so both the in-memory grove<> and the
+// partial-read grove_view<> can be queried through one implementation.
+template <interval_queryable grove_type>
 void grove_intersect(
     grove_type& grove,
     const std::string& queryfile,

@@ -11,6 +11,7 @@
 #include <genogrove/structure/grove/grove.hpp>
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/gff_reader.hpp>
+#include <handlers/queryable.hpp>
 
 namespace handlers {
 namespace gff {
@@ -29,10 +30,9 @@ void grove_insert(
 );
 
 // Intersect a GFF/GTF query file against a populated grove and write hits.
-// Templated on the grove type so both the in-memory grove<> and the
-// partial-read grove_view<> — which share the same intersect()/get_keys()
-// API — can be queried through one implementation.
-template <typename grove_type>
+// Constrained on interval_queryable so both the in-memory grove<> and the
+// partial-read grove_view<> can be queried through one implementation.
+template <interval_queryable grove_type>
 void grove_intersect(
     grove_type& grove,
     const std::string& queryfile,
