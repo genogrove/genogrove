@@ -5,15 +5,15 @@
 
 // Compares two ways to answer a query against a serialized .gg on disk:
 //   - eager: grove::deserialize (inflates every block) then intersect
-//   - lazy:  lazy_grove::open (scans the block index, inflates nothing) then
+//   - view:  grove_view::open (scans the block index, inflates nothing) then
 //            intersect (inflates only the O(log n) blocks on the descent path)
-// The lazy path trades a whole-file inflate for a cheap index scan + a handful
+// The view path trades a whole-file inflate for a cheap index scan + a handful
 // of block loads, so it wins on read+query latency for a large index — and
 // touches a tiny fraction of the blocks (reported as a counter).
 
 // genogrove
 #include <genogrove/structure/grove/grove.hpp>
-#include <genogrove/structure/grove/lazy_grove.hpp>
+#include <genogrove/structure/grove/grove_view.hpp>
 #include "benchmark_utils.hpp"
 
 // Google Benchmark
@@ -30,7 +30,7 @@ namespace fs = std::filesystem;
 namespace {
 
 // Build the grove from the sorted dataset and serialize it to a temp .gg.
-// lazy_grove needs a seekable file, so the payload goes to disk (not a stream).
+// grove_view needs a seekable file, so the payload goes to disk (not a stream).
 fs::path prepare_gg(int num_intervals, int order, const char* tag) {
     std::string filename = fs::current_path() / "data" /
         (std::to_string(num_intervals) + "_intervals_sorted.txt");
@@ -41,7 +41,7 @@ fs::path prepare_gg(int num_intervals, int order, const char* tag) {
         grove.insert_data("chr1", interval_data.intvl, interval_data.data, gst::sorted);
     }
     fs::path path = fs::temp_directory_path() /
-        ("gg_lazy_bench_" + std::string(tag) + "_" + std::to_string(num_intervals) +
+        ("gg_view_bench_" + std::string(tag) + "_" + std::to_string(num_intervals) +
          "_" + std::to_string(order) + ".gg");
     std::ofstream ofs(path, std::ios::binary);
     grove.serialize(ofs);
@@ -61,7 +61,7 @@ gdt::interval mid_query(int num_intervals) {
 // ----------------------------
 // Eager: deserialize whole file + query
 // ----------------------------
-static void BM_lazy_read_eager(benchmark::State& state) {
+static void BM_read_eager(benchmark::State& state) {
     const auto num_intervals = static_cast<int>(state.range(0));
     const auto order = static_cast<int>(state.range(1));
     fs::path path = prepare_gg(num_intervals, order, "eager");
@@ -81,20 +81,20 @@ static void BM_lazy_read_eager(benchmark::State& state) {
 // ----------------------------
 // Lazy: open (index scan) + query (loads only the touched blocks)
 // ----------------------------
-static void BM_lazy_read_lazy(benchmark::State& state) {
+static void BM_read_view(benchmark::State& state) {
     const auto num_intervals = static_cast<int>(state.range(0));
     const auto order = static_cast<int>(state.range(1));
-    fs::path path = prepare_gg(num_intervals, order, "lazy");
+    fs::path path = prepare_gg(num_intervals, order, "view");
     const gdt::interval query = mid_query(num_intervals);
 
     std::size_t blocks_loaded = 0;
     std::size_t block_count = 0;
     for (auto _ : state) {
-        auto lazy = gst::lazy_grove<gdt::interval, int>::open(path.string());
-        auto hits = lazy.intersect(query, "chr1").get_keys().size();
+        auto view = gst::grove_view<gdt::interval, int>::open(path.string());
+        auto hits = view.intersect(query, "chr1").get_keys().size();
         benchmark::DoNotOptimize(hits);
-        blocks_loaded = lazy.blocks_loaded();
-        block_count = lazy.block_count();
+        blocks_loaded = view.blocks_loaded();
+        block_count = view.block_count();
     }
 
     fs::remove(path);
@@ -116,5 +116,5 @@ static void ApplyReadArgs(benchmark::internal::Benchmark* b) {
     }
 }
 
-BENCHMARK(BM_lazy_read_eager)->Apply(ApplyReadArgs)->Unit(benchmark::kMicrosecond);
-BENCHMARK(BM_lazy_read_lazy)->Apply(ApplyReadArgs)->Unit(benchmark::kMicrosecond);
+BENCHMARK(BM_read_eager)->Apply(ApplyReadArgs)->Unit(benchmark::kMicrosecond);
+BENCHMARK(BM_read_view)->Apply(ApplyReadArgs)->Unit(benchmark::kMicrosecond);
