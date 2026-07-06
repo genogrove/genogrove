@@ -3,8 +3,8 @@
  * See the LICENSE file in the root of the repository for more information.
  */
 
-#ifndef GENOGROVE_STRUCTURE_GROVE_LAZY_GROVE_HPP
-#define GENOGROVE_STRUCTURE_GROVE_LAZY_GROVE_HPP
+#ifndef GENOGROVE_STRUCTURE_GROVE_GROVE_VIEW_HPP
+#define GENOGROVE_STRUCTURE_GROVE_GROVE_VIEW_HPP
 
 #include <cstddef>
 #include <cstdint>
@@ -35,7 +35,7 @@ namespace genogrove::structure {
 /**
  * @brief Read-only, partial reader over a serialized (format 0.2) grove.
  *
- * Where grove::deserialize eagerly loads every block, lazy_grove loads only the
+ * Where grove::deserialize eagerly loads every block, grove_view loads only the
  * blocks a query walks. It reads the directory and builds a block_id -> file
  * offset index at open, then pages in individual blocks on demand and caches
  * them for its lifetime (no eviction — you keep what you touch). intersect() and
@@ -50,7 +50,7 @@ namespace genogrove::structure {
  * a hierarchical directory only when benchmarks show either dominates.
  */
 template <gdt::key_type_base key_type, typename data_type = void, typename edge_data_type = void>
-class lazy_grove {
+class grove_view {
     using key_t = gdt::key<key_type, data_type>;
     using node_t = node<key_type, data_type>;
 
@@ -61,22 +61,22 @@ class lazy_grove {
      * @throws std::runtime_error if the file cannot be opened, the magic is
      *         wrong, the stream is not seekable, or the directory is malformed.
      */
-    [[nodiscard]] static lazy_grove open(const std::string& path) {
+    [[nodiscard]] static grove_view open(const std::string& path) {
         auto file = std::make_unique<std::ifstream>(path, std::ios::binary);
         if (!file->is_open()) {
-            throw std::runtime_error("lazy_grove::open: cannot open " + path);
+            throw std::runtime_error("grove_view::open: cannot open " + path);
         }
-        return lazy_grove(std::move(file));
+        return grove_view(std::move(file));
     }
 
-    lazy_grove(const lazy_grove&) = delete;
-    lazy_grove& operator=(const lazy_grove&) = delete;
+    grove_view(const grove_view&) = delete;
+    grove_view& operator=(const grove_view&) = delete;
     // Non-movable: block_inflater owns a z_stream and is move-deleted. open()
     // returns by value via guaranteed copy elision, so no move is ever needed.
-    lazy_grove(lazy_grove&&) = delete;
-    lazy_grove& operator=(lazy_grove&&) = delete;
-    ~lazy_grove() = default;  // unique_ptr frees each loaded node; children are
-                              // never linked in lazy mode, so no recursive delete.
+    grove_view(grove_view&&) = delete;
+    grove_view& operator=(grove_view&&) = delete;
+    ~grove_view() = default;  // unique_ptr frees each loaded node; children are
+                              // never linked in view mode, so no recursive delete.
 
     /**
      * @brief Overlap query within a single index (chromosome), loading only the
@@ -89,7 +89,7 @@ class lazy_grove {
         if (it == index_roots.end()) {
             return result;
         }
-        lazy_resolver res{this};
+        block_resolver res{this};
         detail::search_overlaps(res, load_node(it->second), query, result);
         return result;
     }
@@ -97,7 +97,7 @@ class lazy_grove {
     /** @brief Overlap query across every index. */
     [[nodiscard]] gdt::query_result<key_type, data_type> intersect(const key_type& query) {
         gdt::query_result<key_type, data_type> result{query};
-        lazy_resolver res{this};
+        block_resolver res{this};
         for (const auto& [name, root_id] : index_roots) {
             detail::search_overlaps(res, load_node(root_id), query, result);
         }
@@ -105,10 +105,10 @@ class lazy_grove {
     }
 
     /**
-     * @brief Outgoing graph neighbors of a key returned by this lazy_grove.
+     * @brief Outgoing graph neighbors of a key returned by this grove_view.
      *
      * Loads each target's block on demand — the cross-chromosome hop. `source`
-     * must be a key pointer this lazy_grove produced (via intersect or a prior
+     * must be a key pointer this grove_view produced (via intersect or a prior
      * get_neighbors); edges are recorded when its block was paged in.
      */
     [[nodiscard]] std::vector<key_t*> get_neighbors(const key_t* source) {
@@ -160,7 +160,7 @@ class lazy_grove {
     std::string comp_buf;
     std::string raw_buf;
 
-    explicit lazy_grove(std::unique_ptr<std::ifstream> f) : file(std::move(f)) {
+    explicit grove_view(std::unique_ptr<std::ifstream> f) : file(std::move(f)) {
         read_directory_and_scan();
     }
 
@@ -172,43 +172,43 @@ class lazy_grove {
         is.read(magic.data(), static_cast<std::streamsize>(magic.size()));
         if (is.gcount() != static_cast<std::streamsize>(magic.size()) ||
             magic != detail::grove_stream_magic) {
-            throw std::runtime_error("lazy_grove: bad magic (not a format 0.2 grove stream)");
+            throw std::runtime_error("grove_view: bad magic (not a format 0.2 grove stream)");
         }
 
         detail::read_pod(is, order);
         if (!is) {
-            throw std::runtime_error("lazy_grove: stream error reading order");
+            throw std::runtime_error("grove_view: stream error reading order");
         }
         if (order < 3) {
-            throw std::runtime_error("lazy_grove: order must be >= 3");
+            throw std::runtime_error("grove_view: order must be >= 3");
         }
 
         std::uint32_t num_indices;
         detail::read_pod(is, num_indices);
         if (!is) {
-            throw std::runtime_error("lazy_grove: stream error reading index count");
+            throw std::runtime_error("grove_view: stream error reading index count");
         }
         for (std::uint32_t i = 0; i < num_indices; ++i) {
             std::uint32_t name_len;
             detail::read_pod(is, name_len);
             if (!is) {
-                throw std::runtime_error("lazy_grove: stream error reading index name length");
+                throw std::runtime_error("grove_view: stream error reading index name length");
             }
             std::string name(name_len, '\0');
             is.read(name.data(), static_cast<std::streamsize>(name_len));
             if (!is) {
-                throw std::runtime_error("lazy_grove: stream error reading index name");
+                throw std::runtime_error("grove_view: stream error reading index name");
             }
             detail::block_id root_id;
             detail::read_pod(is, root_id);
             if (!is) {
-                throw std::runtime_error("lazy_grove: stream error reading root block id");
+                throw std::runtime_error("grove_view: stream error reading root block id");
             }
             index_roots.emplace(std::move(name), root_id);
         }
 
         // leaf/external key counts are validation aids the eager reader uses;
-        // the lazy reader parses on demand and ignores them.
+        // the view reader parses on demand and ignores them.
         std::uint64_t leaf_count, ext_count;
         detail::read_pod(is, num_blocks);
         detail::read_pod(is, ext_block_begin);
@@ -217,27 +217,27 @@ class lazy_grove {
         (void)leaf_count;
         (void)ext_count;
         if (!is) {
-            throw std::runtime_error("lazy_grove: stream error reading directory");
+            throw std::runtime_error("grove_view: stream error reading directory");
         }
         if (ext_block_begin > num_blocks) {
-            throw std::runtime_error("lazy_grove: external-block-begin exceeds block count");
+            throw std::runtime_error("grove_view: external-block-begin exceeds block count");
         }
 
         block_offsets.resize(num_blocks);
         for (detail::block_id b = 0; b < num_blocks; ++b) {
             std::streampos pos = is.tellg();
             if (pos == std::streampos(-1)) {
-                throw std::runtime_error("lazy_grove: source is not seekable");
+                throw std::runtime_error("grove_view: source is not seekable");
             }
             block_offsets[b] = static_cast<std::uint64_t>(pos);
             std::uint64_t clen;
             detail::read_pod(is, clen);
             if (!is) {
-                throw std::runtime_error("lazy_grove: stream error scanning block length");
+                throw std::runtime_error("grove_view: stream error scanning block length");
             }
             is.seekg(static_cast<std::streamoff>(clen), std::ios::cur);
             if (!is) {
-                throw std::runtime_error("lazy_grove: truncated block during scan");
+                throw std::runtime_error("grove_view: truncated block during scan");
             }
         }
     }
@@ -248,26 +248,26 @@ class lazy_grove {
         // load_external with an id past the block count, so bound-check here
         // before indexing block_offsets (load_node is already guarded separately).
         if (b >= num_blocks) {
-            throw std::runtime_error("lazy_grove: block id out of range");
+            throw std::runtime_error("grove_view: block id out of range");
         }
         std::istream& is = *file;
         is.clear();
         is.seekg(static_cast<std::streamoff>(block_offsets[b]), std::ios::beg);
         if (!is) {
-            throw std::runtime_error("lazy_grove: seek to block failed");
+            throw std::runtime_error("grove_view: seek to block failed");
         }
         std::uint64_t clen;
         detail::read_pod(is, clen);
         if (!is) {
-            throw std::runtime_error("lazy_grove: stream error reading block length");
+            throw std::runtime_error("grove_view: stream error reading block length");
         }
         if (clen > static_cast<std::uint64_t>(std::numeric_limits<std::streamsize>::max())) {
-            throw std::runtime_error("lazy_grove: block length out of range");
+            throw std::runtime_error("grove_view: block length out of range");
         }
         comp_buf.resize(static_cast<std::size_t>(clen));
         is.read(comp_buf.data(), static_cast<std::streamsize>(clen));
         if (is.gcount() != static_cast<std::streamsize>(clen)) {
-            throw std::runtime_error("lazy_grove: truncated block");
+            throw std::runtime_error("grove_view: truncated block");
         }
         inflater.decompress(comp_buf.data(), static_cast<std::size_t>(clen), raw_buf);
     }
@@ -275,7 +275,7 @@ class lazy_grove {
     // Load (or return cached) a node block and record its child/next references.
     node_t* load_node(detail::block_id b) {
         if (b >= ext_block_begin) {
-            throw std::runtime_error("lazy_grove: node block id out of range");
+            throw std::runtime_error("grove_view: node block id out of range");
         }
         auto cached = node_cache.find(b);
         if (cached != node_cache.end()) {
@@ -312,7 +312,7 @@ class lazy_grove {
         std::uint32_t cnt;
         detail::read_pod(zis, cnt);
         if (!zis) {
-            throw std::runtime_error("lazy_grove: stream error reading external block count");
+            throw std::runtime_error("grove_view: stream error reading external block count");
         }
         std::vector<key_t*> keys;
         keys.reserve(cnt);
@@ -339,7 +339,7 @@ class lazy_grove {
         std::uint32_t ecount;
         detail::read_pod(zis, ecount);
         if (!zis) {
-            throw std::runtime_error("lazy_grove: stream error reading edge count");
+            throw std::runtime_error("grove_view: stream error reading edge count");
         }
         std::vector<edge_ref>* bucket = nullptr;
         for (std::uint32_t i = 0; i < ecount; ++i) {
@@ -348,12 +348,12 @@ class lazy_grove {
             detail::read_pod(zis, tb);
             detail::read_pod(zis, ts);
             if (!zis) {
-                throw std::runtime_error("lazy_grove: stream error reading edge");
+                throw std::runtime_error("grove_view: stream error reading edge");
             }
             if constexpr (!std::is_void_v<edge_data_type>) {
                 (void)gdt::serializer<edge_data_type>::read(zis);
                 if (!zis) {
-                    throw std::runtime_error("lazy_grove: stream error reading edge metadata");
+                    throw std::runtime_error("grove_view: stream error reading edge metadata");
                 }
             }
             if (bucket == nullptr) {
@@ -367,13 +367,13 @@ class lazy_grove {
         if (tb < ext_block_begin) {
             node_t* tn = load_node(tb);
             if (!tn->get_is_leaf() || ts >= tn->get_keys().size()) {
-                throw std::runtime_error("lazy_grove: invalid edge target");
+                throw std::runtime_error("grove_view: invalid edge target");
             }
             return tn->get_keys()[ts];
         }
         std::vector<key_t*>& ekeys = load_external(tb);
         if (ts >= ekeys.size()) {
-            throw std::runtime_error("lazy_grove: invalid external edge target");
+            throw std::runtime_error("grove_view: invalid external edge target");
         }
         return ekeys[ts];
     }
@@ -381,8 +381,8 @@ class lazy_grove {
     // Resolver plugged into the shared query engine: child/next go through the
     // block cache. child_ids/next_id come from the loaded_node the node was
     // paged in with (reverse-mapped via node_block).
-    struct lazy_resolver {
-        lazy_grove* g;
+    struct block_resolver {
+        grove_view* g;
         node_t* child(node_t* n, std::size_t i) {
             loaded_node& lb = g->node_cache.at(g->node_block.at(n));
             if (i >= lb.child_ids.size()) {
@@ -404,4 +404,4 @@ class lazy_grove {
 
 }  // namespace genogrove::structure
 
-#endif  // GENOGROVE_STRUCTURE_GROVE_LAZY_GROVE_HPP
+#endif  // GENOGROVE_STRUCTURE_GROVE_GROVE_VIEW_HPP
