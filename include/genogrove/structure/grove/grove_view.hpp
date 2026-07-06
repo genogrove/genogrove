@@ -57,16 +57,19 @@ class grove_view {
   public:
     /**
      * @brief Open a serialized grove for partial reading.
-     * @param path Path to a `.gg` grove stream (format 0.2).
+     * @param path Path to a file containing a `.gg` grove stream (format 0.2).
+     * @param data_offset Byte offset where the grove stream starts. Defaults to
+     *        0 (a bare grove stream); pass the size of any leading wrapper (e.g.
+     *        the CLI's `gg_header`) when the grove is embedded after a header.
      * @throws std::runtime_error if the file cannot be opened, the magic is
      *         wrong, the stream is not seekable, or the directory is malformed.
      */
-    [[nodiscard]] static grove_view open(const std::string& path) {
+    [[nodiscard]] static grove_view open(const std::string& path, std::streamoff data_offset = 0) {
         auto file = std::make_unique<std::ifstream>(path, std::ios::binary);
         if (!file->is_open()) {
             throw std::runtime_error("grove_view::open: cannot open " + path);
         }
-        return grove_view(std::move(file));
+        return grove_view(std::move(file), data_offset);
     }
 
     grove_view(const grove_view&) = delete;
@@ -160,14 +163,19 @@ class grove_view {
     std::string comp_buf;
     std::string raw_buf;
 
-    explicit grove_view(std::unique_ptr<std::ifstream> f) : file(std::move(f)) {
-        read_directory_and_scan();
+    explicit grove_view(std::unique_ptr<std::ifstream> f, std::streamoff data_offset)
+        : file(std::move(f)) {
+        read_directory_and_scan(data_offset);
     }
 
     // Read the plain directory, then walk the length-prefix chain once to record
     // each block's offset (reading only the 8-byte length, seeking past the data).
-    void read_directory_and_scan() {
+    void read_directory_and_scan(std::streamoff data_offset) {
         std::istream& is = *file;
+        is.seekg(data_offset, std::ios::beg);
+        if (!is) {
+            throw std::runtime_error("grove_view: seek to grove stream start failed");
+        }
         std::array<char, 4> magic{};
         is.read(magic.data(), static_cast<std::streamsize>(magic.size()));
         if (is.gcount() != static_cast<std::streamsize>(magic.size()) ||
