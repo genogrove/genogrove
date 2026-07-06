@@ -361,8 +361,8 @@ def plot_view_vs_eager_read(metrics: Dict[str, List[Tuple]], output_dir: Path):
         return {size: t for size, t in pts}
 
     e = series(eager)
-    l = series(view)
-    sizes = sorted(set(e) & set(l))
+    v = series(view)
+    sizes = sorted(set(e) & set(v))
     if not sizes:
         return
 
@@ -370,7 +370,7 @@ def plot_view_vs_eager_read(metrics: Dict[str, List[Tuple]], output_dir: Path):
     fig, ax = plt.subplots(figsize=(12, 8))
     ax.plot(sizes, [e[s] for s in sizes], marker='o', linewidth=2, markersize=8,
             color='#e74c3c', label='Eager (deserialize + query)')
-    ax.plot(sizes, [l[s] for s in sizes], marker='s', linewidth=2, markersize=8,
+    ax.plot(sizes, [v[s] for s in sizes], marker='s', linewidth=2, markersize=8,
             color='#2ecc71', label='Grove View (open + query)')
     ax.set_xscale('log')
     ax.set_yscale('log')
@@ -383,7 +383,7 @@ def plot_view_vs_eager_read(metrics: Dict[str, List[Tuple]], output_dir: Path):
 
     # Plot 2: speedup factor vs size.
     fig, ax = plt.subplots(figsize=(12, 8))
-    ax.plot(sizes, [e[s] / l[s] for s in sizes], marker='D', linewidth=2, markersize=8,
+    ax.plot(sizes, [e[s] / v[s] for s in sizes], marker='D', linewidth=2, markersize=8,
             color='#3498db')
     ax.axhline(1.0, color='gray', linestyle='--', linewidth=1, label='parity')
     ax.set_xscale('log')
