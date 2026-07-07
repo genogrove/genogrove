@@ -45,7 +45,8 @@ cxxopts::Options index::parse_args(int argc, char** argv) {
             ("gff-name-tag", "For GFF/GTF input with --links: the attribute whose value "
                              "identifies each record for link matching (e.g. ID, gene_id, "
                              "transcript_id). Every record must carry it and values must be "
-                             "unique across the file. Not valid for BED input.",
+                             "unique across the file. Ignored for BED input (which matches "
+                             "on column 4).",
                     cxxopts::value<std::string>())
             ("h,help", "Print help")
             ;
