@@ -39,8 +39,14 @@ cxxopts::Options index::parse_args(int argc, char** argv) {
             ("t,timed", "Measure the time taken for indexing",
                     cxxopts::value<bool>()->default_value("false"))
             ("l,links", "Optional TSV (nameA<TAB>nameB, # comments) of directed edges "
-                        "to attach to the grove's graph overlay. Names match BED column 4 "
-                        "and must be unique. BED input only.",
+                        "to attach to the grove's graph overlay. Names match BED column 4, "
+                        "or the --gff-name-tag attribute for GFF/GTF input, and must be unique.",
+                    cxxopts::value<std::string>())
+            ("gff-name-tag", "For GFF/GTF input with --links: the attribute whose value "
+                             "identifies each record for link matching (e.g. ID, gene_id, "
+                             "transcript_id). Every record must carry it and values must be "
+                             "unique across the file. Ignored for BED input (which matches "
+                             "on column 4).",
                     cxxopts::value<std::string>())
             ("h,help", "Print help")
             ;
@@ -105,11 +111,14 @@ void index::execute(const cxxopts::ParseResult& args) {
     }
 
     const bool has_links = args.count("links") != 0;
-    if(has_links && filetype != gio::filetype::BED) {
+    const bool has_name_tag = args.count("gff-name-tag") != 0;
+    // GFF/GTF links need an explicit identifying attribute — there is no
+    // canonical name column. (--gff-name-tag on BED input is simply ignored;
+    // BED links always match on column 4.)
+    if(has_links && filetype != gio::filetype::BED && !has_name_tag) {
         throw std::runtime_error(
-            "Error: --links is currently only supported for BED input "
-            "(GFF/GTF support tracked at "
-            "https://github.com/genogrove/genogrove/issues/441)");
+            "Error: --links on GFF/GTF input requires --gff-name-tag <ATTR> "
+            "to select the identifying attribute (e.g. ID, gene_id, transcript_id)");
     }
 
     const auto start_time = std::chrono::steady_clock::now();
@@ -143,7 +152,20 @@ void index::execute(const cxxopts::ParseResult& args) {
         }
     } else {  // GFF or GTF (validated above)
         ggs::grove<gdt::interval, gio::gff_entry> grove(order);
-        handlers::gff::grove_insert(grove, inputfile, sorted);
+
+        // Only build the name->key map when --links was requested; without it
+        // the map is null and grove_insert pays no extra cost (and reads no tag).
+        handlers::gff::name_to_key_map name_map;
+        const std::string name_tag = has_name_tag
+            ? args["gff-name-tag"].as<std::string>()
+            : std::string();
+        handlers::gff::grove_insert(
+            grove, inputfile, sorted, has_links ? &name_map : nullptr, name_tag);
+
+        if(has_links) {
+            handlers::links::apply_to_grove(
+                grove, args["links"].as<std::string>(), name_map);
+        }
 
         std::ofstream output(outputfile, std::ios::binary);
         if(!output) {

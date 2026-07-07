@@ -372,14 +372,111 @@ TEST_F(CLIIndexE2ETest, IndexWithLinksDeduplicatesRepeatedEdges) {
     fs::remove(dup_edge_links);
 }
 
-TEST_F(CLIIndexE2ETest, IndexLinksRejectsGffInput) {
+TEST_F(CLIIndexE2ETest, IndexGffLinksAddsGraphEdges) {
+    // target.gff records carry ID=gene1/gene2/gene3; link them by that tag.
+    fs::path gff_links = fs::temp_directory_path() / "genogrove_idx_gff_links.tsv";
+    {
+        std::ofstream out(gff_links);
+        out << "gene1\tgene2\n"
+            << "gene2\tgene3\n";  // gene3 is on chr2 — cross-chromosome edge
+    }
+
+    auto result = run_command(cli(
+        "idx \"" + gff_target_path.string() + "\" --links \"" + gff_links.string() +
+        "\" --gff-name-tag ID -o \"" + tmp_links_output.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    ASSERT_TRUE(fs::exists(tmp_links_output));
+
+    std::ifstream in(tmp_links_output, std::ios::binary);
+    ASSERT_TRUE(in.is_open());
+    (void)gio::gg_header::read(in);
+    auto grove = ggs::grove<gdt::interval, gio::gff_entry>::deserialize(in);
+
+    // gene1: chr1 [101,500]; gene2: chr1 [601,900]; gene3: chr2 [201,400].
+    auto g1 = grove.intersect(gdt::interval(300, 300), "chr1");
+    auto g2 = grove.intersect(gdt::interval(700, 700), "chr1");
+    auto g3 = grove.intersect(gdt::interval(300, 300), "chr2");
+    ASSERT_EQ(g1.get_keys().size(), 1u);
+    ASSERT_EQ(g2.get_keys().size(), 1u);
+    ASSERT_EQ(g3.get_keys().size(), 1u);
+    auto* gene1 = g1.get_keys()[0];
+    auto* gene2 = g2.get_keys()[0];
+    auto* gene3 = g3.get_keys()[0];
+
+    EXPECT_TRUE(grove.has_edge(gene1, gene2));
+    EXPECT_TRUE(grove.has_edge(gene2, gene3));
+    EXPECT_FALSE(grove.has_edge(gene1, gene3));
+    EXPECT_FALSE(grove.has_edge(gene2, gene1));  // directed
+
+    fs::remove(gff_links);
+}
+
+TEST_F(CLIIndexE2ETest, IndexGffLinksWithoutNameTagFails) {
+    // GFF/GTF has no canonical name column, so --links requires --gff-name-tag.
     auto result = run_command(cli(
         "idx \"" + gff_target_path.string() + "\" --links \"" + links_path.string() +
         "\" -o \"" + tmp_links_output.string() + "\""
     ));
     EXPECT_NE(result.exit_code, 0);
-    EXPECT_NE(result.output.find("--links is currently only supported for BED"),
-              std::string::npos) << result.output;
+    EXPECT_NE(result.output.find("requires --gff-name-tag"), std::string::npos)
+        << result.output;
+}
+
+TEST_F(CLIIndexE2ETest, IndexGffLinksMissingTagAttributeFails) {
+    // No record in target.gff carries a transcript_id attribute.
+    fs::path some_links = fs::temp_directory_path() / "genogrove_idx_gff_missing_links.tsv";
+    {
+        std::ofstream out(some_links);
+        out << "gene1\tgene2\n";
+    }
+
+    auto result = run_command(cli(
+        "idx \"" + gff_target_path.string() + "\" --links \"" + some_links.string() +
+        "\" --gff-name-tag transcript_id -o \"" + tmp_links_output.string() + "\""
+    ));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("transcript_id"), std::string::npos) << result.output;
+
+    fs::remove(some_links);
+}
+
+TEST_F(CLIIndexE2ETest, IndexGffLinksDuplicateTagValueFails) {
+    // Two records sharing ID=dup make the name ambiguous for link resolution.
+    fs::path dup_gff = fs::temp_directory_path() / "genogrove_idx_gff_dup.gff";
+    {
+        std::ofstream out(dup_gff);
+        out << "##gff-version 3\n"
+            << "chr1\tt\tgene\t101\t500\t.\t+\t.\tID=dup\n"
+            << "chr1\tt\tgene\t601\t900\t.\t-\t.\tID=dup\n";
+    }
+    fs::path some_links = fs::temp_directory_path() / "genogrove_idx_gff_dup_links.tsv";
+    {
+        std::ofstream out(some_links);
+        out << "dup\tdup\n";
+    }
+
+    auto result = run_command(cli(
+        "idx \"" + dup_gff.string() + "\" --links \"" + some_links.string() +
+        "\" --gff-name-tag ID -o \"" + tmp_links_output.string() + "\""
+    ));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("duplicate GFF/GTF name"), std::string::npos)
+        << result.output;
+
+    fs::remove(dup_gff);
+    fs::remove(some_links);
+}
+
+TEST_F(CLIIndexE2ETest, IndexGffNameTagIgnoredForBedInput) {
+    // --gff-name-tag on BED input is ignored (BED links always match column 4),
+    // not an error. The link still resolves via the BED name.
+    auto result = run_command(cli(
+        "idx \"" + links_target_path.string() + "\" --links \"" + links_path.string() +
+        "\" --gff-name-tag ID -o \"" + tmp_links_output.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    ASSERT_TRUE(fs::exists(tmp_links_output));
 }
 
 // ==========================================
