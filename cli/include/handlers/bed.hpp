@@ -14,6 +14,7 @@
 #include <genogrove/data_type/key.hpp>
 #include <genogrove/io/bed_reader.hpp>
 #include <genogrove/structure/grove/grove.hpp>
+#include <handlers/name_map.hpp>
 #include <handlers/queryable.hpp>
 
 namespace handlers {
@@ -23,16 +24,8 @@ namespace gdt = genogrove::data_type;
 namespace ggs = genogrove::structure;
 namespace gio = genogrove::io;
 
-// Transient map from a BED record's column-4 name to the inserted key
-// pointer in the grove. Used at indexing time by `idx --links` to resolve
-// TSV link rows to `graph_overlay::add_edge` calls.
-//
-// The key is a string_view into the stored `bed_entry::name` (the grove's
-// `key_storage` is a `std::deque`, so addresses are stable for the grove's
-// lifetime). No string copies. The map is never serialised; it lives only
-// for the duration of `idx::execute`.
-using name_to_key_map = std::unordered_map<
-    std::string_view, gdt::key<gdt::interval, gio::bed_entry>*>;
+// BED links match on column 4 (bed_entry::name). See handlers/name_map.hpp.
+using name_to_key_map = handlers::name_to_key_map<gio::bed_entry>;
 
 // Insert BED file entries into a grove. When sorted is true, entries are
 // inserted via the sorted-append fast path — the caller asserts the file is
