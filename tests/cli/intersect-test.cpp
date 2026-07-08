@@ -25,6 +25,20 @@ namespace gdt = genogrove::data_type;
 namespace ggs = genogrove::structure;
 namespace gio = genogrove::io;
 
+namespace {
+// Drive a BED query file against a grove and print BED-format hits — the
+// BED/BED path of intersect::execute's run_intersect, inlined so the unit
+// tests can exercise the handler primitives directly.
+template <typename grove_t>
+void bed_intersect(grove_t& grove, const std::string& queryfile, std::ostream& out) {
+    handlers::bed::for_each_bed_query(queryfile, [&](gdt::interval iv, const std::string& index) {
+        for (auto* result : grove.intersect(iv, index).get_keys()) {
+            handlers::bed::print_bed_result(out, result->get_data());
+        }
+    });
+}
+} // namespace
+
 // ==========================================
 // Test Fixture
 // ==========================================
@@ -87,7 +101,7 @@ TEST_F(CLIIntersectTest, GroveIntersect) {
     handlers::bed::grove_insert(grove, target_path.string());
 
     std::ostringstream output;
-    handlers::bed::grove_intersect(grove, query_path.string(), output);
+    bed_intersect(grove, query_path.string(), output);
 
     std::string result = output.str();
 
@@ -106,7 +120,7 @@ TEST_F(CLIIntersectTest, GroveIntersectOutputFormat) {
     handlers::bed::grove_insert(grove, target_path.string());
 
     std::ostringstream output;
-    handlers::bed::grove_intersect(grove, query_path.string(), output);
+    bed_intersect(grove, query_path.string(), output);
 
     // Each line should be tab-separated: chrom\tstart\tend\n
     std::istringstream iss(output.str());
@@ -134,7 +148,7 @@ TEST_F(CLIIntersectTest, GroveIntersectNoOverlaps) {
     grove.insert_data(entry.chrom, gdt::interval(entry.start, entry.end - 1), entry);
 
     std::ostringstream output;
-    handlers::bed::grove_intersect(grove, query_path.string(), output);
+    bed_intersect(grove, query_path.string(), output);
 
     EXPECT_TRUE(output.str().empty());
 }
@@ -251,7 +265,7 @@ TEST_F(CLIIntersectTest, OutputToFile) {
     {
         std::ofstream ofs(tmp_output);
         ASSERT_TRUE(ofs.is_open());
-        handlers::bed::grove_intersect(grove, query_path.string(), ofs);
+        bed_intersect(grove, query_path.string(), ofs);
     }
 
     // Read back and verify

@@ -385,21 +385,28 @@ TEST_F(CLIIntersectE2ETest, GffIntersectWithPrebuiltIndexInPlace) {
 }
 
 // ==========================================
-// Cross-type queries are not yet supported (tracked in #439)
+// Cross-type queries (#439): query type and target/index type are independent.
+// Output format follows the target payload; both readers map to a common
+// 0-based coordinate space so overlaps line up across formats.
 // ==========================================
 
-TEST_F(CLIIntersectE2ETest, RejectsBedQueryAgainstGffTarget) {
+TEST_F(CLIIntersectE2ETest, CrossTypeBedQueryAgainstGffTarget) {
+    // BED query, GFF target -> GFF-format output rows. query.bed 150-250 and
+    // 850-950 overlap gene1 (chr1 101-500) and gene2 (chr1 601-900); chr2
+    // 500-600 misses gene3 (chr2 201-400).
     auto result = run_command(cli(
         "isec -q \"" + query_path.string() +
         "\" -t \"" + gff_target_path.string() + "\""
     ));
-    EXPECT_NE(result.exit_code, 0);
-    EXPECT_NE(result.output.find("query file must be GFF or GTF"),
-              std::string::npos);
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("chr1\t101\t500"), std::string::npos) << result.output;
+    EXPECT_NE(result.output.find("chr1\t601\t900"), std::string::npos) << result.output;
+    EXPECT_EQ(result.output.find("chr2"), std::string::npos) << result.output;
 }
 
-TEST_F(CLIIntersectE2ETest, RejectsGffQueryAgainstBedIndex) {
-    // Build a BED index, then try to query it with a GFF file.
+TEST_F(CLIIntersectE2ETest, CrossTypeGffQueryAgainstBedIndex) {
+    // GFF query, prebuilt BED index -> BED-format output rows. query.gff
+    // 151-250 and 851-950 overlap the BED targets at chr1 100-500 and 600-900.
     auto idx_result = run_command(cli(
         "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
     ));
@@ -408,7 +415,8 @@ TEST_F(CLIIntersectE2ETest, RejectsGffQueryAgainstBedIndex) {
     auto result = run_command(cli(
         "isec -q \"" + gff_query_path.string() + "\" -i \"" + tmp_index.string() + "\""
     ));
-    EXPECT_NE(result.exit_code, 0);
-    EXPECT_NE(result.output.find("query file must be BED"),
-              std::string::npos);
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos) << result.output;
+    EXPECT_NE(result.output.find("chr1\t600\t900"), std::string::npos) << result.output;
+    EXPECT_EQ(result.output.find("chr2"), std::string::npos) << result.output;
 }
