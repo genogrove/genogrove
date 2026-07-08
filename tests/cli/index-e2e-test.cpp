@@ -142,7 +142,7 @@ TEST_F(CLIIndexE2ETest, IndexProducesDeserializableGrove) {
     ASSERT_TRUE(in.is_open());
     const auto header = gio::gg_header::read(in);
     EXPECT_EQ(header.payload_type, gio::gg_payload_type::BED);
-    auto grove = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
+    auto grove = ggs::grove<gdt::interval, gio::bed_entry, std::string>::deserialize(in);
     EXPECT_EQ(grove.indexed_vertex_count(), 3u);
 
     // chr1 100-500 is stored as the closed interval [100, 499]; a query at 150
@@ -187,7 +187,7 @@ TEST_F(CLIIndexE2ETest, IndexSortedFlagProducesSameRecordCount) {
 
     std::ifstream in(tmp_output, std::ios::binary);
     (void)gio::gg_header::read(in);
-    auto grove = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
+    auto grove = ggs::grove<gdt::interval, gio::bed_entry, std::string>::deserialize(in);
     EXPECT_EQ(grove.indexed_vertex_count(), 3u);
 }
 
@@ -228,7 +228,7 @@ TEST_F(CLIIndexE2ETest, IndexProducesDeserializableGffGrove) {
     const auto header = gio::gg_header::read(in);
     EXPECT_EQ(header.payload_type, gio::gg_payload_type::GFF);
 
-    auto grove = ggs::grove<gdt::interval, gio::gff_entry>::deserialize(in);
+    auto grove = ggs::grove<gdt::interval, gio::gff_entry, std::string>::deserialize(in);
     EXPECT_EQ(grove.indexed_vertex_count(), 3u);
 
     // chr1:101-500 (gene1) is stored as interval [101, 500]; a query at 200
@@ -276,7 +276,7 @@ TEST_F(CLIIndexE2ETest, IndexWithLinksAddsGraphEdges) {
     std::ifstream in(tmp_links_output, std::ios::binary);
     ASSERT_TRUE(in.is_open());
     (void)gio::gg_header::read(in);
-    auto grove = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
+    auto grove = ggs::grove<gdt::interval, gio::bed_entry, std::string>::deserialize(in);
 
     // Resolve the three named records by querying their intervals.
     // geneA: chr1 100-500 -> [100,499]; geneB: chr1 600-900 -> [600,899];
@@ -298,6 +298,73 @@ TEST_F(CLIIndexE2ETest, IndexWithLinksAddsGraphEdges) {
     EXPECT_FALSE(grove.has_edge(geneA, geneC));
     EXPECT_FALSE(grove.has_edge(geneB, geneA));
     EXPECT_FALSE(grove.has_edge(geneC, geneB));
+}
+
+TEST_F(CLIIndexE2ETest, IndexWithLinksAttachesEdgeMetadata) {
+    // An optional 3rd TSV column is stored as the edge's metadata and must
+    // survive the serialize -> deserialize round-trip.
+    fs::path meta_links = fs::temp_directory_path() / "genogrove_idx_meta_links.tsv";
+    {
+        std::ofstream out(meta_links);
+        out << "geneA\tgeneB\tsupports_isoform=ENST1\n"  // edge with metadata
+            << "geneB\tgeneC\n";                          // edge without
+    }
+
+    auto result = run_command(cli(
+        "idx \"" + links_target_path.string() + "\" --links \"" + meta_links.string() +
+        "\" -o \"" + tmp_links_output.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+
+    std::ifstream in(tmp_links_output, std::ios::binary);
+    ASSERT_TRUE(in.is_open());
+    (void)gio::gg_header::read(in);
+    auto grove = ggs::grove<gdt::interval, gio::bed_entry, std::string>::deserialize(in);
+
+    auto a_hits = grove.intersect(gdt::interval(300, 300), "chr1");
+    auto b_hits = grove.intersect(gdt::interval(700, 700), "chr1");
+    ASSERT_EQ(a_hits.get_keys().size(), 1u);
+    ASSERT_EQ(b_hits.get_keys().size(), 1u);
+    auto* geneA = a_hits.get_keys()[0];
+    auto* geneB = b_hits.get_keys()[0];
+
+    // geneA -> geneB carries the metadata; geneB -> geneC has default (empty).
+    auto a_edges = grove.get_edges(geneA);
+    ASSERT_EQ(a_edges.size(), 1u);
+    EXPECT_EQ(a_edges[0], "supports_isoform=ENST1");
+    auto b_edges = grove.get_edges(geneB);
+    ASSERT_EQ(b_edges.size(), 1u);
+    EXPECT_EQ(b_edges[0], "");
+
+    fs::remove(meta_links);
+}
+
+TEST_F(CLIIndexE2ETest, IndexWithLinksSamePairDifferentMetadataKeepsBoth) {
+    // The dedup key includes metadata, so one pair with two distinct metadata
+    // values yields two parallel edges (not a collapsed duplicate).
+    fs::path multi_links = fs::temp_directory_path() / "genogrove_idx_multi_meta.tsv";
+    {
+        std::ofstream out(multi_links);
+        out << "geneA\tgeneB\tevidence=hic\n"
+            << "geneA\tgeneB\tevidence=chia\n";
+    }
+
+    auto result = run_command(cli(
+        "idx \"" + links_target_path.string() + "\" --links \"" + multi_links.string() +
+        "\" -o \"" + tmp_links_output.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+
+    std::ifstream in(tmp_links_output, std::ios::binary);
+    ASSERT_TRUE(in.is_open());
+    (void)gio::gg_header::read(in);
+    auto grove = ggs::grove<gdt::interval, gio::bed_entry, std::string>::deserialize(in);
+
+    auto a_hits = grove.intersect(gdt::interval(300, 300), "chr1");
+    ASSERT_EQ(a_hits.get_keys().size(), 1u);
+    EXPECT_EQ(grove.out_degree(a_hits.get_keys()[0]), 2u);
+
+    fs::remove(multi_links);
 }
 
 TEST_F(CLIIndexE2ETest, IndexWithLinksUnresolvedNameFails) {
@@ -362,7 +429,7 @@ TEST_F(CLIIndexE2ETest, IndexWithLinksDeduplicatesRepeatedEdges) {
     std::ifstream in(tmp_links_output, std::ios::binary);
     ASSERT_TRUE(in.is_open());
     (void)gio::gg_header::read(in);
-    auto grove = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
+    auto grove = ggs::grove<gdt::interval, gio::bed_entry, std::string>::deserialize(in);
 
     auto a_hits = grove.intersect(gdt::interval(300, 300), "chr1");
     ASSERT_EQ(a_hits.get_keys().size(), 1u);
@@ -391,7 +458,7 @@ TEST_F(CLIIndexE2ETest, IndexGffLinksAddsGraphEdges) {
     std::ifstream in(tmp_links_output, std::ios::binary);
     ASSERT_TRUE(in.is_open());
     (void)gio::gg_header::read(in);
-    auto grove = ggs::grove<gdt::interval, gio::gff_entry>::deserialize(in);
+    auto grove = ggs::grove<gdt::interval, gio::gff_entry, std::string>::deserialize(in);
 
     // gene1: chr1 [101,500]; gene2: chr1 [601,900]; gene3: chr2 [201,400].
     auto g1 = grove.intersect(gdt::interval(300, 300), "chr1");

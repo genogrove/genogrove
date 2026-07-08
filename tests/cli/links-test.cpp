@@ -29,10 +29,30 @@ TEST(LinksParser, parsesValidRows) {
     auto rows = handlers::links::parse_links_tsv(in);
 
     ASSERT_EQ(rows.size(), 2u);
-    EXPECT_EQ(rows[0].first, "gene1");
-    EXPECT_EQ(rows[0].second, "gene2");
-    EXPECT_EQ(rows[1].first, "gene2");
-    EXPECT_EQ(rows[1].second, "exon3");
+    EXPECT_EQ(rows[0].source, "gene1");
+    EXPECT_EQ(rows[0].target, "gene2");
+    EXPECT_FALSE(rows[0].metadata.has_value());  // 2-column row -> no metadata
+    EXPECT_EQ(rows[1].source, "gene2");
+    EXPECT_EQ(rows[1].target, "exon3");
+    EXPECT_FALSE(rows[1].metadata.has_value());
+}
+
+TEST(LinksParser, parsesThirdColumnAsMetadata) {
+    auto in = tsv("gene1\texon3\tsupports_isoform=ENST1\ngene2\tenhancerA\n");
+    auto rows = handlers::links::parse_links_tsv(in);
+
+    ASSERT_EQ(rows.size(), 2u);
+    ASSERT_TRUE(rows[0].metadata.has_value());
+    EXPECT_EQ(*rows[0].metadata, "supports_isoform=ENST1");
+    EXPECT_FALSE(rows[1].metadata.has_value());  // mixed 3- and 2-column rows
+}
+
+TEST(LinksParser, metadataMayContainSpacesAndEquals) {
+    auto in = tsv("a\tb\thi_c score = 4.2\n");
+    auto rows = handlers::links::parse_links_tsv(in);
+    ASSERT_EQ(rows.size(), 1u);
+    ASSERT_TRUE(rows[0].metadata.has_value());
+    EXPECT_EQ(*rows[0].metadata, "hi_c score = 4.2");  // only tabs delimit
 }
 
 TEST(LinksParser, skipsCommentLines) {
@@ -40,8 +60,8 @@ TEST(LinksParser, skipsCommentLines) {
     auto rows = handlers::links::parse_links_tsv(in);
 
     ASSERT_EQ(rows.size(), 1u);
-    EXPECT_EQ(rows[0].first, "gene1");
-    EXPECT_EQ(rows[0].second, "gene2");
+    EXPECT_EQ(rows[0].source, "gene1");
+    EXPECT_EQ(rows[0].target, "gene2");
 }
 
 TEST(LinksParser, skipsBlankLines) {
@@ -49,7 +69,7 @@ TEST(LinksParser, skipsBlankLines) {
     auto rows = handlers::links::parse_links_tsv(in);
 
     ASSERT_EQ(rows.size(), 2u);
-    EXPECT_EQ(rows[1].first, "gene3");
+    EXPECT_EQ(rows[1].source, "gene3");
 }
 
 TEST(LinksParser, stripsTrailingCarriageReturn) {
@@ -58,8 +78,8 @@ TEST(LinksParser, stripsTrailingCarriageReturn) {
     auto rows = handlers::links::parse_links_tsv(in);
 
     ASSERT_EQ(rows.size(), 2u);
-    EXPECT_EQ(rows[0].second, "gene2");   // not "gene2\r"
-    EXPECT_EQ(rows[1].second, "gene4");
+    EXPECT_EQ(rows[0].target, "gene2");   // not "gene2\r"
+    EXPECT_EQ(rows[1].target, "gene4");
 }
 
 TEST(LinksParser, emptyInputYieldsNoRows) {
@@ -77,8 +97,8 @@ TEST(LinksParser, rejectsSingleColumn) {
     EXPECT_THROW(handlers::links::parse_links_tsv(in), std::runtime_error);
 }
 
-TEST(LinksParser, rejectsThreeColumns) {
-    auto in = tsv("gene1\tgene2\tgene3\n");
+TEST(LinksParser, rejectsFourColumns) {
+    auto in = tsv("gene1\tgene2\tmeta\textra\n");
     EXPECT_THROW(handlers::links::parse_links_tsv(in), std::runtime_error);
 }
 
@@ -89,6 +109,12 @@ TEST(LinksParser, rejectsEmptyColumn) {
 
     auto in2 = tsv("\tgene2\n");
     EXPECT_THROW(handlers::links::parse_links_tsv(in2), std::runtime_error);
+}
+
+TEST(LinksParser, rejectsEmptyMetadataColumn) {
+    // A present-but-empty 3rd column is ambiguous — reject rather than guess.
+    auto in = tsv("gene1\tgene2\t\n");
+    EXPECT_THROW(handlers::links::parse_links_tsv(in), std::runtime_error);
 }
 
 TEST(LinksParser, errorMessageNamesTheLineNumber) {

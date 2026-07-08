@@ -282,6 +282,38 @@ TEST_F(CLIIntersectE2ETest, InPlaceRequiresIndex) {
               std::string::npos);
 }
 
+TEST_F(CLIIntersectE2ETest, InPlaceQueriesIndexWithMetadataEdges) {
+    // Build a --links index whose edges carry 3rd-column metadata, then query
+    // it with --in-place. grove_view must parse the leaf blocks past the
+    // per-edge metadata bytes without misaligning — correct overlaps prove the
+    // block layout stayed aligned.
+    const fs::path links_target = test_data_dir / "target_links.bed";
+    ASSERT_TRUE(fs::exists(links_target)) << links_target;
+    const fs::path meta_links = fs::temp_directory_path() / "genogrove_e2e_meta_links.tsv";
+    {
+        std::ofstream out(meta_links);
+        out << "geneA\tgeneB\tscore=0.9\n"
+            << "geneA\tgeneC\thi_c=4.2\n";  // cross-chromosome edge with metadata
+    }
+
+    auto idx = run_command(cli(
+        "idx \"" + links_target.string() + "\" --links \"" + meta_links.string() +
+        "\" -o \"" + tmp_index.string() + "\""
+    ));
+    ASSERT_EQ(idx.exit_code, 0) << idx.output;
+
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -i \"" + tmp_index.string() +
+        "\" --in-place"
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos) << result.output;
+    EXPECT_NE(result.output.find("chr1\t600\t900"), std::string::npos) << result.output;
+    EXPECT_EQ(result.output.find("chr2"), std::string::npos) << result.output;
+
+    fs::remove(meta_links);
+}
+
 TEST_F(CLIIntersectE2ETest, IntersectIgnoresTargetWhenIndexGiven) {
     // -i takes precedence over -t: a nonexistent -t must not fail when a
     // valid index is supplied, since the target is ignored.

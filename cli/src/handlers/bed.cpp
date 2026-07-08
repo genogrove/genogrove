@@ -9,7 +9,7 @@ namespace handlers {
 namespace bed {
 
 void grove_insert(
-    ggs::grove<gdt::interval, gio::bed_entry>& grove,
+    ggs::grove<gdt::interval, gio::bed_entry, std::string>& grove,
     const std::string& filepath,
     bool sorted,
     name_to_key_map* name_map

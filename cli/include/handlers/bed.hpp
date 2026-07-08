@@ -37,7 +37,7 @@ using name_to_key_map = handlers::name_to_key_map<gio::bed_entry>;
 // duplicate name across two records throws `std::runtime_error`, since
 // `--links` requires every reachable name to resolve to exactly one interval.
 void grove_insert(
-    ggs::grove<gdt::interval, gio::bed_entry>& grove,
+    ggs::grove<gdt::interval, gio::bed_entry, std::string>& grove,
     const std::string& filepath,
     bool sorted = false,
     name_to_key_map* name_map = nullptr
