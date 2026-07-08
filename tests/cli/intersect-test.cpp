@@ -68,7 +68,7 @@ protected:
 // ==========================================
 
 TEST_F(CLIIntersectTest, GroveInsert) {
-    ggs::grove<gdt::interval, gio::bed_entry> grove(3);
+    ggs::grove<gdt::interval, gio::bed_entry, std::string> grove(3);
     handlers::bed::grove_insert(grove, target_path.string());
 
     // Verify chr1 entries: query with a wide interval covering all of chr1
@@ -83,7 +83,7 @@ TEST_F(CLIIntersectTest, GroveInsert) {
 }
 
 TEST_F(CLIIntersectTest, GroveIntersect) {
-    ggs::grove<gdt::interval, gio::bed_entry> grove(3);
+    ggs::grove<gdt::interval, gio::bed_entry, std::string> grove(3);
     handlers::bed::grove_insert(grove, target_path.string());
 
     std::ostringstream output;
@@ -102,7 +102,7 @@ TEST_F(CLIIntersectTest, GroveIntersect) {
 }
 
 TEST_F(CLIIntersectTest, GroveIntersectOutputFormat) {
-    ggs::grove<gdt::interval, gio::bed_entry> grove(3);
+    ggs::grove<gdt::interval, gio::bed_entry, std::string> grove(3);
     handlers::bed::grove_insert(grove, target_path.string());
 
     std::ostringstream output;
@@ -124,7 +124,7 @@ TEST_F(CLIIntersectTest, GroveIntersectOutputFormat) {
 
 TEST_F(CLIIntersectTest, GroveIntersectNoOverlaps) {
     // Create a grove with entries that don't overlap the query
-    ggs::grove<gdt::interval, gio::bed_entry> grove(3);
+    ggs::grove<gdt::interval, gio::bed_entry, std::string> grove(3);
 
     // Insert an interval that won't overlap with any query entries
     gio::bed_entry entry;
@@ -245,7 +245,7 @@ TEST_F(CLIIntersectTest, ValidateInPlaceWithoutIndexThrows) {
 
 TEST_F(CLIIntersectTest, OutputToFile) {
     // Build grove and intersect, writing to file
-    ggs::grove<gdt::interval, gio::bed_entry> grove(3);
+    ggs::grove<gdt::interval, gio::bed_entry, std::string> grove(3);
     handlers::bed::grove_insert(grove, target_path.string());
 
     {

@@ -128,7 +128,7 @@ void index::execute(const cxxopts::ParseResult& args) {
     // input row aborts before the output is opened, leaving any pre-existing
     // .gg at outputfile intact.
     if(filetype == gio::filetype::BED) {
-        ggs::grove<gdt::interval, gio::bed_entry> grove(order);
+        ggs::grove<gdt::interval, gio::bed_entry, std::string> grove(order);
 
         // Only build the name->key map when --links was requested. Without
         // --links the map is null and grove_insert pays no extra cost.
@@ -151,7 +151,7 @@ void index::execute(const cxxopts::ParseResult& args) {
             throw std::runtime_error("Error: failed to write index to: " + outputfile);
         }
     } else {  // GFF or GTF (validated above)
-        ggs::grove<gdt::interval, gio::gff_entry> grove(order);
+        ggs::grove<gdt::interval, gio::gff_entry, std::string> grove(order);
 
         // Only build the name->key map when --links was requested; without it
         // the map is null and grove_insert pays no extra cost (and reads no tag).

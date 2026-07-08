@@ -154,11 +154,11 @@ void intersect::execute(const cxxopts::ParseResult& args) {
                     "Error: query file must be BED to query a BED index");
             }
             if(in_place) {
-                auto grove = ggs::grove_view<gdt::interval, gio::bed_entry>::open(
+                auto grove = ggs::grove_view<gdt::interval, gio::bed_entry, std::string>::open(
                     index_path, data_offset);
                 handlers::bed::grove_intersect(grove, queryfile, *outputStream);
             } else {
-                auto grove = ggs::grove<gdt::interval, gio::bed_entry>::deserialize(in);
+                auto grove = ggs::grove<gdt::interval, gio::bed_entry, std::string>::deserialize(in);
                 handlers::bed::grove_intersect(grove, queryfile, *outputStream);
             }
         } else {  // GFF — gg_header::read() rejects any other value
@@ -167,11 +167,11 @@ void intersect::execute(const cxxopts::ParseResult& args) {
                     "Error: query file must be GFF or GTF to query a GFF index");
             }
             if(in_place) {
-                auto grove = ggs::grove_view<gdt::interval, gio::gff_entry>::open(
+                auto grove = ggs::grove_view<gdt::interval, gio::gff_entry, std::string>::open(
                     index_path, data_offset);
                 handlers::gff::grove_intersect(grove, queryfile, *outputStream);
             } else {
-                auto grove = ggs::grove<gdt::interval, gio::gff_entry>::deserialize(in);
+                auto grove = ggs::grove<gdt::interval, gio::gff_entry, std::string>::deserialize(in);
                 handlers::gff::grove_intersect(grove, queryfile, *outputStream);
             }
         }
@@ -185,7 +185,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
                 throw std::runtime_error(
                     "Error: query file must be BED for a BED target");
             }
-            ggs::grove<gdt::interval, gio::bed_entry> grove(k);
+            ggs::grove<gdt::interval, gio::bed_entry, std::string> grove(k);
             handlers::bed::grove_insert(grove, targetfile);
             handlers::bed::grove_intersect(grove, queryfile, *outputStream);
         } else if(is_gff_or_gtf(target_filetype)) {
@@ -193,7 +193,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
                 throw std::runtime_error(
                     "Error: query file must be GFF or GTF for a GFF target");
             }
-            ggs::grove<gdt::interval, gio::gff_entry> grove(k);
+            ggs::grove<gdt::interval, gio::gff_entry, std::string> grove(k);
             handlers::gff::grove_insert(grove, targetfile);
             handlers::gff::grove_intersect(grove, queryfile, *outputStream);
         } else {

@@ -36,7 +36,7 @@ using name_to_key_map = handlers::name_to_key_map<gio::gff_entry>;
 // tag as the identifier), as does a duplicate value across two records —
 // `--links` requires every name to resolve to exactly one interval.
 void grove_insert(
-    ggs::grove<gdt::interval, gio::gff_entry>& grove,
+    ggs::grove<gdt::interval, gio::gff_entry, std::string>& grove,
     const std::string& filepath,
     bool sorted = false,
     name_to_key_map* name_map = nullptr,

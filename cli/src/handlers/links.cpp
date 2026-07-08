@@ -22,28 +22,50 @@ void strip_trailing_cr(std::string& s) {
     }
 }
 
-// Split `line` on the first tab character. Returns (left, right) if exactly
-// one tab was found; otherwise std::nullopt-ish behaviour via the bool flag.
-bool split_two_columns(const std::string& line,
-                       std::string& out_a,
-                       std::string& out_b) {
-    const auto first_tab = line.find('\t');
-    if (first_tab == std::string::npos) {
-        return false;  // 1 column
+// Parse one non-comment line into a link_row. Accepts 2 columns
+// (source<TAB>target) or 3 (source<TAB>target<TAB>metadata). Every column must
+// be non-empty. Throws on 1 or 4+ columns, or any empty column, naming the
+// line number.
+link_row parse_row(const std::string& line, std::size_t line_num) {
+    auto fail = [line_num]() {
+        return std::runtime_error(
+            "Error: malformed links TSV at line " + std::to_string(line_num) +
+            ": expected 2 or 3 tab-separated non-empty columns "
+            "(source, target, [metadata])");
+    };
+
+    const auto tab1 = line.find('\t');
+    if (tab1 == std::string::npos) {
+        throw fail();  // 1 column
     }
-    if (line.find('\t', first_tab + 1) != std::string::npos) {
-        return false;  // 3+ columns
+    const auto tab2 = line.find('\t', tab1 + 1);
+
+    link_row row;
+    row.source.assign(line, 0, tab1);
+
+    if (tab2 == std::string::npos) {
+        row.target.assign(line, tab1 + 1, std::string::npos);  // 2 columns
+    } else {
+        if (line.find('\t', tab2 + 1) != std::string::npos) {
+            throw fail();  // 4+ columns
+        }
+        row.target.assign(line, tab1 + 1, tab2 - (tab1 + 1));
+        row.metadata = line.substr(tab2 + 1);  // 3 columns
+        if (row.metadata->empty()) {
+            throw fail();  // empty metadata column is ambiguous — reject
+        }
     }
-    out_a.assign(line, 0, first_tab);
-    out_b.assign(line, first_tab + 1, std::string::npos);
-    return !out_a.empty() && !out_b.empty();
+
+    if (row.source.empty() || row.target.empty()) {
+        throw fail();
+    }
+    return row;
 }
 
 } // namespace
 
-std::vector<std::pair<std::string, std::string>>
-parse_links_tsv(std::istream& is) {
-    std::vector<std::pair<std::string, std::string>> rows;
+std::vector<link_row> parse_links_tsv(std::istream& is) {
+    std::vector<link_row> rows;
     std::string line;
     std::size_t line_num = 0;
     while (std::getline(is, line)) {
@@ -52,13 +74,7 @@ parse_links_tsv(std::istream& is) {
         if (line.empty() || line.front() == '#') {
             continue;
         }
-        std::string a, b;
-        if (!split_two_columns(line, a, b)) {
-            throw std::runtime_error(
-                "Error: malformed links TSV at line " + std::to_string(line_num) +
-                ": expected 2 tab-separated non-empty columns");
-        }
-        rows.emplace_back(std::move(a), std::move(b));
+        rows.push_back(parse_row(line, line_num));
     }
     return rows;
 }
