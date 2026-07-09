@@ -39,7 +39,11 @@ template <handlers::interval_queryable grove_t, typename print_fn>
 void run_intersect(grove_t& grove, const std::string& queryfile,
                    gio::filetype query_type, std::ostream& out, print_fn print) {
     auto handle = [&](gdt::interval iv, const std::string& index) {
-        for (auto* result : grove.intersect(iv, index).get_keys()) {
+        // Bind the query_result to a local: get_keys() returns a reference into
+        // it, so iterating grove.intersect(...).get_keys() directly would dangle
+        // once the temporary is destroyed at the end of the range expression.
+        auto results = grove.intersect(iv, index);
+        for (auto* result : results.get_keys()) {
             print(out, result->get_data());
         }
     };

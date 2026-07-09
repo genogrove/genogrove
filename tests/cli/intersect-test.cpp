@@ -32,7 +32,8 @@ namespace {
 template <typename grove_t>
 void bed_intersect(grove_t& grove, const std::string& queryfile, std::ostream& out) {
     handlers::bed::for_each_bed_query(queryfile, [&](gdt::interval iv, const std::string& index) {
-        for (auto* result : grove.intersect(iv, index).get_keys()) {
+        auto results = grove.intersect(iv, index);  // bind: get_keys() refs into it
+        for (auto* result : results.get_keys()) {
             handlers::bed::print_bed_result(out, result->get_data());
         }
     });
