@@ -15,7 +15,6 @@
 #include <genogrove/io/bed_reader.hpp>
 #include <genogrove/structure/grove/grove.hpp>
 #include <handlers/name_map.hpp>
-#include <handlers/queryable.hpp>
 
 namespace handlers {
 namespace bed {
@@ -43,27 +42,22 @@ void grove_insert(
     name_to_key_map* name_map = nullptr
 );
 
-// Intersect a BED query file against a populated grove and write hits.
-// Constrained on interval_queryable so both the in-memory grove<> and the
-// partial-read grove_view<> can be queried through one implementation.
-template <interval_queryable grove_type>
-void grove_intersect(
-    grove_type& grove,
-    const std::string& queryfile,
-    std::ostream& output
-) {
+// Iterate a BED query file, invoking cb(interval, chrom) for each record. The
+// interval is in the CLI's canonical 0-based-inclusive space (BED is natively
+// 0-based half-open, hence end-1). Split from result printing so a BED query
+// can run against a target of any payload type (see run_intersect).
+template <typename F>
+void for_each_bed_query(const std::string& queryfile, F&& cb) {
     gio::bed_reader reader(queryfile);
-
     for (const auto& query_entry : reader) {
-        gdt::interval query(query_entry.start, query_entry.end - 1);
-        auto results = grove.intersect(query, query_entry.chrom);
-
-        for(auto* result : results.get_keys()) {
-            output << result->get_data().chrom << "\t"
-                   << result->get_data().start << "\t"
-                   << result->get_data().end << "\n";
-        }
+        cb(gdt::interval(query_entry.start, query_entry.end - 1), query_entry.chrom);
     }
+}
+
+// Print one result row for a BED-payload hit. The output format tracks the
+// target payload type, independent of the query file type.
+inline void print_bed_result(std::ostream& output, const gio::bed_entry& payload) {
+    output << payload.chrom << "\t" << payload.start << "\t" << payload.end << "\n";
 }
 
 } // namespace bed

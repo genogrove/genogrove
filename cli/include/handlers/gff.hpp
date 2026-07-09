@@ -13,7 +13,6 @@
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/gff_reader.hpp>
 #include <handlers/name_map.hpp>
-#include <handlers/queryable.hpp>
 
 namespace handlers {
 namespace gff {
@@ -43,27 +42,24 @@ void grove_insert(
     std::string_view name_tag = {}
 );
 
-// Intersect a GFF/GTF query file against a populated grove and write hits.
-// Constrained on interval_queryable so both the in-memory grove<> and the
-// partial-read grove_view<> can be queried through one implementation.
-template <interval_queryable grove_type>
-void grove_intersect(
-    grove_type& grove,
-    const std::string& queryfile,
-    std::ostream& output
-) {
+// Iterate a GFF/GTF query file, invoking cb(interval, seqid) for each record.
+// The interval is converted to the CLI's canonical 0-based-inclusive space:
+// GFF is 1-based inclusive, so [start, end] -> interval(start-1, end-1). This
+// matches the BED conversion, so a GFF query and a BED query over the same
+// physical region produce the same interval (see run_intersect). Split from
+// result printing so a GFF query can run against a target of any payload type.
+template <typename F>
+void for_each_gff_query(const std::string& queryfile, F&& cb) {
     gio::gff_reader reader(queryfile);
-
     for (const auto& query_entry : reader) {
-        gdt::interval query(query_entry.start, query_entry.end);
-        auto results = grove.intersect(query, query_entry.seqid);
-
-        for(auto* result : results.get_keys()) {
-            output << result->get_data().seqid << "\t"
-                   << result->get_data().start << "\t"
-                   << result->get_data().end << "\n";
-        }
+        cb(gdt::interval(query_entry.start - 1, query_entry.end - 1), query_entry.seqid);
     }
+}
+
+// Print one result row for a GFF-payload hit. The output format tracks the
+// target payload type, independent of the query file type.
+inline void print_gff_result(std::ostream& output, const gio::gff_entry& payload) {
+    output << payload.seqid << "\t" << payload.start << "\t" << payload.end << "\n";
 }
 
 } // namespace gff
