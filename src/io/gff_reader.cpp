@@ -144,6 +144,9 @@ namespace genogrove::io {
             if (ec1 != std::errc{} || ec2 != std::errc{}) {
                 throw std::runtime_error("Invalid GFF coordinates (out of range) in " + fpath.string());
             }
+            if (start_num < 1) {
+                throw std::runtime_error("Invalid GFF coordinates (start must be >= 1, GFF is 1-based) in " + fpath.string());
+            }
             if (start_num > end_num) {
                 throw std::runtime_error("Invalid GFF coordinates (start > end) in " + fpath.string());
             }
@@ -374,6 +377,14 @@ namespace genogrove::io {
             auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end);
             if (ec1 != std::errc{} || ec2 != std::errc{}) {
                 error_message = "Coordinate out of range at line " + std::to_string(line_num);
+                return false;
+            }
+
+            // GFF columns 4/5 are 1-based, so start must be >= 1. Reject 0 here
+            // rather than let a downstream 0-based conversion (start - 1)
+            // underflow (see genogrove#474).
+            if (start < 1) {
+                error_message = "Start coordinate must be >= 1 (GFF is 1-based) at line " + std::to_string(line_num);
                 return false;
             }
 
