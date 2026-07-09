@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(genogrove VERSION 0.24.8)
+project(genogrove VERSION 0.25.0)
 
 find_package(PkgConfig REQUIRED)
 find_package(ZLIB REQUIRED)
