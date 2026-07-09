@@ -72,6 +72,7 @@ protected:
     fs::path query_path;
     fs::path gff_target_path;
     fs::path gff_query_path;
+    fs::path vcf_query_path;
     fs::path tmp_output;
     fs::path tmp_index;
     fs::path tmp_gff_index;
@@ -83,6 +84,7 @@ protected:
         query_path = test_data_dir / "query.bed";
         gff_target_path = test_data_dir / "target.gff";
         gff_query_path = test_data_dir / "query.gff";
+        vcf_query_path = test_data_dir / "query.vcf";
         tmp_output = fs::temp_directory_path() / "genogrove_e2e_test_output.bed";
         tmp_index = fs::temp_directory_path() / "genogrove_e2e_test_index.gg";
         tmp_gff_index = fs::temp_directory_path() / "genogrove_e2e_test_index_gff.gg";
@@ -92,6 +94,7 @@ protected:
         ASSERT_TRUE(fs::exists(query_path)) << "Query test data not found: " << query_path;
         ASSERT_TRUE(fs::exists(gff_target_path)) << "GFF target test data not found: " << gff_target_path;
         ASSERT_TRUE(fs::exists(gff_query_path)) << "GFF query test data not found: " << gff_query_path;
+        ASSERT_TRUE(fs::exists(vcf_query_path)) << "VCF query test data not found: " << vcf_query_path;
     }
 
     void TearDown() override {
@@ -414,6 +417,56 @@ TEST_F(CLIIntersectE2ETest, CrossTypeGffQueryAgainstBedIndex) {
 
     auto result = run_command(cli(
         "isec -q \"" + gff_query_path.string() + "\" -i \"" + tmp_index.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos) << result.output;
+    EXPECT_NE(result.output.find("chr1\t600\t900"), std::string::npos) << result.output;
+    EXPECT_EQ(result.output.find("chr2"), std::string::npos) << result.output;
+}
+
+// ==========================================
+// VCF query (role 1): VCF is a valid query format, never a target payload.
+// vcf_entry maps to the same 0-based space as BED, so a VCF query lines up
+// with BED/GFF targets. query.vcf: chr1 POS 200 (SNP) and POS 850 hit the
+// chr1 targets; POS 301 REF=ATGC (multi-base) also hits chr1 100-500; chr2
+// POS 550 misses chr2 200-400.
+// ==========================================
+
+TEST_F(CLIIntersectE2ETest, VcfQueryAgainstBedTarget) {
+    auto result = run_command(cli(
+        "isec -q \"" + vcf_query_path.string() +
+        "\" -t \"" + target_path.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos) << result.output;
+    EXPECT_NE(result.output.find("chr1\t600\t900"), std::string::npos) << result.output;
+    EXPECT_EQ(result.output.find("chr2"), std::string::npos) << result.output;
+}
+
+TEST_F(CLIIntersectE2ETest, VcfQueryAgainstGffTarget) {
+    // VCF query, GFF target -> GFF-format output rows. Same overlaps land on
+    // gene1 (chr1 101-500) and gene2 (chr1 601-900); chr2 misses gene3.
+    auto result = run_command(cli(
+        "isec -q \"" + vcf_query_path.string() +
+        "\" -t \"" + gff_target_path.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("chr1\t101\t500"), std::string::npos) << result.output;
+    EXPECT_NE(result.output.find("chr1\t601\t900"), std::string::npos) << result.output;
+    EXPECT_EQ(result.output.find("chr2"), std::string::npos) << result.output;
+}
+
+TEST_F(CLIIntersectE2ETest, VcfQueryAgainstPrebuiltIndexInPlace) {
+    // A VCF query touches only the query side, so --in-place partial-read of a
+    // BED index works unchanged — proves query/payload independence end to end.
+    auto idx_result = run_command(cli(
+        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
+    ));
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
+
+    auto result = run_command(cli(
+        "isec -q \"" + vcf_query_path.string() + "\" -i \"" + tmp_index.string() +
+        "\" --in-place"
     ));
     EXPECT_EQ(result.exit_code, 0) << result.output;
     EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos) << result.output;
