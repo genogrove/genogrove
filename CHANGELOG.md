@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **GFF `start` coordinate < 1 rejected**: `gff_reader` accepted `start == 0` (it only checked `start > end`), which flowed into the CLI's 0-based conversion `interval(start - 1, end - 1)` and underflowed `size_t` to `SIZE_MAX`, corrupting B+ tree ordering. `start < 1` is now rejected in both the constructor's first-record validation and the per-record `parse_line` path (GFF columns 4/5 are 1-based); the error message names the line. `start == 1` is unaffected. ([#474](https://github.com/genogrove/genogrove/issues/474), [#476](https://github.com/genogrove/genogrove/pull/476))
+
 ## [0.25.0] - 2026-07-08
 
 ### Added

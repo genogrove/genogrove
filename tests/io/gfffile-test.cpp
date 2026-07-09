@@ -393,6 +393,40 @@ TEST_F(gfffileTest, validationInvalidCoordinateRange) {
     fs::remove(temp_file);
 }
 
+TEST_F(gfffileTest, validationRejectsZeroStart) {
+    // GFF is 1-based, so start == 0 is malformed; it must be rejected rather
+    // than flow into a 0-based conversion and underflow (genogrove#474).
+    fs::path temp_file = test_data_dir / "temp_zero_start.gff";
+    std::ofstream out(temp_file);
+    out << "chr1\tHAVANA\tgene\t0\t500\t.\t+\t.\tID=gene1\n";  // start == 0
+    out.close();
+
+    // Constructor validates the first record and throws.
+    EXPECT_THROW({
+        gio::gff_reader reader(temp_file);
+    }, std::runtime_error);
+
+    fs::remove(temp_file);
+}
+
+TEST_F(gfffileTest, readNextRejectsZeroStart) {
+    // Per-record parse path (parse_line) must also reject start == 0: a valid
+    // first record followed by a zero-start record throws by default.
+    fs::path temp_file = test_data_dir / "temp_zero_start_second.gff";
+    std::ofstream out(temp_file);
+    out << "chr1\tHAVANA\tgene\t100\t500\t.\t+\t.\tID=gene1\n";  // valid
+    out << "chr1\tHAVANA\tgene\t0\t400\t.\t+\t.\tID=gene2\n";    // start == 0
+    out.close();
+
+    gio::gff_reader reader(temp_file);
+    gio::gff_entry entry;
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.start, 100u);
+    EXPECT_THROW(reader.read_next(entry), std::runtime_error);
+
+    fs::remove(temp_file);
+}
+
 TEST_F(gfffileTest, validationEmptyFile) {
     // Empty file: structurally valid but zero records. Constructor must not
     // throw; iterator must immediately equal end(). See #310.
