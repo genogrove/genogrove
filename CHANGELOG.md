@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **VCF/BCF as an `isec` query format**: VCF and BCF files are now accepted as the `-q` query to `intersect`, searchable against BED or GFF targets and prebuilt indexes (eager or `--in-place`). A new query-only handler (`for_each_vcf_query`) maps each record to the CLI's canonical 0-based space exactly like BED — `interval(start, end - 1)` where `end = pos + len(REF)`, so a SNP becomes a single-base interval and `len(REF) >= 1` rules out `size_t` underflow. VCF is query-only (never a target/index payload), so there is no `.gg` format change and the index side is untouched. The `.bcf` extension now maps to `filetype::VCF` so binary BCF queries are accepted (`vcf_reader` already handles both). Adds VCF-query e2e tests (against BED and GFF targets, plus `--in-place`) and `.vcf`/`.bcf` filetype-detector tests. ([#478](https://github.com/genogrove/genogrove/pull/478))
+
 ## [0.25.1] - 2026-07-09
 
 ### Fixed
