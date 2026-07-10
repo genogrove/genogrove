@@ -162,6 +162,23 @@ TEST_F(filetypeDetectorTest, compressedGtfFile) {
     EXPECT_EQ(comp, gio::compression_type::GZIP);
 }
 
+TEST_F(filetypeDetectorTest, vcfExtension) {
+    gio::filetype_detector detector;
+    auto [ftype, comp] = detector.detect_filetype(test_data_dir / "test.vcf");
+
+    EXPECT_EQ(ftype, gio::filetype::VCF);
+    EXPECT_EQ(comp, gio::compression_type::NONE);
+}
+
+TEST_F(filetypeDetectorTest, bcfExtensionResolvesToVcf) {
+    // .bcf maps to the same VCF filetype so the CLI can accept binary BCF as a
+    // query; vcf_reader handles both. test_region.bcf is a real binary BCF.
+    gio::filetype_detector detector;
+    auto [ftype, comp] = detector.detect_filetype(test_data_dir / "test_region.bcf");
+
+    EXPECT_EQ(ftype, gio::filetype::VCF);
+}
+
 // ==========================================
 // Edge Cases
 // ==========================================

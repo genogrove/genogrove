@@ -6,6 +6,7 @@
 #include <subcalls/intersect.hpp>
 #include <handlers/bed.hpp>
 #include <handlers/gff.hpp>
+#include <handlers/vcf.hpp>
 
 #include <genogrove/io/filetype_detector.hpp>
 #include <genogrove/io/gg_format.hpp>
@@ -49,6 +50,8 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
     };
     if (query_type == gio::filetype::BED) {
         handlers::bed::for_each_bed_query(queryfile, handle);
+    } else if (query_type == gio::filetype::VCF) {
+        handlers::vcf::for_each_vcf_query(queryfile, handle);
     } else {  // GFF / GTF (validated before dispatch)
         handlers::gff::for_each_gff_query(queryfile, handle);
     }
@@ -161,9 +164,10 @@ void intersect::execute(const cxxopts::ParseResult& args) {
     // are independent — a BED query may run against a GFF index and vice versa.
     // The query must still be a supported interval format.
     auto [query_filetype, query_compression] = gio::filetype_detector().detect_filetype(queryfile);
-    if(query_filetype != gio::filetype::BED && !is_gff_or_gtf(query_filetype)) {
+    if(query_filetype != gio::filetype::BED && query_filetype != gio::filetype::VCF
+       && !is_gff_or_gtf(query_filetype)) {
         throw std::runtime_error(
-            "Error: query file must be BED, GFF, or GTF");
+            "Error: query file must be BED, GFF, GTF, or VCF");
     }
 
     // validate() guarantees at least one of -i / -t is present; when both are
