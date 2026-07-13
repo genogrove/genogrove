@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -176,7 +177,14 @@ TEST(GroveViewTest, EdgePayloadsSurfaceThroughView) {
     ASSERT_EQ(strong.size(), 1u);
     EXPECT_EQ(strong[0]->get_data(), "geneB");  // target block paged in on demand
 
+    // A predicate that matches nothing returns empty (no target block touched).
+    EXPECT_TRUE(view.get_neighbors_if(
+                        src, [](const std::string& m) { return m == "nonexistent"; })
+                    .empty());
+
     EXPECT_EQ(view.get_edges(nullptr).size(), 0u);
+    EXPECT_THROW(view.get_neighbors_if(nullptr, [](const std::string&) { return true; }),
+                 std::invalid_argument);
 
     fs::remove(path);
 }

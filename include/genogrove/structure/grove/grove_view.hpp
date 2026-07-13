@@ -137,7 +137,9 @@ class grove_view {
      * @brief Metadata of every outgoing edge of `source`, in edge order.
      *
      * Only available when edge_data_type is non-void. Reads nothing extra: the
-     * metadata was parsed and kept when `source`'s block was paged in.
+     * metadata was parsed and kept when `source`'s block was paged in. Returns
+     * an empty vector if `source` is null or has no recorded edges (unlike the
+     * target-resolving get_neighbors / get_neighbors_if, which throw on null).
      */
     template <typename M = edge_data_type>
     [[nodiscard]] std::vector<M> get_edges(const key_t* source) const
