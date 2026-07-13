@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -142,6 +143,48 @@ TEST(GroveViewTest, CrossChromosomeNeighbors) {
     auto nb = view.get_neighbors(rb.get_keys()[0]);
     ASSERT_EQ(nb.size(), 1u);
     EXPECT_EQ(nb[0]->get_data(), "geneA");
+
+    fs::remove(path);
+}
+
+TEST(GroveViewTest, EdgePayloadsSurfaceThroughView) {
+    // Edge metadata is parsed and kept when a block is paged in, so get_edges /
+    // get_neighbors_if work without a full deserialize.
+    using grove_t = gst::grove<gdt::interval, std::string, std::string>;
+    fs::path path;
+    {
+        grove_t g(4);
+        auto* a = g.insert_data("chr7", gdt::interval{100, 200}, "geneA", gst::sorted);
+        auto* b = g.insert_data("chr9", gdt::interval{300, 400}, "geneB", gst::sorted);
+        auto* c = g.insert_data("chr9", gdt::interval{500, 600}, "geneC", gst::sorted);
+        g.add_edge(a, b, std::string{"strong"});
+        g.add_edge(a, c, std::string{"weak"});
+        path = write_grove(g, "edgepayload");
+    }
+
+    auto view = gst::grove_view<gdt::interval, std::string, std::string>::open(path.string());
+
+    auto ra = view.intersect(gdt::interval{100, 200}, "chr7");
+    ASSERT_EQ(ra.get_keys().size(), 1u);
+    const auto* src = ra.get_keys()[0];
+
+    auto meta = view.get_edges(src);
+    std::sort(meta.begin(), meta.end());
+    EXPECT_EQ(meta, (std::vector<std::string>{"strong", "weak"}));
+
+    auto strong = view.get_neighbors_if(
+        src, [](const std::string& m) { return m == "strong"; });
+    ASSERT_EQ(strong.size(), 1u);
+    EXPECT_EQ(strong[0]->get_data(), "geneB");  // target block paged in on demand
+
+    // A predicate that matches nothing returns empty (no target block touched).
+    EXPECT_TRUE(view.get_neighbors_if(
+                        src, [](const std::string& m) { return m == "nonexistent"; })
+                    .empty());
+
+    EXPECT_EQ(view.get_edges(nullptr).size(), 0u);
+    EXPECT_THROW(view.get_neighbors_if(nullptr, [](const std::string&) { return true; }),
+                 std::invalid_argument);
 
     fs::remove(path);
 }
