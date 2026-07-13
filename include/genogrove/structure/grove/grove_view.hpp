@@ -6,6 +6,7 @@
 #ifndef GENOGROVE_STRUCTURE_GROVE_GROVE_VIEW_HPP
 #define GENOGROVE_STRUCTURE_GROVE_GROVE_VIEW_HPP
 
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <deque>
@@ -17,7 +18,9 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include "genogrove/data_type/key.hpp"
@@ -130,6 +133,52 @@ class grove_view {
         return out;
     }
 
+    /**
+     * @brief Metadata of every outgoing edge of `source`, in edge order.
+     *
+     * Only available when edge_data_type is non-void. Reads nothing extra: the
+     * metadata was parsed and kept when `source`'s block was paged in.
+     */
+    template <typename M = edge_data_type>
+    [[nodiscard]] std::vector<M> get_edges(const key_t* source) const
+        requires(!std::is_void_v<edge_data_type>) {
+        std::vector<M> out;
+        auto it = adjacency.find(source);
+        if (it != adjacency.end()) {
+            out.reserve(it->second.size());
+            for (const auto& e : it->second) {
+                out.push_back(e.meta);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * @brief Outgoing neighbors of `source` whose edge metadata satisfies `pred`.
+     *
+     * Only available when edge_data_type is non-void. Resolves the surviving
+     * targets' blocks on demand, exactly like get_neighbors.
+     */
+    template <typename Predicate>
+    [[nodiscard]] std::vector<key_t*> get_neighbors_if(const key_t* source, Predicate pred)
+        requires(!std::is_void_v<edge_data_type> &&
+                 std::predicate<Predicate, const edge_data_type&>) {
+        if (source == nullptr) {
+            throw std::invalid_argument("get_neighbors_if: source must not be null");
+        }
+        std::vector<key_t*> out;
+        auto it = adjacency.find(source);
+        if (it == adjacency.end()) {
+            return out;
+        }
+        for (const auto& e : it->second) {
+            if (pred(e.meta)) {
+                out.push_back(resolve_target(e.tb, e.ts));
+            }
+        }
+        return out;
+    }
+
     /// Blocks paged in so far — for tests asserting a query is actually partial.
     [[nodiscard]] std::size_t blocks_loaded() const { return node_cache.size() + ext_cache.size(); }
     /// Total block count from the directory.
@@ -139,6 +188,8 @@ class grove_view {
     struct edge_ref {
         detail::block_id tb;
         std::uint32_t ts;
+        [[no_unique_address]]
+        std::conditional_t<std::is_void_v<edge_data_type>, std::monostate, edge_data_type> meta;
     };
     struct loaded_node {
         std::unique_ptr<node_t> n;
@@ -341,8 +392,9 @@ class grove_view {
         return ins->second;
     }
 
-    // Record a key's outgoing edges as (target_block, target_slot). Edge metadata
-    // is consumed to stay aligned but discarded — get_neighbors needs only targets.
+    // Record a key's outgoing edges as (target_block, target_slot[, metadata]).
+    // Metadata is kept when edge_data_type is non-void so get_edges /
+    // get_neighbors_if can surface it without a full deserialize.
     void read_key_edges(std::istream& zis, const key_t* src) {
         std::uint32_t ecount;
         detail::read_pod(zis, ecount);
@@ -358,16 +410,18 @@ class grove_view {
             if (!zis) {
                 throw std::runtime_error("grove_view: stream error reading edge");
             }
-            if constexpr (!std::is_void_v<edge_data_type>) {
-                (void)gdt::serializer<edge_data_type>::read(zis);
-                if (!zis) {
-                    throw std::runtime_error("grove_view: stream error reading edge metadata");
-                }
-            }
             if (bucket == nullptr) {
                 bucket = &adjacency[src];
             }
-            bucket->push_back(edge_ref{tb, ts});
+            if constexpr (std::is_void_v<edge_data_type>) {
+                bucket->push_back(edge_ref{tb, ts, {}});
+            } else {
+                edge_data_type meta = gdt::serializer<edge_data_type>::read(zis);
+                if (!zis) {
+                    throw std::runtime_error("grove_view: stream error reading edge metadata");
+                }
+                bucket->push_back(edge_ref{tb, ts, std::move(meta)});
+            }
         }
     }
 

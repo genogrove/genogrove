@@ -146,6 +146,41 @@ TEST(GroveViewTest, CrossChromosomeNeighbors) {
     fs::remove(path);
 }
 
+TEST(GroveViewTest, EdgePayloadsSurfaceThroughView) {
+    // Edge metadata is parsed and kept when a block is paged in, so get_edges /
+    // get_neighbors_if work without a full deserialize.
+    using grove_t = gst::grove<gdt::interval, std::string, std::string>;
+    fs::path path;
+    {
+        grove_t g(4);
+        auto* a = g.insert_data("chr7", gdt::interval{100, 200}, "geneA", gst::sorted);
+        auto* b = g.insert_data("chr9", gdt::interval{300, 400}, "geneB", gst::sorted);
+        auto* c = g.insert_data("chr9", gdt::interval{500, 600}, "geneC", gst::sorted);
+        g.add_edge(a, b, std::string{"strong"});
+        g.add_edge(a, c, std::string{"weak"});
+        path = write_grove(g, "edgepayload");
+    }
+
+    auto view = gst::grove_view<gdt::interval, std::string, std::string>::open(path.string());
+
+    auto ra = view.intersect(gdt::interval{100, 200}, "chr7");
+    ASSERT_EQ(ra.get_keys().size(), 1u);
+    const auto* src = ra.get_keys()[0];
+
+    auto meta = view.get_edges(src);
+    std::sort(meta.begin(), meta.end());
+    EXPECT_EQ(meta, (std::vector<std::string>{"strong", "weak"}));
+
+    auto strong = view.get_neighbors_if(
+        src, [](const std::string& m) { return m == "strong"; });
+    ASSERT_EQ(strong.size(), 1u);
+    EXPECT_EQ(strong[0]->get_data(), "geneB");  // target block paged in on demand
+
+    EXPECT_EQ(view.get_edges(nullptr).size(), 0u);
+
+    fs::remove(path);
+}
+
 TEST(GroveViewTest, NeighborResolvesIntoDistributedExternalBlock) {
     // Edge target lives in the 3rd external chunk; get_neighbors must page in that
     // one external block (not all of them) and resolve (block_id, slot) correctly.
