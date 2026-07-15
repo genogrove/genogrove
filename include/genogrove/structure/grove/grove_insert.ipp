@@ -185,7 +185,7 @@ public:
      * @throws std::runtime_error if insertion fails
      * @note Creates a new root if index doesn't exist; handles node splits automatically
      */
-    gdt::key<key_type, data_type>* insert(std::string_view index, gdt::key<key_type, data_type>& key) {
+    gdt::key<key_type, data_type>* insert(std::string_view index, const gdt::key<key_type, data_type>& key) {
         // get the root node for the given chromosome (or create a new one if it doesn't exist)
         node<key_type, data_type>* root = this->get_root(index);
         if(root == nullptr) {
@@ -228,7 +228,7 @@ private:
      * @return Pointer to the inserted key in the tree, or nullptr on failure
      * @note This is a helper function for insert(); handles recursive traversal and leaf insertion
      */
-    gdt::key<key_type, data_type>* insert_iter(node<key_type, data_type>* node, gdt::key<key_type, data_type>& key,
+    gdt::key<key_type, data_type>* insert_iter(node<key_type, data_type>* node, const gdt::key<key_type, data_type>& key,
                                                std::string_view index) {
         if(!node) {
             throw std::runtime_error("Null node passed to insert_iter");
@@ -406,7 +406,7 @@ private:
      * @note Assumes key is greater than all existing keys in the index; bypasses tree traversal
      * @note Significantly faster than regular insert() for sorted data
      */
-    gdt::key<key_type, data_type>* insert_sorted(std::string_view index, gdt::key<key_type, data_type>& key) {
+    gdt::key<key_type, data_type>* insert_sorted(std::string_view index, const gdt::key<key_type, data_type>& key) {
         node<key_type, data_type>* root = this->get_root(index);
         if(root == nullptr) {
             root = this->insert_root(index);

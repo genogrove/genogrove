@@ -105,9 +105,15 @@ namespace genogrove::data_type {
              * When data_t is void: Creates a key with only the value.
              * When data_t is non-void: Creates a key with value and default-constructed data.
              *
+             * Value-initializes `data{}`, so it requires data_t to be default-
+             * constructible when non-void (void's monostate stand-in always is).
+             * The constraint keeps it out of overload resolution for a non-default-
+             * constructible data_t rather than hard-erroring in the member initializer.
+             *
              * @param kvalue The key value (moved into the key)
              */
             explicit key(key_t kvalue)
+                requires (std::is_void_v<data_t> || std::default_initializable<data_t>)
                 : value(std::move(kvalue)), data{} {}
 
             /**
@@ -186,7 +192,7 @@ namespace genogrove::data_type {
              * @note Returns by const reference for efficiency
              */
             template<typename D = data_t>
-            [[nodiscard]] const D& get_data() const noexcept requires (!std::is_void_v<D>) {
+            [[nodiscard]] const D& get_data() const noexcept requires (!std::is_void_v<data_t>) {
                     return data;
             }
 
@@ -203,7 +209,7 @@ namespace genogrove::data_type {
              * @note Useful for efficient in-place updates
              */
             template<typename D = data_t>
-            [[nodiscard]] D& get_data() noexcept requires (!std::is_void_v<D>) {
+            [[nodiscard]] D& get_data() noexcept requires (!std::is_void_v<data_t>) {
                 return data;
             }
 
@@ -218,7 +224,7 @@ namespace genogrove::data_type {
              * @note This method only exists when data_t != void
              */
             template<typename D = data_t>
-            void set_data(D new_data) requires (!std::is_void_v<D>) {
+            void set_data(D new_data) requires (!std::is_void_v<data_t>) {
                     data = std::move(new_data);
             }
 
@@ -241,7 +247,7 @@ namespace genogrove::data_type {
              *
              * @return String representation of the key value
              */
-            std::string to_string() const {
+            [[nodiscard]] std::string to_string() const {
                 return value.to_string();
             }
 

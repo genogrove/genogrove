@@ -135,7 +135,7 @@ class node {
      * @brief Get the B+ tree order of this node
      * @return The order value (max children = order, max keys = order-1)
      */
-    int get_order() const noexcept {
+    [[nodiscard]] int get_order() const noexcept {
         return this->order;
     }
 
@@ -144,7 +144,7 @@ class node {
      * @return Reference to vector of key pointers
      * @note Keys are pointers to entries in grove's deque, not owned by node
      */
-    std::vector<gdt::key<key_type, data_type>*>& get_keys() {
+    [[nodiscard]] std::vector<gdt::key<key_type, data_type>*>& get_keys() {
         return this->keys;
     }
 
@@ -152,7 +152,7 @@ class node {
      * @brief Get const reference to the keys vector
      * @return Const reference to vector of key pointers
      */
-    const std::vector<gdt::key<key_type, data_type>*>& get_keys() const {
+    [[nodiscard]] const std::vector<gdt::key<key_type, data_type>*>& get_keys() const {
         return this->keys;
     }
 
@@ -161,7 +161,7 @@ class node {
      * @return Reference to vector of child node pointers
      * @note Children are owned by this node and will be deleted in destructor
      */
-    std::vector<node<key_type, data_type>*>& get_children() {
+    [[nodiscard]] std::vector<node<key_type, data_type>*>& get_children() {
         return this->children;
     }
 
@@ -169,7 +169,7 @@ class node {
      * @brief Get const reference to the children vector
      * @return Const reference to vector of child node pointers
      */
-    const std::vector<node<key_type, data_type>*>& get_children() const {
+    [[nodiscard]] const std::vector<node<key_type, data_type>*>& get_children() const {
         return this->children;
     }
 
@@ -177,7 +177,7 @@ class node {
      * @brief Get pointer to parent node
      * @return Pointer to parent node, or nullptr if this is root
      */
-    node* get_parent() const noexcept {
+    [[nodiscard]] node* get_parent() const noexcept {
         return this->parent;
     }
 
@@ -194,7 +194,7 @@ class node {
      * @return Pointer to next leaf node, or nullptr if no next sibling
      * @note Only meaningful for leaf nodes that are chained together
      */
-    node* get_next() const noexcept {
+    [[nodiscard]] node* get_next() const noexcept {
         return this->next;
     }
 
@@ -211,7 +211,7 @@ class node {
      * @brief Check if this node is a leaf
      * @return True if this is a leaf node, false if internal node
      */
-    bool get_is_leaf() const noexcept {
+    [[nodiscard]] bool get_is_leaf() const noexcept {
         return this->is_leaf;
     }
 
@@ -280,7 +280,7 @@ class node {
      * For example with intervals: returns the bounding interval (min start, max
      * end) of this node's keys.
      */
-    [[nodiscard]] key_type calc_keys_aggregate() {
+    [[nodiscard]] key_type calc_keys_aggregate() const {
         if (this->keys.empty()) {
             throw std::runtime_error("calc_keys_aggregate called on node with no keys");
         }
@@ -306,7 +306,7 @@ class node {
      * calc_keys_aggregate() would leave the separator too narrow to reach
      * keys in the catch-all chain.
      */
-    [[nodiscard]] key_type calc_subtree_range() {
+    [[nodiscard]] key_type calc_subtree_range() const {
         if (this->is_leaf || this->children.empty()) {
             return calc_keys_aggregate();
         }
@@ -342,7 +342,7 @@ class node {
      * @return Pointer to the child node
      * @throws std::out_of_range if index is invalid
      */
-    node* get_child(int index) {
+    [[nodiscard]] node* get_child(int index) {
         if(index < 0 || static_cast<size_t>(index) >= this->children.size()) {
             throw std::out_of_range("child index out of range");
         }
@@ -355,7 +355,7 @@ class node {
      * @return Pointer to the child node
      * @throws std::out_of_range if index is invalid
      */
-    node* get_child(int index) const {
+    [[nodiscard]] node* get_child(int index) const {
         if(index < 0 || static_cast<size_t>(index) >= this->children.size()) {
             throw std::out_of_range("child index out of range");
         }

@@ -169,7 +169,7 @@ class grove {
      * @brief Get the order (maximum capacity) of the grove
      * @return The order of the B+ tree (maximum number of keys per node)
      */
-    int get_order() const {
+    [[nodiscard]] int get_order() const {
         return this->order;
     }
 
@@ -178,7 +178,7 @@ class grove {
      * @brief Get map of all root nodes indexed by their string keys
      * @return Const reference to unordered map from index names (e.g., chromosome names) to root node pointers
      */
-    const std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>>& get_root_nodes() const {
+    [[nodiscard]] const std::unordered_map<std::string, node<key_type, data_type>*, string_hash, std::equal_to<>>& get_root_nodes() const {
         return this->root_nodes;
     }
 
@@ -188,7 +188,7 @@ class grove {
      * @return Pointer to rightmost leaf node, or nullptr if index doesn't exist
      * @note Used for optimized sorted insertion
      */
-    node<key_type, data_type>* get_rightmost_node(std::string_view key) const {
+    [[nodiscard]] node<key_type, data_type>* get_rightmost_node(std::string_view key) const {
         return ggu::value_lookup(this->rightmost_nodes, key).value_or(nullptr);
     }
 

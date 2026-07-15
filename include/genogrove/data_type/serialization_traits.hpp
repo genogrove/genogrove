@@ -106,7 +106,7 @@ struct serializer {
         }
     }
 
-    static T read(std::istream& is) {
+    [[nodiscard]] static T read(std::istream& is) {
         if constexpr(has_deserialize<T>) {
             return T::deserialize(is);
         } else {
