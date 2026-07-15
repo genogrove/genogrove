@@ -66,16 +66,16 @@ constexpr std::string_view DEFAULT_TREE_ORDER = "3";
 cxxopts::Options intersect::parse_args(int argc, char** argv) {
     cxxopts::Options options("intersect", "Search for interval overlaps in the index");
     options.add_options()
-            ("q,queryfile", "The query file to be indexed",
+            ("q,queryfile", "The query file to search for overlaps (BED, GFF/GTF, or VCF)",
              cxxopts::value<std::string>())
-            ("t,targetfile", "The target BED file to build the grove from",
+            ("t,targetfile", "The target file to build the grove from (BED or GFF/GTF)",
                     cxxopts::value<std::string>())
             ("i,indexfile", "A prebuilt .gg index to search against",
                     cxxopts::value<std::string>())
             ("in-place", "Query the prebuilt index (-i) in place: read only the "
                          "blocks each query touches instead of loading the whole "
                          "file into memory (requires -i)")
-            ("o,outputfile", "Write the index to the specified file",
+            ("o,outputfile", "Write the intersection results to the specified file",
              cxxopts::value<std::string>()->default_value("stdout"))
             ("k,order", "The order of the tree",
              cxxopts::value<int>()->default_value(std::string(DEFAULT_TREE_ORDER)))
@@ -163,7 +163,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
     // format follows the target/index payload type. So query and target types
     // are independent — a BED query may run against a GFF index and vice versa.
     // The query must still be a supported interval format.
-    auto [query_filetype, query_compression] = gio::filetype_detector().detect_filetype(queryfile);
+    auto [query_filetype, _] = gio::filetype_detector().detect_filetype(queryfile);
     if(query_filetype != gio::filetype::BED && query_filetype != gio::filetype::VCF
        && !is_gff_or_gtf(query_filetype)) {
         throw std::runtime_error(
@@ -209,7 +209,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
         }
     } else {
         const std::string targetfile = args["targetfile"].as<std::string>();
-        auto [target_filetype, target_compression] =
+        auto [target_filetype, _] =
             gio::filetype_detector().detect_filetype(targetfile);
 
         if(target_filetype == gio::filetype::BED) {
