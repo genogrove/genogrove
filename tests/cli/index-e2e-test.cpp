@@ -576,3 +576,24 @@ TEST_F(CLIIndexE2ETest, InvalidOptionValueFailsCleanly) {
     auto result = run_command(cli("idx \"" + target_path.string() + "\" -k notanumber"));
     EXPECT_EQ(result.exit_code, 1) << result.output;
 }
+
+TEST_F(CLIIndexE2ETest, IndexEmptyInputProducesDeserializableIndex) {
+    // An empty (0-record) BED is a valid input: idx must succeed and write a
+    // deserializable .gg. Proven by then querying it in place (isec -i), which
+    // deserializes the index and returns no overlaps.
+    fs::path empty_bed = fs::temp_directory_path() / "genogrove_idx_empty.bed";
+    { std::ofstream out(empty_bed); }  // zero bytes
+
+    auto idx_result = run_command(cli(
+        "idx \"" + empty_bed.string() + "\" -o \"" + tmp_output.string() + "\""
+    ));
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;  // fail fast; don't isec a stale index
+    ASSERT_TRUE(fs::exists(tmp_output));
+
+    auto isec_result = run_command(cli(
+        "isec -q \"" + target_path.string() + "\" -i \"" + tmp_output.string() + "\""
+    ));
+    EXPECT_EQ(isec_result.exit_code, 0) << isec_result.output;  // deserializes cleanly, no overlaps
+
+    fs::remove(empty_bed);
+}
