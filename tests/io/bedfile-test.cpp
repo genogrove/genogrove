@@ -293,6 +293,30 @@ TEST_F(bedfileTest, validationInvalidFormat) {
     fs::remove(temp_file);
 }
 
+TEST_F(bedfileTest, skipInvalidToleratesBadFirstRecord) {
+    // Regression for #492: with skip_invalid_lines the constructor must not
+    // throw even when the FIRST data record is malformed — it is skipped during
+    // iteration like any other bad line, honoring the tolerance contract.
+    fs::path temp_file = test_data_dir / "temp_bad_first.bed";
+    {
+        std::ofstream out(temp_file);
+        out << "chr1\tINVALID\t50\tbad\n";   // malformed first data record
+        out << "chr1\t100\t200\tgood\n";     // valid record
+    }
+
+    int count = 0;
+    ASSERT_NO_THROW({
+        gio::bed_reader reader(temp_file, {.skip_invalid_lines = true});
+        for (const auto& entry : reader) {
+            (void)entry;
+            ++count;
+        }
+    });
+    EXPECT_EQ(count, 1);  // only the valid record survives
+
+    fs::remove(temp_file);
+}
+
 TEST_F(bedfileTest, validationInvalidCoordinates) {
     // Create a temporary file with non-integer coordinates
     fs::path temp_file = test_data_dir / "temp_invalid_coords.bed";

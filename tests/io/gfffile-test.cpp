@@ -359,6 +359,30 @@ TEST_F(gfffileTest, validationInvalidFormat) {
     fs::remove(temp_file);
 }
 
+TEST_F(gfffileTest, skipInvalidToleratesBadFirstRecord) {
+    // Regression for #492: with skip_invalid_lines the constructor must not
+    // throw even when the FIRST data record is malformed — it is skipped during
+    // iteration like any other bad line, honoring the tolerance contract.
+    fs::path temp_file = test_data_dir / "temp_bad_first.gff";
+    {
+        std::ofstream out(temp_file);
+        out << "chr1\tsrc\tgene\tINVALID\t900\t.\t+\t.\tID=bad\n";  // malformed first record
+        out << "chr1\tsrc\tgene\t100\t200\t.\t+\t.\tID=good\n";     // valid record
+    }
+
+    int count = 0;
+    ASSERT_NO_THROW({
+        gio::gff_reader reader(temp_file, {.skip_invalid_lines = true});
+        for (const auto& entry : reader) {
+            (void)entry;
+            ++count;
+        }
+    });
+    EXPECT_EQ(count, 1);  // only the valid record survives
+
+    fs::remove(temp_file);
+}
+
 TEST_F(gfffileTest, validationInvalidCoordinates) {
     // Create a temporary file with non-integer coordinates
     fs::path temp_file = test_data_dir / "temp_invalid_coords.gff";

@@ -89,31 +89,37 @@ namespace genogrove::io {
                 return;
             }
 
-            std::string_view line_sv(*first_line);
-            size_t fpos = 0;
-            auto chrom_f = ggu::next_field(line_sv, fpos);
-            auto start_f = ggu::next_field(line_sv, fpos);
-            auto end_f = ggu::next_field(line_sv, fpos);
+            // With skip_invalid_lines the caller opts into tolerating malformed
+            // records — including the first. Defer all validation to
+            // read_next()/parse_line() so construction never throws on a bad
+            // record; the iterator will skip it like any other.
+            if (!this->options.skip_invalid_lines) {
+                std::string_view line_sv(*first_line);
+                size_t fpos = 0;
+                auto chrom_f = ggu::next_field(line_sv, fpos);
+                auto start_f = ggu::next_field(line_sv, fpos);
+                auto end_f = ggu::next_field(line_sv, fpos);
 
-            if (!chrom_f || !start_f || !end_f) {
-                throw std::runtime_error("Invalid BED header/format in " + fpath.string());
-            }
+                if (!chrom_f || !start_f || !end_f) {
+                    throw std::runtime_error("Invalid BED header/format in " + fpath.string());
+                }
 
-            if (start_f->empty() || end_f->empty() ||
-                !std::ranges::all_of(*start_f, ggu::is_digit) ||
-                !std::ranges::all_of(*end_f, ggu::is_digit)) {
-                throw std::runtime_error("Invalid BED coordinates (non-integer) in " + fpath.string());
-            }
+                if (start_f->empty() || end_f->empty() ||
+                    !std::ranges::all_of(*start_f, ggu::is_digit) ||
+                    !std::ranges::all_of(*end_f, ggu::is_digit)) {
+                    throw std::runtime_error("Invalid BED coordinates (non-integer) in " + fpath.string());
+                }
 
-            size_t start_num = 0;
-            size_t end_num = 0;
-            auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
-            auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
-            if (ec1 != std::errc{} || ec2 != std::errc{}) {
-                throw std::runtime_error("Invalid BED coordinates (out of range) in " + fpath.string());
-            }
-            if (start_num >= end_num) {
-                throw std::runtime_error("Invalid BED coordinates (start >= end) in " + fpath.string());
+                size_t start_num = 0;
+                size_t end_num = 0;
+                auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
+                auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
+                if (ec1 != std::errc{} || ec2 != std::errc{}) {
+                    throw std::runtime_error("Invalid BED coordinates (out of range) in " + fpath.string());
+                }
+                if (start_num >= end_num) {
+                    throw std::runtime_error("Invalid BED coordinates (start >= end) in " + fpath.string());
+                }
             }
 
             bgzf_rewind_to_start(bgzf_file, fpath);
@@ -353,8 +359,17 @@ namespace genogrove::io {
         while (true) {
             error_message.clear();
 
-            auto line_opt = region_reader ? region_reader->next_line(line_num)
-                                          : bgzf_next_data_line(bgzf_file, line_num);
+            // A BGZF/tabix I/O error throws from the fetch; record it in
+            // error_message before it propagates so a caller that catches the
+            // exception and calls get_error_message() sees it (matching bam/vcf).
+            std::optional<std::string> line_opt;
+            try {
+                line_opt = region_reader ? region_reader->next_line(line_num)
+                                         : bgzf_next_data_line(bgzf_file, line_num);
+            } catch (const std::exception& e) {
+                error_message = e.what();
+                throw;
+            }
             if (!line_opt) return false;  // EOF / end of region
 
             if (parse_line(*line_opt, entry)) return true;
