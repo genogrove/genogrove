@@ -163,7 +163,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
     // format follows the target/index payload type. So query and target types
     // are independent — a BED query may run against a GFF index and vice versa.
     // The query must still be a supported interval format.
-    auto [query_filetype, _] = gio::filetype_detector().detect_filetype(queryfile);
+    auto query_filetype = std::get<0>(gio::filetype_detector().detect_filetype(queryfile));
     if(query_filetype != gio::filetype::BED && query_filetype != gio::filetype::VCF
        && !is_gff_or_gtf(query_filetype)) {
         throw std::runtime_error(
@@ -209,8 +209,8 @@ void intersect::execute(const cxxopts::ParseResult& args) {
         }
     } else {
         const std::string targetfile = args["targetfile"].as<std::string>();
-        auto [target_filetype, _] =
-            gio::filetype_detector().detect_filetype(targetfile);
+        auto target_filetype =
+            std::get<0>(gio::filetype_detector().detect_filetype(targetfile));
 
         if(target_filetype == gio::filetype::BED) {
             ggs::grove<gdt::interval, gio::bed_entry, std::string> grove(k);
