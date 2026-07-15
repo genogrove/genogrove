@@ -55,7 +55,7 @@ namespace genogrove::data_type {
              *
              * @return Pointer to the predecessor key, or nullptr if none exists
              */
-            key<key_t, data_t>* get_predecessor() const noexcept {
+            [[nodiscard]] key<key_t, data_t>* get_predecessor() const noexcept {
                 return this->predecessor;
             }
 
@@ -64,7 +64,7 @@ namespace genogrove::data_type {
              *
              * @return Pointer to the successor key, or nullptr if none exists
              */
-            key<key_t, data_t>* get_successor() const noexcept {
+            [[nodiscard]] key<key_t, data_t>* get_successor() const noexcept {
                 return this->successor;
             }
 

@@ -165,7 +165,7 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept for debugging/display
              */
-            std::string to_string() const;
+            [[nodiscard]] std::string to_string() const;
 
             /**
              * @brief Get the start position (0-based, inclusive).

@@ -76,7 +76,7 @@ namespace genogrove::data_type {
              *
              * @return Const reference to the query value
              */
-            const key_t& get_query() const noexcept { return this->query; }
+            [[nodiscard]] const key_t& get_query() const noexcept { return this->query; }
 
             /**
              * @brief Get all matching keys found by the query.
@@ -91,7 +91,7 @@ namespace genogrove::data_type {
              * @note Pointers remain valid as long as the grove is not modified
              * @note Keys are stored in the order they were found during tree traversal
              */
-            const std::vector<key<key_t, data_t>*>& get_keys() const { return this->keys; }
+            [[nodiscard]] const std::vector<key<key_t, data_t>*>& get_keys() const { return this->keys; }
 
             /**
              * @brief Add a matching key to the result set.
