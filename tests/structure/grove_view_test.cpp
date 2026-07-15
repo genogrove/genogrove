@@ -19,6 +19,8 @@
 #include <string>
 #include <vector>
 
+#include <genogrove/data_type/genomic_coordinate.hpp>
+#include <genogrove/data_type/numeric.hpp>
 #include <genogrove/structure/grove/grove.hpp>
 #include <genogrove/structure/grove/grove_view.hpp>
 
@@ -246,4 +248,139 @@ TEST(GroveViewTest, AbsentIndexAndEmptyGrove) {
     EXPECT_EQ(view_empty.intersect(gdt::interval{1, 2}, "chr1").get_keys().size(), 0u);
     EXPECT_EQ(view_empty.intersect(gdt::interval{1, 2}).get_keys().size(), 0u);
     fs::remove(empty);
+}
+
+namespace {
+
+// Data value of a flanking side, or -1 when null — for order-independent
+// eager-vs-view comparison. Assumes non-negative data in the fixtures.
+template <typename FR>
+std::pair<int, int> flank_pair(const FR& r) {
+    return {r.get_predecessor() ? r.get_predecessor()->get_data() : -1,
+            r.get_successor() ? r.get_successor()->get_data() : -1};
+}
+
+} // namespace
+
+TEST(GroveViewTest, MatchesEagerFlanking) {
+    using grove_t = gst::grove<gdt::interval, int>;
+    fs::path path;
+    {
+        grove_t g(4);
+        // A spread of non-overlapping intervals plus a nested pair so the
+        // largest-end predecessor rule is exercised (data 998 is nested inside 999).
+        for (size_t i = 0; i < 80; ++i) {
+            g.insert_data("chr1", gdt::interval{i * 10, i * 10 + 5}, static_cast<int>(i), gst::sorted);
+        }
+        g.insert_data("chr1", gdt::interval{300, 400}, 999, gst::sorted);  // wide
+        g.insert_data("chr1", gdt::interval{320, 330}, 998, gst::sorted);  // nested inside 999
+        path = write_grove(g, "flanking");
+    }
+
+    grove_t eager = [&] {
+        std::ifstream ifs(path, std::ios::binary);
+        return grove_t::deserialize(ifs);
+    }();
+    auto view = gst::grove_view<gdt::interval, int>::open(path.string());
+
+    const std::vector<gdt::interval> queries = {
+        {0, 5}, {96, 99}, {225, 235}, {335, 345}, {500, 510}, {795, 805}, {5000, 6000}};
+    for (const auto& q : queries) {
+        auto e = flank_pair(eager.flanking(q, "chr1"));
+        auto l = flank_pair(view.flanking(q, "chr1"));
+        EXPECT_EQ(e, l) << "flanking mismatch on [" << q.get_start() << "," << q.get_end() << "]";
+    }
+
+    // Absent index -> null pair.
+    auto miss = view.flanking(gdt::interval{10, 20}, "nope");
+    EXPECT_EQ(miss.get_predecessor(), nullptr);
+    EXPECT_EQ(miss.get_successor(), nullptr);
+
+    fs::remove(path);
+}
+
+TEST(GroveViewTest, FlankingPartialLoad) {
+    using grove_t = gst::grove<gdt::interval, int>;
+    fs::path path;
+    {
+        grove_t g(4);
+        for (size_t i = 0; i < 500; ++i) {
+            g.insert_data("chr1", gdt::interval{i * 10, i * 10 + 5}, static_cast<int>(i), gst::sorted);
+        }
+        path = write_grove(g, "flanking_partial");
+    }
+
+    auto view = gst::grove_view<gdt::interval, int>::open(path.string());
+    ASSERT_GT(view.block_count(), 20u);
+
+    auto r = view.flanking(gdt::interval{1006, 1008}, "chr1");  // sits between data 100 and 101
+    ASSERT_NE(r.get_predecessor(), nullptr);
+    ASSERT_NE(r.get_successor(), nullptr);
+    EXPECT_EQ(r.get_predecessor()->get_data(), 100);
+    EXPECT_EQ(r.get_successor()->get_data(), 101);
+
+    EXPECT_GT(view.blocks_loaded(), 0u);
+    EXPECT_LT(view.blocks_loaded(), view.block_count())
+        << "loaded " << view.blocks_loaded() << " of " << view.block_count() << " blocks";
+
+    fs::remove(path);
+}
+
+TEST(GroveViewTest, FlankingPredicateOverloadMatchesEager) {
+    using grove_t = gst::grove<gdt::genomic_coordinate, int>;
+    fs::path path;
+    {
+        grove_t g(4);
+        // Alternating strands so a same-strand predicate skips the nearer segment.
+        for (size_t i = 0; i < 40; ++i) {
+            char strand = (i % 2 == 0) ? '+' : '-';
+            g.insert_data("chr1", gdt::genomic_coordinate{strand, i * 10, i * 10 + 5},
+                          static_cast<int>(i), gst::sorted);
+        }
+        path = write_grove(g, "flanking_pred");
+    }
+
+    grove_t eager = [&] {
+        std::ifstream ifs(path, std::ios::binary);
+        return grove_t::deserialize(ifs);
+    }();
+    auto view = gst::grove_view<gdt::genomic_coordinate, int>::open(path.string());
+
+    auto same_strand = [](const gdt::genomic_coordinate& c, const gdt::genomic_coordinate& q) {
+        return q.get_strand() == '*' || c.get_strand() == '*' || c.get_strand() == q.get_strand();
+    };
+    for (size_t s = 100; s < 300; s += 37) {
+        gdt::genomic_coordinate q{'+', s, s + 3};
+        auto e = flank_pair(eager.flanking(q, "chr1", same_strand));
+        auto l = flank_pair(view.flanking(q, "chr1", same_strand));
+        EXPECT_EQ(e, l) << "strand-filtered flanking mismatch at start " << s;
+    }
+
+    fs::remove(path);
+}
+
+TEST(GroveViewTest, FlankingNumericMatchesEager) {
+    using grove_t = gst::grove<gdt::numeric, int>;
+    fs::path path;
+    {
+        grove_t g(4);
+        for (size_t i = 0; i < 60; ++i) {
+            g.insert_data("chr1", gdt::numeric{static_cast<int>(i * 5)}, static_cast<int>(i), gst::sorted);
+        }
+        path = write_grove(g, "flanking_numeric");
+    }
+
+    grove_t eager = [&] {
+        std::ifstream ifs(path, std::ios::binary);
+        return grove_t::deserialize(ifs);
+    }();
+    auto view = gst::grove_view<gdt::numeric, int>::open(path.string());
+
+    for (int v : {0, 12, 51, 297, 1000}) {
+        auto e = flank_pair(eager.flanking(gdt::numeric{v}, "chr1"));
+        auto l = flank_pair(view.flanking(gdt::numeric{v}, "chr1"));
+        EXPECT_EQ(e, l) << "numeric flanking mismatch at " << v;
+    }
+
+    fs::remove(path);
 }

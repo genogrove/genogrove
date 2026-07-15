@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`grove_view::flanking` — nearest predecessor/successor on the partial reader**: the random-access `grove_view` gains `flanking(query, index)` and the predicate-filtered `flanking(query, index, is_compatible)` overload, so genome-wide nearest-neighbour queries page in only the blocks on the descent path instead of falling back to a full `deserialize()`. The flanking descent is extracted from `grove` into a resolver-driven free function (`detail::search_flanking`) alongside `search_overlaps`, with `detail::subtree_range` (a resolver-driven analogue of `node::calc_subtree_range` for the last child's catch-all range) and `detail::flanking_could_descend` (the backend-agnostic pruning predicate). No resolver-concept extension was needed — flanking consults only `child()`, the child count follows from the B+ tree invariant, and both `eager_resolver` and the view's `block_resolver` already satisfy `overlap_resolver`. The interval-nesting predecessor rule (largest-end) and successor rule are preserved; the in-memory `grove::flanking` now delegates to the same engine (~130 lines of member descent removed). Query-only — no insert/serialize surface, no format change. Adds eager-vs-view parity tests (interval incl. nested-interval predecessor rule, numeric scalar path, strand-predicate overload) and a partial-load assertion. ([#482](https://github.com/genogrove/genogrove/issues/482), [#483](https://github.com/genogrove/genogrove/pull/483))
+
 ## [0.25.2] - 2026-07-13
 
 ### Added

@@ -111,6 +111,46 @@ class grove_view {
     }
 
     /**
+     * @brief Nearest non-overlapping predecessor and successor of a query within
+     *        a single index, loading only the blocks the descent walks.
+     *
+     * Returns exactly what the eager grove's flanking() would — same
+     * predecessor/successor rules (interval-nesting largest-end for the
+     * predecessor, smallest-start for the successor) — while paging in only the
+     * blocks on the descent path (plus the last-child right spine each internal
+     * node needs to bound its catch-all subtree). Both fields are nullptr if the
+     * index does not exist.
+     */
+    [[nodiscard]] gdt::flanking_query_result<key_type, data_type>
+    flanking(const key_type& query, std::string_view index) {
+        return flanking(query, index,
+            [](const key_type&, const key_type&) constexpr noexcept { return true; });
+    }
+
+    /**
+     * @brief Flanking query with a caller-supplied compatibility filter.
+     *
+     * The predicate is applied at every leaf candidate before the overlap and
+     * comparison checks, exactly as in grove::flanking — internal-node pruning
+     * stays purely structural.
+     *
+     * @tparam Pred Callable `bool(const key_type& candidate, const key_type& query)`.
+     */
+    template <typename Pred>
+        requires detail::flanking_predicate<Pred, key_type>
+    [[nodiscard]] gdt::flanking_query_result<key_type, data_type>
+    flanking(const key_type& query, std::string_view index, Pred is_compatible) {
+        gdt::flanking_query_result<key_type, data_type> result{};
+        auto it = index_roots.find(std::string(index));
+        if (it == index_roots.end()) {
+            return result;
+        }
+        block_resolver res{this};
+        detail::search_flanking(res, load_node(it->second), query, is_compatible, result);
+        return result;
+    }
+
+    /**
      * @brief Outgoing graph neighbors of a key returned by this grove_view.
      *
      * Loads each target's block on demand — the cross-chromosome hop. `source`
