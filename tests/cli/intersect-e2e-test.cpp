@@ -217,6 +217,37 @@ TEST_F(CLIIntersectE2ETest, InvalidOrder) {
     EXPECT_NE(result.output.find("order must be at least 3"), std::string::npos);
 }
 
+TEST_F(CLIIntersectE2ETest, UnsupportedQueryFormatRejected) {
+    // The query must be BED/GFF/GTF/VCF; a FASTA query is rejected cleanly.
+    fs::path fa = fs::temp_directory_path() / "genogrove_e2e_query.fasta";
+    {
+        std::ofstream out(fa);
+        out << ">seq1\nACGTACGT\n";
+    }
+    auto result = run_command(cli(
+        "isec -q \"" + fa.string() + "\" -t \"" + target_path.string() + "\""
+    ));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("must be BED"), std::string::npos) << result.output;
+    fs::remove(fa);
+}
+
+TEST_F(CLIIntersectE2ETest, CorruptIndexFileRejected) {
+    // A non-.gg file passed to -i must fail the header magic check cleanly
+    // (exit != 0, no crash), not be mis-parsed.
+    fs::path bogus = fs::temp_directory_path() / "genogrove_e2e_bogus.gg";
+    {
+        std::ofstream out(bogus, std::ios::binary);
+        out << "this is definitely not a gg index file\n";
+    }
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -i \"" + bogus.string() + "\""
+    ));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("magic mismatch"), std::string::npos) << result.output;
+    fs::remove(bogus);
+}
+
 // ==========================================
 // Help
 // ==========================================
