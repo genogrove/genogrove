@@ -137,6 +137,7 @@ class grove_view {
      * @tparam Pred Callable `bool(const key_type& candidate, const key_type& query)`.
      */
     template <typename Pred>
+        requires detail::flanking_predicate<Pred, key_type>
     [[nodiscard]] gdt::flanking_query_result<key_type, data_type>
     flanking(const key_type& query, std::string_view index, Pred is_compatible) {
         gdt::flanking_query_result<key_type, data_type> result{};

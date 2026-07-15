@@ -65,6 +65,7 @@ public:
      *       traversed; the predicate filters them out at the leaf level.
      */
     template <typename Pred>
+        requires detail::flanking_predicate<Pred, key_type>
     [[nodiscard]] gdt::flanking_query_result<key_type, data_type>
     flanking(const key_type& query, std::string_view index,
              Pred is_compatible) const {

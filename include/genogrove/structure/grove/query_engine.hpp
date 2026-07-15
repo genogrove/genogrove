@@ -38,6 +38,16 @@ concept overlap_resolver = requires(R& r, node<key_type, data_type>* n, std::siz
  * linked. child() forwards to node::get_child (which throws on an out-of-range
  * index; the search only ever asks for valid child slots on internal nodes).
  */
+/**
+ * @brief A flanking compatibility filter: `bool(const key_type&, const key_type&)`.
+ *
+ * Applied at every leaf candidate before the overlap and comparison checks.
+ * Named (rather than inlined as a `requires`) because all three flanking entry
+ * points share it — mirrors how `get_neighbors_if` constrains its predicate.
+ */
+template<typename Pred, typename key_type>
+concept flanking_predicate = std::predicate<Pred, const key_type&, const key_type&>;
+
 template<typename key_type, typename data_type>
 struct eager_resolver {
     node<key_type, data_type>* child(node<key_type, data_type>* n, std::size_t i) const {
@@ -226,7 +236,8 @@ bool flanking_could_descend(const key_type& agg, const key_type& query,
  *              applied at leaves only; internal pruning is purely structural.
  */
 template<gdt::key_type_base key_type, typename data_type, typename Resolver, typename Pred>
-    requires overlap_resolver<Resolver, key_type, data_type>
+    requires overlap_resolver<Resolver, key_type, data_type> &&
+             flanking_predicate<Pred, key_type>
 void search_flanking(Resolver& res, node<key_type, data_type>* current,
                      const key_type& query, const Pred& is_compatible,
                      gdt::flanking_query_result<key_type, data_type>& state) {
