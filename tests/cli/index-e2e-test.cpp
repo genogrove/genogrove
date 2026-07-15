@@ -587,7 +587,7 @@ TEST_F(CLIIndexE2ETest, IndexEmptyInputProducesDeserializableIndex) {
     auto idx_result = run_command(cli(
         "idx \"" + empty_bed.string() + "\" -o \"" + tmp_output.string() + "\""
     ));
-    EXPECT_EQ(idx_result.exit_code, 0) << idx_result.output;
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;  // fail fast; don't isec a stale index
     ASSERT_TRUE(fs::exists(tmp_output));
 
     auto isec_result = run_command(cli(
