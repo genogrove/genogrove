@@ -39,9 +39,11 @@ private:
 } // namespace
 
 TEST(SerializationTest, FileStreamStateCleanAfterDeserialize) {
-    // Regression test for #301: inflate_streambuf left failbit set on the
-    // underlying ifstream when the last source_.read() returned fewer bytes
-    // than requested (partial read at EOF sets eofbit + failbit).
+    // Regression test for #301: deserialize must leave the underlying ifstream
+    // clean (no failbit). The original culprit was the whole-stream inflate
+    // leaving eofbit+failbit set after a partial read at EOF; format 0.2 reads
+    // each block from a length-prefixed buffer, but the clean-stream invariant
+    // still holds and is pinned here.
     auto tmp_path = fs::temp_directory_path() / "genogrove_stream_state_test.bin";
 
     {

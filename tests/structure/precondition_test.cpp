@@ -156,22 +156,22 @@ TEST(ruleOfFiveTest, groveMoveTransfersOwnership) {
     EXPECT_EQ(g1.get_root_nodes().size(), 0);
 }
 
-TEST(ruleOfFiveTest, zlibStreambufsAreNonCopyableNonMovable) {
-    // The zlib streambufs own a raw z_stream and are copy AND move deleted.
-    // These static_asserts pin all four members so a future refactor cannot
-    // silently re-enable a move (which would double-free the z_stream).
-    using deflate_buf = gst::detail::deflate_streambuf;
-    using inflate_buf = gst::detail::inflate_streambuf;
+TEST(ruleOfFiveTest, zlibBlockCodecsAreNonCopyableNonMovable) {
+    // The block codecs own a raw z_stream and are copy AND move deleted. These
+    // static_asserts pin all four members so a future refactor cannot silently
+    // re-enable a move (which would double-free the z_stream).
+    using deflater = gst::detail::block_deflater;
+    using inflater = gst::detail::block_inflater;
 
-    static_assert(!std::is_copy_constructible_v<deflate_buf>);
-    static_assert(!std::is_copy_assignable_v<deflate_buf>);
-    static_assert(!std::is_move_constructible_v<deflate_buf>);
-    static_assert(!std::is_move_assignable_v<deflate_buf>);
+    static_assert(!std::is_copy_constructible_v<deflater>);
+    static_assert(!std::is_copy_assignable_v<deflater>);
+    static_assert(!std::is_move_constructible_v<deflater>);
+    static_assert(!std::is_move_assignable_v<deflater>);
 
-    static_assert(!std::is_copy_constructible_v<inflate_buf>);
-    static_assert(!std::is_copy_assignable_v<inflate_buf>);
-    static_assert(!std::is_move_constructible_v<inflate_buf>);
-    static_assert(!std::is_move_assignable_v<inflate_buf>);
+    static_assert(!std::is_copy_constructible_v<inflater>);
+    static_assert(!std::is_copy_assignable_v<inflater>);
+    static_assert(!std::is_move_constructible_v<inflater>);
+    static_assert(!std::is_move_assignable_v<inflater>);
 }
 
 // =============================================================================
