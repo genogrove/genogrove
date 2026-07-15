@@ -102,7 +102,7 @@ void index::execute(const cxxopts::ParseResult& args) {
     // Dispatch on input file type — BED and GFF/GTF are supported. Validate
     // the type before any output side-effect so an unsupported input never
     // truncates an existing .gg at outputfile.
-    auto [filetype, compression] = gio::filetype_detector().detect_filetype(inputfile);
+    auto filetype = std::get<0>(gio::filetype_detector().detect_filetype(inputfile));
     if(filetype != gio::filetype::BED &&
        filetype != gio::filetype::GFF &&
        filetype != gio::filetype::GTF) {

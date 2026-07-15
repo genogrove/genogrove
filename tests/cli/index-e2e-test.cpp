@@ -555,3 +555,24 @@ TEST_F(CLIIndexE2ETest, IndexMissingInputFails) {
     EXPECT_NE(result.exit_code, 0);
     EXPECT_NE(result.output.find("does not exist"), std::string::npos);
 }
+
+// ==========================================
+// Top-level CLI: --version and clean arg-error handling (#485)
+// ==========================================
+
+TEST_F(CLIIndexE2ETest, VersionFlagPrintsVersionAndExitsZero) {
+    auto result = run_command(cli("--version"));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    // Prints "genogrove <major>.<minor>.<patch>".
+    EXPECT_NE(result.output.find("genogrove "), std::string::npos) << result.output;
+    EXPECT_NE(result.output.find('.'), std::string::npos) << result.output;
+}
+
+TEST_F(CLIIndexE2ETest, InvalidOptionValueFailsCleanly) {
+    // Regression for #485: a non-integer -k used to throw an uncaught cxxopts
+    // exception during subcommand parsing and abort via std::terminate (which
+    // pclose reports as a non-normal exit, exit_code -1). It must now be caught
+    // and reported as a clean exit 1.
+    auto result = run_command(cli("idx \"" + target_path.string() + "\" -k notanumber"));
+    EXPECT_EQ(result.exit_code, 1) << result.output;
+}
