@@ -25,6 +25,29 @@ namespace gio = genogrove::io;
 
 constexpr std::string_view DEFAULT_TREE_ORDER = "3";
 
+namespace {
+
+// Open outputfile, write the format header for `payload_type`, then serialise
+// the grove. The grove is built before this call, so a parse error never
+// reaches here and an existing .gg at outputfile is never truncated (see
+// execute()). Shared by the BED and GFF branches so the open/header/serialize/
+// post-write-check sequence is written once.
+template<typename grove_t>
+void write_index(grove_t& grove, const std::string& outputfile,
+                 gio::gg_payload_type payload_type) {
+    std::ofstream output(outputfile, std::ios::binary);
+    if(!output) {
+        throw std::runtime_error("Error: could not open output file: " + outputfile);
+    }
+    gio::gg_header::current(payload_type).write(output);
+    grove.serialize(output);
+    if(!output) {
+        throw std::runtime_error("Error: failed to write index to: " + outputfile);
+    }
+}
+
+} // namespace
+
 cxxopts::Options index::parse_args(int argc, char** argv) {
     cxxopts::Options options("genogrove index", "index an interval file");
     options.add_options()
@@ -141,15 +164,7 @@ void index::execute(const cxxopts::ParseResult& args) {
                 grove, args["links"].as<std::string>(), name_map);
         }
 
-        std::ofstream output(outputfile, std::ios::binary);
-        if(!output) {
-            throw std::runtime_error("Error: could not open output file: " + outputfile);
-        }
-        gio::gg_header::current(gio::gg_payload_type::BED).write(output);
-        grove.serialize(output);
-        if(!output) {
-            throw std::runtime_error("Error: failed to write index to: " + outputfile);
-        }
+        write_index(grove, outputfile, gio::gg_payload_type::BED);
     } else {  // GFF or GTF (validated above)
         ggs::grove<gdt::interval, gio::gff_entry, std::string> grove(order);
 
@@ -167,15 +182,7 @@ void index::execute(const cxxopts::ParseResult& args) {
                 grove, args["links"].as<std::string>(), name_map);
         }
 
-        std::ofstream output(outputfile, std::ios::binary);
-        if(!output) {
-            throw std::runtime_error("Error: could not open output file: " + outputfile);
-        }
-        gio::gg_header::current(gio::gg_payload_type::GFF).write(output);
-        grove.serialize(output);
-        if(!output) {
-            throw std::runtime_error("Error: failed to write index to: " + outputfile);
-        }
+        write_index(grove, outputfile, gio::gg_payload_type::GFF);
     }
 
     if(timed) {

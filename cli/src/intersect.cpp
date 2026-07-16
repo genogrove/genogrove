@@ -57,6 +57,24 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
     }
 }
 
+// Query a prebuilt .gg index of payload type `payload_t`, choosing between an
+// in-place grove_view (read only the blocks each query touches) and a fully
+// deserialized in-memory grove. Written once here so the eager/in-place split
+// is not duplicated per payload type at the call site.
+template <typename payload_t, typename print_fn>
+void query_index(const std::string& index_path, std::ifstream& in, bool in_place,
+                 std::streamoff data_offset, const std::string& queryfile,
+                 gio::filetype query_filetype, std::ostream& out, print_fn print) {
+    if(in_place) {
+        auto grove = ggs::grove_view<gdt::interval, payload_t, std::string>::open(
+            index_path, data_offset);
+        run_intersect(grove, queryfile, query_filetype, out, print);
+    } else {
+        auto grove = ggs::grove<gdt::interval, payload_t, std::string>::deserialize(in);
+        run_intersect(grove, queryfile, query_filetype, out, print);
+    }
+}
+
 } // namespace
 
 namespace subcalls {
@@ -185,27 +203,13 @@ void intersect::execute(const cxxopts::ParseResult& args) {
         const auto data_offset = static_cast<std::streamoff>(gio::gg_header::SIZE);
 
         if(header.payload_type == gio::gg_payload_type::BED) {
-            if(in_place) {
-                auto grove = ggs::grove_view<gdt::interval, gio::bed_entry, std::string>::open(
-                    index_path, data_offset);
-                run_intersect(grove, queryfile, query_filetype, *outputStream,
-                              handlers::bed::print_bed_result);
-            } else {
-                auto grove = ggs::grove<gdt::interval, gio::bed_entry, std::string>::deserialize(in);
-                run_intersect(grove, queryfile, query_filetype, *outputStream,
-                              handlers::bed::print_bed_result);
-            }
+            query_index<gio::bed_entry>(index_path, in, in_place, data_offset,
+                                        queryfile, query_filetype, *outputStream,
+                                        handlers::bed::print_bed_result);
         } else {  // GFF — gg_header::read() rejects any other value
-            if(in_place) {
-                auto grove = ggs::grove_view<gdt::interval, gio::gff_entry, std::string>::open(
-                    index_path, data_offset);
-                run_intersect(grove, queryfile, query_filetype, *outputStream,
-                              handlers::gff::print_gff_result);
-            } else {
-                auto grove = ggs::grove<gdt::interval, gio::gff_entry, std::string>::deserialize(in);
-                run_intersect(grove, queryfile, query_filetype, *outputStream,
-                              handlers::gff::print_gff_result);
-            }
+            query_index<gio::gff_entry>(index_path, in, in_place, data_offset,
+                                        queryfile, query_filetype, *outputStream,
+                                        handlers::gff::print_gff_result);
         }
     } else {
         const std::string targetfile = args["targetfile"].as<std::string>();
