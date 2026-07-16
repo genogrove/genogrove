@@ -110,23 +110,12 @@ public:
             current_node->insert_key_ptr(key_ptr);
             inserted_keys.push_back(key_ptr);
 
-            // Handle overflow
+            // Handle overflow — cascade upward so a parent that overflows as a
+            // result of the leaf split is itself split (a single-level split here
+            // left an internal node growing unbounded across appends, see #490).
             if (current_node->get_keys().size() == this->order) {
-                if (current_node->get_parent() == nullptr) {
-                    // Root node overflow
-                    auto* new_root = new node<key_type, data_type>(this->order);
-                    new_root->add_child(current_node, 0);
-                    new_root->set_is_leaf(false);
-                    current_node->set_parent(new_root);
-                    split_node(new_root, 0, index, /*sorted_append=*/true);
-                    this->root_nodes[std::string(index)] = new_root;
-                    current_node = this->get_rightmost_node(index);
-                } else {
-                    // Internal node overflow
-                    int child_index = current_node->get_parent()->get_children().size() - 1;
-                    split_node(current_node->get_parent(), child_index, index, /*sorted_append=*/true);
-                    current_node = this->get_rightmost_node(index);
-                }
+                cascade_split_sorted_append(current_node, index);
+                current_node = this->get_rightmost_node(index);
             }
         }
         return inserted_keys;
@@ -196,13 +185,7 @@ public:
             throw std::runtime_error("Failed to insert key into tree");
         }
         if(root->get_keys().size() == this->order) {
-            node<key_type, data_type>* new_root = new node<key_type, data_type>(this->order);
-            new_root->add_child(root, 0);
-            new_root->set_is_leaf(false);
-            root->set_parent(new_root);
-            split_node(new_root, 0, index, /*sorted_append=*/false);
-            root = new_root;
-            this->root_nodes[std::string(index)] = root; // update the root node in the map
+            root = promote_new_root(root, index, /*sorted_append=*/false);
         }
         return key_ptr;
     }
@@ -383,6 +366,52 @@ private:
     }
 
     /**
+     * @brief Grow the tree by one level: wrap an overflowing root in a fresh
+     *        parent and split it, then publish the new root
+     * @param old_root The current root that just overflowed (order keys)
+     * @param index The grove index name, forwarded to split_node()
+     * @param sorted_append Passed through to split_node() (asymmetric leaf
+     *        midpoint on the sorted-append path, symmetric otherwise)
+     * @return The newly created root
+     * @note Shared by all three insert paths so the root-promotion step cannot
+     *       diverge between them (see #490).
+     */
+    node<key_type, data_type>* promote_new_root(node<key_type, data_type>* old_root,
+                                                std::string_view index, bool sorted_append) {
+        auto* new_root = new node<key_type, data_type>(this->order);
+        new_root->add_child(old_root, 0);
+        new_root->set_is_leaf(false);
+        old_root->set_parent(new_root);
+        split_node(new_root, 0, index, sorted_append);
+        this->root_nodes[std::string(index)] = new_root;
+        return new_root;
+    }
+
+    /**
+     * @brief Cascade rightmost-leaf overflow splits upward until no node overflows
+     * @param overflow_node The rightmost node that just received a key and may be full
+     * @param index The grove index name, forwarded to split_node() for cache updates
+     * @note Sorted-append path only: always splits the rightmost child with the
+     *       asymmetric leaf midpoint and promotes a new root when the overflow
+     *       reaches the top. Shared by insert_sorted() and the bulk sorted-append
+     *       loop so both cascade identically — a single-level `if` here would
+     *       leave a parent overflowing after enough appends (see #490).
+     */
+    void cascade_split_sorted_append(node<key_type, data_type>* overflow_node, std::string_view index) {
+        while (overflow_node->get_keys().size() == this->order) {
+            if (overflow_node->get_parent() == nullptr) {
+                // root overflow - grow the tree by one level
+                promote_new_root(overflow_node, index, /*sorted_append=*/true);
+                break;
+            }
+            auto* parent_node = overflow_node->get_parent();
+            int child_index = static_cast<int>(parent_node->get_children().size()) - 1;
+            split_node(parent_node, child_index, index, /*sorted_append=*/true);
+            overflow_node = parent_node;
+        }
+    }
+
+    /**
      * @brief Insert a pre-sorted data point into the grove using optimized sorted insertion
      * @param index The index name (e.g., chromosome name) where the data should be inserted
      * @param key_value The key value to insert (e.g., interval)
@@ -424,24 +453,7 @@ private:
             rightmost_node->insert_key_ptr(key_ptr);
 
             // handle key overflow - cascade splits upward until no overflow
-            auto* overflow_node = rightmost_node;
-            while (overflow_node->get_keys().size() == this->order) {
-                if (overflow_node->get_parent() == nullptr) {
-                    // root overflow - create new root
-                    auto* new_root = new node<key_type, data_type>(this->order);
-                    new_root->add_child(overflow_node, 0);
-                    new_root->set_is_leaf(false);
-                    overflow_node->set_parent(new_root);
-                    split_node(new_root, 0, index, /*sorted_append=*/true);
-                    this->root_nodes[std::string(index)] = new_root;
-                    break;
-                } else {
-                    auto* parent_node = overflow_node->get_parent();
-                    int child_index = static_cast<int>(parent_node->get_children().size()) - 1;
-                    split_node(parent_node, child_index, index, /*sorted_append=*/true);
-                    overflow_node = parent_node;
-                }
-            }
+            cascade_split_sorted_append(rightmost_node, index);
             return key_ptr;
         }
     }

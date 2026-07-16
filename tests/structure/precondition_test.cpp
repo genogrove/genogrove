@@ -17,6 +17,8 @@
 #include <genogrove/structure/grove/node.hpp>
 #include <genogrove/structure/grove/zlib_streambuf.hpp>
 
+#include "tree_validator.hpp"
+
 namespace gst = genogrove::structure;
 namespace gdt = genogrove::data_type;
 
@@ -211,6 +213,38 @@ TEST(groveEdgeCaseTest, duplicateKeyInsertion) {
 
     auto result = g.intersect(gdt::interval{10, 20}, "chr1");
     EXPECT_EQ(result.get_keys().size(), 2);
+}
+
+TEST(groveEdgeCaseTest, bulkAppendIntoNonEmptyIndexCascadesParentSplits) {
+    // #490: bulk sorted-append into a NON-EMPTY index must cascade overflow
+    // splits all the way up. The old single-level `if` split only the
+    // overflowing leaf's parent and never re-checked the parent, so after
+    // enough appends one internal node grew without bound — queries still
+    // returned every key (intersect scans all children), but the B+ tree
+    // invariant "no node exceeds order-1 keys" was violated and that node
+    // degraded to O(n). order 3 forces deep multi-level cascades; the leading
+    // single-key insert makes the index non-empty so the bulk call takes the
+    // rightmost-append path rather than empty-index bottom-up construction.
+    constexpr int order = 3;
+    constexpr int N = 500;
+    gst::grove<gdt::interval, int> g(order);
+
+    g.insert_data("chr1", gdt::interval{0, 5}, 0, gst::sorted);
+
+    std::vector<std::pair<gdt::interval, int>> batch;
+    for (int i = 1; i < N; ++i) {
+        batch.emplace_back(gdt::interval{static_cast<size_t>(i) * 10,
+                                         static_cast<size_t>(i) * 10 + 5}, i);
+    }
+    g.insert_data("chr1", batch, gst::sorted, gst::bulk);
+
+    // Structural invariants: no node exceeds order-1 keys, all leaves same depth.
+    auto* root = g.get_root_nodes().at("chr1");
+    genogrove::test_support::validate_tree_structure(root, order);
+
+    // Every appended key remains findable.
+    auto result = g.intersect(gdt::interval{0, static_cast<size_t>(N) * 10}, "chr1");
+    EXPECT_EQ(result.get_keys().size(), static_cast<size_t>(N));
 }
 
 TEST(groveEdgeCaseTest, keysEqualToOrder) {
