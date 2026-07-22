@@ -255,7 +255,7 @@ class grove_view {
     /// grove::get_root_nodes() — lets a caller discover what intersect(query) /
     /// flanking can run against. Reads nothing extra: the directory is already
     /// in memory from open().
-    [[nodiscard]] std::vector<std::string> index_names() const {
+    [[nodiscard]] std::vector<std::string> get_index_names() const {
         std::vector<std::string> names;
         names.reserve(index_roots.size());
         for (const auto& [name, root_id] : index_roots) {

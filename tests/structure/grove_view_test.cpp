@@ -94,8 +94,8 @@ TEST(GroveViewTest, MatchesEagerIntersectAcrossIndices) {
     EXPECT_EQ(view.get_order(), eager.get_order());  // built with order 4
     EXPECT_EQ(view.get_order(), 4);
 
-    // index_names() enumerates the same indices the eager grove holds, order-independent.
-    std::vector<std::string> view_names = view.index_names();
+    // get_index_names() enumerates the same indices the eager grove holds, order-independent.
+    std::vector<std::string> view_names = view.get_index_names();
     std::sort(view_names.begin(), view_names.end());
     EXPECT_EQ(view_names, (std::vector<std::string>{"chr1", "chr2"}));
 
