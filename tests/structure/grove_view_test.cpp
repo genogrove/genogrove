@@ -184,9 +184,19 @@ TEST(GroveViewTest, EdgePayloadsSurfaceThroughView) {
                         src, [](const std::string& m) { return m == "nonexistent"; })
                     .empty());
 
+    // get_edge_list pairs each resolved target with its metadata, in edge order
+    // (insertion order: a->b "strong" then a->c "weak"); no sort — order is asserted.
+    auto edge_list = view.get_edge_list(src);
+    ASSERT_EQ(edge_list.size(), 2u);
+    EXPECT_EQ(edge_list[0].first->get_data(), "geneB");  // "strong"
+    EXPECT_EQ(edge_list[0].second, "strong");
+    EXPECT_EQ(edge_list[1].first->get_data(), "geneC");  // "weak"
+    EXPECT_EQ(edge_list[1].second, "weak");
+
     EXPECT_EQ(view.get_edges(nullptr).size(), 0u);
     EXPECT_THROW(view.get_neighbors_if(nullptr, [](const std::string&) { return true; }),
                  std::invalid_argument);
+    EXPECT_THROW(view.get_edge_list(nullptr), std::invalid_argument);
 
     fs::remove(path);
 }

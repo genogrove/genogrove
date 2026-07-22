@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`grove_view::get_edge_list` — targets paired with edge metadata**: the partial (random-access) reader gains `get_edge_list(source)`, returning `std::vector<std::pair<key_t*, edge_data_type>>` so each resolved target is paired with its edge payload in one call, matching `graph_overlay::get_edge_list` and saving consumers from zipping `get_neighbors` + `get_edges`. Because the view stores lazy adjacency (`edge_ref { block_id; ts; meta }`), it resolves each target via `resolve_target` on demand (mirroring `get_neighbors`) rather than returning a reference to a stored vector; returns edges in adjacency order, throws `std::invalid_argument` on a null source (consistent with the target-resolving `get_neighbors`/`get_neighbors_if`), and an empty vector for a source with no edges. Constrained to non-`void` `edge_data_type`. Read path only — no format change; unblocks the pygenogrove `GroveView.get_edge_list` binding. ([#504](https://github.com/genogrove/genogrove/issues/504), [#505](https://github.com/genogrove/genogrove/pull/505))
+
 ## [0.25.3] - 2026-07-16
 
 ### Added

@@ -221,6 +221,32 @@ class grove_view {
         return out;
     }
 
+    /**
+     * @brief Each outgoing target of `source` paired with its edge metadata, in edge order.
+     *
+     * Only available when edge_data_type is non-void. Resolves targets on demand
+     * exactly like get_neighbors, so it throws std::invalid_argument on a null
+     * source (unlike the metadata-only get_edges, which returns empty). Parity
+     * with graph_overlay::get_edge_list. Empty vector for a source with no edges.
+     */
+    template <typename M = edge_data_type>
+    [[nodiscard]] std::vector<std::pair<key_t*, M>> get_edge_list(const key_t* source)
+        requires(!std::is_void_v<edge_data_type>) {
+        if (source == nullptr) {
+            throw std::invalid_argument("get_edge_list: source must not be null");
+        }
+        std::vector<std::pair<key_t*, M>> out;
+        auto it = adjacency.find(source);
+        if (it == adjacency.end()) {
+            return out;
+        }
+        out.reserve(it->second.size());
+        for (const auto& e : it->second) {
+            out.emplace_back(resolve_target(e.tb, e.ts), e.meta);
+        }
+        return out;
+    }
+
     /// Blocks paged in so far — for tests asserting a query is actually partial.
     [[nodiscard]] std::size_t blocks_loaded() const { return node_cache.size() + ext_cache.size(); }
     /// Total block count from the directory.
