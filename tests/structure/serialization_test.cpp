@@ -9,13 +9,18 @@
  */
 
 #include <gtest/gtest.h>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <streambuf>
 #include <string>
+#include <type_traits>
 
+#include <genogrove/data_type/serialization_traits.hpp>
+#include <genogrove/structure/grove/gg_block_format.hpp>
 #include <genogrove/structure/grove/grove.hpp>
+#include <genogrove/structure/grove/zlib_streambuf.hpp>
 
 namespace gst = genogrove::structure;
 namespace gdt = genogrove::data_type;
@@ -35,6 +40,25 @@ public:
 private:
     std::string data_;
 };
+
+// Append a POD's raw bytes to a byte buffer (little-endian on the test host,
+// matching how the grove format writes counts).
+template <typename T>
+void put_pod(std::string& s, const T& v) {
+    static_assert(std::is_trivially_copyable_v<T>, "put_pod needs a POD");
+    const char* p = reinterpret_cast<const char*>(&v);
+    s.append(p, sizeof(T));
+}
+
+// Start a grove stream: magic + order + num_indices. Callers append index
+// entries / directory fields to craft a corrupt header for the DoS bounds.
+std::string start_stream(std::uint32_t num_indices, int order = 3) {
+    std::string s;
+    s.append(gst::detail::grove_stream_magic.data(), gst::detail::grove_stream_magic.size());
+    put_pod<int>(s, order);
+    put_pod<std::uint32_t>(s, num_indices);
+    return s;
+}
 
 } // namespace
 
@@ -266,4 +290,67 @@ TEST(SerializationTest, EmptyGroveRoundTrip) {
         EXPECT_TRUE(r.get_root_nodes().empty());
         EXPECT_EQ(r.intersect(gdt::interval{1, 2}, "absent").get_keys().size(), 0u);
     }
+}
+
+// ===========================================================================
+// #484 — file-controlled allocation counts must be bounded against the stream
+// so a corrupt/malicious .gg throws runtime_error instead of OOMing. Each test
+// crafts a tiny header whose count field is enormous; a correct reader rejects
+// it near-instantly. (Pre-fix these forced multi-GB allocations.)
+// ===========================================================================
+
+TEST(SerializationDoSTest, HugeBlockCountRejected) {
+    using grove_t = gst::grove<gdt::interval, int>;
+    std::string bytes = start_stream(/*num_indices=*/0);
+    put_pod<gst::detail::block_id>(bytes, 0xFFFFFFFFu);  // num_blocks
+    put_pod<gst::detail::block_id>(bytes, 0u);           // ext_block_begin
+    put_pod<std::uint64_t>(bytes, 0u);                   // leaf key count
+    put_pod<std::uint64_t>(bytes, 0u);                   // external key count
+    // No block data follows: 4 billion blocks cannot be backed by 0 bytes.
+    std::stringstream ss(bytes, std::ios::in | std::ios::binary);
+    EXPECT_THROW(grove_t::deserialize(ss), std::runtime_error);
+}
+
+TEST(SerializationDoSTest, HugeIndexCountRejected) {
+    using grove_t = gst::grove<gdt::interval, int>;
+    std::string bytes = start_stream(/*num_indices=*/0xFFFFFFFFu);
+    // Nothing after the count: 4 billion index entries cannot be backed.
+    std::stringstream ss(bytes, std::ios::in | std::ios::binary);
+    EXPECT_THROW(grove_t::deserialize(ss), std::runtime_error);
+}
+
+TEST(SerializationDoSTest, HugeIndexNameLengthRejected) {
+    using grove_t = gst::grove<gdt::interval, int>;
+    std::string bytes = start_stream(/*num_indices=*/1);
+    put_pod<std::uint32_t>(bytes, 0xFFFFFFFFu);  // name_len for the one index
+    bytes.append(8, '\0');                       // padding so the index-count bound passes
+    std::stringstream ss(bytes, std::ios::in | std::ios::binary);
+    EXPECT_THROW(grove_t::deserialize(ss), std::runtime_error);
+}
+
+TEST(SerializationDoSTest, HugeStringLengthRejected) {
+    // The std::string trait must not allocate a length-sized buffer before the
+    // content is present. Seekable source → the bound applies.
+    std::string bytes;
+    put_pod<std::uint32_t>(bytes, 0xFFFFFFFFu);  // claimed string length
+    bytes.append(4, 'x');                        // only 4 bytes of content
+    std::stringstream ss(bytes, std::ios::in | std::ios::binary);
+    EXPECT_THROW(gdt::serialization_traits<std::string>::deserialize(ss), std::runtime_error);
+}
+
+TEST(SerializationDoSTest, InflaterEnforcesOutputCap) {
+    // A small compressed block that inflates far past the cap must throw rather
+    // than materialize the full output (decompression-bomb guard).
+    std::string payload(200000, 'A');  // highly compressible → tiny compressed size
+    std::string compressed;
+    gst::detail::block_deflater{}.compress(payload, compressed);
+    ASSERT_LT(compressed.size(), payload.size());
+
+    gst::detail::block_inflater inflater;
+    std::string out;
+    EXPECT_THROW(inflater.decompress(compressed.data(), compressed.size(), out, /*max_output=*/1024),
+                 std::runtime_error);
+    // With a sufficient cap it round-trips exactly.
+    inflater.decompress(compressed.data(), compressed.size(), out, payload.size());
+    EXPECT_EQ(out, payload);
 }

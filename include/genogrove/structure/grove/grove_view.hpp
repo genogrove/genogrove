@@ -338,6 +338,7 @@ class grove_view {
             if (!is) {
                 throw std::runtime_error("grove_view: stream error reading index name length");
             }
+            detail::require_backing_bytes(is, name_len, 1, "index name");
             std::string name(name_len, '\0');
             is.read(name.data(), static_cast<std::streamsize>(name_len));
             if (!is) {
@@ -366,6 +367,10 @@ class grove_view {
         if (ext_block_begin > num_blocks) {
             throw std::runtime_error("grove_view: external-block-begin exceeds block count");
         }
+        // num_blocks is file-controlled; each block is at least an 8-byte length
+        // prefix on disk, so reject a count the file can't back before resizing
+        // block_offsets (a corrupt header could otherwise force a huge alloc).
+        detail::require_backing_bytes(is, num_blocks, sizeof(std::uint64_t), "block");
 
         block_offsets.resize(num_blocks);
         for (detail::block_id b = 0; b < num_blocks; ++b) {
