@@ -29,7 +29,8 @@ namespace genogrove::io {
 
     enum class compression_type {
         NONE,
-        GZIP,      // .gz (including bgzf)
+        GZIP,      // gzip OR BGZF — BGZF reuses the gzip 1f 8b magic, so BAM/BCF
+                   // and bgzipped .vcf.gz all report GZIP (see detect_filetype)
         BZIP2,     // .bz2
         XZ,        // .xz (LZMA)
         ZSTD,      // .zst (Zstandard)
@@ -39,6 +40,15 @@ namespace genogrove::io {
 
     class filetype_detector {
     public:
+        /**
+         * @brief Detect (filetype, compression) from a path's extension and magic bytes.
+         *
+         * The compression component describes the outer container only. BGZF-framed
+         * formats — BAM, BCF, and bgzipped .vcf.gz — share gzip's 1f 8b magic and so
+         * report compression_type::GZIP; the htslib-backed readers unwrap that framing
+         * themselves, so callers must not treat GZIP here as "run it through gzip" and
+         * double-decompress.
+         */
         [[nodiscard]] std::tuple<filetype, compression_type> detect_filetype(const fs::path& filepath);
     private:
         compression_type detect_compression(const fs::path& filepath);

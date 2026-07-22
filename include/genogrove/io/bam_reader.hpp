@@ -308,7 +308,11 @@ namespace genogrove::io {
      * ```cpp
      * bam_reader reader(filepath);
      * for (const auto& entry : reader) {
-     *     grove.insert_data(entry.chrom, entry.interval, entry);
+     *     // Guard: unmapped / zero-ref-consuming reads have end == start, so
+     *     // interval(start, end - 1) would underflow (see sam_entry::end).
+     *     if (entry.consumes_reference()) {
+     *         grove.insert_data(entry.chrom, gdt::interval(entry.start, entry.end - 1), entry);
+     *     }
      * }
      * // If we get here, all records were read successfully
      * ```
