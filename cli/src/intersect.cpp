@@ -81,7 +81,7 @@ namespace subcalls {
 
 constexpr std::string_view DEFAULT_TREE_ORDER = "3";
 
-cxxopts::Options intersect::parse_args(int argc, char** argv) {
+cxxopts::Options intersect::build_options() {
     cxxopts::Options options("intersect", "Search for interval overlaps in the index");
     options.add_options()
             ("q,queryfile", "The query file to search for overlaps (BED, GFF/GTF, or VCF)",

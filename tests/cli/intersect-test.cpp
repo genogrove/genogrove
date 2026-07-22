@@ -73,7 +73,7 @@ protected:
             argv.push_back(s.data());
         }
         int argc = static_cast<int>(argv.size());
-        auto options = isec.parse_args(argc, argv.data());
+        auto options = isec.build_options();
         return options.parse(argc, argv.data());
     }
 };

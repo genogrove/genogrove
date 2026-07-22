@@ -25,7 +25,7 @@
 namespace subcalls {
     class index : public subcall {
         public:
-            cxxopts::Options parse_args(int argc, char** argv) override;
+            cxxopts::Options build_options() override;
             void execute(const cxxopts::ParseResult& args) override;
             void validate(const cxxopts::ParseResult& args) override;
 };

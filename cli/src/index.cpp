@@ -48,7 +48,7 @@ void write_index(grove_t& grove, const std::string& outputfile,
 
 } // namespace
 
-cxxopts::Options index::parse_args(int argc, char** argv) {
+cxxopts::Options index::build_options() {
     cxxopts::Options options("genogrove index", "index an interval file");
     options.add_options()
             ("inputfile", "The input file to be indexed",
