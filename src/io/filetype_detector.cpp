@@ -61,6 +61,8 @@ namespace genogrove::io {
 
         unsigned char* ubuf = reinterpret_cast<unsigned char*>(buffer);
 
+        // BGZF (BAM/BCF/bgzipped .vcf.gz) reuses the gzip 1f 8b magic, so it is
+        // reported as GZIP here too — see the compression_type::GZIP note.
         if(bytes_read >= 2 && ubuf[0] == GZIP_MAGIC[0] && ubuf[1] == GZIP_MAGIC[1]) {
             return compression_type::GZIP;
         }
