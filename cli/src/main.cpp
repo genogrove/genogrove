@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
         }
 
         // parse additional options for the subcommand
-        cxxopts::Options subcallOptions = command->parse_args(argc -1, argv + 1);
+        cxxopts::Options subcallOptions = command->build_options();
         cxxopts::ParseResult subcallArgs = subcallOptions.parse(argc -1, argv + 1);
 
         if(subcallArgs.count("help")) {

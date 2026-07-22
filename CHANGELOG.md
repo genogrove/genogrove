@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **`io` documentation papercuts**: two `/cpp-audit`-surfaced doc fixes with no behavior change. `filetype_detector` now documents that BGZF-framed inputs (BAM, BCF, bgzipped `.vcf.gz`) share gzip's `1f 8b` magic and so report `compression_type::GZIP` — the compression component names the outer container, and the htslib-backed readers unwrap BGZF themselves, so callers must not double-decompress (enum note + `detect_filetype` docstring + magic-check comment). The `bam_reader` class usage example, which called `grove.insert_data(entry.chrom, entry.interval, entry)` against a non-existent `sam_entry::interval` member, is corrected to `gdt::interval(entry.start, entry.end - 1)` guarded by `entry.consumes_reference()` (unmapped/zero-ref reads have `end == start` and would underflow), matching the `vcf_reader` example. ([#494](https://github.com/genogrove/genogrove/issues/494), [#507](https://github.com/genogrove/genogrove/pull/507))
 
+### Refactored
+- **Dropped unused `argc`/`argv` from the CLI subcall option builder**: `subcalls::subcall::parse_args(int, char**)` took `argc`/`argv` but every override ignored them — the method only registers flags and returns the `cxxopts::Options`; the actual parse happens separately in `main.cpp` via `subcallOptions.parse(argc - 1, argv + 1)`. Renamed to `build_options()` (the old name implied it parsed) and removed the dead parameters across the interface, both `index`/`intersect` overrides, the call site, and the CLI test helper. Pure interface cleanup — no behavior change. ([#496](https://github.com/genogrove/genogrove/issues/496), [#506](https://github.com/genogrove/genogrove/pull/506))
+
 ## [0.25.3] - 2026-07-16
 
 ### Added
