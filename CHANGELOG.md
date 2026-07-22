@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`grove_view` read-side introspection: `get_order()` and `get_index_names()`**: the partial (random-access) reader gains two accessors that were present on the in-memory `grove` but had no view equivalent, despite the view already holding the data from `open()`. `get_order()` returns the B+ tree order (mirrors `grove::get_order()`); `get_index_names()` returns `std::vector<std::string>` of every index (e.g. chromosome) in the `.gg`, in unspecified order — the view-appropriate analogue of `grove::get_root_nodes()` (which returns node pointers meaningless to a lazy view), letting a caller discover what `intersect(query)` / `flanking` can run against. Both read nothing extra (no block loads, no format change). Mutation, aggregate graph/key counts, and `grove_to_sif` were deliberately left out — the first is write-only, the latter two would force reading the whole file, contradicting the lazy design. ([#509](https://github.com/genogrove/genogrove/issues/509), [#510](https://github.com/genogrove/genogrove/pull/510))
+
 ## [0.25.4] - 2026-07-22
 
 ### Added

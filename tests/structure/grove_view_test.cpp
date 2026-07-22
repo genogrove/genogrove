@@ -90,6 +90,15 @@ TEST(GroveViewTest, MatchesEagerIntersectAcrossIndices) {
     EXPECT_EQ(data_values(eager.intersect(gdt::interval{0, 60})),
               data_values(view.intersect(gdt::interval{0, 60})));
 
+    // Read-side introspection parity with the eager grove.
+    EXPECT_EQ(view.get_order(), eager.get_order());  // built with order 4
+    EXPECT_EQ(view.get_order(), 4);
+
+    // get_index_names() enumerates the same indices the eager grove holds, order-independent.
+    std::vector<std::string> view_names = view.get_index_names();
+    std::sort(view_names.begin(), view_names.end());
+    EXPECT_EQ(view_names, (std::vector<std::string>{"chr1", "chr2"}));
+
     fs::remove(path);
 }
 

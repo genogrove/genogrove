@@ -247,6 +247,23 @@ class grove_view {
         return out;
     }
 
+    /// The B+ tree order the `.gg` was built with. Mirrors grove::get_order().
+    [[nodiscard]] int get_order() const { return order; }
+
+    /// Names of every index (e.g. chromosome) in the `.gg`, in unspecified order
+    /// (like grove's unordered root map). The view-appropriate analogue of
+    /// grove::get_root_nodes() — lets a caller discover what intersect(query) /
+    /// flanking can run against. Reads nothing extra: the directory is already
+    /// in memory from open().
+    [[nodiscard]] std::vector<std::string> get_index_names() const {
+        std::vector<std::string> names;
+        names.reserve(index_roots.size());
+        for (const auto& [name, root_id] : index_roots) {
+            names.push_back(name);
+        }
+        return names;
+    }
+
     /// Blocks paged in so far — for tests asserting a query is actually partial.
     [[nodiscard]] std::size_t blocks_loaded() const { return node_cache.size() + ext_cache.size(); }
     /// Total block count from the directory.
