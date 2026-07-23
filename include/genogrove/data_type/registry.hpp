@@ -86,7 +86,7 @@ concept registry_value =
  * @note Thread safety: intern(), find(), clear(), serialize(), and deserialize()
  *       are mutex-protected and may be called concurrently with one another.
  *       get(), contains(), size(), and empty() are UNLOCKED fast paths — they are
- *       safe only when no writer (intern/clear/deserialize) runs concurrently.
+ *       safe only when no writer (intern/clear/reset/deserialize) runs concurrently.
  *       Calling any of them while a writer is in flight is a data race, and thus
  *       undefined behavior (not a stale-but-defined read): they touch the same
  *       std::deque / std::unordered_map that intern() grows and deserialize()
@@ -219,7 +219,7 @@ class registry {
      * @param id The ID returned from intern().
      * @return Const reference to the stored payload.
      * @throws std::out_of_range if `id` is not a valid ID.
-     * @note Unlocked. Safe only when no writer (intern/clear/deserialize) runs
+     * @note Unlocked. Safe only when no writer (intern/clear/reset/deserialize) runs
      *       concurrently — a concurrent writer makes this a data race (undefined
      *       behavior). See the class-level thread-safety note.
      */
@@ -235,7 +235,7 @@ class registry {
      * @param id The ID to check.
      * @return true if valid, false otherwise.
      * @note Unlocked. Not safe to call concurrently with a writer
-     *       (intern/clear/deserialize) — that is a data race (undefined behavior);
+     *       (intern/clear/reset/deserialize) — that is a data race (undefined behavior);
      *       see the class-level thread-safety note.
      */
     [[nodiscard]] bool contains(id_type id) const noexcept {
@@ -245,7 +245,7 @@ class registry {
     /**
      * @brief Number of interned entries.
      * @note Unlocked. Not safe to call concurrently with a writer
-     *       (intern/clear/deserialize) — that is a data race (undefined behavior);
+     *       (intern/clear/reset/deserialize) — that is a data race (undefined behavior);
      *       see the class-level thread-safety note.
      */
     [[nodiscard]] std::size_t size() const noexcept {
@@ -255,7 +255,7 @@ class registry {
     /**
      * @brief Whether the registry has any entries.
      * @note Unlocked. Not safe to call concurrently with a writer
-     *       (intern/clear/deserialize) — that is a data race (undefined behavior);
+     *       (intern/clear/reset/deserialize) — that is a data race (undefined behavior);
      *       see the class-level thread-safety note.
      */
     [[nodiscard]] bool empty() const noexcept {
