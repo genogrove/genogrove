@@ -376,6 +376,12 @@ public:
         detail::block_inflater inflater;
         std::string comp_buf;
         std::string raw_buf;
+        // Bytes remaining in the block region, measured once. Each block's
+        // file-controlled clen is validated against this by plain subtraction
+        // instead of a per-block seek-to-end — seeking every block dominated
+        // deserialize (#513). -1 means the source is not seekable, so the
+        // per-block clen bound is skipped (the truncated-read check still fires).
+        std::streamoff block_bytes_left = detail::remaining_bytes(is);
         try {
             // ---- read every block (length-prefixed, independently compressed) ----
             for (detail::block_id b = 0; b < num_blocks; ++b) {
@@ -390,10 +396,16 @@ public:
                 if (clen > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
                     throw std::runtime_error("Failed to deserialize grove: block length out of range");
                 }
-                // clen bytes must actually remain in the stream: reject a bogus
-                // multi-GB length before resize allocates it (OOM guard) rather
-                // than after the truncated read.
-                detail::require_backing_bytes(is, clen, 1, "compressed block");
+                // clen bytes must actually remain: reject a bogus multi-GB length
+                // before resize allocates it (OOM guard). Arithmetic only — the
+                // budget was measured once above.
+                if (block_bytes_left >= 0) {
+                    block_bytes_left -= static_cast<std::streamoff>(sizeof(clen));
+                    if (block_bytes_left < 0 || clen > static_cast<uint64_t>(block_bytes_left)) {
+                        throw std::runtime_error("Failed to deserialize grove: compressed block length exceeds remaining stream");
+                    }
+                    block_bytes_left -= static_cast<std::streamoff>(clen);
+                }
                 comp_buf.resize(static_cast<size_t>(clen));
                 is.read(comp_buf.data(), static_cast<std::streamsize>(clen));
                 if (is.gcount() != static_cast<std::streamsize>(clen)) {

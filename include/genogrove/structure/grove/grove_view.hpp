@@ -287,6 +287,7 @@ class grove_view {
     detail::block_id num_blocks = 0;
     detail::block_id ext_block_begin = 0;
     std::vector<std::uint64_t> block_offsets;  // block_id -> offset of [clen][bytes]
+    std::uint64_t stream_size = 0;  // file end; bounds each block's clen without a seek (#513)
     std::unordered_map<std::string, detail::block_id> index_roots;
 
     std::deque<key_t> key_storage;  // stable addresses for loaded keys
@@ -389,6 +390,10 @@ class grove_view {
                 throw std::runtime_error("grove_view: truncated block during scan");
             }
         }
+        // End of the block region — used to bound each block's clen at load time
+        // by arithmetic instead of a per-load seek-to-end (#513).
+        const std::streampos end = is.tellg();
+        stream_size = (end == std::streampos(-1)) ? 0 : static_cast<std::uint64_t>(end);
     }
 
     // Seek to block b, read its length prefix, and inflate it into raw_buf.
@@ -413,7 +418,11 @@ class grove_view {
         if (clen > static_cast<std::uint64_t>(std::numeric_limits<std::streamsize>::max())) {
             throw std::runtime_error("grove_view: block length out of range");
         }
-        detail::require_backing_bytes(is, clen, 1, "compressed block");
+        // clen bytes must fit between this block's data start and the file end
+        // (measured once at scan time) — arithmetic only, no per-load seek (#513).
+        if (stream_size != 0 && clen > stream_size - block_offsets[b] - sizeof(clen)) {
+            throw std::runtime_error("grove_view: compressed block length exceeds file");
+        }
         comp_buf.resize(static_cast<std::size_t>(clen));
         is.read(comp_buf.data(), static_cast<std::streamsize>(clen));
         if (is.gcount() != static_cast<std::streamsize>(clen)) {
