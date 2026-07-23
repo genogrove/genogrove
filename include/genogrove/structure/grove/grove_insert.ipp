@@ -488,7 +488,8 @@ private:
 
         // Spread the data evenly across leaves — a greedy (order-1)-per-leaf
         // packing could leave the final leaf underfull (below leaf_min_keys).
-        const even_distribution leaf_dist = distribute_evenly(data.size(), this->order - 1);
+        const detail::even_distribution leaf_dist =
+            detail::distribute_evenly(data.size(), static_cast<size_t>(this->order - 1));
 
         auto it = data.begin();
         for (size_t leaf_idx = 0; leaf_idx < leaf_dist.num_groups; ++leaf_idx) {
@@ -540,8 +541,8 @@ private:
             // Spread the children evenly across parents — a greedy
             // order-per-parent packing could leave the final parent underfull
             // (below internal_min_keys).
-            const even_distribution parent_dist =
-                distribute_evenly(current_layer.size(), this->order);
+            const detail::even_distribution parent_dist =
+                detail::distribute_evenly(current_layer.size(), static_cast<size_t>(this->order));
 
             size_t child_idx = 0;
             for (size_t parent_idx = 0; parent_idx < parent_dist.num_groups; ++parent_idx) {
