@@ -65,6 +65,16 @@ TEST(BulkDistributionTest, CountsAboveIntMaxAreNotNarrowed) {
     expect_valid_distribution(5'000'000'000ull, 100'000'000);  // few very large groups
 }
 
+// The ceiling must not overflow: (total + max - 1) would wrap to 0 near
+// SIZE_MAX and then divide by zero. Pure arithmetic — no iteration over the
+// (astronomically many) groups.
+TEST(BulkDistributionTest, CeilingDoesNotOverflowNearSizeMax) {
+    const std::size_t total = std::numeric_limits<std::size_t>::max() - 10;
+    const det::even_distribution d = det::distribute_evenly(total, 4);
+    EXPECT_GT(d.num_groups, 0u);
+    EXPECT_EQ(d.num_groups, total / 4 + (total % 4 != 0 ? 1 : 0));
+}
+
 TEST(BulkDistributionTest, ThreeBillionOverHundredIsExact) {
     const det::even_distribution d = det::distribute_evenly(3'000'000'000ull, 100);
     EXPECT_EQ(d.num_groups, 30'000'000u);

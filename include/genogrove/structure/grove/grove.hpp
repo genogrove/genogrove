@@ -98,7 +98,10 @@ struct even_distribution {
 /// routing the ceiling through an int helper (as an earlier version did) narrowed
 /// the size_t `total` and silently corrupted bulk builds above INT_MAX keys (#486).
 inline even_distribution distribute_evenly(std::size_t total, std::size_t max_per_group) noexcept {
-    const std::size_t num_groups = (total + max_per_group - 1) / max_per_group;  // ceil, in size_t
+    // Overflow-safe ceiling: total/max + (remainder ? 1 : 0) never adds near
+    // SIZE_MAX, unlike (total + max - 1) / max.
+    const std::size_t num_groups =
+        total / max_per_group + (total % max_per_group != 0 ? 1 : 0);
     return {num_groups, total / num_groups, total % num_groups};
 }
 
