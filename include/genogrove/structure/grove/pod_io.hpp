@@ -15,6 +15,26 @@
 
 namespace genogrove::structure::detail {
 
+/// Bytes from the current get position to the end of the stream, or -1 if the
+/// source is not seekable. The position is preserved. Measuring this once and
+/// tracking it by hand avoids a seek per element in hot loops (see #513).
+inline std::streamoff remaining_bytes(std::istream& is) {
+    const std::streampos cur = is.tellg();
+    if (cur == std::streampos(-1)) {
+        return -1;  // not seekable
+    }
+    is.seekg(0, std::ios::end);
+    const std::streampos end = is.tellg();
+    is.seekg(cur, std::ios::beg);
+    // streampos only guarantees ==/!=; use the streamoff difference for ordering.
+    const std::streamoff diff = end - cur;
+    if (!is || end == std::streampos(-1) || diff < 0) {
+        is.clear();  // clear any failbit from the probe; leave unbounded
+        return -1;
+    }
+    return diff;
+}
+
 /// Reject a file-controlled element count that the remaining stream cannot
 /// possibly back. Every element occupies at least `min_bytes_per_elem` bytes on
 /// disk, so a `count` exceeding `remaining / min_bytes_per_elem` is corrupt and
@@ -25,24 +45,17 @@ namespace genogrove::structure::detail {
 ///
 /// Seekable streams only (files, stringstreams, and the seekable memory_streambuf
 /// over decompressed blocks). A non-seekable source is left unbounded — best
-/// effort rather than a false rejection. The stream position is preserved.
+/// effort rather than a false rejection. The stream position is preserved. This
+/// seeks internally, so do NOT call it per element in a hot loop — measure
+/// remaining_bytes() once and track it instead (see grove::deserialize, #513).
 inline void require_backing_bytes(std::istream& is, std::uint64_t count,
                                   std::uint64_t min_bytes_per_elem, const char* what) {
     if (count == 0 || min_bytes_per_elem == 0) {
         return;
     }
-    const std::streampos cur = is.tellg();
-    if (cur == std::streampos(-1)) {
-        return;  // not seekable — cannot bound
-    }
-    is.seekg(0, std::ios::end);
-    const std::streampos end = is.tellg();
-    is.seekg(cur, std::ios::beg);
-    // streampos only guarantees ==/!=; use the streamoff difference for ordering.
-    const std::streamoff remaining_off = end - cur;
-    if (!is || end == std::streampos(-1) || remaining_off < 0) {
-        is.clear();  // clear any failbit from the probe; leave unbounded
-        return;
+    const std::streamoff remaining_off = remaining_bytes(is);
+    if (remaining_off < 0) {
+        return;  // not seekable / undeterminable — leave unbounded
     }
     const std::uint64_t remaining = static_cast<std::uint64_t>(remaining_off);
     if (count > remaining / min_bytes_per_elem) {
