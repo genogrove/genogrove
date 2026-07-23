@@ -84,12 +84,17 @@ concept registry_value =
  * @endcode
  *
  * @note Thread safety: intern(), find(), clear(), serialize(), and deserialize()
- *       are protected by an internal mutex. get(), contains(), size(), empty()
- *       are unlocked fast paths. get(id) is safe under concurrent intern() iff
- *       the caller obtained `id` from a prior intern() that happens-before
- *       this thread (e.g. via thread join, mutex, atomic publication, queue).
- *       size()/empty()/contains() return best-effort snapshots under concurrent
- *       writes.
+ *       are mutex-protected and may be called concurrently with one another.
+ *       get(), contains(), size(), and empty() are UNLOCKED fast paths — they are
+ *       safe only when no writer (intern/clear/deserialize) runs concurrently.
+ *       Calling any of them while a writer is in flight is a data race, and thus
+ *       undefined behavior (not a stale-but-defined read): they touch the same
+ *       std::deque / std::unordered_map that intern() grows and deserialize()
+ *       move-assigns, and even a std::deque push_back races an unlocked reader on
+ *       the container's internal bookkeeping. Intended pattern: intern during a
+ *       build phase, then — once mutation has ceased and that fact is published to
+ *       reader threads (a thread join, mutex, atomic, or queue that establishes
+ *       happens-before) — read freely and lock-free from many threads.
  *
  * @note Singleton lifetime: Data persists for program duration. Call reset() in
  *       tests to clear state between cases.
@@ -214,8 +219,9 @@ class registry {
      * @param id The ID returned from intern().
      * @return Const reference to the stored payload.
      * @throws std::out_of_range if `id` is not a valid ID.
-     * @note Unlocked. Safe under concurrent intern() iff `id` was obtained from
-     *       an intern() that happens-before this call.
+     * @note Unlocked. Safe only when no writer (intern/clear/deserialize) runs
+     *       concurrently — a concurrent writer makes this a data race (undefined
+     *       behavior). See the class-level thread-safety note.
      */
     const Payload& get(id_type id) const {
         if (id >= storage.size()) {
@@ -228,8 +234,9 @@ class registry {
      * @brief Check whether an ID refers to a valid entry.
      * @param id The ID to check.
      * @return true if valid, false otherwise.
-     * @note Unlocked best-effort read; size may be observed stale under
-     *       concurrent writes.
+     * @note Unlocked. Not safe to call concurrently with a writer
+     *       (intern/clear/deserialize) — that is a data race (undefined behavior);
+     *       see the class-level thread-safety note.
      */
     [[nodiscard]] bool contains(id_type id) const noexcept {
         return id < storage.size();
@@ -237,7 +244,9 @@ class registry {
 
     /**
      * @brief Number of interned entries.
-     * @note Unlocked best-effort read under concurrent writes.
+     * @note Unlocked. Not safe to call concurrently with a writer
+     *       (intern/clear/deserialize) — that is a data race (undefined behavior);
+     *       see the class-level thread-safety note.
      */
     [[nodiscard]] std::size_t size() const noexcept {
         return storage.size();
@@ -245,7 +254,9 @@ class registry {
 
     /**
      * @brief Whether the registry has any entries.
-     * @note Unlocked best-effort read under concurrent writes.
+     * @note Unlocked. Not safe to call concurrently with a writer
+     *       (intern/clear/deserialize) — that is a data race (undefined behavior);
+     *       see the class-level thread-safety note.
      */
     [[nodiscard]] bool empty() const noexcept {
         return storage.empty();
