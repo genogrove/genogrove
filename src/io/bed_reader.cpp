@@ -501,11 +501,21 @@ namespace genogrove::io {
             }
         }
 
+        // A BED12 record has one entry per block (exon); a few thousand is already
+        // far beyond any real feature. Cap the file-controlled count so a corrupt
+        // stream can't allocate a vector for up to 4 billion size_t's and OOM the
+        // process (mirrors gff_reader's MAX_ATTRIBUTES_PER_RECORD guard). See #484.
+        static constexpr uint32_t MAX_BLOCKS_PER_RECORD = 4096;
+
         std::vector<size_t> read_size_vector(std::istream& is) {
             uint32_t n = 0;
             is.read(reinterpret_cast<char*>(&n), sizeof(n));
             if (!is) {
                 throw std::runtime_error("Failed to deserialize block_info: stream error reading vector length");
+            }
+            if (n > MAX_BLOCKS_PER_RECORD) {
+                throw std::runtime_error(
+                    "Failed to deserialize block_info: unreasonable block count");
             }
             std::vector<size_t> v(n);
             if (n > 0) {

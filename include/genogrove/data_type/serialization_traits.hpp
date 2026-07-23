@@ -157,6 +157,24 @@ struct serialization_traits<std::string> {
         if (!is) {
             throw std::runtime_error("Failed to deserialize string: stream error reading length");
         }
+        // `length` is file-controlled and the content follows immediately: if the
+        // stream can't back that many bytes the length is corrupt, so reject it
+        // before allocating a `length`-sized string (OOM guard on untrusted input,
+        // #484). Seekable streams only — the position is restored either way.
+        if (length > 0) {
+            const std::streampos cur = is.tellg();
+            if (cur != std::streampos(-1)) {
+                is.seekg(0, std::ios::end);
+                const std::streampos end = is.tellg();
+                is.seekg(cur, std::ios::beg);
+                if (is && end != std::streampos(-1) &&
+                    static_cast<uint64_t>(end - cur) < length) {
+                    throw std::runtime_error(
+                        "Failed to deserialize string: length exceeds remaining stream bytes");
+                }
+                is.clear();  // drop any failbit set by the seek probe
+            }
+        }
         std::string value(length, '\0');
         is.read(&value[0], static_cast<std::streamsize>(length));
         if (!is) {

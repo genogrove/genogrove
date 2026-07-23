@@ -121,8 +121,9 @@ public:
 
         // External keys are distributed into fixed-size blocks so a partial read
         // can page in one registry chunk at a time (never the whole registry).
-        // ext_chunk is a compression-vs-granularity knob (see gg_block_format.hpp).
-        constexpr uint32_t ext_chunk = 512;  // ponytail: fixed; tune via benchmark
+        // ext_chunk is a compression-vs-granularity knob; deserialization caps the
+        // per-block count at this same constant (see gg_block_format.hpp, #484).
+        constexpr uint32_t ext_chunk = detail::max_external_keys_per_block;
         std::vector<std::pair<size_t, size_t>> ext_ranges;  // [begin,end) in external_key_storage
         for (size_t start = 0; start < external_key_storage.size(); start += ext_chunk) {
             size_t end = std::min(start + static_cast<size_t>(ext_chunk), external_key_storage.size());
@@ -274,6 +275,11 @@ public:
         if (!is) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading index count");
         }
+        // num_indices is file-controlled: reject a count the stream can't back
+        // before reserving (each index entry is >= a name-length field + a root
+        // block id on disk). Guards the reserve against a malicious OOM.
+        detail::require_backing_bytes(is, num_indices,
+                                      sizeof(uint32_t) + sizeof(detail::block_id), "index");
         std::vector<std::pair<std::string, detail::block_id>> index_roots;
         index_roots.reserve(num_indices);
         for (uint32_t i = 0; i < num_indices; ++i) {
@@ -282,6 +288,7 @@ public:
             if (!is) {
                 throw std::runtime_error("Failed to deserialize grove: stream error reading index name length");
             }
+            detail::require_backing_bytes(is, name_len, 1, "index name");
             std::string name(name_len, '\0');
             is.read(name.data(), static_cast<std::streamsize>(name_len));
             if (!is) {
@@ -307,6 +314,11 @@ public:
         if (ext_block_begin > num_blocks) {
             throw std::runtime_error("Failed to deserialize grove: external-block-begin exceeds block count");
         }
+        // num_blocks is file-controlled and sizes the per-block index vectors
+        // below (all <= num_blocks entries). Each block is at least an 8-byte
+        // length prefix on disk, so reject a count the stream can't back before
+        // allocating — otherwise a tiny corrupt header forces a multi-GB resize.
+        detail::require_backing_bytes(is, num_blocks, sizeof(uint64_t), "block");
 
         // Pending edge to resolve after every block is parsed (targets may live
         // in a block not yet read). Metadata is carried only when present.
@@ -378,6 +390,10 @@ public:
                 if (clen > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
                     throw std::runtime_error("Failed to deserialize grove: block length out of range");
                 }
+                // clen bytes must actually remain in the stream: reject a bogus
+                // multi-GB length before resize allocates it (OOM guard) rather
+                // than after the truncated read.
+                detail::require_backing_bytes(is, clen, 1, "compressed block");
                 comp_buf.resize(static_cast<size_t>(clen));
                 is.read(comp_buf.data(), static_cast<std::streamsize>(clen));
                 if (is.gcount() != static_cast<std::streamsize>(clen)) {
@@ -403,14 +419,27 @@ public:
                     if (!zis) {
                         throw std::runtime_error("Failed to deserialize grove: stream error reading external block count");
                     }
+                    // cnt is file-controlled. Reject a count the writer could never
+                    // have produced (it packs at most max_external_keys_per_block per
+                    // block) before allocating or looping — otherwise a bogus cnt
+                    // spins appending garbage into external storage until OOM.
+                    if (cnt > detail::max_external_keys_per_block) {
+                        throw std::runtime_error("Failed to deserialize grove: external block key count exceeds limit");
+                    }
                     auto& ekeys = ext_block_keys[b - ext_block_begin];
                     ekeys.reserve(cnt);
                     for (uint32_t i = 0; i < cnt; ++i) {
                         key_type key_value = key_type::deserialize(zis);
                         if constexpr (std::is_void_v<data_type>) {
+                            if (!zis) {
+                                throw std::runtime_error("Failed to deserialize grove: stream error reading external key");
+                            }
                             g.external_key_storage.emplace_back(key_value);
                         } else {
                             data_type data_value = gdt::serializer<data_type>::read(zis);
+                            if (!zis) {
+                                throw std::runtime_error("Failed to deserialize grove: stream error reading external key");
+                            }
                             g.external_key_storage.emplace_back(key_value, data_value);
                         }
                         ekeys.push_back(&g.external_key_storage.back());

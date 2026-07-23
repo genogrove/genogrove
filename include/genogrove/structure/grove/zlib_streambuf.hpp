@@ -81,8 +81,17 @@ public:
     block_inflater(block_inflater&&) = delete;
     block_inflater& operator=(block_inflater&&) = delete;
 
+    /// Default per-block decompressed-size ceiling: a small compressed block can
+    /// inflate to gigabytes (a "zip bomb"), so cap the output on untrusted input.
+    /// 1 GiB is far above any legitimate single block (one node or one external-
+    /// key chunk) while still bounding the blow-up. See #484.
+    static constexpr std::size_t default_max_block_output = std::size_t{1} << 30;
+
     /// Decompress the zlib stream in [src, src+len) into `out` (cleared first).
-    void decompress(const char* src, std::size_t len, std::string& out) {
+    /// Throws if the decompressed size would exceed `max_output` — a
+    /// decompression-bomb guard for corrupt/malicious blocks.
+    void decompress(const char* src, std::size_t len, std::string& out,
+                    std::size_t max_output = default_max_block_output) {
         if (inflateReset(&zs) != Z_OK) {
             throw std::runtime_error("inflateReset failed");
         }
@@ -99,7 +108,11 @@ public:
                 // since a full output buffer is provided every iteration.
                 throw std::runtime_error("inflate failed: truncated or corrupt block");
             }
-            out.append(scratch.data(), scratch.size() - zs.avail_out);
+            const std::size_t produced = scratch.size() - zs.avail_out;
+            if (produced > max_output - out.size()) {  // out.size() <= max_output holds
+                throw std::runtime_error("inflate failed: decompressed block exceeds size limit");
+            }
+            out.append(scratch.data(), produced);
         } while (ret != Z_STREAM_END);
     }
 
@@ -121,6 +134,38 @@ public:
     memory_streambuf(const char* data, std::size_t size) {
         char* p = const_cast<char*>(data);
         setg(p, p, p + size);
+    }
+
+protected:
+    // Seekable (read-only) so callers can measure the remaining decompressed
+    // block via tellg()/seekg() — used by require_backing_bytes to bound
+    // in-block counts/lengths against real data (see #484).
+    pos_type seekoff(off_type off, std::ios_base::seekdir dir,
+                     std::ios_base::openmode which) override {
+        if ((which & std::ios_base::in) == 0) {
+            return pos_type(off_type(-1));
+        }
+        // Work in integer-offset space: forming an out-of-range pointer (e.g.
+        // eback() + huge_off) before the bounds check is UB, so validate the
+        // target offset against [0, size] first, then build the in-bounds pointer.
+        const off_type size = egptr() - eback();
+        off_type base = 0;
+        if (dir == std::ios_base::cur) {
+            base = gptr() - eback();
+        } else if (dir == std::ios_base::end) {
+            base = size;
+        }
+        const off_type target = base + off;
+        if (target < 0 || target > size) {
+            return pos_type(off_type(-1));
+        }
+        char* const beg = eback();
+        setg(beg, beg + target, beg + size);
+        return pos_type(target);
+    }
+
+    pos_type seekpos(pos_type pos, std::ios_base::openmode which) override {
+        return seekoff(off_type(pos), std::ios_base::beg, which);
     }
 };
 
