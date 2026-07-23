@@ -78,6 +78,32 @@ namespace genogrove::structure {
         inline constexpr bool is_optional_v = is_optional<T>::value;
     }
 
+namespace detail {
+
+/// Result of distributing items as evenly as possible into groups.
+struct even_distribution {
+    std::size_t num_groups;      ///< Number of groups
+    std::size_t base_per_group;  ///< Items every group holds before the remainder
+    std::size_t extra_groups;    ///< The first `extra_groups` groups hold one extra
+
+    /// Number of items in group `idx` (0-based).
+    std::size_t count_for(std::size_t idx) const noexcept {
+        return base_per_group + (idx < extra_groups ? 1 : 0);
+    }
+};
+
+/// Distribute `total` (> 0) items into the fewest groups such that no group
+/// exceeds `max_per_group` (> 0) items, spreading the remainder one per group
+/// across the first `total % num_groups` groups. All arithmetic is size_t:
+/// routing the ceiling through an int helper (as an earlier version did) narrowed
+/// the size_t `total` and silently corrupted bulk builds above INT_MAX keys (#486).
+inline even_distribution distribute_evenly(std::size_t total, std::size_t max_per_group) noexcept {
+    const std::size_t num_groups = (total + max_per_group - 1) / max_per_group;  // ceil, in size_t
+    return {num_groups, total / num_groups, total % num_groups};
+}
+
+} // namespace detail
+
 /**
  * @class grove
  * @brief Template-based B+ tree container for efficient genomic interval storage and querying
@@ -237,27 +263,6 @@ class grove {
     /// Floor of a/b for positive integers (e.g. floor_div(9, 2) == 4)
     static constexpr int floor_div(int a, int b) noexcept {
         return a / b;
-    }
-
-    /// Result of distributing items as evenly as possible into groups.
-    struct even_distribution {
-        size_t num_groups;      ///< Number of groups
-        size_t base_per_group;  ///< Items every group holds before the remainder
-        size_t extra_groups;    ///< The first `extra_groups` groups hold one extra
-
-        /// Number of items in group `idx` (0-based).
-        size_t count_for(size_t idx) const noexcept {
-            return base_per_group + (idx < extra_groups ? 1 : 0);
-        }
-    };
-
-    /// Distribute `total` (> 0) items into the fewest groups such that no group
-    /// exceeds `max_per_group` items, spreading the remainder one per group
-    /// across the first `total % num_groups` groups.
-    static even_distribution distribute_evenly(size_t total, int max_per_group) noexcept {
-        const size_t num_groups =
-            static_cast<size_t>(ceil_div(static_cast<int>(total), max_per_group));
-        return {num_groups, total / num_groups, total % num_groups};
     }
 
     /// Minimum number of keys for a leaf node: ceil((order - 1) / 2)
