@@ -145,21 +145,23 @@ protected:
         if ((which & std::ios_base::in) == 0) {
             return pos_type(off_type(-1));
         }
-        char* const beg = eback();
-        char* const end = egptr();
-        char* target = nullptr;
-        if (dir == std::ios_base::beg) {
-            target = beg + off;
-        } else if (dir == std::ios_base::cur) {
-            target = gptr() + off;
-        } else {  // std::ios_base::end
-            target = end + off;
+        // Work in integer-offset space: forming an out-of-range pointer (e.g.
+        // eback() + huge_off) before the bounds check is UB, so validate the
+        // target offset against [0, size] first, then build the in-bounds pointer.
+        const off_type size = egptr() - eback();
+        off_type base = 0;
+        if (dir == std::ios_base::cur) {
+            base = gptr() - eback();
+        } else if (dir == std::ios_base::end) {
+            base = size;
         }
-        if (target < beg || target > end) {
+        const off_type target = base + off;
+        if (target < 0 || target > size) {
             return pos_type(off_type(-1));
         }
-        setg(beg, target, end);
-        return pos_type(target - beg);
+        char* const beg = eback();
+        setg(beg, beg + target, beg + size);
+        return pos_type(target);
     }
 
     pos_type seekpos(pos_type pos, std::ios_base::openmode which) override {

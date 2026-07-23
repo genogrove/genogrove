@@ -338,6 +338,41 @@ TEST(SerializationDoSTest, HugeStringLengthRejected) {
     EXPECT_THROW(gdt::serialization_traits<std::string>::deserialize(ss), std::runtime_error);
 }
 
+TEST(SerializationDoSTest, HugeCompressedBlockLengthRejected) {
+    // A block's compressed length is file-controlled; a multi-GB clen with no
+    // backing bytes must be rejected before comp_buf.resize allocates it.
+    using grove_t = gst::grove<gdt::interval, int>;
+    std::string bytes = start_stream(/*num_indices=*/0);
+    put_pod<gst::detail::block_id>(bytes, 1u);           // num_blocks
+    put_pod<gst::detail::block_id>(bytes, 1u);           // ext_block_begin (block 0 is a node)
+    put_pod<std::uint64_t>(bytes, 0u);                   // leaf key count
+    put_pod<std::uint64_t>(bytes, 0u);                   // external key count
+    put_pod<std::uint64_t>(bytes, std::uint64_t{1} << 40);  // clen = 1 TiB, no data follows
+    std::stringstream ss(bytes, std::ios::in | std::ios::binary);
+    EXPECT_THROW(grove_t::deserialize(ss), std::runtime_error);
+}
+
+TEST(SerializationDoSTest, HugeExternalKeyCountRejected) {
+    // An external block's key count is read from the (decompressed) block; a
+    // count above the writer's per-block chunk cap is rejected before parsing.
+    // The count is checked first, so the block body is just the count field.
+    using grove_t = gst::grove<gdt::interval, int>;
+    std::string payload;
+    put_pod<std::uint32_t>(payload, gst::detail::max_external_keys_per_block + 1);
+    std::string comp;
+    gst::detail::block_deflater{}.compress(payload, comp);
+
+    std::string bytes = start_stream(/*num_indices=*/0);
+    put_pod<gst::detail::block_id>(bytes, 1u);           // num_blocks
+    put_pod<gst::detail::block_id>(bytes, 0u);           // ext_block_begin = 0 -> block 0 is external
+    put_pod<std::uint64_t>(bytes, 0u);                   // leaf key count
+    put_pod<std::uint64_t>(bytes, 0u);                   // external key count
+    put_pod<std::uint64_t>(bytes, static_cast<std::uint64_t>(comp.size()));  // clen
+    bytes += comp;
+    std::stringstream ss(bytes, std::ios::in | std::ios::binary);
+    EXPECT_THROW(grove_t::deserialize(ss), std::runtime_error);
+}
+
 TEST(SerializationDoSTest, InflaterEnforcesOutputCap) {
     // A small compressed block that inflates far past the cap must throw rather
     // than materialize the full output (decompression-bomb guard).

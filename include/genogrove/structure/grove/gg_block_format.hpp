@@ -21,6 +21,13 @@ using block_id = std::uint32_t;
 /// leaf in an index's leaf chain (which has no successor).
 inline constexpr block_id no_block = 0xFFFFFFFFu;
 
+/// Maximum external keys packed into one block by the writer (its chunk size).
+/// A block's key count is read from the file, so deserialization rejects any
+/// count above this — a valid stream never exceeds it, and a bogus count must
+/// not drive an unbounded parse/allocation loop (see #484). Keep the writer's
+/// chunk size and this cap in lock-step by referencing this constant in both.
+inline constexpr std::uint32_t max_external_keys_per_block = 512;
+
 /// Magic + version at the very start of a grove serialization stream (distinct
 /// from the CLI-level io::gg_header that wraps a .gg file). Lets grove::deserialize
 /// reject a foreign / older-layout stream with a clear error before parsing. The

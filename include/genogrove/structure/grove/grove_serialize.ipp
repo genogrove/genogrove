@@ -121,8 +121,9 @@ public:
 
         // External keys are distributed into fixed-size blocks so a partial read
         // can page in one registry chunk at a time (never the whole registry).
-        // ext_chunk is a compression-vs-granularity knob (see gg_block_format.hpp).
-        constexpr uint32_t ext_chunk = 512;  // ponytail: fixed; tune via benchmark
+        // ext_chunk is a compression-vs-granularity knob; deserialization caps the
+        // per-block count at this same constant (see gg_block_format.hpp, #484).
+        constexpr uint32_t ext_chunk = detail::max_external_keys_per_block;
         std::vector<std::pair<size_t, size_t>> ext_ranges;  // [begin,end) in external_key_storage
         for (size_t start = 0; start < external_key_storage.size(); start += ext_chunk) {
             size_t end = std::min(start + static_cast<size_t>(ext_chunk), external_key_storage.size());
@@ -389,6 +390,10 @@ public:
                 if (clen > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
                     throw std::runtime_error("Failed to deserialize grove: block length out of range");
                 }
+                // clen bytes must actually remain in the stream: reject a bogus
+                // multi-GB length before resize allocates it (OOM guard) rather
+                // than after the truncated read.
+                detail::require_backing_bytes(is, clen, 1, "compressed block");
                 comp_buf.resize(static_cast<size_t>(clen));
                 is.read(comp_buf.data(), static_cast<std::streamsize>(clen));
                 if (is.gcount() != static_cast<std::streamsize>(clen)) {
@@ -414,12 +419,15 @@ public:
                     if (!zis) {
                         throw std::runtime_error("Failed to deserialize grove: stream error reading external block count");
                     }
+                    // cnt is file-controlled. Reject a count the writer could never
+                    // have produced (it packs at most max_external_keys_per_block per
+                    // block) before allocating or looping — otherwise a bogus cnt
+                    // spins appending garbage into external storage until OOM.
+                    if (cnt > detail::max_external_keys_per_block) {
+                        throw std::runtime_error("Failed to deserialize grove: external block key count exceeds limit");
+                    }
                     auto& ekeys = ext_block_keys[b - ext_block_begin];
-                    // cnt is file-controlled. Cap the reserve so it can't drive an
-                    // up-front OOM; the loop below still reads exactly cnt keys but
-                    // throws the moment the (decompressed) block runs out, so a
-                    // bogus cnt can't spin appending garbage into external storage.
-                    ekeys.reserve(std::min<uint32_t>(cnt, 4096u));
+                    ekeys.reserve(cnt);
                     for (uint32_t i = 0; i < cnt; ++i) {
                         key_type key_value = key_type::deserialize(zis);
                         if constexpr (std::is_void_v<data_type>) {

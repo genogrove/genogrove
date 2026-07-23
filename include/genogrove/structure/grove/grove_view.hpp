@@ -413,6 +413,7 @@ class grove_view {
         if (clen > static_cast<std::uint64_t>(std::numeric_limits<std::streamsize>::max())) {
             throw std::runtime_error("grove_view: block length out of range");
         }
+        detail::require_backing_bytes(is, clen, 1, "compressed block");
         comp_buf.resize(static_cast<std::size_t>(clen));
         is.read(comp_buf.data(), static_cast<std::streamsize>(clen));
         if (is.gcount() != static_cast<std::streamsize>(clen)) {
@@ -463,14 +464,27 @@ class grove_view {
         if (!zis) {
             throw std::runtime_error("grove_view: stream error reading external block count");
         }
+        // cnt is file-controlled; reject a count the writer could never emit (it
+        // packs at most max_external_keys_per_block per block) before allocating
+        // or looping, and check stream state each iteration so a bogus count can't
+        // spin appending garbage keys until OOM.
+        if (cnt > detail::max_external_keys_per_block) {
+            throw std::runtime_error("grove_view: external block key count exceeds limit");
+        }
         std::vector<key_t*> keys;
         keys.reserve(cnt);
         for (std::uint32_t i = 0; i < cnt; ++i) {
             key_type key_value = key_type::deserialize(zis);
             if constexpr (std::is_void_v<data_type>) {
+                if (!zis) {
+                    throw std::runtime_error("grove_view: stream error reading external key");
+                }
                 key_storage.emplace_back(key_value);
             } else {
                 data_type data_value = gdt::serializer<data_type>::read(zis);
+                if (!zis) {
+                    throw std::runtime_error("grove_view: stream error reading external key");
+                }
                 key_storage.emplace_back(key_value, data_value);
             }
             keys.push_back(&key_storage.back());
