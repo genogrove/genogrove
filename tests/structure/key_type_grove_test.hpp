@@ -991,6 +991,71 @@ TYPED_TEST_P(grove_typed_test, internal_node_split_regular_insert) {
     }
 }
 
+// Unsorted insert into a tree several levels deep. Routing descends by
+// comparing the key against each child's subtree maximum; if that comparison is
+// wrong the key lands in a sibling, sorted inside the wrong leaf, and no later
+// split moves it back. Every per-node invariant still holds in that state — the
+// property that breaks is that the leaf chain, read front to back, is the
+// sorted key sequence (#517).
+//
+// A small order with many keys is what makes this visible: shallow trees route
+// the key at most one leaf too far, where the forward leaf walk still reaches
+// it. Runs for every key type, so the scalar types (which share the same
+// routing comparison) are covered too.
+TYPED_TEST_P(grove_typed_test, deep_unsorted_insert_keeps_leaf_chain_sorted) {
+    constexpr size_t key_count = 300;
+    constexpr int order = 3;
+
+    gst::grove<TypeParam, int> deep_grove(order);
+    auto data = grove_test_traits<TypeParam, int>::generate_test_data(key_count);
+    ASSERT_EQ(data.size(), key_count);
+
+    auto shuffled = data;
+    std::shuffle(shuffled.begin(), shuffled.end(), std::mt19937{42});
+    for (const auto& [key_val, data_val] : shuffled) {
+        deep_grove.insert_data(this->get_default_index(), key_val, data_val);
+    }
+
+    validate_grove_index(deep_grove, this->get_default_index(), order);
+
+    // Leaf chain read front to back == the keys in sorted order
+    auto* leftmost = deep_grove.get_root_nodes().at(this->get_default_index());
+    ASSERT_NE(leftmost, nullptr);
+    while (!leftmost->get_is_leaf()) {
+        ASSERT_FALSE(leftmost->get_children().empty());
+        leftmost = leftmost->get_children().front();
+    }
+
+    std::vector<TypeParam> chain;
+    for (auto* leaf = leftmost; leaf != nullptr; leaf = leaf->get_next()) {
+        for (const auto* key_ptr : leaf->get_keys()) {
+            chain.push_back(key_ptr->get_value());
+        }
+    }
+
+    std::vector<TypeParam> expected;
+    expected.reserve(data.size());
+    for (const auto& [key_val, data_val] : data) {
+        expected.push_back(key_val);
+    }
+    std::sort(expected.begin(), expected.end());
+
+    ASSERT_EQ(chain.size(), expected.size()) << "leaf chain lost or duplicated keys";
+    for (size_t i = 0; i < expected.size(); ++i) {
+        ASSERT_TRUE(chain[i] == expected[i])
+            << "leaf chain diverges from sorted order at position " << i
+            << " (chain " << chain[i].to_string()
+            << ", expected " << expected[i].to_string() << ")";
+    }
+
+    // The reported symptom: a query for a key's own value no longer found it.
+    for (const auto& [key_val, data_val] : data) {
+        auto results = deep_grove.intersect(key_val, this->get_default_index());
+        EXPECT_FALSE(results.get_keys().empty())
+            << "point query missed " << key_val.to_string();
+    }
+}
+
 TYPED_TEST_P(grove_typed_test, grove_to_sif_output) {
     auto data = this->generate_test_data(20);
     for (const auto& [key, value] : data) {
@@ -1226,6 +1291,7 @@ REGISTER_TYPED_TEST_SUITE_P(grove_typed_test,
     serialization_multiple_indices,
     internal_node_split_invariants,
     internal_node_split_regular_insert,
+    deep_unsorted_insert_keeps_leaf_chain_sorted,
     grove_to_sif_output,
     grove_to_sif_empty_grove,
     serialization_compressed_smaller,

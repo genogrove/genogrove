@@ -17,6 +17,39 @@ namespace genogrove::test_support {
 namespace gst = genogrove::structure;
 
 /**
+ * @brief The actual largest key in a subtree — last key of its rightmost leaf
+ *
+ * Computed the slow, obvious way so it is an independent check on the cached
+ * value that insertion routes with.
+ */
+template <typename key_type, typename data_type>
+const key_type* actual_subtree_max(gst::node<key_type, data_type>* n) {
+    while (n != nullptr && !n->get_is_leaf()) {
+        if (n->get_children().empty()) return nullptr;
+        n = n->get_children().back();
+    }
+    if (n == nullptr || n->get_keys().empty()) return nullptr;
+    return &n->get_keys().back()->get_value();
+}
+
+/**
+ * @brief The actual bounding range of a subtree, computed from leaf keys only
+ *
+ * Deliberately ignores internal separator keys — otherwise a stale separator
+ * would be compared against a range derived from itself and the check would
+ * pass on both.
+ */
+template <typename key_type, typename data_type>
+key_type actual_subtree_range(gst::node<key_type, data_type>* n) {
+    if (n->get_is_leaf()) return n->calc_keys_aggregate();
+    key_type range = actual_subtree_range(n->get_children()[0]);
+    for (size_t i = 1; i < n->get_children().size(); ++i) {
+        range = key_type::aggregate(range, actual_subtree_range(n->get_children()[i]));
+    }
+    return range;
+}
+
+/**
  * @brief Recursively validate structural B+ tree invariants for a node
  *
  * Checks per node:
@@ -46,6 +79,22 @@ void validate_tree_invariants(
 
     EXPECT_EQ(n->get_parent(), expected_parent)
         << "Parent pointer mismatch at depth " << depth;
+
+    // Cached routing max must match the subtree's real maximum key. Insertion
+    // routes on this value, so a stale one silently drops keys into the wrong
+    // leaf while every local invariant still looks healthy (#517).
+    {
+        const key_type* expected_max = actual_subtree_max(n);
+        const auto& cached_max = n->get_subtree_max();
+        ASSERT_EQ(cached_max.has_value(), expected_max != nullptr)
+            << "Cached subtree max presence mismatch at depth " << depth;
+        if (expected_max != nullptr) {
+            EXPECT_TRUE(*cached_max == *expected_max)
+                << "Stale cached subtree max at depth " << depth
+                << " (cached " << cached_max->to_string()
+                << ", actual " << expected_max->to_string() << ")";
+        }
+    }
 
     // Leaf min: ceil((order-1)/2); internal min: floor((order-1)/2)
     const int min_keys = n->get_is_leaf()
@@ -88,8 +137,36 @@ void validate_tree_invariants(
             << n->get_keys().size() << " keys";
 
         for (size_t i = 1; i < n->get_keys().size(); ++i) {
-            EXPECT_FALSE(n->get_keys()[i]->get_value() < n->get_keys()[i-1]->get_value())
-                << "Keys should be sorted within internal node at depth " << depth;
+            if constexpr (requires { key_type::is_interval; }) {
+                // Separators are bounding boxes, and only their start is
+                // ordered across siblings: the end is a subtree maximum (one
+                // long interval pushes it arbitrarily far right), and for
+                // stranded keys aggregating mixed strands yields the '*'
+                // wildcard, which operator< sorts before any concrete strand.
+                // A full key comparison is therefore not an invariant here —
+                // separator correctness is covered by the exactness check below.
+                EXPECT_LE(n->get_keys()[i-1]->get_value().get_start(),
+                          n->get_keys()[i]->get_value().get_start())
+                    << "Separator starts should be non-decreasing at depth " << depth;
+            } else {
+                // Scalar key types aggregate to the subtree maximum, so their
+                // separators are fully ordered.
+                EXPECT_FALSE(n->get_keys()[i]->get_value() < n->get_keys()[i-1]->get_value())
+                    << "Keys should be sorted within internal node at depth " << depth;
+            }
+        }
+
+        // Each separator must describe exactly the child it sits in front of.
+        // A separator that still carries a pre-split node's range keeps a start
+        // from further left, which both loosens query pruning and makes the
+        // separator sequence non-monotonic (the symptom seen at depth 4-6).
+        for (size_t i = 0; i < n->get_keys().size(); ++i) {
+            const key_type child_range = actual_subtree_range(n->get_children()[i]);
+            EXPECT_TRUE(n->get_keys()[i]->get_value() == child_range)
+                << "Separator " << i << " at depth " << depth
+                << " does not match its child's subtree range (separator "
+                << n->get_keys()[i]->get_value().to_string()
+                << ", child " << child_range.to_string() << ")";
         }
 
         for (size_t i = 0; i < n->get_children().size(); ++i) {
@@ -128,6 +205,21 @@ std::vector<gst::node<key_type, data_type>*> validate_tree_structure(
     if (!leaves_in_order.empty()) {
         EXPECT_EQ(leaves_in_order.back()->get_next(), nullptr)
             << "Last leaf's next pointer should be nullptr";
+    }
+
+    // The concatenated leaf sequence must be globally sorted. Per-leaf
+    // sortedness is not enough: a misrouted key sits sorted inside the wrong
+    // leaf, and search_overlaps walks the chain forward and stops once a leaf
+    // starts past the query, so anything stranded behind that point is
+    // unreachable (#517).
+    for (size_t i = 0; i + 1 < leaves_in_order.size(); ++i) {
+        const auto& current_keys = leaves_in_order[i]->get_keys();
+        const auto& next_keys = leaves_in_order[i + 1]->get_keys();
+        if (current_keys.empty() || next_keys.empty()) continue;
+        EXPECT_FALSE(next_keys.front()->get_value() < current_keys.back()->get_value())
+            << "Leaf chain is not globally sorted between leaf " << i << " and " << (i + 1)
+            << " (" << current_keys.back()->get_value().to_string()
+            << " followed by " << next_keys.front()->get_value().to_string() << ")";
     }
 
     return leaves_in_order;

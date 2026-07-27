@@ -12,6 +12,7 @@
 #include <deque>
 #include <istream>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <ranges>
 #include <stdexcept>
@@ -412,6 +413,56 @@ class node {
     // =========================================================================
 
     /**
+     * @brief Largest key in this node's subtree, or nullopt if the subtree is empty
+     *
+     * This is the B+ tree routing separator: insertion descends past a child
+     * exactly when the key to insert is greater than that child's subtree max.
+     * The separator keys cannot serve this purpose — they are subtree bounding
+     * boxes, so their start is the subtree MINIMUM and their end is a maximum
+     * end contributed by some other key. Neither is the subtree's maximum key
+     * (see #517).
+     */
+    [[nodiscard]] const std::optional<key_type>& get_subtree_max() const {
+        return this->subtree_max;
+    }
+
+    /**
+     * @brief Recompute this node's cached subtree max from its own contents
+     *
+     * O(1): a leaf's max is its last key, an internal node's max is its last
+     * child's cached max (the last child holds the largest keys). Callers must
+     * refresh bottom-up — every structural change refreshes the changed node
+     * before its ancestors.
+     */
+    void refresh_subtree_max() {
+        if (this->is_leaf) {
+            this->subtree_max = this->keys.empty()
+                ? std::nullopt
+                : std::optional<key_type>{this->keys.back()->get_value()};
+        } else {
+            this->subtree_max = this->children.empty()
+                ? std::nullopt
+                : this->children.back()->get_subtree_max();
+        }
+    }
+
+    /**
+     * @brief Refresh the cached subtree max of every node in this subtree
+     *
+     * Post-order, O(subtree size). Used after a tree is materialized wholesale
+     * rather than built through the insert paths (deserialization), where no
+     * incremental refresh has happened.
+     */
+    void refresh_subtree_max_recursive() {
+        if (!this->is_leaf) {
+            for (auto* child : this->children) {
+                child->refresh_subtree_max_recursive();
+            }
+        }
+        refresh_subtree_max();
+    }
+
+    /**
      * @brief Print all keys in this node to an output stream
      * @param os Output stream to write to
      * @param sep Separator string between keys (default: tab)
@@ -435,6 +486,9 @@ class node {
 
     /// Vector of pointers to child nodes (owned by this node)
     std::vector<node<key_type, data_type>*> children;
+
+    /// Largest key in this node's subtree — the routing separator (see get_subtree_max)
+    std::optional<key_type> subtree_max;
 
     /// Pointer to parent node (nullptr for root)
     node<key_type, data_type>* parent;

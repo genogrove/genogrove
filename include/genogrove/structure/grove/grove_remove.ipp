@@ -35,6 +35,7 @@ public:
         if (it == keys.end()) return false;
         keys.erase(it);
         --this->leaf_key_count;
+        leaf->refresh_subtree_max();
 
         this->graph_data.remove_all_edges(key_to_remove);
 
@@ -138,11 +139,12 @@ private:
             return nullptr;
         }
 
+        // Route on each child's subtree max, exactly as insert_iter does — a
+        // key can only be found in the subtree insertion would have put it in.
         size_t i = 0;
-        while (i < current->get_keys().size() &&
-               (key_to_find->get_value() > current->get_keys()[i]->get_value()) &&
-               !key_type::overlaps(current->get_keys()[i]->get_value(),
-                                   key_to_find->get_value())) {
+        while (i < current->get_keys().size()) {
+            const auto& child_max = current->get_child(i)->get_subtree_max();
+            if (!child_max.has_value() || !(key_to_find->get_value() > *child_max)) { break; }
             i++;
         }
         return find_leaf(current->get_child(i), key_to_find);
@@ -165,13 +167,20 @@ private:
     }
 
     /**
-     * @brief Walk from a node up to the root, refreshing separator keys
+     * @brief Walk from a node up to the root, refreshing separator keys and
+     *        cached subtree maxima
+     *
+     * The root gets its max refreshed too (it has no separator to update), so a
+     * removal of the largest key cannot leave a stale routing bound behind.
      */
     void update_separators_upward(node<key_type, data_type>* n) {
         auto* current = n;
-        while (current->get_parent() != nullptr) {
+        while (current != nullptr) {
+            current->refresh_subtree_max();
             auto* parent = current->get_parent();
-            set_parent_separator(parent, find_child_pos(current), current);
+            if (parent != nullptr) {
+                set_parent_separator(parent, find_child_pos(current), current);
+            }
             current = parent;
         }
     }
@@ -222,6 +231,8 @@ private:
             moved_child->set_parent(n);
         }
 
+        left->refresh_subtree_max();
+        n->refresh_subtree_max();
         set_parent_separator(parent, child_pos - 1, left);
         set_parent_separator(parent, child_pos, n);
         return true;
@@ -255,6 +266,8 @@ private:
             moved_child->set_parent(n);
         }
 
+        n->refresh_subtree_max();
+        right->refresh_subtree_max();
         set_parent_separator(parent, child_pos, n);
         set_parent_separator(parent, child_pos + 1, right);
         return true;
@@ -312,6 +325,9 @@ private:
             left->get_children().insert(left->get_children().end(),
                 right->get_children().begin(), right->get_children().end());
         }
+
+        // left absorbed right's keys/children, so its max is right's old max
+        left->refresh_subtree_max();
 
         // Detach right from parent: drop its child slot, then drop one key.
         // If right had its own separator (wasn't the last child), remove that
