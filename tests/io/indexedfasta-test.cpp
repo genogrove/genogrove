@@ -135,29 +135,29 @@ TEST_F(fastaIndexTest, nonExistentFileThrows) {
 
 TEST_F(fastaIndexTest, fetchUnknownSequenceThrows) {
     gio::fasta_index fasta(fasta_path);
-    EXPECT_THROW(fasta.fetch("chrX", 0, 10), std::out_of_range);
+    EXPECT_THROW((void)fasta.fetch("chrX", 0, 10), std::out_of_range);
 }
 
 TEST_F(fastaIndexTest, fetchEntireUnknownSequenceThrows) {
     gio::fasta_index fasta(fasta_path);
-    EXPECT_THROW(fasta.fetch("chrX"), std::out_of_range);
+    EXPECT_THROW((void)fasta.fetch("chrX"), std::out_of_range);
 }
 
 TEST_F(fastaIndexTest, fetchInvalidRegionThrows) {
     gio::fasta_index fasta(fasta_path);
-    EXPECT_THROW(fasta.fetch("chr1", 10, 10), std::out_of_range);
-    EXPECT_THROW(fasta.fetch("chr1", 20, 10), std::out_of_range);
+    EXPECT_THROW((void)fasta.fetch("chr1", 10, 10), std::out_of_range);
+    EXPECT_THROW((void)fasta.fetch("chr1", 20, 10), std::out_of_range);
 }
 
 TEST_F(fastaIndexTest, sequenceNameOutOfRangeThrows) {
     gio::fasta_index fasta(fasta_path);
-    EXPECT_THROW(fasta.sequence_name(3), std::out_of_range);
-    EXPECT_THROW(fasta.sequence_name(100), std::out_of_range);
+    EXPECT_THROW((void)fasta.sequence_name(3), std::out_of_range);
+    EXPECT_THROW((void)fasta.sequence_name(100), std::out_of_range);
 }
 
 TEST_F(fastaIndexTest, sequenceLengthUnknownNameThrows) {
     gio::fasta_index fasta(fasta_path);
-    EXPECT_THROW(fasta.sequence_length("chrX"), std::out_of_range);
+    EXPECT_THROW((void)fasta.sequence_length("chrX"), std::out_of_range);
 }
 
 // ==========================================

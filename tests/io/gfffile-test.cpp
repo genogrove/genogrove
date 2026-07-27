@@ -1165,7 +1165,7 @@ TEST(gffEntrySerialization, rejectsUnknownFormatValue) {
     bytes.back() = static_cast<char>(0x7F);  // any value > UNKNOWN (=2)
 
     std::stringstream corrupt(bytes, std::ios::in | std::ios::out | std::ios::binary);
-    EXPECT_THROW(gio::gff_entry::deserialize(corrupt), std::runtime_error);
+    EXPECT_THROW((void)gio::gff_entry::deserialize(corrupt), std::runtime_error);
 }
 
 TEST(gffEntrySerialization, groveRoundTrip) {

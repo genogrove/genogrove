@@ -108,33 +108,33 @@ TEST(LinksParser, commentsAndBlanksOnlyYieldNoRows) {
 
 TEST(LinksParser, rejectsSingleColumn) {
     auto in = tsv("gene1\ngene2\tgene3\n");
-    EXPECT_THROW(handlers::links::parse_links_tsv(in), std::runtime_error);
+    EXPECT_THROW((void)handlers::links::parse_links_tsv(in), std::runtime_error);
 }
 
 TEST(LinksParser, rejectsFourColumns) {
     auto in = tsv("gene1\tgene2\tmeta\textra\n");
-    EXPECT_THROW(handlers::links::parse_links_tsv(in), std::runtime_error);
+    EXPECT_THROW((void)handlers::links::parse_links_tsv(in), std::runtime_error);
 }
 
 TEST(LinksParser, rejectsEmptyColumn) {
     // A tab with an empty left or right field is malformed.
     auto in1 = tsv("gene1\t\n");
-    EXPECT_THROW(handlers::links::parse_links_tsv(in1), std::runtime_error);
+    EXPECT_THROW((void)handlers::links::parse_links_tsv(in1), std::runtime_error);
 
     auto in2 = tsv("\tgene2\n");
-    EXPECT_THROW(handlers::links::parse_links_tsv(in2), std::runtime_error);
+    EXPECT_THROW((void)handlers::links::parse_links_tsv(in2), std::runtime_error);
 }
 
 TEST(LinksParser, rejectsEmptyMetadataColumn) {
     // A present-but-empty 3rd column is ambiguous — reject rather than guess.
     auto in = tsv("gene1\tgene2\t\n");
-    EXPECT_THROW(handlers::links::parse_links_tsv(in), std::runtime_error);
+    EXPECT_THROW((void)handlers::links::parse_links_tsv(in), std::runtime_error);
 }
 
 TEST(LinksParser, errorMessageNamesTheLineNumber) {
     auto in = tsv("gene1\tgene2\ngene3\tgene4\nbadrow\n");
     try {
-        handlers::links::parse_links_tsv(in);
+        (void)handlers::links::parse_links_tsv(in);
         FAIL() << "expected parse_links_tsv to throw";
     } catch(const std::runtime_error& e) {
         const std::string msg = e.what();
