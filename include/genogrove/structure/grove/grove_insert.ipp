@@ -239,8 +239,8 @@ private:
             // stops at keys.size().
             int child_index = 0;
             while (child_index < static_cast<int>(node->get_keys().size())) {
-                const auto& child_max = node->get_child(child_index)->get_subtree_max();
-                if (!child_max.has_value() || !(key.get_value() > *child_max)) { break; }
+                const auto* child_max = node->get_child(child_index)->get_subtree_max();
+                if (child_max == nullptr || !(key.get_value() > child_max->get_value())) { break; }
                 child_index++;
             }
             auto* key_ptr = insert_iter(node->get_child(child_index), key, index);
@@ -260,10 +260,15 @@ private:
                 split_node(node, child_index, index, /*sorted_append=*/false);
             }
 
-            // Refresh after the split: the last child may have just been
-            // replaced by the right half of a split, and children are already
-            // up to date at this point (bottom-up refresh order).
-            node->refresh_subtree_max();
+            // A subtree's maximum can only change if the inserted key exceeds
+            // it. A split does not change which keys the subtree holds, so it
+            // cannot change the maximum either — only the key just inserted
+            // can. Skipping the recompute avoids touching the last child on
+            // every level of the descent.
+            auto* current_max = node->get_subtree_max();
+            if (current_max == nullptr || key.get_value() > current_max->get_value()) {
+                node->refresh_subtree_max();
+            }
             return key_ptr;
         }
     }
@@ -511,12 +516,14 @@ private:
             ++this->leaf_key_count;
             rightmost_node->insert_key_ptr(key_ptr);
 
-            // handle key overflow - cascade splits upward until no overflow
-            cascade_split_sorted_append(rightmost_node, index);
-
-            // The appended key is the new maximum of every node on the
-            // rightmost spine (splits refresh only the halves they create).
-            refresh_subtree_max_upward(this->get_rightmost_node(index));
+            node<key_type, data_type>* tail = rightmost_node;
+            if (rightmost_node->get_keys().size() == this->order) {
+                cascade_split_sorted_append(rightmost_node, index);
+                tail = this->get_rightmost_node(index);
+            }
+            for (auto* current = tail; current != nullptr; current = current->get_parent()) {
+                current->refresh_subtree_max();
+            }
             return key_ptr;
         }
     }

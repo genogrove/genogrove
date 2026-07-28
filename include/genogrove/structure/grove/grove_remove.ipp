@@ -88,6 +88,13 @@ public:
         }
         this->graph_data.remap_keys(remap);
         this->key_storage = std::move(new_storage);
+
+        // Cached routing maxima point into the old storage, which has just
+        // been replaced — rebuild them rather than remapping, so compaction
+        // cannot leave a node routing through a freed key.
+        for (auto& [_, root] : this->root_nodes) {
+            root->refresh_subtree_max_recursive();
+        }
     }
 
 private:
@@ -143,8 +150,8 @@ private:
         // key can only be found in the subtree insertion would have put it in.
         size_t i = 0;
         while (i < current->get_keys().size()) {
-            const auto& child_max = current->get_child(i)->get_subtree_max();
-            if (!child_max.has_value() || !(key_to_find->get_value() > *child_max)) { break; }
+            const auto* child_max = current->get_child(i)->get_subtree_max();
+            if (child_max == nullptr || !(key_to_find->get_value() > child_max->get_value())) { break; }
             i++;
         }
         return find_leaf(current->get_child(i), key_to_find);

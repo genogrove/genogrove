@@ -12,7 +12,6 @@
 #include <deque>
 #include <istream>
 #include <memory>
-#include <optional>
 #include <ostream>
 #include <ranges>
 #include <stdexcept>
@@ -67,7 +66,7 @@ class node {
      * - Not marked as leaf (set explicitly when needed)
      */
     explicit node(int order)
-        : order(order), keys{}, children{}, parent{nullptr}, next{nullptr}, is_leaf{false} {
+        : order(order), is_leaf{false}, keys{}, children{}, parent{nullptr}, next{nullptr} {
         if (order < 2) {
             throw std::invalid_argument("B+ tree node order must be >= 2");
         }
@@ -104,11 +103,11 @@ class node {
     // that kept them but lost its cached maximum reports "no bound", which
     // routing reads as "descend here regardless of the key" (#517).
     node(node&& other) noexcept
-        : order(other.order), keys(std::move(other.keys)),
+        : order(other.order), is_leaf(other.is_leaf), keys(std::move(other.keys)),
           children(std::move(other.children)),
-          subtree_max(std::move(other.subtree_max)), parent(other.parent),
-          next(other.next), is_leaf(other.is_leaf) {
-        other.subtree_max.reset();
+          subtree_max(other.subtree_max), parent(other.parent),
+          next(other.next) {
+        other.subtree_max = nullptr;
         other.parent = nullptr;
         other.next = nullptr;
     }
@@ -124,11 +123,11 @@ class node {
             order = other.order;
             keys = std::move(other.keys);
             children = std::move(other.children);
-            subtree_max = std::move(other.subtree_max);
+            subtree_max = other.subtree_max;
             parent = other.parent;
             next = other.next;
             is_leaf = other.is_leaf;
-            other.subtree_max.reset();
+            other.subtree_max = nullptr;
             other.parent = nullptr;
             other.next = nullptr;
         }
@@ -420,7 +419,7 @@ class node {
     // =========================================================================
 
     /**
-     * @brief Largest key in this node's subtree, or nullopt if the subtree is empty
+     * @brief Largest key in this node's subtree, or nullptr if the subtree is empty
      *
      * This is the B+ tree routing separator: insertion descends past a child
      * exactly when the key to insert is greater than that child's subtree max.
@@ -428,8 +427,14 @@ class node {
      * boxes, so their start is the subtree MINIMUM and their end is a maximum
      * end contributed by some other key. Neither is the subtree's maximum key
      * (see #517).
+     *
+     * @note Borrowed, never owned: this points into the grove's key storage,
+     *       exactly like the entries of `keys`. Anything that rebuilds that
+     *       storage (`grove::compact()`) must rebuild these too.
+     * @note Maintained by the in-memory tree paths and rebuilt on deserialize.
+     *       The paged `grove_view` leaves it null — nothing there routes.
      */
-    [[nodiscard]] const std::optional<key_type>& get_subtree_max() const {
+    [[nodiscard]] gdt::key<key_type, data_type>* get_subtree_max() const {
         return this->subtree_max;
     }
 
@@ -440,15 +445,17 @@ class node {
      * child's cached max (the last child holds the largest keys). Callers must
      * refresh bottom-up — every structural change refreshes the changed node
      * before its ancestors.
+     *
+     * Stored as a pointer rather than a value so `sizeof(node)` is unchanged:
+     * a `std::optional<key_type>` member cost 24 bytes per node, which at small
+     * orders (many tiny nodes) measurably slowed every insert path.
      */
     void refresh_subtree_max() {
         if (this->is_leaf) {
-            this->subtree_max = this->keys.empty()
-                ? std::nullopt
-                : std::optional<key_type>{this->keys.back()->get_value()};
+            this->subtree_max = this->keys.empty() ? nullptr : this->keys.back();
         } else {
             this->subtree_max = this->children.empty()
-                ? std::nullopt
+                ? nullptr
                 : this->children.back()->get_subtree_max();
         }
     }
@@ -488,6 +495,11 @@ class node {
     /// B+ tree order (max children = order, max keys = order-1)
     int order;
 
+    /// Flag indicating whether this is a leaf node.
+    /// Packed next to `order` so it occupies alignment padding rather than a
+    /// tail byte — that keeps sizeof(node) unchanged despite `subtree_max`.
+    bool is_leaf;
+
     /// Vector of pointers to keys (owned by grove's deque, not by node)
     std::vector<gdt::key<key_type, data_type>*> keys;
 
@@ -495,16 +507,13 @@ class node {
     std::vector<node<key_type, data_type>*> children;
 
     /// Largest key in this node's subtree — the routing separator (see get_subtree_max)
-    std::optional<key_type> subtree_max;
+    gdt::key<key_type, data_type>* subtree_max{nullptr};
 
     /// Pointer to parent node (nullptr for root)
     node<key_type, data_type>* parent;
 
     /// Pointer to next sibling node (used for leaf node chaining)
     node<key_type, data_type>* next;
-
-    /// Flag indicating whether this is a leaf node
-    bool is_leaf;
 };
 } // namespace genogrove::structure
 
