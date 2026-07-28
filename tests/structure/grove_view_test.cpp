@@ -203,9 +203,9 @@ TEST(GroveViewTest, EdgePayloadsSurfaceThroughView) {
     EXPECT_EQ(edge_list[1].second, "weak");
 
     EXPECT_EQ(view.get_edges(nullptr).size(), 0u);
-    EXPECT_THROW(view.get_neighbors_if(nullptr, [](const std::string&) { return true; }),
+    EXPECT_THROW((void)view.get_neighbors_if(nullptr, [](const std::string&) { return true; }),
                  std::invalid_argument);
-    EXPECT_THROW(view.get_edge_list(nullptr), std::invalid_argument);
+    EXPECT_THROW((void)view.get_edge_list(nullptr), std::invalid_argument);
 
     fs::remove(path);
 }

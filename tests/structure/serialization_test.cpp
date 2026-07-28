@@ -308,7 +308,7 @@ TEST(SerializationDoSTest, HugeBlockCountRejected) {
     put_pod<std::uint64_t>(bytes, 0u);                   // external key count
     // No block data follows: 4 billion blocks cannot be backed by 0 bytes.
     std::stringstream ss(bytes, std::ios::in | std::ios::binary);
-    EXPECT_THROW(grove_t::deserialize(ss), std::runtime_error);
+    EXPECT_THROW((void)grove_t::deserialize(ss), std::runtime_error);
 }
 
 TEST(SerializationDoSTest, HugeIndexCountRejected) {
@@ -316,7 +316,7 @@ TEST(SerializationDoSTest, HugeIndexCountRejected) {
     std::string bytes = start_stream(/*num_indices=*/0xFFFFFFFFu);
     // Nothing after the count: 4 billion index entries cannot be backed.
     std::stringstream ss(bytes, std::ios::in | std::ios::binary);
-    EXPECT_THROW(grove_t::deserialize(ss), std::runtime_error);
+    EXPECT_THROW((void)grove_t::deserialize(ss), std::runtime_error);
 }
 
 TEST(SerializationDoSTest, HugeIndexNameLengthRejected) {
@@ -325,7 +325,7 @@ TEST(SerializationDoSTest, HugeIndexNameLengthRejected) {
     put_pod<std::uint32_t>(bytes, 0xFFFFFFFFu);  // name_len for the one index
     bytes.append(8, '\0');                       // padding so the index-count bound passes
     std::stringstream ss(bytes, std::ios::in | std::ios::binary);
-    EXPECT_THROW(grove_t::deserialize(ss), std::runtime_error);
+    EXPECT_THROW((void)grove_t::deserialize(ss), std::runtime_error);
 }
 
 TEST(SerializationDoSTest, HugeStringLengthRejected) {
@@ -349,7 +349,7 @@ TEST(SerializationDoSTest, HugeCompressedBlockLengthRejected) {
     put_pod<std::uint64_t>(bytes, 0u);                   // external key count
     put_pod<std::uint64_t>(bytes, std::uint64_t{1} << 40);  // clen = 1 TiB, no data follows
     std::stringstream ss(bytes, std::ios::in | std::ios::binary);
-    EXPECT_THROW(grove_t::deserialize(ss), std::runtime_error);
+    EXPECT_THROW((void)grove_t::deserialize(ss), std::runtime_error);
 }
 
 TEST(SerializationDoSTest, HugeExternalKeyCountRejected) {
@@ -370,7 +370,7 @@ TEST(SerializationDoSTest, HugeExternalKeyCountRejected) {
     put_pod<std::uint64_t>(bytes, static_cast<std::uint64_t>(comp.size()));  // clen
     bytes += comp;
     std::stringstream ss(bytes, std::ios::in | std::ios::binary);
-    EXPECT_THROW(grove_t::deserialize(ss), std::runtime_error);
+    EXPECT_THROW((void)grove_t::deserialize(ss), std::runtime_error);
 }
 
 TEST(SerializationDoSTest, InflaterEnforcesOutputCap) {

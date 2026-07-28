@@ -98,7 +98,7 @@ TEST(GgHeader, rejectsBadMagic) {
     const char bad[12] = {'X','X','X','X', 0,1, 0,0,0, 0x01, 0,0};
     ss.write(bad, sizeof(bad));
 
-    EXPECT_THROW(gio::gg_header::read(ss), std::runtime_error);
+    EXPECT_THROW((void)gio::gg_header::read(ss), std::runtime_error);
 }
 
 TEST(GgHeader, rejectsTruncatedHeader) {
@@ -106,7 +106,7 @@ TEST(GgHeader, rejectsTruncatedHeader) {
     // Only the magic; no version, payload, etc.
     ss.write("GROV", 4);
 
-    EXPECT_THROW(gio::gg_header::read(ss), std::runtime_error);
+    EXPECT_THROW((void)gio::gg_header::read(ss), std::runtime_error);
 }
 
 TEST(GgHeader, rejectsUnsupportedFormatVersion) {
@@ -122,7 +122,7 @@ TEST(GgHeader, rejectsUnsupportedFormatVersion) {
     };
     ss.write(bytes, sizeof(bytes));
 
-    EXPECT_THROW(gio::gg_header::read(ss), std::runtime_error);
+    EXPECT_THROW((void)gio::gg_header::read(ss), std::runtime_error);
 }
 
 TEST(GgHeader, rejectsUnknownPayloadType) {
@@ -137,7 +137,7 @@ TEST(GgHeader, rejectsUnknownPayloadType) {
     };
     ss.write(bytes, sizeof(bytes));
 
-    EXPECT_THROW(gio::gg_header::read(ss), std::runtime_error);
+    EXPECT_THROW((void)gio::gg_header::read(ss), std::runtime_error);
 }
 
 // ==========================================

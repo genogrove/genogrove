@@ -118,6 +118,11 @@ public:
                 current_node = this->get_rightmost_node(index);
             }
         }
+
+        // One spine refresh for the whole batch rather than one per key: within
+        // the loop only the rightmost spine is stale, and routing never consults
+        // a last child's max (it is the catch-all).
+        refresh_subtree_max_upward(this->get_rightmost_node(index));
         return inserted_keys;
     }
 
@@ -220,11 +225,22 @@ private:
             auto* key_ptr = allocate_key(key);
             ++this->leaf_key_count;
             node->insert_key_ptr(key_ptr);
+            node->refresh_subtree_max();
             return key_ptr;
         } else {
+            // Route on each child's subtree max — the B+ tree separator. The
+            // node's own keys are subtree bounding boxes and cannot serve here:
+            // for interval-like types a box's start is the subtree MINIMUM, so
+            // comparing against it ("am I bigger than this child's smallest
+            // key?") is true for nearly every key and pushes out-of-order keys
+            // one child too far right at every level, where no later split
+            // moves them back (#517).
+            // The last child has no bound — it is the catch-all, so the loop
+            // stops at keys.size().
             int child_index = 0;
-            while(child_index < node->get_keys().size() &&
-                  key.get_value() > node->get_keys()[child_index]->get_value()) {
+            while (child_index < static_cast<int>(node->get_keys().size())) {
+                const auto& child_max = node->get_child(child_index)->get_subtree_max();
+                if (!child_max.has_value() || !(key.get_value() > *child_max)) { break; }
                 child_index++;
             }
             auto* key_ptr = insert_iter(node->get_child(child_index), key, index);
@@ -243,7 +259,25 @@ private:
             if(node->get_child(child_index)->get_keys().size() == this->order) {
                 split_node(node, child_index, index, /*sorted_append=*/false);
             }
+
+            // Refresh after the split: the last child may have just been
+            // replaced by the right half of a split, and children are already
+            // up to date at this point (bottom-up refresh order).
+            node->refresh_subtree_max();
             return key_ptr;
+        }
+    }
+
+    /**
+     * @brief Refresh the cached subtree max of a node and all of its ancestors
+     *
+     * O(depth). Used by the sorted-append paths, which insert straight into the
+     * rightmost leaf and so raise the maximum of every node on the rightmost
+     * spine at once.
+     */
+    void refresh_subtree_max_upward(node<key_type, data_type>* n) {
+        for (auto* current = n; current != nullptr; current = current->get_parent()) {
+            current->refresh_subtree_max();
         }
     }
 
@@ -297,6 +331,8 @@ private:
                          int index, std::string_view index_name, int mid) {
         new_child->get_keys().assign(child->get_keys().begin() + mid, child->get_keys().end());
         child->get_keys().resize(mid);
+        child->refresh_subtree_max();
+        new_child->refresh_subtree_max();
 
         // Parent separator = aggregate of left leaf's keys
         gdt::key<key_type, data_type> parent_key{child->calc_keys_aggregate()};
@@ -304,6 +340,16 @@ private:
         parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
         parent->get_children().insert(parent->get_children().begin() + index + 1, new_child.get());
         auto* released = new_child.release();
+
+        // The separator that described the pre-split leaf has just shifted to
+        // index+1, where it now stands for the right half only — but it still
+        // carries the whole leaf's range, so its start is the LEFT half's
+        // minimum. Left stale, it makes the parent's separators non-monotonic
+        // and loosens query pruning. (The split child may have been the last
+        // child, which has no separator; then there is nothing to refresh.)
+        if (index + 1 < static_cast<int>(parent->get_keys().size())) {
+            parent->get_keys()[index + 1]->set_value(released->calc_keys_aggregate());
+        }
 
         // Link leaf chain
         released->set_next(child->get_next());
@@ -359,10 +405,21 @@ private:
             moved_child->set_parent(new_child.get());
         }
 
+        // Both halves kept their own children, whose caches are unchanged
+        child->refresh_subtree_max();
+        new_child->refresh_subtree_max();
+
         // Insert separator and new child into parent
         parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
         parent->get_children().insert(parent->get_children().begin() + index + 1, new_child.get());
-        new_child.release();
+        auto* released = new_child.release();
+
+        // Same shift as in split_leaf_node: the pre-split node's separator now
+        // sits at index+1 describing the right half, so it must be narrowed to
+        // that half's actual range.
+        if (index + 1 < static_cast<int>(parent->get_keys().size())) {
+            parent->get_keys()[index + 1]->set_value(released->calc_subtree_range());
+        }
     }
 
     /**
@@ -383,6 +440,7 @@ private:
         new_root->set_is_leaf(false);
         old_root->set_parent(new_root);
         split_node(new_root, 0, index, sorted_append);
+        new_root->refresh_subtree_max();
         this->root_nodes[std::string(index)] = new_root;
         return new_root;
     }
@@ -443,6 +501,7 @@ private:
             auto* key_ptr = allocate_key(key);
             ++this->leaf_key_count;
             root->insert_key_ptr(key_ptr);
+            root->refresh_subtree_max();
             return key_ptr;
         } else {
             // get rightmost node and insert
@@ -454,6 +513,10 @@ private:
 
             // handle key overflow - cascade splits upward until no overflow
             cascade_split_sorted_append(rightmost_node, index);
+
+            // The appended key is the new maximum of every node on the
+            // rightmost spine (splits refresh only the halves they create).
+            refresh_subtree_max_upward(this->get_rightmost_node(index));
             return key_ptr;
         }
     }
@@ -506,6 +569,7 @@ private:
                 ++it;
             }
 
+            leaf->refresh_subtree_max();
             leaves.push_back(std::move(leaf));
         }
 
@@ -571,6 +635,10 @@ private:
 
                     ++child_idx;
                 }
+
+                // Children of this layer are already built, so their caches are
+                // final — the parent's max is just its last child's.
+                parent->refresh_subtree_max();
 
                 // Compute this parent's full subtree range for the next layer
                 key_type parent_range = current_ranges[first_child_idx];

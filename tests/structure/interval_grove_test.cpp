@@ -16,6 +16,8 @@
 #include <genogrove/utility/ranges.hpp>
 
 // standard
+#include <algorithm>
+#include <numeric>
 #include <random>
 #include <variant>
 
@@ -90,6 +92,41 @@ struct grove_test_traits<gdt::interval, int> {
 // Register gdt::interval for typed testing - all standard tests run automatically!
 using IntervalTestTypes = ::testing::Types<gdt::interval>;
 INSTANTIATE_TYPED_TEST_SUITE_P(Interval, grove_typed_test, IntervalTestTypes);
+
+// =============================================================================
+// Regression: unsorted insert into a tree deeper than two levels (#517)
+// =============================================================================
+
+// A small order with many keys forces several levels. Routing used to compare
+// each key against its child's bounding box, whose start is that subtree's
+// MINIMUM, so out-of-order keys were pushed one child too far right per level.
+// The keys stayed reachable by a full scan but not by a point query, and every
+// per-node invariant still held — only the global leaf order broke.
+TEST(interval_grove_unsorted_insert, deep_tree_stays_globally_sorted) {
+    constexpr int order = 3;
+    constexpr int key_count = 500;
+
+    gst::grove<gdt::interval, int> grove(order);
+
+    std::vector<int> positions(key_count);
+    std::iota(positions.begin(), positions.end(), 0);
+    std::shuffle(positions.begin(), positions.end(), std::mt19937{42});
+
+    for (int position : positions) {
+        grove.insert_data("chr1", gdt::interval(position * 100, position * 100 + 50), position);
+    }
+
+    // Structural invariants, global leaf-chain order, cached routing maxima,
+    // and reachability of every leaf key via intersect().
+    validate_grove_index(grove, "chr1", order);
+
+    // The reported symptom: a query for a key's own coordinates missed it.
+    for (int position : positions) {
+        auto result = grove.intersect(gdt::interval(position * 100, position * 100 + 50), "chr1");
+        EXPECT_EQ(result.get_keys().size(), 1u)
+            << "point query missed the key at position " << position;
+    }
+}
 
 // =============================================================================
 // Example: How to add a new data type in the future (SUPER EASY!)

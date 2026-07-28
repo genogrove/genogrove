@@ -498,6 +498,11 @@ public:
                     throw std::runtime_error("Failed to deserialize grove: invalid root block id");
                 }
                 node<key_type, data_type>* root = block_node[root_id];
+
+                // Routing maxima are derived state, so they are not serialized —
+                // rebuild them now that children are linked. O(nodes).
+                root->refresh_subtree_max_recursive();
+
                 local_roots[name] = root;
                 node<key_type, data_type>* cur = root;
                 while (!cur->get_is_leaf() && !cur->get_children().empty()) {

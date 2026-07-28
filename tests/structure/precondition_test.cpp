@@ -86,8 +86,8 @@ TEST(nodePreconditionTest, addChildAcceptsValidIndex) {
 
 TEST(nodePreconditionTest, getChildRejectsOutOfRange) {
     gst::node<gdt::interval, int> n(10);
-    EXPECT_THROW(n.get_child(0), std::out_of_range);
-    EXPECT_THROW(n.get_child(-1), std::out_of_range);
+    EXPECT_THROW((void)n.get_child(0), std::out_of_range);
+    EXPECT_THROW((void)n.get_child(-1), std::out_of_range);
 }
 
 TEST(nodePreconditionTest, getChildReturnsValidChild) {
