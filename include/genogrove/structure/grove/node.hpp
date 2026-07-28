@@ -99,11 +99,16 @@ class node {
     node(const node&) = delete;
     node& operator=(const node&) = delete;
 
-    // Movable: transfer ownership of children, leave source empty
+    // Movable: transfer ownership of children, leave source empty.
+    // subtree_max must travel with the keys and children it describes — a node
+    // that kept them but lost its cached maximum reports "no bound", which
+    // routing reads as "descend here regardless of the key" (#517).
     node(node&& other) noexcept
         : order(other.order), keys(std::move(other.keys)),
-          children(std::move(other.children)), parent(other.parent),
+          children(std::move(other.children)),
+          subtree_max(std::move(other.subtree_max)), parent(other.parent),
           next(other.next), is_leaf(other.is_leaf) {
+        other.subtree_max.reset();
         other.parent = nullptr;
         other.next = nullptr;
     }
@@ -119,9 +124,11 @@ class node {
             order = other.order;
             keys = std::move(other.keys);
             children = std::move(other.children);
+            subtree_max = std::move(other.subtree_max);
             parent = other.parent;
             next = other.next;
             is_leaf = other.is_leaf;
+            other.subtree_max.reset();
             other.parent = nullptr;
             other.next = nullptr;
         }

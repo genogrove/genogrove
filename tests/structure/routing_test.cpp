@@ -35,6 +35,7 @@
 // standard
 #include <algorithm>
 #include <random>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -201,6 +202,82 @@ TEST(grove_routing, extremes_reach_the_outer_leaves) {
         EXPECT_EQ(smallest.get_keys().size(), 1u) << "smallest key unreachable";
         const auto largest = grove.intersect(gdt::interval(100000, 100010), "chr1");
         EXPECT_EQ(largest.get_keys().size(), 1u) << "largest key unreachable";
+    }
+}
+
+// node declares itself movable, and the cached maximum has to travel with the
+// keys it describes: a moved node that kept its keys but reported no maximum
+// would be routed into unconditionally.
+TEST(grove_routing, node_move_preserves_the_cached_maximum) {
+    gdt::key<gdt::interval, int> first(gdt::interval(10, 20), 1);
+    gdt::key<gdt::interval, int> second(gdt::interval(30, 40), 2);
+
+    gst::node<gdt::interval, int> source(4);
+    source.set_is_leaf(true);
+    source.insert_key_ptr(&first);
+    source.insert_key_ptr(&second);
+    source.refresh_subtree_max();
+    ASSERT_TRUE(source.get_subtree_max().has_value());
+
+    gst::node<gdt::interval, int> move_constructed(std::move(source));
+    ASSERT_TRUE(move_constructed.get_subtree_max().has_value())
+        << "move construction kept the keys but dropped the routing bound";
+    EXPECT_TRUE(*move_constructed.get_subtree_max() == second.get_value());
+
+    gst::node<gdt::interval, int> move_assigned(4);
+    move_assigned.set_is_leaf(true);
+    move_assigned = std::move(move_constructed);
+    ASSERT_TRUE(move_assigned.get_subtree_max().has_value())
+        << "move assignment kept the keys but dropped the routing bound";
+    EXPECT_TRUE(*move_assigned.get_subtree_max() == second.get_value());
+}
+
+// Cached subtree maxima are derived state: they are not serialized, and
+// deserialize() rebuilds them. Queries would not notice if that rebuild went
+// missing — they consult bounding boxes, not maxima — so this asserts the
+// restored tree directly and then inserts into it, which is the first operation
+// that would misroute if every restored node reported "no maximum".
+TEST(grove_routing, routing_state_survives_a_serialize_round_trip) {
+    constexpr int order = 3;
+
+    gst::grove<gdt::interval, int> original(order);
+    const interval_data data = nested(300);
+    interval_data shuffled = data;
+    std::shuffle(shuffled.begin(), shuffled.end(), std::mt19937{11});
+    for (const auto& [key_value, value] : shuffled) {
+        original.insert_data("chr1", key_value, value);
+    }
+    validate_grove_index(original, "chr1", order);
+
+    std::stringstream stream;
+    original.serialize(stream);
+    auto restored = gst::grove<gdt::interval, int>::deserialize(stream);
+
+    // Separators, leaf-chain order and every cached maximum must hold on the
+    // tree as rebuilt from the file.
+    validate_grove_index(restored, "chr1", order);
+
+    // Route new keys into the restored tree, interleaved with what is already
+    // there so the descent has to choose between siblings rather than append.
+    std::vector<gdt::interval> added;
+    for (int i = 0; i < 150; ++i) {
+        added.emplace_back(i * 200 + 60, i * 200 + 70);
+    }
+    std::shuffle(added.begin(), added.end(), std::mt19937{12});
+    for (const auto& key_value : added) {
+        restored.insert_data("chr1", key_value, 0);
+    }
+    validate_grove_index(restored, "chr1", order);
+
+    for (const auto& [key_value, value] : data) {
+        const auto result = restored.intersect(key_value, "chr1");
+        EXPECT_FALSE(result.get_keys().empty())
+            << "original key lost after round trip: " << key_value.to_string();
+    }
+    for (const auto& key_value : added) {
+        const auto result = restored.intersect(key_value, "chr1");
+        EXPECT_FALSE(result.get_keys().empty())
+            << "key inserted into the restored tree is unreachable: " << key_value.to_string();
     }
 }
 

@@ -160,6 +160,12 @@ void validate_tree_invariants(
         // A separator that still carries a pre-split node's range keeps a start
         // from further left, which both loosens query pruning and makes the
         // separator sequence non-monotonic (the symptom seen at depth 4-6).
+        //
+        // Fail here rather than index out of bounds below: the count check
+        // above is non-fatal, so a genuinely malformed node would otherwise
+        // crash the test binary instead of reporting where the tree is broken.
+        ASSERT_EQ(n->get_children().size(), n->get_keys().size() + 1)
+            << "Cannot validate separators: child/key count mismatch at depth " << depth;
         for (size_t i = 0; i < n->get_keys().size(); ++i) {
             const key_type child_range = actual_subtree_range(n->get_children()[i]);
             EXPECT_TRUE(n->get_keys()[i]->get_value() == child_range)
