@@ -37,11 +37,26 @@ jobs:
           mkdir -p build/benchmarks/data
           cp benchmarks/data/*_intervals_*.txt build/benchmarks/data/
 
+      # Three repetitions at 0.25s each costs the same wall time as the single
+      # 0.5s run this replaced, but gives three samples to pick from instead of
+      # trusting one. reduce_repetitions.py then keeps the fastest sample per
+      # benchmark: a slow sample means something else on the shared runner
+      # interfered, and that is noise, not a slower library.
       - name: Run benchmarks
         run: |
           cd build/benchmarks
-          ./genogrove_benchmarks --benchmark_out=benchmark_result.json --benchmark_out_format=json
+          ./genogrove_benchmarks \
+            --benchmark_repetitions=3 \
+            --benchmark_min_time=0.25s \
+            --benchmark_out=benchmark_raw.json \
+            --benchmark_out_format=json
           cd ../..
+
+      - name: Reduce repetitions to the fastest sample per benchmark
+        run: |
+          python3 benchmarks/reduce_repetitions.py \
+            build/benchmarks/benchmark_raw.json \
+            build/benchmarks/benchmark_result.json
 
       - name: Set up Python for visualizations
         uses: actions/setup-python@v5
