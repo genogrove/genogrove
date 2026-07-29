@@ -85,13 +85,13 @@ void validate_tree_invariants(
     // leaf while every local invariant still looks healthy (#517).
     {
         const key_type* expected_max = actual_subtree_max(n);
-        const auto& cached_max = n->get_subtree_max();
-        ASSERT_EQ(cached_max.has_value(), expected_max != nullptr)
+        const auto* cached_max = n->get_subtree_max();
+        ASSERT_EQ(cached_max != nullptr, expected_max != nullptr)
             << "Cached subtree max presence mismatch at depth " << depth;
         if (expected_max != nullptr) {
-            EXPECT_TRUE(*cached_max == *expected_max)
+            EXPECT_TRUE(cached_max->get_value() == *expected_max)
                 << "Stale cached subtree max at depth " << depth
-                << " (cached " << cached_max->to_string()
+                << " (cached " << cached_max->get_value().to_string()
                 << ", actual " << expected_max->to_string() << ")";
         }
     }

@@ -205,6 +205,64 @@ TEST(grove_routing, extremes_reach_the_outer_leaves) {
     }
 }
 
+// The routing cache must not inflate the node. At small orders a grove holds
+// thousands of tiny nodes, so node size drives cache pressure across every
+// insert path — storing this cache by value (a 24-byte std::optional member)
+// cost up to 1.8x on unsorted insert while changing no algorithm.
+TEST(grove_routing, cache_does_not_grow_the_node) {
+    // What node holds: order + is_leaf packed into one word, three vectors,
+    // and three pointers (subtree_max, parent, next).
+    struct expected_layout {
+        int order;
+        bool is_leaf;
+        std::vector<void*> keys;
+        std::vector<void*> children;
+        void* subtree_max;
+        void* parent;
+        void* next;
+    };
+    EXPECT_LE(sizeof(gst::node<gdt::interval, int>), sizeof(expected_layout))
+        << "node grew beyond its fields — check member ordering and that the "
+           "routing cache is stored as a pointer, not a value";
+}
+
+// compact() rebuilds the grove's key storage, so every cached routing pointer
+// is left dangling. Reading one is undefined rather than reliably wrong, so
+// this inserts after compacting: routing has to consult the cache to place the
+// new keys, which fails visibly if the rebuild was skipped.
+TEST(grove_routing, compact_keeps_the_routing_cache_usable) {
+    constexpr int order = 3;
+    gst::grove<gdt::interval, int> grove(order);
+
+    interval_data data = disjoint(200);
+    interval_data shuffled = data;
+    std::shuffle(shuffled.begin(), shuffled.end(), std::mt19937{21});
+    for (const auto& [key_value, value] : shuffled) {
+        grove.insert_data("chr1", key_value, value);
+    }
+
+    for (size_t i = 0; i < data.size(); i += 2) {
+        const auto result = grove.intersect(data[i].first, "chr1");
+        if (!result.get_keys().empty()) {
+            grove.remove_key("chr1", result.get_keys()[0]);
+        }
+    }
+    grove.compact();
+    validate_grove_index(grove, "chr1", order);
+
+    // Route new keys through the rebuilt cache, interleaved with the survivors.
+    for (size_t i = 0; i < data.size(); i += 2) {
+        grove.insert_data("chr1", data[i].first, static_cast<int>(i));
+    }
+    validate_grove_index(grove, "chr1", order);
+
+    for (const auto& [key_value, value] : data) {
+        const auto result = grove.intersect(key_value, "chr1");
+        EXPECT_FALSE(result.get_keys().empty())
+            << "key unreachable after compact + reinsert: " << key_value.to_string();
+    }
+}
+
 // node declares itself movable, and the cached maximum has to travel with the
 // keys it describes: a moved node that kept its keys but reported no maximum
 // would be routed into unconditionally.
@@ -217,19 +275,19 @@ TEST(grove_routing, node_move_preserves_the_cached_maximum) {
     source.insert_key_ptr(&first);
     source.insert_key_ptr(&second);
     source.refresh_subtree_max();
-    ASSERT_TRUE(source.get_subtree_max().has_value());
+    ASSERT_NE(source.get_subtree_max(), nullptr);
 
     gst::node<gdt::interval, int> move_constructed(std::move(source));
-    ASSERT_TRUE(move_constructed.get_subtree_max().has_value())
+    ASSERT_NE(move_constructed.get_subtree_max(), nullptr)
         << "move construction kept the keys but dropped the routing bound";
-    EXPECT_TRUE(*move_constructed.get_subtree_max() == second.get_value());
+    EXPECT_TRUE(move_constructed.get_subtree_max()->get_value() == second.get_value());
 
     gst::node<gdt::interval, int> move_assigned(4);
     move_assigned.set_is_leaf(true);
     move_assigned = std::move(move_constructed);
-    ASSERT_TRUE(move_assigned.get_subtree_max().has_value())
+    ASSERT_NE(move_assigned.get_subtree_max(), nullptr)
         << "move assignment kept the keys but dropped the routing bound";
-    EXPECT_TRUE(*move_assigned.get_subtree_max() == second.get_value());
+    EXPECT_TRUE(move_assigned.get_subtree_max()->get_value() == second.get_value());
 }
 
 // Cached subtree maxima are derived state: they are not serialized, and
