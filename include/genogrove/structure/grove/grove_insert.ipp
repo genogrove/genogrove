@@ -516,14 +516,16 @@ private:
             ++this->leaf_key_count;
             rightmost_node->insert_key_ptr(key_ptr);
 
+            // Handle overflow, then refresh the spine the appended key just
+            // raised. The rightmost leaf is only re-looked-up when a split
+            // actually moved it — that map lookup on every key was a
+            // measurable share of this path's cost.
             node<key_type, data_type>* tail = rightmost_node;
             if (rightmost_node->get_keys().size() == this->order) {
                 cascade_split_sorted_append(rightmost_node, index);
                 tail = this->get_rightmost_node(index);
             }
-            for (auto* current = tail; current != nullptr; current = current->get_parent()) {
-                current->refresh_subtree_max();
-            }
+            refresh_subtree_max_upward(tail);
             return key_ptr;
         }
     }
