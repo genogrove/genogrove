@@ -76,6 +76,31 @@ std::vector<gdt::key<gdt::interval, int>*> insert_intervals(
     return keys;
 }
 
+/**
+ * @brief Insert the same intervals as insert_intervals(), but shuffled and
+ *        without the sorted tag, so routing has to choose a child rather than
+ *        always appending to the rightmost one
+ * @return Key pointers in coordinate order — index i is the interval at i * gap
+ */
+std::vector<gdt::key<gdt::interval, int>*> insert_intervals_shuffled(
+    gst::grove<gdt::interval, int>& grove,
+    const std::string& index,
+    int count,
+    unsigned seed,
+    int gap = 10) {
+    std::vector<int> insertion_order(count);
+    std::iota(insertion_order.begin(), insertion_order.end(), 0);
+    std::shuffle(insertion_order.begin(), insertion_order.end(), std::mt19937{seed});
+
+    std::vector<gdt::key<gdt::interval, int>*> keys(static_cast<size_t>(count), nullptr);
+    for (int i : insertion_order) {
+        const size_t start = static_cast<size_t>(i * gap);
+        keys[static_cast<size_t>(i)] =
+            grove.insert_data(index, gdt::interval{start, start + 5}, i);
+    }
+    return keys;
+}
+
 // =============================================================================
 // Basic Removal Tests
 // =============================================================================
@@ -897,5 +922,80 @@ TEST(GroveCompactTest, RoundtripSerializationAfterCompact) {
         auto result = restored.intersect(gdt::interval{start, start + 5}, "chr1");
         ASSERT_EQ(result.get_keys().size(), 1u);
         EXPECT_EQ(result.get_keys()[0]->get_data(), i);
+    }
+}
+// =============================================================================
+// Removal from an unsorted-built tree
+// =============================================================================
+
+// Randomized counterpart to the hand-built scenarios above, which all build
+// their trees with the sorted tag and so only ever exercise sorted-append
+// shapes. This builds unsorted and drains the tree in random order, asserting
+// on every removal that the key is still findable.
+//
+// That per-removal assertion is the substance of the test. Routing descends by
+// comparing against each child's cached subtree maximum, so a rebalance path
+// that forgets to refresh a cache leaves a maximum that is too small, the
+// descent advances past the child holding the key, and remove_key reports a
+// live key as missing. Verified by deleting the refresh from each of
+// merge_with_sibling, try_borrow_from_left and try_borrow_from_right in turn:
+// this test fails in all three cases.
+//
+// Note the asymmetry that makes it worth checking every step rather than
+// occasionally. The pre-#518 separator comparison could only undershoot — a key
+// always overlaps its own child's bounding box, halting the scan there at the
+// latest — and find_leaf's forward leaf-chain walk recovers from landing early.
+// Max-based routing can overshoot, and the chain walk only goes right, so an
+// overshoot is unrecoverable.
+//
+// What this does NOT establish is that find_leaf's routing is itself correct:
+// reverting it to the old comparison leaves the whole suite passing, because
+// with accurate caches the two rules are indistinguishable from outside.
+TEST(GroveRemoveTest, RandomizedRemovalFromUnsortedTree) {
+    constexpr int count = 200;
+
+    for (int order : {3, 4, 6}) {
+        SCOPED_TRACE(::testing::Message() << "order=" << order);
+
+        gst::grove<gdt::interval, int> grove(order);
+        auto keys = insert_intervals_shuffled(grove, "chr1", count, 517u + static_cast<unsigned>(order));
+        validate_grove_index(grove.get_root_nodes().at("chr1"), order);
+
+        std::vector<int> removal_order(count);
+        std::iota(removal_order.begin(), removal_order.end(), 0);
+        std::shuffle(removal_order.begin(), removal_order.end(), std::mt19937{7u + static_cast<unsigned>(order)});
+
+        int remaining = count;
+        for (int step = 0; step < count; ++step) {
+            const int victim = removal_order[step];
+            ASSERT_TRUE(grove.remove_key("chr1", keys[static_cast<size_t>(victim)]))
+                << "remove_key could not find the key at " << (victim * 10) << " after "
+                << step << " removals — the descent reached the wrong subtree";
+            --remaining;
+
+            // Validating after every removal would run one intersect per
+            // surviving key each time. Every 25 keeps the test quick while
+            // still landing repeatedly in the middle of borrow/merge activity —
+            // plus every step of the endgame, where merges cascade, the tree
+            // sheds levels and collapse_root fires. Skipping that stretch would
+            // leave the densest rebalancing of the whole run unchecked.
+            if (remaining > 0 && (step % 25 == 0 || remaining <= 10)) {
+                auto root_it = grove.get_root_nodes().find("chr1");
+                ASSERT_NE(root_it, grove.get_root_nodes().end());
+                validate_grove_index(root_it->second, order);
+
+                // A key stranded in the wrong leaf stays present but stops
+                // being reachable, so the survivor count is the reachability
+                // check: it is short exactly when routing has gone wrong.
+                const auto survivors = grove.intersect(
+                    gdt::interval{0, static_cast<size_t>(count) * 10}, "chr1");
+                EXPECT_EQ(survivors.get_keys().size(), static_cast<size_t>(remaining))
+                    << "survivor count wrong after " << (step + 1) << " removals";
+            }
+        }
+
+        EXPECT_EQ(grove.get_root_nodes().find("chr1"), grove.get_root_nodes().end())
+            << "the index should be dropped once its last key is removed";
+        EXPECT_EQ(grove.indexed_vertex_count(), 0u);
     }
 }
