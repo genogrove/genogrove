@@ -1,0 +1,142 @@
+name: PR Benchmark A/B
+
+# Builds this PR and the branch it targets on ONE runner and runs them
+# alternately, so host speed cancels out.
+#
+# The continuous-benchmarking job on main cannot do this: it compares a commit
+# against its predecessor, measured on whichever shared runner each got, and
+# those hosts routinely differ by 30% or more. That is how #518 shipped a 1.5x
+# insert regression that the dashboard reported as 2.05x mixed in with a 2.00x
+# move in untouched code — see the analysis on that PR. Comparing on one host
+# removes the guesswork.
+#
+# Only runs when something that could plausibly change performance is touched;
+# doc- and test-only PRs skip it.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'include/**'
+      - 'src/**'
+      - 'benchmarks/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/pr-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# A new push supersedes an in-flight comparison for the same PR.
+concurrency:
+  group: pr-benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: A/B against the base branch
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    steps:
+      # Default checkout for a pull_request event is the PR merged into the base
+      # branch, which is what we want to measure: base vs "base with this PR".
+      # Anything that landed on the base since the branch forked is then present
+      # on both sides and cancels out.
+      - name: Checkout PR merge result
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ libhts-dev
+
+      - name: Add a worktree at the base branch
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          # checkout only guarantees the ref it checked out, so fetch the base
+          # explicitly rather than assuming origin/<base> exists.
+          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+          git worktree add ../base "origin/$BASE_REF"
+          git -C ../base log -1 --format='base is %h %s'
+
+      # FETCHCONTENT_BASE_DIR is shared so google-benchmark is downloaded once
+      # rather than per build tree. Only the benchmark target is built.
+      - name: Build both sides
+        run: |
+          for side in head base; do
+            src="."
+            [ "$side" = base ] && src="../base"
+            cmake -B "build-$side" -S "$src" \
+              -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_BENCHMARKS=ON \
+              -DCMAKE_CXX_COMPILER=g++ \
+              -DFETCHCONTENT_BASE_DIR="$PWD/.deps"
+            cmake --build "build-$side" --target genogrove_benchmarks
+            # Deliberately this checkout's data for both sides: comparing two
+            # builds only means something if they read identical input.
+            mkdir -p "build-$side/benchmarks/data"
+            cp benchmarks/data/*_intervals_*.txt "build-$side/benchmarks/data/"
+          done
+
+      # Three rounds, alternating within each round so slow drift over the job
+      # affects both sides equally. One repetition per invocation — the rounds
+      # are the repetitions, and compare_ab.py takes the fastest per side.
+      - name: Run interleaved rounds
+        env:
+          # Every family at two sizes and three orders, plus the controls, which
+          # verify the two sides really did see the same machine.
+          FILTER: 'BM_control_|/(1000|5000)/(3|15|100)$'
+        run: |
+          for round in 1 2 3; do
+            for side in head base; do
+              ( cd "build-$side/benchmarks" && ./genogrove_benchmarks \
+                  --benchmark_filter="$FILTER" \
+                  --benchmark_min_time=0.25s \
+                  --benchmark_out="result-$side-$round.json" \
+                  --benchmark_out_format=json > /dev/null )
+            done
+          done
+
+      - name: Compare
+        run: |
+          python3 benchmarks/compare_ab.py \
+            --head build-head/benchmarks/result-head-*.json \
+            --base build-base/benchmarks/result-base-*.json \
+            --threshold 1.20 \
+            --out report.md
+
+      - name: Publish to the job summary
+        if: always()
+        run: |
+          if [ -f report.md ]; then
+            cat report.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The benchmark comparison did not produce a report — see the step logs." \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Fork PRs get a read-only token, so this cannot post there. That is why
+      # the job summary above is the primary output and this step never fails
+      # the job.
+      - name: Update the sticky PR comment
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          marker='<!-- pr-benchmark-ab -->'
+          { echo "$marker"; cat report.md; } > comment.md
+          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq "[.[] | select(.body | startswith(\"$marker\"))] | first | .id // empty")
+          if [ -n "$existing" ]; then
+            gh api "repos/$REPO/issues/comments/$existing" -X PATCH -F body=@comment.md
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file comment.md
+          fi
