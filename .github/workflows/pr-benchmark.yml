@@ -109,9 +109,17 @@ jobs:
 
       - name: Compare
         env:
+          # The PR's own head commit, not the ephemeral refs/pull/N/merge SHA
+          # that is actually built: the merge SHA appears nowhere in the PR UI,
+          # so it tells a reviewer nothing. github.sha covers workflow_dispatch.
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || 'main' }}
         run: |
+          # Read the base commit back out of the checkout rather than trusting
+          # the event payload, so the report states what was genuinely built.
+          # This also gives workflow_dispatch a real SHA instead of the branch
+          # name the checkout step falls back to.
+          BASE_SHA=$(git -C base rev-parse HEAD)
+
           # Each side builds its own benchmark sources, so if this PR edits a
           # benchmark's workload then identically named benchmarks measure
           # different work on the two sides and the ratios mean nothing. Say so
