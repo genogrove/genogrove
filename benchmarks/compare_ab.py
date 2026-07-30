@@ -48,7 +48,7 @@ def fastest_per_benchmark(paths):
     return best
 
 
-def format_report(head, base, threshold):
+def format_report(head, base, threshold, head_sha=None, base_sha=None, warnings=()):
     shared = [n for n in head if n in base and base[n] > 0]
     controls = sorted(n for n in shared if n.startswith(CONTROL_PREFIX))
     measured = [n for n in shared if not n.startswith(CONTROL_PREFIX)]
@@ -58,6 +58,16 @@ def format_report(head, base, threshold):
     improvements = [(r, n) for r, n in ratios if r <= 1 / threshold]
 
     lines = ["## Benchmark A/B (same runner, interleaved)", ""]
+
+    # State which commits produced these numbers. The report is normally posted
+    # as a comment that is edited in place, so without this a reader cannot tell
+    # whether it describes the current tip or a superseded push.
+    if head_sha or base_sha:
+        lines.append(f"`{(head_sha or '?')[:12]}` (this PR) vs `{(base_sha or '?')[:12]}` (base)")
+        lines.append("")
+
+    for warning in warnings:
+        lines += [f"> ⚠️ {warning}", ""]
 
     if controls:
         lines += ["<details><summary>Machine controls — these should read ~1.00x</summary>", ""]
@@ -120,6 +130,10 @@ def main(argv=None):
     parser.add_argument("--fail-over", type=float, default=None,
                         help="exit non-zero if any benchmark is slower than this ratio")
     parser.add_argument("--out", default=None, help="write the markdown report here as well as stdout")
+    parser.add_argument("--head-sha", default=None, help="commit measured as head, shown in the report")
+    parser.add_argument("--base-sha", default=None, help="commit measured as base, shown in the report")
+    parser.add_argument("--warn", action="append", default=None,
+                        help="caveat to print above the table; repeatable")
     args = parser.parse_args(argv)
 
     head = fastest_per_benchmark(args.head)
@@ -128,7 +142,8 @@ def main(argv=None):
         print("error: one side produced no benchmark rows", file=sys.stderr)
         return 2
 
-    report, worst = format_report(head, base, args.threshold)
+    report, worst = format_report(head, base, args.threshold,
+                                  args.head_sha, args.base_sha, args.warn or ())
     print(report)
     if args.out:
         with open(args.out, "w") as handle:

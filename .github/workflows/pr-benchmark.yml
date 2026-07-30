@@ -39,29 +39,33 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
     steps:
-      # Default checkout for a pull_request event is the PR merged into the base
-      # branch, which is what we want to measure: base vs "base with this PR".
-      # Anything that landed on the base since the branch forked is then present
-      # on both sides and cancels out.
+      # Default checkout for a pull_request event is the PR merged into the base,
+      # which is what we want as "head": base plus this PR.
+      #
+      # persist-credentials is off on both checkouts because this job executes
+      # PR-controlled code — the PR's own CMakeLists during configure, then its
+      # compiled benchmark binary — and neither needs a token in git config.
       - name: Checkout PR merge result
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          persist-credentials: false
+
+      # The base side must be the exact commit the merge result was computed
+      # against, not the branch tip at job start. If anything lands on the base
+      # in between, the two sides straddle different base commits and unrelated
+      # changes get attributed to this PR — the very error this job exists to
+      # rule out. workflow_dispatch has no event payload, so it falls back to main.
+      - name: Checkout the base commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || 'main' }}
+          path: base
+          persist-credentials: false
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build g++ libhts-dev
-
-      - name: Add a worktree at the base branch
-        env:
-          BASE_REF: ${{ github.base_ref || 'main' }}
-        run: |
-          # checkout only guarantees the ref it checked out, so fetch the base
-          # explicitly rather than assuming origin/<base> exists.
-          git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
-          git worktree add ../base "origin/$BASE_REF"
-          git -C ../base log -1 --format='base is %h %s'
 
       # FETCHCONTENT_BASE_DIR is shared so google-benchmark is downloaded once
       # rather than per build tree. Only the benchmark target is built.
@@ -69,7 +73,7 @@ jobs:
         run: |
           for side in head base; do
             src="."
-            [ "$side" = base ] && src="../base"
+            [ "$side" = base ] && src="base"
             cmake -B "build-$side" -S "$src" \
               -G Ninja \
               -DCMAKE_BUILD_TYPE=Release \
@@ -93,7 +97,8 @@ jobs:
           FILTER: 'BM_control_|/(1000|5000)/(3|15|100)$'
         run: |
           for round in 1 2 3; do
-            for side in head base; do
+            if [ $((round % 2)) -eq 1 ]; then order="head base"; else order="base head"; fi
+            for side in $order; do
               ( cd "build-$side/benchmarks" && ./genogrove_benchmarks \
                   --benchmark_filter="$FILTER" \
                   --benchmark_min_time=0.25s \
@@ -103,11 +108,26 @@ jobs:
           done
 
       - name: Compare
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || 'main' }}
         run: |
+          # Each side builds its own benchmark sources, so if this PR edits a
+          # benchmark's workload then identically named benchmarks measure
+          # different work on the two sides and the ratios mean nothing. Say so
+          # rather than presenting the table as fact. Data files are excluded:
+          # both sides read this checkout's copies by construction.
+          warn=()
+          if ! diff -qr -x data benchmarks base/benchmarks > /dev/null 2>&1; then
+            warn+=(--warn "The benchmark sources differ between the two sides, so identically named benchmarks may not measure the same work. Read the ratios below as indicative only.")
+          fi
           python3 benchmarks/compare_ab.py \
             --head build-head/benchmarks/result-head-*.json \
             --base build-base/benchmarks/result-base-*.json \
             --threshold 1.20 \
+            --head-sha "$HEAD_SHA" \
+            --base-sha "$BASE_SHA" \
+            "${warn[@]}" \
             --out report.md
 
       - name: Publish to the job summary
