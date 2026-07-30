@@ -115,10 +115,14 @@ jobs:
           # Each side builds its own benchmark sources, so if this PR edits a
           # benchmark's workload then identically named benchmarks measure
           # different work on the two sides and the ratios mean nothing. Say so
-          # rather than presenting the table as fact. Data files are excluded:
-          # both sides read this checkout's copies by construction.
+          # rather than presenting the table as fact.
+          #
+          # Only what compiles into the binary counts. Data files are excluded
+          # because both sides read this checkout's copies by construction, and
+          # the Python helpers because they post-process results rather than
+          # affect them — warning about those would be crying wolf.
           warn=()
-          if ! diff -qr -x data benchmarks base/benchmarks > /dev/null 2>&1; then
+          if ! diff -qr -x data -x '*.py' benchmarks base/benchmarks > /dev/null 2>&1; then
             warn+=(--warn "The benchmark sources differ between the two sides, so identically named benchmarks may not measure the same work. Read the ratios below as indicative only.")
           fi
           python3 benchmarks/compare_ab.py \
