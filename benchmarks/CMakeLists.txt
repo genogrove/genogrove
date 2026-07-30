@@ -21,7 +21,6 @@ add_executable(genogrove_benchmarks
 target_link_libraries(genogrove_benchmarks
         PRIVATE
         genogrove
-        benchmark::benchmark
         benchmark::benchmark_main
 )
 
@@ -31,7 +30,6 @@ add_executable(genogrove_cli_benchmarks
 
 target_link_libraries(genogrove_cli_benchmarks
         PRIVATE
-        benchmark::benchmark
         benchmark::benchmark_main
 )
 
