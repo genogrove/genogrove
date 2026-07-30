@@ -132,9 +132,13 @@ jobs:
           # in CMakeLists.txt deliberately does not warn: it makes the same
           # workload genuinely faster or slower, which is a real difference this
           # PR introduced and exactly what the comparison should report.
+          # Hash per file rather than concatenating: a plain cat stream is
+          # ambiguous about where one file ends and the next begins, so moving
+          # content between sources could produce identical bytes. md5sum emits
+          # "<hash>  <name>", putting both content and filename in the stream.
           workload() {
-            find "$1" -maxdepth 1 \( -name '*.cpp' -o -name '*.hpp' \) -print0 \
-              | sort -z | xargs -0 -r cat
+            ( cd "$1" && find . -maxdepth 1 -type f \( -name '*.cpp' -o -name '*.hpp' \) \
+                -exec md5sum {} + | sort -k 2 )
           }
           warn=()
           if ! diff -q <(workload benchmarks) <(workload base/benchmarks) > /dev/null 2>&1; then
