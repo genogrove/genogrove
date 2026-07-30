@@ -946,7 +946,7 @@ TEST(GroveCompactTest, RoundtripSerializationAfterCompact) {
 // globally sorted, which is exactly what #517 broke — so find_leaf's routing
 // matters only on an already-corrupt tree, and no test on a well-formed tree
 // can observe it.
-TEST(GroveRemoveTest, RandomisedRemovalFromUnsortedTree) {
+TEST(GroveRemoveTest, RandomizedRemovalFromUnsortedTree) {
     constexpr int count = 200;
 
     for (int order : {3, 4, 6}) {
@@ -970,8 +970,11 @@ TEST(GroveRemoveTest, RandomisedRemovalFromUnsortedTree) {
 
             // Validating after every removal would run one intersect per
             // surviving key each time. Every 25 keeps the test quick while
-            // still landing repeatedly in the middle of borrow/merge activity.
-            if (remaining > 0 && step % 25 == 0) {
+            // still landing repeatedly in the middle of borrow/merge activity —
+            // plus every step of the endgame, where merges cascade, the tree
+            // sheds levels and collapse_root fires. Skipping that stretch would
+            // leave the densest rebalancing of the whole run unchecked.
+            if (remaining > 0 && (step % 25 == 0 || remaining <= 10)) {
                 auto root_it = grove.get_root_nodes().find("chr1");
                 ASSERT_NE(root_it, grove.get_root_nodes().end());
                 validate_grove_index(root_it->second, order);
