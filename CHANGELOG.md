@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Removal coverage for unsorted-built trees**: every rebalance scenario in `grove_remove_test.cpp` hand-builds its tree with the `sorted` tag (10 of 12 `insert_data` calls; the only `shuffle` reorders removals, not insertions), so borrow, merge and root collapse were only ever exercised against the shapes sorted appends produce. Adds a randomized case that builds unsorted and removes all 200 keys in random order at orders 3, 4 and 6, asserting each `remove_key` succeeds and checking structure, separator exactness, cached subtree maxima and survivor reachability as the tree drains — the cached maxima being maintained by hand in `try_borrow_from_left`, `try_borrow_from_right` and `merge_with_sibling`, which is where a missed refresh would surface. The coverage gap that motivated this (#519) turned out to be narrower than filed: reverting `find_leaf` to the pre-[#518] separator comparison leaves all 40 removal tests passing, because the descent is followed by a forward leaf-chain walk and the old scan cannot overshoot — a key always overlaps its own child's bounding box, halting the scan at the target child at the latest, and landing earlier is recovered by walking right. That reasoning holds only while the leaf chain is globally sorted, so `find_leaf`'s routing is load-bearing only on an already-corrupt tree; the test carries a comment recording this so it is not later mistaken for a check on the descent. Test-only, no library change. ([#519](https://github.com/genogrove/genogrove/issues/519), [#527](https://github.com/genogrove/genogrove/pull/527))
+
 ## [0.25.6] - 2026-07-29
 
 ### Fixed
