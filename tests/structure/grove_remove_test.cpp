@@ -928,24 +928,29 @@ TEST(GroveCompactTest, RoundtripSerializationAfterCompact) {
 // Removal from an unsorted-built tree
 // =============================================================================
 
-// Every rebalance scenario above hand-builds its tree with the sorted tag, so
-// the shapes they exercise are the ones sorted appends produce. This builds
-// unsorted instead and then removes every key in random order: at these orders
-// underflow, borrow and merge fire constantly, so the rebalance paths run many
-// times over against shapes no hand-built case covers — and the validator
-// checks separator exactness and the cached subtree maxima after each batch,
-// which is where a rebalance that forgets to refresh would show up.
+// Randomized counterpart to the hand-built scenarios above, which all build
+// their trees with the sorted tag and so only ever exercise sorted-append
+// shapes. This builds unsorted and drains the tree in random order, asserting
+// on every removal that the key is still findable.
 //
-// Note what this deliberately does NOT claim to pin: find_leaf()'s descent.
-// That was checked by reverting find_leaf to the pre-#518 separator comparison
-// and re-running — the whole suite, this test included, still passed. The
-// descent is masked by the forward leaf-chain walk that follows it: the old
-// scan stops at the target child or earlier (a key always overlaps its own
-// child's bounding box, which halts the scan) and never past it, so landing
-// early is recovered by walking right. That holds only while the leaf chain is
-// globally sorted, which is exactly what #517 broke — so find_leaf's routing
-// matters only on an already-corrupt tree, and no test on a well-formed tree
-// can observe it.
+// That per-removal assertion is the substance of the test. Routing descends by
+// comparing against each child's cached subtree maximum, so a rebalance path
+// that forgets to refresh a cache leaves a maximum that is too small, the
+// descent advances past the child holding the key, and remove_key reports a
+// live key as missing. Verified by deleting the refresh from each of
+// merge_with_sibling, try_borrow_from_left and try_borrow_from_right in turn:
+// this test fails in all three cases.
+//
+// Note the asymmetry that makes it worth checking every step rather than
+// occasionally. The pre-#518 separator comparison could only undershoot — a key
+// always overlaps its own child's bounding box, halting the scan there at the
+// latest — and find_leaf's forward leaf-chain walk recovers from landing early.
+// Max-based routing can overshoot, and the chain walk only goes right, so an
+// overshoot is unrecoverable.
+//
+// What this does NOT establish is that find_leaf's routing is itself correct:
+// reverting it to the old comparison leaves the whole suite passing, because
+// with accurate caches the two rules are indistinguishable from outside.
 TEST(GroveRemoveTest, RandomizedRemovalFromUnsortedTree) {
     constexpr int count = 200;
 
