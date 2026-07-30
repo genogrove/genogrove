@@ -125,12 +125,23 @@ jobs:
           # different work on the two sides and the ratios mean nothing. Say so
           # rather than presenting the table as fact.
           #
-          # Only what compiles into the binary counts. Data files are excluded
-          # because both sides read this checkout's copies by construction, and
-          # the Python helpers because they post-process results rather than
-          # affect them — warning about those would be crying wolf.
+          # A workload is defined by the .cpp/.hpp sources and nothing else.
+          # Listing what to ignore instead was tried twice and cried wolf both
+          # times — first on the Python helpers, then on CMakeLists.txt — so the
+          # rule is inverted to name what counts. Note that a build-flag change
+          # in CMakeLists.txt deliberately does not warn: it makes the same
+          # workload genuinely faster or slower, which is a real difference this
+          # PR introduced and exactly what the comparison should report.
+          # Hash per file rather than concatenating: a plain cat stream is
+          # ambiguous about where one file ends and the next begins, so moving
+          # content between sources could produce identical bytes. md5sum emits
+          # "<hash>  <name>", putting both content and filename in the stream.
+          workload() {
+            ( cd "$1" && find . -maxdepth 1 -type f \( -name '*.cpp' -o -name '*.hpp' \) \
+                -exec md5sum {} + | sort -k 2 )
+          }
           warn=()
-          if ! diff -qr -x data -x '*.py' benchmarks base/benchmarks > /dev/null 2>&1; then
+          if ! diff -q <(workload benchmarks) <(workload base/benchmarks) > /dev/null 2>&1; then
             warn+=(--warn "The benchmark sources differ between the two sides, so identically named benchmarks may not measure the same work. Read the ratios below as indicative only.")
           fi
           python3 benchmarks/compare_ab.py \

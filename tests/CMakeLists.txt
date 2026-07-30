@@ -36,7 +36,7 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
         ${CMAKE_CURRENT_BINARY_DIR}/../include # important as we configure the version in the build tree
 )
-target_link_libraries(genogrove_config_tests gtest gtest_main)
+target_link_libraries(genogrove_config_tests gtest_main)
 target_compile_definitions(
         genogrove_config_tests
         PRIVATE
@@ -60,7 +60,7 @@ target_include_directories(
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
-target_link_libraries(genogrove_data_type_tests genogrove gtest gtest_main)
+target_link_libraries(genogrove_data_type_tests genogrove gtest_main)
 set_target_properties(genogrove_data_type_tests PROPERTIES
         BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
         INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
@@ -77,7 +77,7 @@ target_include_directories(
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
-target_link_libraries(genogrove_utility_tests genogrove gtest gtest_main)
+target_link_libraries(genogrove_utility_tests genogrove gtest_main)
 set_target_properties(genogrove_utility_tests PROPERTIES
         BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
         INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
@@ -94,7 +94,7 @@ target_include_directories(
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
-target_link_libraries(genogrove_structure_tests genogrove gtest gtest_main)
+target_link_libraries(genogrove_structure_tests genogrove gtest_main)
 set_target_properties(genogrove_structure_tests PROPERTIES
         BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
         INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
@@ -112,7 +112,7 @@ target_include_directories(
         PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
-target_link_libraries(genogrove_io_tests genogrove gtest gtest_main)
+target_link_libraries(genogrove_io_tests genogrove gtest_main)
 set_target_properties(genogrove_io_tests PROPERTIES
     BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
     INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
@@ -145,7 +145,7 @@ if(BUILD_CLI)
             PRIVATE
             GENOGROVE_CLI_PATH="${CMAKE_BINARY_DIR}/bin/genogrove"
     )
-    target_link_libraries(genogrove_cli_tests genogrove gtest gtest_main)
+    target_link_libraries(genogrove_cli_tests genogrove gtest_main)
     set_target_properties(genogrove_cli_tests PROPERTIES
         BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"
         INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
