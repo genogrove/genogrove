@@ -144,10 +144,18 @@ jobs:
           if ! diff -q <(workload benchmarks) <(workload base/benchmarks) > /dev/null 2>&1; then
             warn+=(--warn "The benchmark sources differ between the two sides, so identically named benchmarks may not measure the same work. Read the ratios below as indicative only.")
           fi
+          # Two tiers. --threshold lists a benchmark as slower; --fail-over
+          # fails the check. Measured noise for this job is 1.06x worst case
+          # across 8 runs x 40 benchmarks on unchanged code, so 1.25 leaves
+          # real headroom while catching anything like the 1.53x that reached
+          # main in #518. Not tighter than that: a PR restructuring hot code
+          # can move a benchmark ~10% on layout and inlining luck alone, which
+          # should be visible without failing a build. See #524.
           python3 benchmarks/compare_ab.py \
             --head build-head/benchmarks/result-head-*.json \
             --base build-base/benchmarks/result-base-*.json \
             --threshold 1.20 \
+            --fail-over 1.25 \
             --head-sha "$HEAD_SHA" \
             --base-sha "$BASE_SHA" \
             "${warn[@]}" \
@@ -166,8 +174,11 @@ jobs:
       # Fork PRs get a read-only token, so this cannot post there. That is why
       # the job summary above is the primary output and this step never fails
       # the job.
+      # always(), not the default success(): once --fail-over can fail the
+      # Compare step, the default would skip this exactly when the gate fires
+      # and the numbers are most worth having on the PR.
       - name: Update the sticky PR comment
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
