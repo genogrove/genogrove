@@ -149,7 +149,10 @@ def main(argv=None):
         with open(args.out, "w") as handle:
             handle.write(report + "\n")
 
-    if args.fail_over is not None and worst >= args.fail_over:
+    # Strictly greater, matching both the module docstring ("exceeded") and
+    # this flag's help ("slower than this ratio"). --threshold stays inclusive,
+    # since it is documented as the ratio *at which* a benchmark is listed.
+    if args.fail_over is not None and worst > args.fail_over:
         print(f"\nerror: slowest benchmark {worst:.2f}x exceeds --fail-over {args.fail_over:.2f}x",
               file=sys.stderr)
         return 1
