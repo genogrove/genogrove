@@ -432,6 +432,19 @@ class grove_view {
     }
 
     // Load (or return cached) a node block and record its child/next references.
+    //
+    // Nodes built here have no cached subtree max. That cache is derived state:
+    // the in-memory tree maintains it through the insert and remove paths, and
+    // grove::deserialize rebuilds it after linking children — neither of which
+    // runs for a paged view. Leaving it null is deliberate rather than an
+    // oversight, because nothing here routes by maximum; search_overlaps and
+    // search_flanking prune on the separator bounding boxes, which do come out
+    // of the block.
+    //
+    // Anything added here that does want to route by maximum (see
+    // node::get_subtree_max) has to populate it first. A null max reads as "no
+    // bound", so the descent would enter that child unconditionally — silently
+    // wrong rather than an error.
     node_t* load_node(detail::block_id b) {
         if (b >= ext_block_begin) {
             throw std::runtime_error("grove_view: node block id out of range");
