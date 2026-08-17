@@ -867,6 +867,10 @@ TEST(GraphOverlayTest, GetInNeighborsIfPredicateFiltered) {
 TEST(GraphOverlayTest, ReverseTraversalNullThrows) {
     gst::grove<gdt::interval, std::string> grove(5);
     EXPECT_THROW((void)grove.graph().get_in_neighbors(nullptr), std::invalid_argument);
+    // Also exercise the grove-level forwarder — same reasoning as
+    // ReverseTraversalGroveForwarders: a broken forwarder shouldn't be able
+    // to pass this suite.
+    EXPECT_THROW((void)grove.get_in_neighbors(nullptr), std::invalid_argument);
 }
 
 TEST(GraphOverlayTest, GetEdgeListReturnsByValue) {
