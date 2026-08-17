@@ -866,7 +866,7 @@ TEST(GraphOverlayTest, GetInNeighborsIfPredicateFiltered) {
 
 TEST(GraphOverlayTest, ReverseTraversalNullThrows) {
     gst::grove<gdt::interval, std::string> grove(5);
-    EXPECT_THROW(grove.graph().get_in_neighbors(nullptr), std::invalid_argument);
+    EXPECT_THROW((void)grove.graph().get_in_neighbors(nullptr), std::invalid_argument);
 }
 
 TEST(GraphOverlayTest, GetEdgeListReturnsByValue) {
@@ -886,6 +886,44 @@ TEST(GraphOverlayTest, GetEdgeListReturnsByValue) {
 
     EXPECT_EQ(held.size(), 1);
     EXPECT_EQ(held[0].target, exon2);
+}
+
+TEST(GraphOverlayTest, ReverseTraversalGroveForwarders) {
+    // All other reverse-traversal tests go through grove.graph() directly.
+    // This one exercises the grove-level forwarding wrappers themselves
+    // (grove_graph.ipp), so a broken forwarder would fail here even if the
+    // underlying graph_overlay methods are correct.
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
+
+    auto* exon1 = grove.insert_data("chr1", gdt::interval{1000, 1500}, "exon1", gst::sorted);
+    auto* exon2 = grove.insert_data("chr1", gdt::interval{2000, 2300}, "exon2", gst::sorted);
+    auto* exon4 = grove.insert_data("chr1", gdt::interval{2500, 2800}, "exon4", gst::sorted);
+
+    grove.add_edge(exon1, exon2, TranscriptEdge{"transcript_1", "canonical", 0.95, 150});
+    grove.add_edge(exon4, exon2, TranscriptEdge{"transcript_2", "non-canonical", 0.75, 45});
+
+    EXPECT_EQ(grove.in_degree(exon2), 2);
+    EXPECT_EQ(grove.in_degree(exon1), 0);
+
+    auto in_neighbors = grove.get_in_neighbors(exon2);
+    ASSERT_EQ(in_neighbors.size(), 2);
+    EXPECT_EQ(in_neighbors[0], exon1);
+    EXPECT_EQ(in_neighbors[1], exon4);
+
+    auto in_edges = grove.get_in_edges(exon2);
+    ASSERT_EQ(in_edges.size(), 2);
+
+    auto in_edge_list = grove.get_in_edge_list(exon2);
+    ASSERT_EQ(in_edge_list.size(), 2);
+    EXPECT_EQ(in_edge_list[0].source, exon1);
+    EXPECT_EQ(in_edge_list[1].source, exon4);
+
+    auto canonical_sources = grove.get_in_neighbors_if(exon2,
+        [](const auto& edge) {
+            return edge.junction_type == "canonical";
+        });
+    ASSERT_EQ(canonical_sources.size(), 1);
+    EXPECT_EQ(canonical_sources[0], exon1);
 }
 
 TEST(GraphOverlayTest, VertexCountWithEdgesCountsSourcesOnly) {

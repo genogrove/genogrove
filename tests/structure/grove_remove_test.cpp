@@ -535,6 +535,12 @@ TEST(GroveRemoveTest, RemoveAllEdges) {
     EXPECT_EQ(grove.graph().out_degree(keys[1]), 0);
     EXPECT_TRUE(grove.graph().get_in_neighbors(keys[1]).empty());
     EXPECT_TRUE(grove.get_neighbors(keys[1]).empty());
+
+    // The removed keys[1] -> keys[3] edge must also be gone from keys[3]'s
+    // side — checks that erase_edge() cleans up the *other* endpoint's
+    // incidence bucket, not just the key passed to remove_all_edges().
+    EXPECT_EQ(grove.graph().in_degree(keys[3]), 0);
+    EXPECT_TRUE(grove.graph().get_in_neighbors(keys[3]).empty());
 }
 
 TEST(GroveRemoveTest, RemoveEdgesIf) {

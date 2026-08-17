@@ -7,6 +7,7 @@
 #define GENOGROVE_STRUCTURE_GRAPH_OVERLAY_HPP
 
 #include <algorithm>
+#include <concepts>
 #include <list>
 #include <stdexcept>
 #include <type_traits>
@@ -452,7 +453,7 @@ class graph_overlay {
             if (auto it = remap.find(e.target); it != remap.end()) e.target = it->second;
         }
         incident.clear();
-        incident.reserve(edges_.size());
+        incident.reserve(edges_.size() * 2); // each edge touches up to 2 distinct keys
         for (auto it = edges_.begin(); it != edges_.end(); ++it) {
             register_edge(it);
         }
@@ -488,11 +489,13 @@ class graph_overlay {
         }
     }
 
+    // Order-preserving erase: the O(bucket-size) cost is already paid by the
+    // find() above, so shifting (rather than swap-and-pop) costs nothing
+    // extra while keeping accessor results in insertion order after removal.
     static void erase_iter_from(std::vector<edge_iterator>& v, edge_iterator it) {
         auto pos = std::ranges::find(v, it);
         if (pos != v.end()) {
-            *pos = v.back();
-            v.pop_back();
+            v.erase(pos);
         }
     }
 

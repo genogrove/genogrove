@@ -106,7 +106,7 @@ public:
      * @param source Pointer to source key
      * @return Vector of edge structures containing source, target and metadata
      */
-    std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>
+    [[nodiscard]] std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>
     get_edge_list(const gdt::key<key_type, data_type>* source) const {
         return graph_data.get_edge_list(source);
     }
@@ -116,7 +116,7 @@ public:
      * @param target Pointer to target key
      * @return Vector of edge structures containing source, target and metadata
      */
-    std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>
+    [[nodiscard]] std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>
     get_in_edge_list(const gdt::key<key_type, data_type>* target) const {
         return graph_data.get_in_edge_list(target);
     }
@@ -145,7 +145,7 @@ public:
     [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_in_neighbors_if(
         const gdt::key<key_type, data_type>* target,
         Predicate predicate) const
-        requires (!std::is_void_v<edge_data_type>) {
+        requires (!std::is_void_v<edge_data_type> && std::predicate<Predicate, const edge_data_type&>) {
         return graph_data.get_in_neighbors_if(target, predicate);
     }
 
