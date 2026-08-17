@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Randomized removal coverage over unsorted-built trees**: the removal suite hand-builds every tree with the `sorted` tag, so its rebalance scenarios only ever run against sorted-append shapes. Adds a randomized case that builds unsorted and removes all keys in random order at orders 3, 4 and 6, asserting on every removal that the key is still findable and validating the tree as it drains. ([#519](https://github.com/genogrove/genogrove/issues/519), [#527](https://github.com/genogrove/genogrove/pull/527))
+- **Reverse graph traversal**: `graph_overlay` (and `grove`) gains `get_in_neighbors`, `in_degree`, `get_in_edges`, `get_in_edge_list`, and `get_in_neighbors_if`, so a directed edge can be read from its target side without hand-adding a mirrored reverse edge. Internally replaces the source-only adjacency map with a single edge list plus one incidence index; `get_edge_list`/`get_in_edge_list` now return `std::vector<edge>` by value instead of a reference. ([#531](https://github.com/genogrove/genogrove/issues/531), [#532](https://github.com/genogrove/genogrove/pull/532))
 
 ## [0.25.6] - 2026-07-29
 

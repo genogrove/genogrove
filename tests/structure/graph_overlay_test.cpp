@@ -758,6 +758,194 @@ TEST(GraphOverlayTest, MultipleChromosomesComplexGraph) {
 }
 
 // =============================================================================
+// Reverse Traversal Tests
+// =============================================================================
+
+TEST(GraphOverlayTest, ReverseTraversalBasic) {
+    gst::grove<gdt::interval, std::string> grove(5);
+
+    auto* k1 = grove.insert_data("chr1", gdt::interval{10, 20}, "exon1", gst::sorted);
+    auto* k2 = grove.insert_data("chr1", gdt::interval{25, 35}, "exon2", gst::sorted);
+    auto* k3 = grove.insert_data("chr1", gdt::interval{40, 50}, "exon3", gst::sorted);
+
+    grove.add_edge(k1, k3);
+    grove.add_edge(k2, k3);
+
+    auto in_neighbors = grove.graph().get_in_neighbors(k3);
+    ASSERT_EQ(in_neighbors.size(), 2);
+    EXPECT_EQ(in_neighbors[0], k1);
+    EXPECT_EQ(in_neighbors[1], k2);
+
+    EXPECT_TRUE(grove.graph().get_in_neighbors(k1).empty());
+    EXPECT_TRUE(grove.graph().get_in_neighbors(k2).empty());
+
+    // A directed edge stays invisible from get_neighbors on its target.
+    EXPECT_TRUE(grove.get_neighbors(k3).empty());
+}
+
+TEST(GraphOverlayTest, InDegreeBasic) {
+    gst::grove<gdt::interval, std::string> grove(5);
+
+    auto* k1 = grove.insert_data("chr1", gdt::interval{10, 20}, "exon1", gst::sorted);
+    auto* k2 = grove.insert_data("chr1", gdt::interval{25, 35}, "exon2", gst::sorted);
+    auto* k3 = grove.insert_data("chr1", gdt::interval{40, 50}, "exon3", gst::sorted);
+
+    EXPECT_EQ(grove.graph().in_degree(k3), 0);
+
+    grove.add_edge(k1, k3);
+    EXPECT_EQ(grove.graph().in_degree(k3), 1);
+
+    grove.add_edge(k2, k3);
+    EXPECT_EQ(grove.graph().in_degree(k3), 2);
+
+    EXPECT_EQ(grove.graph().in_degree(k1), 0);
+    EXPECT_EQ(grove.graph().out_degree(k3), 0); // sanity: k3 has no outgoing edges
+}
+
+TEST(GraphOverlayTest, GetInEdgeListWithMetadata) {
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
+
+    auto* exon1 = grove.insert_data("chr1", gdt::interval{1000, 1500}, "exon1", gst::sorted);
+    auto* exon2 = grove.insert_data("chr1", gdt::interval{2000, 2300}, "exon2", gst::sorted);
+    auto* exon4 = grove.insert_data("chr1", gdt::interval{2500, 2800}, "exon4", gst::sorted);
+
+    grove.add_edge(exon1, exon2, TranscriptEdge{"transcript_1", "canonical", 0.95, 150});
+    grove.add_edge(exon4, exon2, TranscriptEdge{"transcript_2", "non-canonical", 0.75, 45});
+
+    auto in_edges = grove.graph().get_in_edge_list(exon2);
+    ASSERT_EQ(in_edges.size(), 2);
+
+    bool found_t1 = false, found_t2 = false;
+    for (const auto& e : in_edges) {
+        EXPECT_EQ(e.target, exon2);
+        if (e.source == exon1) {
+            found_t1 = true;
+            EXPECT_EQ(e.metadata.transcript_id, "transcript_1");
+        } else if (e.source == exon4) {
+            found_t2 = true;
+            EXPECT_EQ(e.metadata.transcript_id, "transcript_2");
+        }
+    }
+    EXPECT_TRUE(found_t1);
+    EXPECT_TRUE(found_t2);
+}
+
+TEST(GraphOverlayTest, GetInEdgesMetadataOnly) {
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
+
+    auto* exon1 = grove.insert_data("chr1", gdt::interval{1000, 1500}, "exon1", gst::sorted);
+    auto* exon2 = grove.insert_data("chr1", gdt::interval{2000, 2300}, "exon2", gst::sorted);
+
+    grove.add_edge(exon1, exon2, TranscriptEdge{"transcript_1", "canonical", 0.95, 150});
+
+    auto in_meta = grove.graph().get_in_edges(exon2);
+    ASSERT_EQ(in_meta.size(), 1);
+    EXPECT_EQ(in_meta[0].transcript_id, "transcript_1");
+
+    EXPECT_TRUE(grove.graph().get_in_edges(exon1).empty());
+}
+
+TEST(GraphOverlayTest, GetInNeighborsIfPredicateFiltered) {
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
+
+    auto* exon1 = grove.insert_data("chr1", gdt::interval{1000, 1500}, "exon1", gst::sorted);
+    auto* exon2 = grove.insert_data("chr1", gdt::interval{2000, 2300}, "exon2", gst::sorted);
+    auto* exon4 = grove.insert_data("chr1", gdt::interval{2500, 2800}, "exon4", gst::sorted);
+
+    grove.add_edge(exon1, exon2, TranscriptEdge{"transcript_1", "canonical", 0.95, 150});
+    grove.add_edge(exon4, exon2, TranscriptEdge{"transcript_2", "non-canonical", 0.75, 45});
+
+    auto canonical_sources = grove.graph().get_in_neighbors_if(exon2,
+        [](const auto& edge) {
+            return edge.junction_type == "canonical";
+        });
+
+    ASSERT_EQ(canonical_sources.size(), 1);
+    EXPECT_EQ(canonical_sources[0], exon1);
+}
+
+TEST(GraphOverlayTest, ReverseTraversalNullThrows) {
+    gst::grove<gdt::interval, std::string> grove(5);
+    EXPECT_THROW((void)grove.graph().get_in_neighbors(nullptr), std::invalid_argument);
+    // Also exercise the grove-level forwarder — same reasoning as
+    // ReverseTraversalGroveForwarders: a broken forwarder shouldn't be able
+    // to pass this suite.
+    EXPECT_THROW((void)grove.get_in_neighbors(nullptr), std::invalid_argument);
+}
+
+TEST(GraphOverlayTest, GetEdgeListReturnsByValue) {
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
+
+    auto* exon1 = grove.insert_data("chr1", gdt::interval{1000, 1500}, "exon1", gst::sorted);
+    auto* exon2 = grove.insert_data("chr1", gdt::interval{2000, 2300}, "exon2", gst::sorted);
+    auto* exon3 = grove.insert_data("chr1", gdt::interval{3000, 3400}, "exon3", gst::sorted);
+
+    grove.add_edge(exon1, exon2, TranscriptEdge{"transcript_1", "canonical", 0.95, 150});
+
+    auto held = grove.get_edge_list(exon1);
+    ASSERT_EQ(held.size(), 1);
+
+    // Mutating the graph after the copy was taken must not affect `held`.
+    grove.add_edge(exon1, exon3, TranscriptEdge{"transcript_2", "non-canonical", 0.75, 45});
+
+    EXPECT_EQ(held.size(), 1);
+    EXPECT_EQ(held[0].target, exon2);
+}
+
+TEST(GraphOverlayTest, ReverseTraversalGroveForwarders) {
+    // All other reverse-traversal tests go through grove.graph() directly.
+    // This one exercises the grove-level forwarding wrappers themselves
+    // (grove_graph.ipp), so a broken forwarder would fail here even if the
+    // underlying graph_overlay methods are correct.
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
+
+    auto* exon1 = grove.insert_data("chr1", gdt::interval{1000, 1500}, "exon1", gst::sorted);
+    auto* exon2 = grove.insert_data("chr1", gdt::interval{2000, 2300}, "exon2", gst::sorted);
+    auto* exon4 = grove.insert_data("chr1", gdt::interval{2500, 2800}, "exon4", gst::sorted);
+
+    grove.add_edge(exon1, exon2, TranscriptEdge{"transcript_1", "canonical", 0.95, 150});
+    grove.add_edge(exon4, exon2, TranscriptEdge{"transcript_2", "non-canonical", 0.75, 45});
+
+    EXPECT_EQ(grove.in_degree(exon2), 2);
+    EXPECT_EQ(grove.in_degree(exon1), 0);
+
+    auto in_neighbors = grove.get_in_neighbors(exon2);
+    ASSERT_EQ(in_neighbors.size(), 2);
+    EXPECT_EQ(in_neighbors[0], exon1);
+    EXPECT_EQ(in_neighbors[1], exon4);
+
+    auto in_edges = grove.get_in_edges(exon2);
+    ASSERT_EQ(in_edges.size(), 2);
+
+    auto in_edge_list = grove.get_in_edge_list(exon2);
+    ASSERT_EQ(in_edge_list.size(), 2);
+    EXPECT_EQ(in_edge_list[0].source, exon1);
+    EXPECT_EQ(in_edge_list[1].source, exon4);
+
+    auto canonical_sources = grove.get_in_neighbors_if(exon2,
+        [](const auto& edge) {
+            return edge.junction_type == "canonical";
+        });
+    ASSERT_EQ(canonical_sources.size(), 1);
+    EXPECT_EQ(canonical_sources[0], exon1);
+}
+
+TEST(GraphOverlayTest, VertexCountWithEdgesCountsSourcesOnly) {
+    gst::grove<gdt::interval, std::string> grove(5);
+
+    auto* k1 = grove.insert_data("chr1", gdt::interval{10, 20}, "exon1", gst::sorted);
+    auto* k2 = grove.insert_data("chr1", gdt::interval{25, 35}, "exon2", gst::sorted);
+
+    grove.add_edge(k1, k2);
+
+    // k1 is a source (outgoing edge) -> counted.
+    // k2 only has an incoming edge -> not counted, even though it now
+    // appears in the incidence index.
+    EXPECT_EQ(grove.vertex_count_with_edges(), 1);
+    EXPECT_EQ(grove.graph().in_degree(k2), 1);
+}
+
+// =============================================================================
 // External Key Tests
 // =============================================================================
 

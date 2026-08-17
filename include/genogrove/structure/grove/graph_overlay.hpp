@@ -6,13 +6,14 @@
 #ifndef GENOGROVE_STRUCTURE_GRAPH_OVERLAY_HPP
 #define GENOGROVE_STRUCTURE_GRAPH_OVERLAY_HPP
 
-#include <unordered_map>
-#include <vector>
 #include <algorithm>
-#include <ranges>
+#include <concepts>
+#include <list>
 #include <stdexcept>
 #include <type_traits>
+#include <unordered_map>
 #include <variant>
+#include <vector>
 
 #include <genogrove/data_type/key.hpp>
 
@@ -25,6 +26,10 @@ namespace genogrove::structure {
  * @details Provides graph capabilities on top of any grove by storing directed edges
  * between keys. The graph is completely separate from the tree structure, allowing
  * multiple graphs with different edge metadata types on the same grove.
+ *
+ * Every edge is stored once, in @ref edges_, and indexed under both of its endpoints
+ * in @ref incident so it can be found from either the source side (forward traversal)
+ * or the target side (reverse traversal) without scanning the whole graph.
  *
  * @tparam key_type The key_type of the keys (e.g., interval)
  * @tparam data_type The data_type of the keys
@@ -40,6 +45,7 @@ class graph_overlay {
      * @brief Edge structure representing a directed connection
      */
     struct edge {
+        gdt::key<key_type, data_type>* source;
         gdt::key<key_type, data_type>* target;
 
         [[no_unique_address]]
@@ -49,13 +55,13 @@ class graph_overlay {
             edge_data_type
         > metadata;
 
-        explicit edge(gdt::key<key_type, data_type>* tgt)
-            : target(tgt), metadata{} {}
+        edge(gdt::key<key_type, data_type>* src, gdt::key<key_type, data_type>* tgt)
+            : source(src), target(tgt), metadata{} {}
 
         template<typename M = edge_data_type>
-        edge(gdt::key<key_type, data_type>* tgt, M&& meta)
+        edge(gdt::key<key_type, data_type>* src, gdt::key<key_type, data_type>* tgt, M&& meta)
             requires (!std::is_void_v<edge_data_type>)
-            : target(tgt), metadata(std::forward<M>(meta)) {}
+            : source(src), target(tgt), metadata(std::forward<M>(meta)) {}
     };
 
     /**
@@ -73,7 +79,7 @@ class graph_overlay {
         if (!source || !target) {
             throw std::invalid_argument("add_edge: source and target must not be null");
         }
-        adjacency[source].emplace_back(target);
+        register_edge(edges_.emplace(edges_.end(), source, target));
     }
 
     /**
@@ -90,33 +96,26 @@ class graph_overlay {
         if (!source || !target) {
             throw std::invalid_argument("add_edge: source and target must not be null");
         }
-        adjacency[source].emplace_back(target, std::forward<M>(metadata));
+        register_edge(edges_.emplace(edges_.end(), source, target, std::forward<M>(metadata)));
     }
 
     /**
-     * @brief Remove a specific edge
+     * @brief Remove a specific directed edge
      * @param source Pointer to source key
      * @param target Pointer to target key
      * @return true if edge was found and removed, false otherwise
      */
     bool remove_edge(gdt::key<key_type, data_type>* source,
                      gdt::key<key_type, data_type>* target) {
-        auto it = adjacency.find(source);
-        if (it == adjacency.end()) {
+        auto it = incident.find(source);
+        if (it == incident.end()) {
             return false;
         }
-
-        auto& edges = it->second;
-        auto edge_it = std::ranges::find_if(edges,
-                                          [target](const edge& e) { return e.target == target; });
-
-        if (edge_it != edges.end()) {
-            edges.erase(edge_it);
-            // Remove source entry if no more edges
-            if (edges.empty()) {
-                adjacency.erase(it);
+        for (auto edge_it : it->second) {
+            if (edge_it->source == source && edge_it->target == target) {
+                erase_edge(edge_it);
+                return true;
             }
-            return true;
         }
         return false;
     }
@@ -132,15 +131,39 @@ class graph_overlay {
             throw std::invalid_argument("get_neighbors: source must not be null");
         }
         std::vector<gdt::key<key_type, data_type>*> neighbors;
-
-        auto it = adjacency.find(source);
-        if (it != adjacency.end()) {
+        auto it = incident.find(source);
+        if (it != incident.end()) {
             neighbors.reserve(it->second.size());
-            for (const auto& e : it->second) {
-                neighbors.push_back(e.target);
+            for (const auto& edge_it : it->second) {
+                if (edge_it->source == source) {
+                    neighbors.push_back(edge_it->target);
+                }
             }
         }
         return neighbors;
+    }
+
+    /**
+     * @brief Get all source keys of incoming edges (reverse of get_neighbors)
+     * @param target Pointer to target key
+     * @return Vector of pointers to keys that have an edge pointing at target
+     */
+    [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_in_neighbors(
+        const gdt::key<key_type, data_type>* target) const {
+        if (!target) {
+            throw std::invalid_argument("get_in_neighbors: target must not be null");
+        }
+        std::vector<gdt::key<key_type, data_type>*> sources;
+        auto it = incident.find(target);
+        if (it != incident.end()) {
+            sources.reserve(it->second.size());
+            for (const auto& edge_it : it->second) {
+                if (edge_it->target == target) {
+                    sources.push_back(edge_it->source);
+                }
+            }
+        }
+        return sources;
     }
 
     /**
@@ -152,25 +175,75 @@ class graph_overlay {
     [[nodiscard]] std::vector<M> get_edges(const gdt::key<key_type, data_type>* source) const
         requires (!std::is_void_v<edge_data_type>) {
         std::vector<M> metadata_list;
-        auto it = adjacency.find(source);
-        if (it != adjacency.end()) {
+        auto it = incident.find(source);
+        if (it != incident.end()) {
             metadata_list.reserve(it->second.size());
-            for (const auto& e : it->second) {
-                metadata_list.push_back(e.metadata);
+            for (const auto& edge_it : it->second) {
+                if (edge_it->source == source) {
+                    metadata_list.push_back(edge_it->metadata);
+                }
             }
         }
         return metadata_list;
     }
 
     /**
-     * @brief Get all outgoing edge structures (with targets and metadata)
-     * @param source Pointer to source key
-     * @return Const reference to vector of edges (empty if no edges)
+     * @brief Get edge metadata for all incoming edges (reverse of get_edges)
+     * @param target Pointer to target key
+     * @return Vector of edge metadata (only available when edge_data_type != void)
      */
-    [[nodiscard]] const std::vector<edge>& get_edge_list(const gdt::key<key_type, data_type>* source) const {
-        static const std::vector<edge> empty_edges;
-        auto it = adjacency.find(source);
-        return (it != adjacency.end()) ? it->second : empty_edges;
+    template<typename M = edge_data_type>
+    [[nodiscard]] std::vector<M> get_in_edges(const gdt::key<key_type, data_type>* target) const
+        requires (!std::is_void_v<edge_data_type>) {
+        std::vector<M> metadata_list;
+        auto it = incident.find(target);
+        if (it != incident.end()) {
+            metadata_list.reserve(it->second.size());
+            for (const auto& edge_it : it->second) {
+                if (edge_it->target == target) {
+                    metadata_list.push_back(edge_it->metadata);
+                }
+            }
+        }
+        return metadata_list;
+    }
+
+    /**
+     * @brief Get all outgoing edge structures (with source, target and metadata)
+     * @param source Pointer to source key
+     * @return Vector of edges (empty if no outgoing edges)
+     */
+    [[nodiscard]] std::vector<edge> get_edge_list(const gdt::key<key_type, data_type>* source) const {
+        std::vector<edge> result;
+        auto it = incident.find(source);
+        if (it != incident.end()) {
+            result.reserve(it->second.size());
+            for (const auto& edge_it : it->second) {
+                if (edge_it->source == source) {
+                    result.push_back(*edge_it);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @brief Get all incoming edge structures (reverse of get_edge_list)
+     * @param target Pointer to target key
+     * @return Vector of edges (empty if no incoming edges)
+     */
+    [[nodiscard]] std::vector<edge> get_in_edge_list(const gdt::key<key_type, data_type>* target) const {
+        std::vector<edge> result;
+        auto it = incident.find(target);
+        if (it != incident.end()) {
+            result.reserve(it->second.size());
+            for (const auto& edge_it : it->second) {
+                if (edge_it->target == target) {
+                    result.push_back(*edge_it);
+                }
+            }
+        }
+        return result;
     }
 
     /**
@@ -185,13 +258,12 @@ class graph_overlay {
         Predicate predicate) const
         requires (!std::is_void_v<edge_data_type> && std::predicate<Predicate, const edge_data_type&>) {
         std::vector<gdt::key<key_type, data_type>*> neighbors;
-
-        auto it = adjacency.find(source);
-        if (it != adjacency.end()) {
+        auto it = incident.find(source);
+        if (it != incident.end()) {
             neighbors.reserve(it->second.size());
-            for (const auto& e : it->second) {
-                if (predicate(e.metadata)) {
-                    neighbors.push_back(e.target);
+            for (const auto& edge_it : it->second) {
+                if (edge_it->source == source && predicate(edge_it->metadata)) {
+                    neighbors.push_back(edge_it->target);
                 }
             }
         }
@@ -199,20 +271,44 @@ class graph_overlay {
     }
 
     /**
-     * @brief Check if edge exists
+     * @brief Get in-neighbors filtered by predicate on edge metadata (reverse of get_neighbors_if)
+     * @param target Pointer to target key
+     * @param predicate Function to filter edges by metadata
+     * @return Vector of source keys where predicate returns true
+     */
+    template<typename Predicate>
+    [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_in_neighbors_if(
+        const gdt::key<key_type, data_type>* target,
+        Predicate predicate) const
+        requires (!std::is_void_v<edge_data_type> && std::predicate<Predicate, const edge_data_type&>) {
+        std::vector<gdt::key<key_type, data_type>*> sources;
+        auto it = incident.find(target);
+        if (it != incident.end()) {
+            sources.reserve(it->second.size());
+            for (const auto& edge_it : it->second) {
+                if (edge_it->target == target && predicate(edge_it->metadata)) {
+                    sources.push_back(edge_it->source);
+                }
+            }
+        }
+        return sources;
+    }
+
+    /**
+     * @brief Check if a directed edge exists
      * @param source Pointer to source key
      * @param target Pointer to target key
      * @return true if edge exists, false otherwise
      */
     [[nodiscard]] bool has_edge(const gdt::key<key_type, data_type>* source,
                   const gdt::key<key_type, data_type>* target) const {
-        auto it = adjacency.find(source);
-        if (it == adjacency.end()) {
+        auto it = incident.find(source);
+        if (it == incident.end()) {
             return false;
         }
-
-        return std::ranges::any_of(it->second,
-                                   [target](const edge& e) { return e.target == target; });
+        return std::ranges::any_of(it->second, [source, target](const auto& edge_it) {
+            return edge_it->source == source && edge_it->target == target;
+        });
     }
 
     /**
@@ -221,8 +317,24 @@ class graph_overlay {
      * @return Number of outgoing edges
      */
     [[nodiscard]] size_t out_degree(const gdt::key<key_type, data_type>* source) const {
-        auto it = adjacency.find(source);
-        return (it != adjacency.end()) ? it->second.size() : 0;
+        auto it = incident.find(source);
+        if (it == incident.end()) return 0;
+        return static_cast<size_t>(std::ranges::count_if(it->second, [source](const auto& edge_it) {
+            return edge_it->source == source;
+        }));
+    }
+
+    /**
+     * @brief Get number of incoming edges to a key
+     * @param target Pointer to target key
+     * @return Number of incoming edges
+     */
+    [[nodiscard]] size_t in_degree(const gdt::key<key_type, data_type>* target) const {
+        auto it = incident.find(target);
+        if (it == incident.end()) return 0;
+        return static_cast<size_t>(std::ranges::count_if(it->second, [target](const auto& edge_it) {
+            return edge_it->target == target;
+        }));
     }
 
     /**
@@ -230,11 +342,7 @@ class graph_overlay {
      * @return Total edge count
      */
     [[nodiscard]] size_t edge_count() const {
-        size_t count = 0;
-        for (const auto& [_, edges] : adjacency) {
-            count += edges.size();
-        }
-        return count;
+        return edges_.size();
     }
 
     /**
@@ -242,7 +350,14 @@ class graph_overlay {
      * @return Number of keys that have outgoing edges
      */
     [[nodiscard]] size_t vertex_count_with_edges() const {
-        return adjacency.size();
+        size_t count = 0;
+        for (const auto& [k, edge_its] : incident) {
+            bool has_out = std::ranges::any_of(edge_its, [k](const auto& edge_it) {
+                return edge_it->source == k;
+            });
+            if (has_out) ++count;
+        }
+        return count;
     }
 
     /**
@@ -251,33 +366,39 @@ class graph_overlay {
      * @return Number of edges removed
      */
     size_t remove_edges_from(gdt::key<key_type, data_type>* source) {
-        auto it = adjacency.find(source);
-        if (it == adjacency.end()) return 0;
-        size_t count = it->second.size();
-        adjacency.erase(it);
-        return count;
+        auto it = incident.find(source);
+        if (it == incident.end()) return 0;
+        std::vector<edge_iterator> to_remove;
+        for (const auto& edge_it : it->second) {
+            if (edge_it->source == source) {
+                to_remove.push_back(edge_it);
+            }
+        }
+        for (auto edge_it : to_remove) {
+            erase_edge(edge_it);
+        }
+        return to_remove.size();
     }
 
     /**
      * @brief Remove all incoming edges to a target key
      * @param target Pointer to target key
      * @return Number of edges removed
-     * @note O(E) — scans all edges in the graph
+     * @note O(in-degree) — only touches edges incident to target
      */
     size_t remove_edges_to(gdt::key<key_type, data_type>* target) {
-        size_t count = 0;
-        for (auto it = adjacency.begin(); it != adjacency.end(); ) {
-            auto& edges = it->second;
-            auto orig_size = edges.size();
-            std::erase_if(edges, [target](const edge& e) { return e.target == target; });
-            count += orig_size - edges.size();
-            if (edges.empty()) {
-                it = adjacency.erase(it);
-            } else {
-                ++it;
+        auto it = incident.find(target);
+        if (it == incident.end()) return 0;
+        std::vector<edge_iterator> to_remove;
+        for (const auto& edge_it : it->second) {
+            if (edge_it->target == target) {
+                to_remove.push_back(edge_it);
             }
         }
-        return count;
+        for (auto edge_it : to_remove) {
+            erase_edge(edge_it);
+        }
+        return to_remove.size();
     }
 
     /**
@@ -300,13 +421,12 @@ class graph_overlay {
     size_t remove_edges_if(Predicate predicate)
         requires std::predicate<Predicate, const edge&> {
         size_t count = 0;
-        for (auto it = adjacency.begin(); it != adjacency.end(); ) {
-            auto& edges = it->second;
-            auto orig_size = edges.size();
-            std::erase_if(edges, predicate);
-            count += orig_size - edges.size();
-            if (edges.empty()) {
-                it = adjacency.erase(it);
+        for (auto it = edges_.begin(); it != edges_.end(); ) {
+            if (predicate(*it)) {
+                auto next = std::next(it);
+                erase_edge(it);
+                it = next;
+                ++count;
             } else {
                 ++it;
             }
@@ -318,50 +438,33 @@ class graph_overlay {
      * @brief Rewrite every source/target pointer using an old → new remap
      * @param remap Map from old key pointer to new key pointer
      *
-     * For each adjacency entry (source → edges):
-     *   - if `source` appears in `remap`, the entry is moved to `remap[source]`
-     *   - for each `edge.target` that appears in `remap`, it is rewritten
-     *
-     * Keys absent from the remap (e.g. external keys, which were not migrated)
-     * are preserved unchanged. If multiple old sources map to the same new
-     * source (non-injective remap), their edge lists are appended into the
-     * destination bucket — no edges are dropped. Intended for grove::compact()
-     * to migrate adjacency after rebuilding the indexed key storage.
+     * Rewrites `edge.source`/`edge.target` for every edge that appears in `remap`,
+     * then rebuilds the incidence index from scratch against the rewritten edge
+     * list. Keys absent from the remap (e.g. external keys, which were not
+     * migrated) are preserved unchanged. Intended for grove::compact() to migrate
+     * the graph after rebuilding the indexed key storage.
      */
     void remap_keys(
         const std::unordered_map<const gdt::key<key_type, data_type>*,
                                  gdt::key<key_type, data_type>*>& remap) {
         if (remap.empty()) return;
-        std::unordered_map<const gdt::key<key_type, data_type>*,
-                           std::vector<edge>> new_adjacency;
-        new_adjacency.reserve(adjacency.size());
-        for (auto& [source, edges] : adjacency) {
-            auto src_it = remap.find(source);
-            const gdt::key<key_type, data_type>* new_source =
-                (src_it != remap.end()) ? src_it->second : source;
-            for (auto& e : edges) {
-                auto tgt_it = remap.find(e.target);
-                if (tgt_it != remap.end()) {
-                    e.target = tgt_it->second;
-                }
-            }
-            auto& bucket = new_adjacency[new_source];
-            if (bucket.empty()) {
-                bucket = std::move(edges);
-            } else {
-                bucket.insert(bucket.end(),
-                    std::make_move_iterator(edges.begin()),
-                    std::make_move_iterator(edges.end()));
-            }
+        for (auto& e : edges_) {
+            if (auto it = remap.find(e.source); it != remap.end()) e.source = it->second;
+            if (auto it = remap.find(e.target); it != remap.end()) e.target = it->second;
         }
-        adjacency = std::move(new_adjacency);
+        incident.clear();
+        incident.reserve(edges_.size() * 2); // each edge touches up to 2 distinct keys
+        for (auto it = edges_.begin(); it != edges_.end(); ++it) {
+            register_edge(it);
+        }
     }
 
     /**
      * @brief Clear all edges
      */
     void clear() {
-        adjacency.clear();
+        edges_.clear();
+        incident.clear();
     }
 
     /**
@@ -369,16 +472,66 @@ class graph_overlay {
      * @return true if no edges exist
      */
     [[nodiscard]] bool empty() const {
-        return adjacency.empty();
+        return edges_.empty();
     }
 
   private:
-    // Adjacency list: source key → vector of edges.
-    // Map key is const-pointer so read-only accessors (get_neighbors, has_edge,
-    // get_edge_list, ...) can take `const key*` and `find()` it directly; the
-    // graph never mutates through the source pointer. Mutating accessors still
-    // accept non-const `key*` source — implicit conversion handles the lookup.
-    std::unordered_map<const gdt::key<key_type, data_type>*, std::vector<edge>> adjacency;
+    using edge_list_t = std::list<edge>;
+    using edge_iterator = edge_list_t::iterator;
+
+    // Files a newly-inserted edge under both of its endpoints in `incident`.
+    // A self-loop (source == target) is filed once, not twice — filing it
+    // twice would double-count degree for that key.
+    void register_edge(edge_iterator it) {
+        incident[it->source].push_back(it);
+        if (it->target != it->source) {
+            incident[it->target].push_back(it);
+        }
+    }
+
+    // Order-preserving erase: the O(bucket-size) cost is already paid by the
+    // find() above, so shifting (rather than swap-and-pop) costs nothing
+    // extra while keeping accessor results in insertion order after removal.
+    static void erase_iter_from(std::vector<edge_iterator>& v, edge_iterator it) {
+        auto pos = std::ranges::find(v, it);
+        if (pos != v.end()) {
+            v.erase(pos);
+        }
+    }
+
+    // Removes one edge from every structure that references it: both
+    // incidence buckets, then the edge list itself. `it` is invalidated by
+    // this call; no other iterator into `edges_` is affected, since erasing
+    // from a std::list never moves other elements.
+    void erase_edge(edge_iterator it) {
+        auto src = it->source;
+        auto tgt = it->target;
+        if (auto mit = incident.find(src); mit != incident.end()) {
+            erase_iter_from(mit->second, it);
+            if (mit->second.empty()) incident.erase(mit);
+        }
+        if (tgt != src) {
+            if (auto mit = incident.find(tgt); mit != incident.end()) {
+                erase_iter_from(mit->second, it);
+                if (mit->second.empty()) incident.erase(mit);
+            }
+        }
+        edges_.erase(it);
+    }
+
+    // Single source of truth: every edge lives here exactly once. A
+    // std::list is used (not std::vector) so that an iterator into it
+    // remains valid until that specific edge is erased — no other edge's
+    // iterator is ever invalidated as a side effect of removing one.
+    edge_list_t edges_;
+
+    // key -> iterators of edges touching that key, in either direction.
+    // Map key is const-pointer so read-only accessors can take `const key*`
+    // and `find()` it directly. Each edge appears under both its source and
+    // its target (see register_edge); forward vs. reverse queries filter the
+    // same bucket by comparing edge_it->source / edge_it->target against the
+    // queried key.
+    std::unordered_map<const gdt::key<key_type, data_type>*, std::vector<edge_iterator>> incident;
 };
 
 } // namespace genogrove::structure

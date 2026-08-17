@@ -511,6 +511,11 @@ TEST(GroveRemoveTest, RemoveEdgesTo) {
     EXPECT_EQ(grove.remove_edges_to(keys[2]), 2);
     EXPECT_EQ(grove.edge_count(), 1);
     EXPECT_TRUE(grove.has_edge(keys[1], keys[3]));
+
+    // remove_edges_to must clear the reverse index too, not just the
+    // forward one — this exercises the O(in-degree) path in graph_overlay.
+    EXPECT_EQ(grove.graph().in_degree(keys[2]), 0);
+    EXPECT_TRUE(grove.graph().get_in_neighbors(keys[2]).empty());
 }
 
 TEST(GroveRemoveTest, RemoveAllEdges) {
@@ -524,6 +529,18 @@ TEST(GroveRemoveTest, RemoveAllEdges) {
     // Remove all edges involving k1 (2 incoming + 1 outgoing)
     EXPECT_EQ(grove.remove_all_edges(keys[1]), 3);
     EXPECT_EQ(grove.edge_count(), 0);
+
+    // Both directions must be fully cleared for keys[1].
+    EXPECT_EQ(grove.graph().in_degree(keys[1]), 0);
+    EXPECT_EQ(grove.graph().out_degree(keys[1]), 0);
+    EXPECT_TRUE(grove.graph().get_in_neighbors(keys[1]).empty());
+    EXPECT_TRUE(grove.get_neighbors(keys[1]).empty());
+
+    // The removed keys[1] -> keys[3] edge must also be gone from keys[3]'s
+    // side — checks that erase_edge() cleans up the *other* endpoint's
+    // incidence bucket, not just the key passed to remove_all_edges().
+    EXPECT_EQ(grove.graph().in_degree(keys[3]), 0);
+    EXPECT_TRUE(grove.graph().get_in_neighbors(keys[3]).empty());
 }
 
 TEST(GroveRemoveTest, RemoveEdgesIf) {
@@ -536,15 +553,17 @@ TEST(GroveRemoveTest, RemoveEdgesIf) {
     grove.add_edge(k0, k2, 99);
     grove.add_edge(k1, k2, 42);
 
-    // Remove edges with metadata == 42
+    // Remove edges with metadata == 42 AND source == k0 — exercises that
+    // `.source` is visible on the predicate's edge argument.
     using edge_t = typename gst::graph_overlay<gdt::interval, int, int>::edge;
-    size_t removed = grove.remove_edges_if([](const edge_t& e) {
-        return e.metadata == 42;
+    size_t removed = grove.remove_edges_if([k0](const edge_t& e) {
+        return e.metadata == 42 && e.source == k0;
     });
 
-    EXPECT_EQ(removed, 2);
-    EXPECT_EQ(grove.edge_count(), 1);
+    EXPECT_EQ(removed, 1);
+    EXPECT_EQ(grove.edge_count(), 2);
     EXPECT_TRUE(grove.has_edge(k0, k2));
+    EXPECT_TRUE(grove.has_edge(k1, k2));
 }
 
 // =============================================================================
@@ -867,6 +886,13 @@ TEST(GroveCompactTest, GraphEdgesSurviveCompact) {
         auto neighbors = grove.get_neighbors(src.get_keys()[0]);
         ASSERT_EQ(neighbors.size(), 1u);
         EXPECT_EQ(neighbors[0], tgt.get_keys()[0]);
+
+        // Reverse lookup must also resolve to the post-compact pointers —
+        // pins that remap_keys() rebuilds the incidence index, not just
+        // rewrites the forward edge.
+        auto in_neighbors = grove.graph().get_in_neighbors(tgt.get_keys()[0]);
+        ASSERT_EQ(in_neighbors.size(), 1u);
+        EXPECT_EQ(in_neighbors[0], src.get_keys()[0]);
     }
 }
 
@@ -900,6 +926,16 @@ TEST(GroveCompactTest, ExternalKeysAndCrossEdgesPreserved) {
     auto from_external = grove.get_neighbors(external);
     ASSERT_EQ(from_external.size(), 1u);
     EXPECT_EQ(from_external[0], new_indexed);
+
+    // Reverse lookups must also resolve correctly post-compact, for both
+    // the indexed→external and external→indexed edges.
+    auto into_external = grove.graph().get_in_neighbors(external);
+    ASSERT_EQ(into_external.size(), 1u);
+    EXPECT_EQ(into_external[0], new_indexed);
+
+    auto into_indexed = grove.graph().get_in_neighbors(new_indexed);
+    ASSERT_EQ(into_indexed.size(), 1u);
+    EXPECT_EQ(into_indexed[0], external);
 }
 
 TEST(GroveCompactTest, RoundtripSerializationAfterCompact) {

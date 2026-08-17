@@ -215,6 +215,14 @@ TEST(SerializationTest, DistributedExternalBlocksRoundTrip) {
         auto neighbors = r.get_neighbors(res.get_keys()[0]);
         ASSERT_EQ(neighbors.size(), 1u);
         EXPECT_EQ(neighbors[0]->get_data(), 1100);  // resolved into the 3rd external block
+
+        // Reverse lookup must also survive the round trip — add_edge replay
+        // on deserialize must rebuild the incidence index, not just the
+        // forward edge list.
+        auto in_neighbors = r.graph().get_in_neighbors(neighbors[0]);
+        ASSERT_EQ(in_neighbors.size(), 1u);
+        EXPECT_EQ(in_neighbors[0], res.get_keys()[0]);
+        EXPECT_EQ(r.graph().in_degree(neighbors[0]), 1u);
     }
 }
 
@@ -249,6 +257,16 @@ TEST(SerializationTest, CrossChromosomeEdgeRoundTrip) {
         auto nb = r.get_neighbors(rb.get_keys()[0]);
         ASSERT_EQ(nb.size(), 1u);
         EXPECT_EQ(nb[0]->get_data(), "geneA");  // chr9 -> chr7
+
+        // Reverse lookups must resolve too — verifies the incidence index
+        // (not just the forward edge list) survives serialize/deserialize.
+        auto in_a = r.graph().get_in_neighbors(ra.get_keys()[0]);
+        ASSERT_EQ(in_a.size(), 1u);
+        EXPECT_EQ(in_a[0]->get_data(), "geneB");  // b -> a, seen from a's side
+
+        auto in_b = r.graph().get_in_neighbors(rb.get_keys()[0]);
+        ASSERT_EQ(in_b.size(), 1u);
+        EXPECT_EQ(in_b[0]->get_data(), "geneA");  // a -> b, seen from b's side
     }
 }
 
