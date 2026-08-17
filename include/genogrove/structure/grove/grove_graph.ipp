@@ -59,6 +59,16 @@ public:
     }
 
     /**
+     * @brief Get all sources with an edge pointing at a key (convenience forwarding to graph)
+     * @param target Pointer to target key
+     * @return Vector of pointers to keys that have an edge pointing at target
+     */
+    [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_in_neighbors(
+        const gdt::key<key_type, data_type>* target) const {
+        return graph_data.get_in_neighbors(target);
+    }
+
+    /**
      * @brief Remove edge between two keys (convenience forwarding to graph)
      * @param source Pointer to source key
      * @param target Pointer to target key
@@ -81,13 +91,34 @@ public:
     }
 
     /**
+     * @brief Get edge metadata for all incoming edges (convenience forwarding to graph)
+     * @param target Pointer to target key
+     * @return Vector of edge metadata for all incoming edges to target
+     */
+    template<typename M = edge_data_type>
+    [[nodiscard]] std::vector<M> get_in_edges(const gdt::key<key_type, data_type>* target) const
+        requires (!std::is_void_v<edge_data_type>) {
+        return graph_data.get_in_edges(target);
+    }
+
+    /**
      * @brief Get all outgoing edge structures (convenience forwarding to graph)
      * @param source Pointer to source key
-     * @return Const reference to vector of edge structures containing target and metadata
+     * @return Vector of edge structures containing source, target and metadata
      */
-    const std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>&
+    std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>
     get_edge_list(const gdt::key<key_type, data_type>* source) const {
         return graph_data.get_edge_list(source);
+    }
+
+    /**
+     * @brief Get all incoming edge structures (convenience forwarding to graph)
+     * @param target Pointer to target key
+     * @return Vector of edge structures containing source, target and metadata
+     */
+    std::vector<typename graph_overlay<key_type, data_type, edge_data_type>::edge>
+    get_in_edge_list(const gdt::key<key_type, data_type>* target) const {
+        return graph_data.get_in_edge_list(target);
     }
 
     /**
@@ -102,6 +133,20 @@ public:
         Predicate predicate) const
         requires (!std::is_void_v<edge_data_type>) {
         return graph_data.get_neighbors_if(source, predicate);
+    }
+
+    /**
+     * @brief Get in-neighbors filtered by predicate (convenience forwarding to graph)
+     * @param target Pointer to target key
+     * @param predicate Function to filter edges by metadata
+     * @return Vector of source keys where predicate returns true
+     */
+    template<typename Predicate>
+    [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_in_neighbors_if(
+        const gdt::key<key_type, data_type>* target,
+        Predicate predicate) const
+        requires (!std::is_void_v<edge_data_type>) {
+        return graph_data.get_in_neighbors_if(target, predicate);
     }
 
     /**
@@ -122,6 +167,15 @@ public:
      */
     [[nodiscard]] size_t out_degree(const gdt::key<key_type, data_type>* source) const {
         return graph_data.out_degree(source);
+    }
+
+    /**
+     * @brief Get number of incoming edges to a key (convenience forwarding to graph)
+     * @param target Pointer to target key
+     * @return Number of incoming edges to target key
+     */
+    [[nodiscard]] size_t in_degree(const gdt::key<key_type, data_type>* target) const {
+        return graph_data.in_degree(target);
     }
 
     /**
@@ -233,7 +287,7 @@ public:
      * @brief Remove all incoming edges to a target key (convenience forwarding to graph)
      * @param target Pointer to target key
      * @return Number of edges removed
-     * @note O(E) — scans all edges in the graph
+     * @note O(in-degree) — only touches edges incident to target
      */
     size_t remove_edges_to(gdt::key<key_type, data_type>* target) {
         return graph_data.remove_edges_to(target);
