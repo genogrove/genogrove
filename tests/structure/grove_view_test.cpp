@@ -321,6 +321,47 @@ TEST(GroveViewTest, SelfLoopInNeighbors) {
     fs::remove(path);
 }
 
+TEST(GroveViewTest, DegreeCounts) {
+    // out_degree/in_degree are bucket-size lookups: no target/source resolution,
+    // so they must not page in any additional block, and a self-loop counts once
+    // in each direction (mirrors graph_overlay's out_degree/in_degree exactly).
+    using grove_t = gst::grove<gdt::interval, std::string>;
+    fs::path path;
+    {
+        grove_t g(4);
+        auto* a = g.insert_data("chr7", gdt::interval{100, 200}, "geneA", gst::sorted);
+        auto* b = g.insert_data("chr9", gdt::interval{300, 400}, "geneB", gst::sorted);
+        auto* c = g.insert_data("chr11", gdt::interval{500, 600}, "geneC", gst::sorted);
+        g.add_edge(a, b);
+        g.add_edge(a, c);
+        g.add_edge(b, c);
+        g.add_edge(c, c);  // self-loop
+        path = write_grove(g, "degree");
+    }
+
+    auto view = gst::grove_view<gdt::interval, std::string>::open(path.string());
+
+    auto ra = view.intersect(gdt::interval{100, 200}, "chr7");
+    ASSERT_EQ(ra.get_keys().size(), 1u);
+    auto* a = ra.get_keys()[0];
+    EXPECT_EQ(view.out_degree(a), 2u);
+    EXPECT_EQ(view.in_degree(a), 0u);
+
+    auto rc = view.intersect(gdt::interval{500, 600}, "chr11");
+    ASSERT_EQ(rc.get_keys().size(), 1u);
+    auto* c = rc.get_keys()[0];
+    auto blocks_before = view.blocks_loaded();  // c's own block is now loaded
+    EXPECT_EQ(view.out_degree(c), 1u);     // c -> c
+    EXPECT_EQ(view.in_degree(c), 3u);      // a->c, b->c, c->c
+    EXPECT_EQ(view.blocks_loaded(), blocks_before)
+        << "degree lookups must not page in any block beyond c's own";
+
+    EXPECT_EQ(view.out_degree(nullptr), 0u);
+    EXPECT_EQ(view.in_degree(nullptr), 0u);
+
+    fs::remove(path);
+}
+
 TEST(GroveViewTest, EdgePayloadsSurfaceThroughView) {
     // Edge metadata is parsed and kept when a block is paged in, so get_edges /
     // get_neighbors_if work without a full deserialize.
