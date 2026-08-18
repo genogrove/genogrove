@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Reverse traversal for `grove_view`**: `grove_view` gains `get_in_neighbors`, `get_in_edges`, `get_in_neighbors_if`, and `get_in_edge_list`, mirroring the forward API it already had. The `.gg` block format bumps to 0.3 — each key's edge record now stores an incoming list alongside its outgoing one, so a partial read can page in either endpoint's block and see that side of an edge without loading the other; no serialization back-compat, regenerate existing indexes. ([#534](https://github.com/genogrove/genogrove/issues/534), [#535](https://github.com/genogrove/genogrove/pull/535))
+
 ## [0.26.0] - 2026-08-17
 
 ### Added
