@@ -628,6 +628,13 @@ class grove_view {
         if (!zis) {
             throw std::runtime_error("grove_view: stream error reading edge count");
         }
+        // ecount is file-controlled; zis is the seekable in-memory view of this
+        // block's already-decompressed bytes, so bound it against what's actually
+        // left there before looping — every ref is at least a (block_id, slot)
+        // pair (4+4 bytes) even with metadata. Mirrors the block/index-count
+        // guards in read_directory_and_scan (#484).
+        detail::require_backing_bytes(zis, ecount, sizeof(detail::block_id) + sizeof(std::uint32_t),
+                                      "edge");
         std::vector<edge_ref>* bucket = nullptr;
         for (std::uint32_t i = 0; i < ecount; ++i) {
             detail::block_id b;

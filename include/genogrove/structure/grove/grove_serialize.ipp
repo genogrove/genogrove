@@ -358,6 +358,8 @@ public:
         // the outgoing section of their source key, so re-adding them here would
         // duplicate every edge in graph_data.
         auto skip_edge_refs = [&](std::istream& zis, uint32_t ecount) {
+            detail::require_backing_bytes(zis, ecount, sizeof(detail::block_id) + sizeof(uint32_t),
+                                          "edge");
             for (uint32_t i = 0; i < ecount; ++i) {
                 detail::block_id b;
                 uint32_t s;
@@ -380,6 +382,8 @@ public:
             if (!zis) {
                 throw std::runtime_error("Failed to deserialize grove: stream error reading edge count");
             }
+            detail::require_backing_bytes(zis, ecount, sizeof(detail::block_id) + sizeof(uint32_t),
+                                          "edge");
             for (uint32_t i = 0; i < ecount; ++i) {
                 detail::block_id tb;
                 uint32_t ts;
