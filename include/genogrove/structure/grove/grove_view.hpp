@@ -36,7 +36,7 @@
 namespace genogrove::structure {
 
 /**
- * @brief Read-only, partial reader over a serialized (format 0.2) grove.
+ * @brief Read-only, partial reader over a serialized (format 0.3) grove.
  *
  * Where grove::deserialize eagerly loads every block, grove_view loads only the
  * blocks a query walks. It reads the directory and builds a block_id -> file
@@ -60,7 +60,7 @@ class grove_view {
   public:
     /**
      * @brief Open a serialized grove for partial reading.
-     * @param path Path to a file containing a `.gg` grove stream (format 0.2).
+     * @param path Path to a file containing a `.gg` grove stream (format 0.3).
      * @param data_offset Byte offset where the grove stream starts. Defaults to
      *        0 (a bare grove stream); pass the size of any leading wrapper (e.g.
      *        the CLI's `gg_header`) when the grove is embedded after a header.
@@ -174,6 +174,30 @@ class grove_view {
     }
 
     /**
+     * @brief Incoming graph neighbors of a key returned by this grove_view.
+     *
+     * Loads each source's block on demand, exactly like get_neighbors. `target`
+     * must be a key pointer this grove_view produced; incoming edges are
+     * recorded co-located with `target`'s own block (written there by the .gg
+     * writer alongside its outgoing edges), so no scan of other blocks is needed.
+     */
+    [[nodiscard]] std::vector<key_t*> get_in_neighbors(const key_t* target) {
+        if (target == nullptr) {
+            throw std::invalid_argument("get_in_neighbors: target must not be null");
+        }
+        std::vector<key_t*> out;
+        auto it = in_adjacency.find(target);
+        if (it == in_adjacency.end()) {
+            return out;
+        }
+        out.reserve(it->second.size());
+        for (const auto& e : it->second) {
+            out.push_back(resolve_target(e.tb, e.ts));
+        }
+        return out;
+    }
+
+    /**
      * @brief Metadata of every outgoing edge of `source`, in edge order.
      *
      * Only available when edge_data_type is non-void. Reads nothing extra: the
@@ -187,6 +211,28 @@ class grove_view {
         std::vector<M> out;
         auto it = adjacency.find(source);
         if (it != adjacency.end()) {
+            out.reserve(it->second.size());
+            for (const auto& e : it->second) {
+                out.push_back(e.meta);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * @brief Metadata of every incoming edge of `target`, in edge order.
+     *
+     * Only available when edge_data_type is non-void. Reads nothing extra: the
+     * metadata was parsed and kept when `target`'s block was paged in. Returns
+     * an empty vector if `target` is null or has no recorded incoming edges
+     * (mirrors get_edges).
+     */
+    template <typename M = edge_data_type>
+    [[nodiscard]] std::vector<M> get_in_edges(const key_t* target) const
+        requires(!std::is_void_v<edge_data_type>) {
+        std::vector<M> out;
+        auto it = in_adjacency.find(target);
+        if (it != in_adjacency.end()) {
             out.reserve(it->second.size());
             for (const auto& e : it->second) {
                 out.push_back(e.meta);
@@ -222,6 +268,32 @@ class grove_view {
     }
 
     /**
+     * @brief Incoming sources of `target` whose edge metadata satisfies `pred`.
+     *
+     * Only available when edge_data_type is non-void. Resolves the surviving
+     * sources' blocks on demand, exactly like get_in_neighbors.
+     */
+    template <typename Predicate>
+    [[nodiscard]] std::vector<key_t*> get_in_neighbors_if(const key_t* target, Predicate pred)
+        requires(!std::is_void_v<edge_data_type> &&
+                 std::predicate<Predicate, const edge_data_type&>) {
+        if (target == nullptr) {
+            throw std::invalid_argument("get_in_neighbors_if: target must not be null");
+        }
+        std::vector<key_t*> out;
+        auto it = in_adjacency.find(target);
+        if (it == in_adjacency.end()) {
+            return out;
+        }
+        for (const auto& e : it->second) {
+            if (pred(e.meta)) {
+                out.push_back(resolve_target(e.tb, e.ts));
+            }
+        }
+        return out;
+    }
+
+    /**
      * @brief Each outgoing target of `source` paired with its edge metadata, in edge order.
      *
      * Only available when edge_data_type is non-void. Resolves targets on demand
@@ -238,6 +310,33 @@ class grove_view {
         std::vector<std::pair<key_t*, M>> out;
         auto it = adjacency.find(source);
         if (it == adjacency.end()) {
+            return out;
+        }
+        out.reserve(it->second.size());
+        for (const auto& e : it->second) {
+            out.emplace_back(resolve_target(e.tb, e.ts), e.meta);
+        }
+        return out;
+    }
+
+    /**
+     * @brief Each incoming source of `target` paired with its edge metadata, in edge order.
+     *
+     * Only available when edge_data_type is non-void. Resolves sources on demand
+     * exactly like get_in_neighbors, so it throws std::invalid_argument on a null
+     * target (unlike the metadata-only get_in_edges, which returns empty). Parity
+     * with graph_overlay::get_in_edge_list. Empty vector for a target with no
+     * incoming edges.
+     */
+    template <typename M = edge_data_type>
+    [[nodiscard]] std::vector<std::pair<key_t*, M>> get_in_edge_list(const key_t* target)
+        requires(!std::is_void_v<edge_data_type>) {
+        if (target == nullptr) {
+            throw std::invalid_argument("get_in_edge_list: target must not be null");
+        }
+        std::vector<std::pair<key_t*, M>> out;
+        auto it = in_adjacency.find(target);
+        if (it == in_adjacency.end()) {
             return out;
         }
         out.reserve(it->second.size());
@@ -295,6 +394,7 @@ class grove_view {
     std::unordered_map<const node_t*, detail::block_id> node_block;  // reverse map for the resolver
     std::unordered_map<detail::block_id, std::vector<key_t*>> ext_cache;
     std::unordered_map<const key_t*, std::vector<edge_ref>> adjacency;
+    std::unordered_map<const key_t*, std::vector<edge_ref>> in_adjacency;
 
     detail::block_inflater inflater;
     std::string comp_buf;
@@ -317,7 +417,7 @@ class grove_view {
         is.read(magic.data(), static_cast<std::streamsize>(magic.size()));
         if (is.gcount() != static_cast<std::streamsize>(magic.size()) ||
             magic != detail::grove_stream_magic) {
-            throw std::runtime_error("grove_view: bad magic (not a format 0.2 grove stream)");
+            throw std::runtime_error("grove_view: bad magic (not a format 0.3 grove stream)");
         }
 
         detail::read_pod(is, order);
@@ -518,10 +618,11 @@ class grove_view {
         return ins->second;
     }
 
-    // Record a key's outgoing edges as (target_block, target_slot[, metadata]).
-    // Metadata is kept when edge_data_type is non-void so get_edges /
-    // get_neighbors_if can surface it without a full deserialize.
-    void read_key_edges(std::istream& zis, const key_t* src) {
+    // Parses one edge-ref list — (block, slot[, metadata]) x count — into `map[key]`.
+    // Shared by the outgoing and incoming sections of read_key_edges; only which
+    // map they land in differs.
+    void read_edge_ref_list(std::istream& zis, const key_t* key,
+                            std::unordered_map<const key_t*, std::vector<edge_ref>>& map) {
         std::uint32_t ecount;
         detail::read_pod(zis, ecount);
         if (!zis) {
@@ -529,26 +630,35 @@ class grove_view {
         }
         std::vector<edge_ref>* bucket = nullptr;
         for (std::uint32_t i = 0; i < ecount; ++i) {
-            detail::block_id tb;
-            std::uint32_t ts;
-            detail::read_pod(zis, tb);
-            detail::read_pod(zis, ts);
+            detail::block_id b;
+            std::uint32_t s;
+            detail::read_pod(zis, b);
+            detail::read_pod(zis, s);
             if (!zis) {
                 throw std::runtime_error("grove_view: stream error reading edge");
             }
             if (bucket == nullptr) {
-                bucket = &adjacency[src];
+                bucket = &map[key];
             }
             if constexpr (std::is_void_v<edge_data_type>) {
-                bucket->push_back(edge_ref{tb, ts, {}});
+                bucket->push_back(edge_ref{b, s, {}});
             } else {
                 edge_data_type meta = gdt::serializer<edge_data_type>::read(zis);
                 if (!zis) {
                     throw std::runtime_error("grove_view: stream error reading edge metadata");
                 }
-                bucket->push_back(edge_ref{tb, ts, std::move(meta)});
+                bucket->push_back(edge_ref{b, s, std::move(meta)});
             }
         }
+    }
+
+    // Record a key's outgoing edges as (target_block, target_slot[, metadata]),
+    // then its incoming edges as (source_block, source_slot[, metadata]) — the
+    // .gg writer stores both, co-located with this key's own block, so paging in
+    // one key's block surfaces both directions without touching any other block.
+    void read_key_edges(std::istream& zis, const key_t* key) {
+        read_edge_ref_list(zis, key, adjacency);
+        read_edge_ref_list(zis, key, in_adjacency);
     }
 
     key_t* resolve_target(detail::block_id tb, std::uint32_t ts) {

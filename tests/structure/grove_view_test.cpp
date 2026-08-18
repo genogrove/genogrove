@@ -5,7 +5,7 @@
 
 /*
  * Tests for grove_view — the partial (random-access) reader over a serialized
- * format 0.2 grove. The contract: it returns exactly what the eager grove would
+ * format 0.3 grove. The contract: it returns exactly what the eager grove would
  * for the same query, while loading only the blocks the query walks.
  */
 
@@ -154,6 +154,86 @@ TEST(GroveViewTest, CrossChromosomeNeighbors) {
     auto nb = view.get_neighbors(rb.get_keys()[0]);
     ASSERT_EQ(nb.size(), 1u);
     EXPECT_EQ(nb[0]->get_data(), "geneA");
+
+    fs::remove(path);
+}
+
+TEST(GroveViewTest, CrossChromosomeInNeighbors) {
+    // Reverse of CrossChromosomeNeighbors: paging in the target's block must
+    // surface its incoming edges without touching the source's block.
+    using grove_t = gst::grove<gdt::interval, std::string>;
+    fs::path path;
+    {
+        grove_t g(4);
+        auto* a = g.insert_data("chr7", gdt::interval{100, 200}, "geneA", gst::sorted);
+        auto* b = g.insert_data("chr9", gdt::interval{300, 400}, "geneB", gst::sorted);
+        g.add_edge(a, b);
+        path = write_grove(g, "crosschrom_in");
+    }
+
+    auto view = gst::grove_view<gdt::interval, std::string>::open(path.string());
+
+    auto rb = view.intersect(gdt::interval{300, 400}, "chr9");
+    ASSERT_EQ(rb.get_keys().size(), 1u);
+    auto in_b = view.get_in_neighbors(rb.get_keys()[0]);
+    ASSERT_EQ(in_b.size(), 1u);
+    EXPECT_EQ(in_b[0]->get_data(), "geneA");  // chr9 -> chr7, source block paged in on demand
+
+    auto ra = view.intersect(gdt::interval{100, 200}, "chr7");
+    ASSERT_EQ(ra.get_keys().size(), 1u);
+    EXPECT_TRUE(view.get_in_neighbors(ra.get_keys()[0]).empty());  // a has no incoming edges
+
+    EXPECT_THROW((void)view.get_in_neighbors(nullptr), std::invalid_argument);
+
+    fs::remove(path);
+}
+
+TEST(GroveViewTest, InEdgePayloadsSurfaceThroughView) {
+    // Reverse of EdgePayloadsSurfaceThroughView: incoming metadata/predicate/list
+    // accessors, resolved off the target's own paged-in block.
+    using grove_t = gst::grove<gdt::interval, std::string, std::string>;
+    fs::path path;
+    {
+        grove_t g(4);
+        auto* a = g.insert_data("chr7", gdt::interval{100, 200}, "geneA", gst::sorted);
+        auto* b = g.insert_data("chr9", gdt::interval{300, 400}, "geneB", gst::sorted);
+        auto* c = g.insert_data("chr11", gdt::interval{500, 600}, "geneC", gst::sorted);
+        g.add_edge(a, c, std::string{"strong"});
+        g.add_edge(b, c, std::string{"weak"});
+        path = write_grove(g, "inedgepayload");
+    }
+
+    auto view = gst::grove_view<gdt::interval, std::string, std::string>::open(path.string());
+
+    auto rc = view.intersect(gdt::interval{500, 600}, "chr11");
+    ASSERT_EQ(rc.get_keys().size(), 1u);
+    const auto* tgt = rc.get_keys()[0];
+
+    auto meta = view.get_in_edges(tgt);
+    std::sort(meta.begin(), meta.end());
+    EXPECT_EQ(meta, (std::vector<std::string>{"strong", "weak"}));
+
+    auto strong = view.get_in_neighbors_if(
+        tgt, [](const std::string& m) { return m == "strong"; });
+    ASSERT_EQ(strong.size(), 1u);
+    EXPECT_EQ(strong[0]->get_data(), "geneA");  // source block paged in on demand
+
+    EXPECT_TRUE(view.get_in_neighbors_if(
+                        tgt, [](const std::string& m) { return m == "nonexistent"; })
+                    .empty());
+
+    // insertion order: a->c "strong" then b->c "weak".
+    auto in_edge_list = view.get_in_edge_list(tgt);
+    ASSERT_EQ(in_edge_list.size(), 2u);
+    EXPECT_EQ(in_edge_list[0].first->get_data(), "geneA");
+    EXPECT_EQ(in_edge_list[0].second, "strong");
+    EXPECT_EQ(in_edge_list[1].first->get_data(), "geneB");
+    EXPECT_EQ(in_edge_list[1].second, "weak");
+
+    EXPECT_EQ(view.get_in_edges(nullptr).size(), 0u);
+    EXPECT_THROW((void)view.get_in_neighbors_if(nullptr, [](const std::string&) { return true; }),
+                 std::invalid_argument);
+    EXPECT_THROW((void)view.get_in_edge_list(nullptr), std::invalid_argument);
 
     fs::remove(path);
 }

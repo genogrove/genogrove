@@ -69,8 +69,8 @@ public:
      * @brief Serialize the grove to a block-structured binary output stream
      * @param os Output stream to write to
      *
-     * Format 0.2 (block-structured, random-access-capable):
-     *   [magic "GGB\x01"]
+     * Format 0.3 (block-structured, random-access-capable):
+     *   [magic "GGB\x02"]
      *   [directory, plain]: order; per-index (name, root block_id); block count;
      *       external-block-begin; leaf-key count; external-key count
      *   [blocks]: each a length-prefixed, independently zlib-compressed record
@@ -78,10 +78,13 @@ public:
      *           internal → keys + child block_ids;  leaf → keys + next block_id + edges
      *       - external blocks (id >= external-begin): packed external keys + edges
      *
-     * Every key's global id is (block_id, slot); graph edges are stored co-located
-     * with their source key as (target_block_id, target_slot[, metadata]). The
-     * per-block compression makes the payload seekable for a future partial read
-     * path; here the whole grove is written.
+     * Every key's global id is (block_id, slot). Each key's edge record holds two
+     * lists: outgoing, as (target_block_id, target_slot[, metadata]), then
+     * incoming, as (source_block_id, source_slot[, metadata]) — every edge is
+     * thus written under both endpoints' blocks, so a partial reader can page in
+     * either side without loading the other. The per-block compression makes the
+     * payload seekable for a future partial read path; here the whole grove is
+     * written.
      *
      * @note Blocks are buffered (compressed) in memory to length-prefix them.
      *       ponytail: fine while groves fit in RAM; revisit with a streaming
@@ -137,26 +140,39 @@ public:
             ext_block_begin + static_cast<detail::block_id>(ext_ranges.size());
 
         // ---- Phase 2: compress each block into an in-memory buffer ----
-        // Per-key outgoing edges, written after a key list. Generic over the key
-        // pointer iterator so leaf keys (key*) and external keys (const key*) share it.
+        // Per-key outgoing then incoming edges, written after a key list. Generic
+        // over the key pointer iterator so leaf keys (key*) and external keys
+        // (const key*) share it. Every edge is thus written twice — once under its
+        // source's outgoing list, once under its target's incoming list — so a
+        // partial reader (grove_view) can page in either endpoint's block and see
+        // that side of the edge without loading the other endpoint.
+        auto write_edge_ref = [&](std::ostream& zos, key_ptr other, const auto& e) {
+            auto found = key_to_id.find(other);
+            if (found == key_to_id.end()) {
+                throw std::runtime_error("Failed to serialize grove: edge endpoint not indexed");
+            }
+            detail::block_id ob = found->second.first;
+            uint32_t oslot = found->second.second;
+            detail::write_pod(zos, ob);
+            detail::write_pod(zos, oslot);
+            if constexpr (!std::is_void_v<edge_data_type>) {
+                gdt::serializer<edge_data_type>::write(zos, e.metadata);
+            }
+        };
         auto write_key_edges = [&](std::ostream& zos, auto first, auto last) {
             for (auto it = first; it != last; ++it) {
                 key_ptr k = *it;
-                const auto& edges = graph_data.get_edge_list(k);
-                uint32_t ecount = static_cast<uint32_t>(edges.size());
-                detail::write_pod(zos, ecount);
-                for (const auto& e : edges) {
-                    auto found = key_to_id.find(e.target);
-                    if (found == key_to_id.end()) {
-                        throw std::runtime_error("Failed to serialize grove: edge target not indexed");
-                    }
-                    detail::block_id tb = found->second.first;
-                    uint32_t ts = found->second.second;
-                    detail::write_pod(zos, tb);
-                    detail::write_pod(zos, ts);
-                    if constexpr (!std::is_void_v<edge_data_type>) {
-                        gdt::serializer<edge_data_type>::write(zos, e.metadata);
-                    }
+                const auto& out_edges = graph_data.get_edge_list(k);
+                uint32_t out_count = static_cast<uint32_t>(out_edges.size());
+                detail::write_pod(zos, out_count);
+                for (const auto& e : out_edges) {
+                    write_edge_ref(zos, e.target, e);
+                }
+                const auto& in_edges = graph_data.get_in_edge_list(k);
+                uint32_t in_count = static_cast<uint32_t>(in_edges.size());
+                detail::write_pod(zos, in_count);
+                for (const auto& e : in_edges) {
+                    write_edge_ref(zos, e.source, e);
                 }
             }
         };
@@ -238,7 +254,7 @@ public:
 
     /**
      * @brief Deserialize a grove from a block-structured binary input stream
-     * @param is Input stream produced by serialize() (format 0.2)
+     * @param is Input stream produced by serialize() (format 0.3)
      * @return Deserialized grove object
      *
      * Eager reader: reads the directory, then reads every length-prefixed block
@@ -255,7 +271,7 @@ public:
         if (is.gcount() != static_cast<std::streamsize>(magic.size()) ||
             magic != detail::grove_stream_magic) {
             throw std::runtime_error(
-                "Failed to deserialize grove: bad magic (not a format 0.2 grove stream)");
+                "Failed to deserialize grove: bad magic (not a format 0.3 grove stream)");
         }
 
         int order;
@@ -337,6 +353,27 @@ public:
             num_blocks - ext_block_begin);
         std::vector<pending_edge> pending;
 
+        // Skips ecount (block_id, slot[, metadata]) entries without recording them.
+        // Used for the incoming-edge section: those edges are already captured via
+        // the outgoing section of their source key, so re-adding them here would
+        // duplicate every edge in graph_data.
+        auto skip_edge_refs = [&](std::istream& zis, uint32_t ecount) {
+            for (uint32_t i = 0; i < ecount; ++i) {
+                detail::block_id b;
+                uint32_t s;
+                detail::read_pod(zis, b);
+                detail::read_pod(zis, s);
+                if (!zis) {
+                    throw std::runtime_error("Failed to deserialize grove: stream error reading edge");
+                }
+                if constexpr (!std::is_void_v<edge_data_type>) {
+                    [[maybe_unused]] auto meta = gdt::serializer<edge_data_type>::read(zis);
+                    if (!zis) {
+                        throw std::runtime_error("Failed to deserialize grove: stream error reading edge metadata");
+                    }
+                }
+            }
+        };
         auto read_key_edges = [&](std::istream& zis, gdt::key<key_type, data_type>* src) {
             uint32_t ecount;
             detail::read_pod(zis, ecount);
@@ -361,6 +398,12 @@ public:
                     pending.push_back(pending_edge{src, tb, ts, std::move(meta)});
                 }
             }
+            uint32_t in_ecount;
+            detail::read_pod(zis, in_ecount);
+            if (!zis) {
+                throw std::runtime_error("Failed to deserialize grove: stream error reading in-edge count");
+            }
+            skip_edge_refs(zis, in_ecount);
         };
 
         // Node destructors recursively delete children, so on any failure we

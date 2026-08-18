@@ -32,7 +32,7 @@ inline constexpr std::uint32_t max_external_keys_per_block = 512;
 /// from the CLI-level io::gg_header that wraps a .gg file). Lets grove::deserialize
 /// reject a foreign / older-layout stream with a clear error before parsing. The
 /// trailing byte is the grove-stream format version; bump it on any layout change.
-inline constexpr std::array<char, 4> grove_stream_magic = {'G', 'G', 'B', '\x01'};
+inline constexpr std::array<char, 4> grove_stream_magic = {'G', 'G', 'B', '\x02'};
 
 } // namespace genogrove::structure::detail
 
