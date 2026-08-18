@@ -70,7 +70,7 @@ public:
      * @param os Output stream to write to
      *
      * Format 0.3 (block-structured, random-access-capable):
-     *   [magic "GGB\x02"]
+     *   [magic "GGB\x03"]
      *   [directory, plain]: order; per-index (name, root block_id); block count;
      *       external-block-begin; leaf-key count; external-key count
      *   [blocks]: each a length-prefixed, independently zlib-compressed record

@@ -31,8 +31,11 @@ inline constexpr std::uint32_t max_external_keys_per_block = 512;
 /// Magic + version at the very start of a grove serialization stream (distinct
 /// from the CLI-level io::gg_header that wraps a .gg file). Lets grove::deserialize
 /// reject a foreign / older-layout stream with a clear error before parsing. The
-/// trailing byte is the grove-stream format version; bump it on any layout change.
-inline constexpr std::array<char, 4> grove_stream_magic = {'G', 'G', 'B', '\x02'};
+/// trailing byte is the grove-stream format version; bump it on any layout change,
+/// kept numerically equal to io::gg_header::CURRENT_FORMAT_MINOR (both track the
+/// same on-disk layout — no technical link between the two constants, just a
+/// convention to avoid two version numbers drifting apart for one format).
+inline constexpr std::array<char, 4> grove_stream_magic = {'G', 'G', 'B', '\x03'};
 
 } // namespace genogrove::structure::detail
 
