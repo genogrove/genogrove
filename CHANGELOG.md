@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Reverse traversal for `grove_view`**: `grove_view` gains `get_in_neighbors`, `get_in_edges`, `get_in_neighbors_if`, and `get_in_edge_list`, mirroring the forward API it already had. The `.gg` block format bumps to 0.3 — each key's edge record now stores an incoming list alongside its outgoing one, so a partial read can page in either endpoint's block and see that side of an edge without loading the other; no serialization back-compat, regenerate existing indexes. ([#534](https://github.com/genogrove/genogrove/issues/534), [#535](https://github.com/genogrove/genogrove/pull/535))
 - **`grove_view::out_degree`/`in_degree`**: closes the last API-parity gap with `graph_overlay`. Both are O(1) bucket-size lookups against the `adjacency`/`in_adjacency` maps a key's block already populates on load — no target/source resolution, so no additional block loads; null returns 0 rather than throwing. ([#536](https://github.com/genogrove/genogrove/issues/536), [#539](https://github.com/genogrove/genogrove/pull/539))
 
+### Fixed
+- **`grove::get_neighbors_if` missing its predicate constraint**: was missing the `std::predicate<Predicate, const edge_data_type&>` constraint its sibling `get_in_neighbors_if` has had since #532. Compile-time diagnostics only — a non-conforming callable already failed to compile via the call inside `graph_overlay::get_neighbors_if`, just with a worse error; no runtime behavior change. ([#542](https://github.com/genogrove/genogrove/issues/542), [#543](https://github.com/genogrove/genogrove/pull/543))
+
 ## [0.26.0] - 2026-08-17
 
 ### Added

@@ -131,7 +131,7 @@ public:
     [[nodiscard]] std::vector<gdt::key<key_type, data_type>*> get_neighbors_if(
         const gdt::key<key_type, data_type>* source,
         Predicate predicate) const
-        requires (!std::is_void_v<edge_data_type>) {
+        requires (!std::is_void_v<edge_data_type> && std::predicate<Predicate, const edge_data_type&>) {
         return graph_data.get_neighbors_if(source, predicate);
     }
 
