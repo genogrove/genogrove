@@ -346,6 +346,30 @@ class grove_view {
         return out;
     }
 
+    /**
+     * @brief Number of outgoing edges from `source`, or 0 if `source` is null or
+     *        has none.
+     *
+     * A bucket-size lookup — no target resolution, so no additional block loads
+     * even for edges whose targets live elsewhere. Mirrors graph_overlay::out_degree.
+     */
+    [[nodiscard]] std::size_t out_degree(const key_t* source) const {
+        auto it = adjacency.find(source);
+        return it == adjacency.end() ? 0 : it->second.size();
+    }
+
+    /**
+     * @brief Number of incoming edges to `target`, or 0 if `target` is null or
+     *        has none.
+     *
+     * A bucket-size lookup — no source resolution, so no additional block loads.
+     * Mirrors graph_overlay::in_degree.
+     */
+    [[nodiscard]] std::size_t in_degree(const key_t* target) const {
+        auto it = in_adjacency.find(target);
+        return it == in_adjacency.end() ? 0 : it->second.size();
+    }
+
     /// The B+ tree order the `.gg` was built with. Mirrors grove::get_order().
     [[nodiscard]] int get_order() const { return order; }
 
