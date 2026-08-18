@@ -413,7 +413,13 @@ public:
             if (!zis) {
                 throw std::runtime_error("Failed to deserialize grove: stream error reading in-edge count");
             }
-            read_in_edge_refs(zis, in_ecount, pending_in[src]);
+            // Only track keys with at least one incoming edge — pending_in[src]
+            // would otherwise default-construct an (empty) entry for every key
+            // in the grove, making the reorder pass below scan every key's
+            // incident bucket instead of just the ones that need reordering.
+            if (in_ecount > 0) {
+                read_in_edge_refs(zis, in_ecount, pending_in[src]);
+            }
         };
 
         // Node destructors recursively delete children, so on any failure we
@@ -595,11 +601,22 @@ public:
             for (auto& [target, in_refs] : pending_in) {
                 std::vector<typename decltype(g.graph_data)::edge_iterator> ordered;
                 ordered.reserve(in_refs.size());
+                // Parallel edges (same source, same target) file multiple
+                // matches under find_edge(); a per-source occurrence counter
+                // walks 0, 1, 2, ... so repeated refs to the same source
+                // resolve to distinct edges instead of the first one N times.
+                // Correct because a single add_edge() call files both
+                // directions atomically — parallel edges keep the same
+                // relative order in the source's outgoing view and the
+                // target's incoming view, so positional occurrence lines up.
+                std::unordered_map<gdt::key<key_type, data_type>*, std::size_t> occurrence;
                 for (auto& [sb, ss] : in_refs) {
                     gdt::key<key_type, data_type>* src = resolve_target(sb, ss);
-                    auto eit = g.graph_data.find_edge(src, target);
+                    std::size_t& n = occurrence[src];
+                    auto eit = g.graph_data.find_edge(src, target, n);
                     if (eit != g.graph_data.edge_end()) {
                         ordered.push_back(eit);
+                        ++n;
                     }
                 }
                 g.graph_data.reorder_incoming(target, ordered.begin(), ordered.end());

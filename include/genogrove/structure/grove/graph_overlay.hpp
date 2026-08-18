@@ -463,19 +463,30 @@ class graph_overlay {
     using edge_iterator = std::list<edge>::iterator;
 
     /**
-     * @brief Find the edge iterator for a specific directed edge.
+     * @brief Find the `occurrence`-th edge iterator for a specific directed edge.
+     *
+     * Parallel edges (multiple add_edge calls for the same source/target pair,
+     * e.g. distinct transcript metadata between the same exon pair) file
+     * multiple matches under `incident[source]`, in the order they were added.
+     * `occurrence` (0-indexed) selects among them, so a caller resolving several
+     * incoming refs that name the same source can walk 0, 1, 2, ... to get each
+     * distinct edge instead of always the first.
+     *
      * @param source Pointer to source key
      * @param target Pointer to target key
+     * @param occurrence 0-indexed match to return among parallel source→target edges
      * @return Iterator to the edge, or edge_end() if not found
      */
     [[nodiscard]] edge_iterator find_edge(
         const gdt::key<key_type, data_type>* source,
-        const gdt::key<key_type, data_type>* target) {
+        const gdt::key<key_type, data_type>* target,
+        std::size_t occurrence = 0) {
         auto it = incident.find(source);
         if (it == incident.end()) return edges_.end();
         for (auto eit : it->second) {
             if (eit->source == source && eit->target == target) {
-                return eit;
+                if (occurrence == 0) return eit;
+                --occurrence;
             }
         }
         return edges_.end();

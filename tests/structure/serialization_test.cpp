@@ -472,11 +472,50 @@ TEST(SerializationTest, IncomingEdgeOrderPreservedAcrossRoundTrip) {
         ASSERT_EQ(rv.get_keys().size(), 1u);
         auto* tgt = rv.get_keys()[0];
 
-        auto in = view.get_in_edge_list(tgt);
+        auto in = view.get_in_neighbors(tgt);
         ASSERT_EQ(in.size(), 2u);
-        EXPECT_EQ(in[0].first->get_data(), 2);  // src_early
-        EXPECT_EQ(in[1].first->get_data(), 1);  // src_late
+        EXPECT_EQ(in[0]->get_data(), 2);  // src_early
+        EXPECT_EQ(in[1]->get_data(), 1);  // src_late
 
         fs::remove(path);
     }
+}
+
+TEST(SerializationTest, ParallelEdgesPreserveDistinctMetadataAfterReorder) {
+    // Two edges sharing both endpoints (parallel edges — e.g. distinct
+    // transcript metadata linking the same exon pair, see link_if's own docs)
+    // exercise find_edge()'s occurrence parameter: naive first-match-only
+    // resolution would collapse both incoming refs onto the same edge,
+    // duplicating one metadata value and silently dropping the other from the
+    // target's incoming view (source's outgoing view stays correct either way,
+    // since it's built directly from replay, not from reorder_incoming).
+    using grove_t = gst::grove<gdt::interval, int, std::string>;
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    {
+        grove_t g(4);
+        auto* a = g.insert_data("chr1", gdt::interval{100, 200}, 1, gst::sorted);
+        auto* t = g.insert_data("chr1", gdt::interval{300, 400}, 2, gst::sorted);
+        g.add_edge(a, t, std::string{"first"});
+        g.add_edge(a, t, std::string{"second"});
+        g.serialize(ss);
+    }
+
+    ss.seekg(0);
+    auto r = grove_t::deserialize(ss);
+    auto ra = r.intersect(gdt::interval{100, 200}, "chr1");
+    auto rt = r.intersect(gdt::interval{300, 400}, "chr1");
+    ASSERT_EQ(ra.get_keys().size(), 1u);
+    ASSERT_EQ(rt.get_keys().size(), 1u);
+
+    // Target's incoming view: both edges present, distinct metadata, in order.
+    auto in = r.graph().get_in_edge_list(rt.get_keys()[0]);
+    ASSERT_EQ(in.size(), 2u);
+    EXPECT_EQ(in[0].metadata, "first");
+    EXPECT_EQ(in[1].metadata, "second");
+
+    // Source's outgoing view: unaffected by the reorder step either way.
+    auto out = r.graph().get_edge_list(ra.get_keys()[0]);
+    ASSERT_EQ(out.size(), 2u);
+    EXPECT_EQ(out[0].metadata, "first");
+    EXPECT_EQ(out[1].metadata, "second");
 }
