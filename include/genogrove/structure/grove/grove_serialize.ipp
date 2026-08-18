@@ -352,12 +352,17 @@ public:
         std::vector<std::vector<gdt::key<key_type, data_type>*>> ext_block_keys(
             num_blocks - ext_block_begin);
         std::vector<pending_edge> pending;
+        // On-disk incoming-edge order per key, so incident[target] can be
+        // reordered after add_edge() replay (which uses block-visitation order).
+        std::unordered_map<gdt::key<key_type, data_type>*,
+                           std::vector<std::pair<detail::block_id, uint32_t>>>
+            pending_in;
 
-        // Skips ecount (block_id, slot[, metadata]) entries without recording them.
-        // Used for the incoming-edge section: those edges are already captured via
-        // the outgoing section of their source key, so re-adding them here would
-        // duplicate every edge in graph_data.
-        auto skip_edge_refs = [&](std::istream& zis, uint32_t ecount) {
+        // Reads ecount (block_id, slot[, metadata]) entries and records the
+        // (source_block, source_slot) pairs into `out` for later resolution.
+        // Metadata is skipped — only the order matters for incident[target].
+        auto read_in_edge_refs = [&](std::istream& zis, uint32_t ecount,
+                                     std::vector<std::pair<detail::block_id, uint32_t>>& out) {
             detail::require_backing_bytes(zis, ecount, sizeof(detail::block_id) + sizeof(uint32_t),
                                           "edge");
             for (uint32_t i = 0; i < ecount; ++i) {
@@ -374,6 +379,7 @@ public:
                         throw std::runtime_error("Failed to deserialize grove: stream error reading edge metadata");
                     }
                 }
+                out.emplace_back(b, s);
             }
         };
         auto read_key_edges = [&](std::istream& zis, gdt::key<key_type, data_type>* src) {
@@ -407,7 +413,7 @@ public:
             if (!zis) {
                 throw std::runtime_error("Failed to deserialize grove: stream error reading in-edge count");
             }
-            skip_edge_refs(zis, in_ecount);
+            read_in_edge_refs(zis, in_ecount, pending_in[src]);
         };
 
         // Node destructors recursively delete children, so on any failure we
@@ -580,6 +586,23 @@ public:
                 } else {
                     g.graph_data.add_edge(pe.src, tgt, std::move(pe.meta));
                 }
+            }
+
+            // Reorder incident[target]'s incoming side to match the on-disk
+            // order.  add_edge() replay uses block-visitation order, which
+            // diverges from the original insertion order when sources live in
+            // non-sequential blocks.
+            for (auto& [target, in_refs] : pending_in) {
+                std::vector<typename decltype(g.graph_data)::edge_iterator> ordered;
+                ordered.reserve(in_refs.size());
+                for (auto& [sb, ss] : in_refs) {
+                    gdt::key<key_type, data_type>* src = resolve_target(sb, ss);
+                    auto eit = g.graph_data.find_edge(src, target);
+                    if (eit != g.graph_data.edge_end()) {
+                        ordered.push_back(eit);
+                    }
+                }
+                g.graph_data.reorder_incoming(target, ordered.begin(), ordered.end());
             }
 
             // ---- validate the directory counts against what was parsed ----

@@ -459,6 +459,63 @@ class graph_overlay {
         }
     }
 
+  public:
+    using edge_iterator = std::list<edge>::iterator;
+
+    /**
+     * @brief Find the edge iterator for a specific directed edge.
+     * @param source Pointer to source key
+     * @param target Pointer to target key
+     * @return Iterator to the edge, or edge_end() if not found
+     */
+    [[nodiscard]] edge_iterator find_edge(
+        const gdt::key<key_type, data_type>* source,
+        const gdt::key<key_type, data_type>* target) {
+        auto it = incident.find(source);
+        if (it == incident.end()) return edges_.end();
+        for (auto eit : it->second) {
+            if (eit->source == source && eit->target == target) {
+                return eit;
+            }
+        }
+        return edges_.end();
+    }
+
+    /// Past-the-end iterator for the edge list.
+    [[nodiscard]] edge_iterator edge_end() { return edges_.end(); }
+
+    /**
+     * @brief Reorder the incoming side of incident[target] to match a given
+     *        sequence of edge iterators.
+     *
+     * Used by grove::deserialize() to restore the on-disk incoming-edge order
+     * that add_edge() replay (in block-visitation order) does not preserve.
+     * Self-loops are filed once, not twice, matching register_edge's convention.
+     *
+     * @param target Pointer to the target key whose incoming order to fix.
+     * @param ordered_begin Beginning of an iterator range of edge_iterator values
+     *        representing the desired incoming order for `target`.
+     * @param ordered_end End of the iterator range.
+     */
+    void reorder_incoming(
+        const gdt::key<key_type, data_type>* target,
+        std::vector<edge_iterator>::const_iterator ordered_begin,
+        std::vector<edge_iterator>::const_iterator ordered_end) {
+        auto it = incident.find(target);
+        if (it == incident.end()) return;
+        // Remove all incoming edges from this bucket.
+        it->second.erase(
+            std::remove_if(it->second.begin(), it->second.end(),
+                           [target](edge_iterator eit) { return eit->target == target; }),
+            it->second.end());
+        // Re-append in the order provided by the caller (on-disk order).
+        for (auto oit = ordered_begin; oit != ordered_end; ++oit) {
+            if ((*oit)->target == target) {
+                it->second.push_back(*oit);
+            }
+        }
+    }
+
     /**
      * @brief Clear all edges
      */
@@ -477,7 +534,6 @@ class graph_overlay {
 
   private:
     using edge_list_t = std::list<edge>;
-    using edge_iterator = edge_list_t::iterator;
 
     // Files a newly-inserted edge under both of its endpoints in `incident`.
     // A self-loop (source == target) is filed once, not twice — filing it

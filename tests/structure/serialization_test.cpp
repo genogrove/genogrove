@@ -20,6 +20,7 @@
 #include <genogrove/data_type/serialization_traits.hpp>
 #include <genogrove/structure/grove/gg_block_format.hpp>
 #include <genogrove/structure/grove/grove.hpp>
+#include <genogrove/structure/grove/grove_view.hpp>
 #include <genogrove/structure/grove/zlib_streambuf.hpp>
 
 namespace gst = genogrove::structure;
@@ -406,4 +407,76 @@ TEST(SerializationDoSTest, InflaterEnforcesOutputCap) {
     // With a sufficient cap it round-trips exactly.
     inflater.decompress(compressed.data(), compressed.size(), out, payload.size());
     EXPECT_EQ(out, payload);
+}
+
+TEST(SerializationTest, IncomingEdgeOrderPreservedAcrossRoundTrip) {
+    // A target whose sources live in non-sequential block order: the on-disk
+    // incoming section records the original insertion order, but add_edge()
+    // replay in block-visitation order would scramble it without the reorder
+    // step (#540).  Build a grove where insertion order ≠ block-id order, then
+    // verify that both the eager grove and grove_view preserve the original
+    // incoming-edge list order.
+    using grove_t = gst::grove<gdt::interval, int>;
+    using key_t = gdt::key<gdt::interval, int>;
+
+    key_t* src_early = nullptr;
+    key_t* src_late = nullptr;
+    key_t* target = nullptr;
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    {
+        grove_t g(4);
+        // Insert sources so that early (inserted first) has a higher spatial
+        // position than late (inserted second).  Both are on chr1 so they
+        // share a single index tree; their leaf positions are determined by
+        // interval start.
+        src_late  = g.insert_data("chr1", gdt::interval{10, 20}, 1, gst::sorted);   // spatially first
+        src_early = g.insert_data("chr1", gdt::interval{500, 600}, 2, gst::sorted); // spatially last
+        target    = g.insert_data("chr1", gdt::interval{1000, 1100}, 3, gst::sorted);
+        // Add edges in chronological order: early→target first, late→target second.
+        g.add_edge(src_early, target);
+        g.add_edge(src_late, target);
+
+        // Pre-serialize: original insertion order.
+        auto original_in = g.graph().get_in_edge_list(target);
+        ASSERT_EQ(original_in.size(), 2u);
+        EXPECT_EQ(original_in[0].source, src_early);
+        EXPECT_EQ(original_in[1].source, src_late);
+
+        g.serialize(ss);
+    }
+
+    // Eager deserialize — must preserve the original incoming order.
+    {
+        ss.seekg(0);
+        auto r = grove_t::deserialize(ss);
+        auto ra = r.intersect(gdt::interval{1000, 1100}, "chr1");
+        ASSERT_EQ(ra.get_keys().size(), 1u);
+        auto* tgt = ra.get_keys()[0];
+
+        auto in = r.graph().get_in_edge_list(tgt);
+        ASSERT_EQ(in.size(), 2u);
+        EXPECT_EQ(in[0].source->get_data(), 2);  // src_early
+        EXPECT_EQ(in[1].source->get_data(), 1);  // src_late
+    }
+
+    // grove_view — must also match.
+    {
+        fs::path path = fs::temp_directory_path() / "genogrove_inorder_test.gg";
+        {
+            ss.seekg(0);
+            std::ofstream ofs(path, std::ios::binary);
+            ofs << ss.rdbuf();
+        }
+        auto view = gst::grove_view<gdt::interval, int>::open(path.string());
+        auto rv = view.intersect(gdt::interval{1000, 1100}, "chr1");
+        ASSERT_EQ(rv.get_keys().size(), 1u);
+        auto* tgt = rv.get_keys()[0];
+
+        auto in = view.get_in_edge_list(tgt);
+        ASSERT_EQ(in.size(), 2u);
+        EXPECT_EQ(in[0].first->get_data(), 2);  // src_early
+        EXPECT_EQ(in[1].first->get_data(), 1);  // src_late
+
+        fs::remove(path);
+    }
 }
