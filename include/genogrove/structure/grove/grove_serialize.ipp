@@ -91,162 +91,9 @@ public:
      *       writer + footer index if buffering ever dominates at genome scale.
      */
     void serialize(std::ostream& os) const {
-        using key_ptr = const gdt::key<key_type, data_type>*;
-
-        // ---- Phase 1: assign block ids and key global ids ----
-        std::unordered_map<const node<key_type, data_type>*, detail::block_id> node_to_block;
-        std::vector<const node<key_type, data_type>*> node_blocks;   // block_id -> node
-        std::unordered_map<key_ptr, std::pair<detail::block_id, uint32_t>> key_to_id;
-        std::vector<std::pair<std::string, detail::block_id>> index_roots;
-        uint64_t leaf_keys_total = 0;
-
-        auto assign = [&](const node<key_type, data_type>* n, auto&& self) -> void {
-            detail::block_id id = static_cast<detail::block_id>(node_blocks.size());
-            node_to_block[n] = id;
-            node_blocks.push_back(n);
-            if (n->get_is_leaf()) {
-                const auto& ks = n->get_keys();
-                leaf_keys_total += ks.size();
-                for (uint32_t i = 0; i < ks.size(); ++i) {
-                    key_to_id[ks[i]] = {id, i};
-                }
-            } else {
-                for (const auto* child : n->get_children()) {
-                    self(child, self);
-                }
-            }
-        };
-        for (const auto& [name, root] : root_nodes) {
-            index_roots.emplace_back(name, static_cast<detail::block_id>(node_blocks.size()));
-            assign(root, assign);
-        }
-        const detail::block_id ext_block_begin = static_cast<detail::block_id>(node_blocks.size());
-
-        // External keys are distributed into fixed-size blocks so a partial read
-        // can page in one registry chunk at a time (never the whole registry).
-        // ext_chunk is a compression-vs-granularity knob; deserialization caps the
-        // per-block count at this same constant (see gg_block_format.hpp, #484).
-        constexpr uint32_t ext_chunk = detail::max_external_keys_per_block;
-        std::vector<std::pair<size_t, size_t>> ext_ranges;  // [begin,end) in external_key_storage
-        for (size_t start = 0; start < external_key_storage.size(); start += ext_chunk) {
-            size_t end = std::min(start + static_cast<size_t>(ext_chunk), external_key_storage.size());
-            detail::block_id id = ext_block_begin + static_cast<detail::block_id>(ext_ranges.size());
-            for (size_t j = start; j < end; ++j) {
-                key_to_id[&external_key_storage[j]] = {id, static_cast<uint32_t>(j - start)};
-            }
-            ext_ranges.emplace_back(start, end);
-        }
-        const detail::block_id num_blocks =
-            ext_block_begin + static_cast<detail::block_id>(ext_ranges.size());
-
-        // ---- Phase 2: compress each block into an in-memory buffer ----
-        // Per-key outgoing then incoming edges, written after a key list. Generic
-        // over the key pointer iterator so leaf keys (key*) and external keys
-        // (const key*) share it. Every edge is thus written twice — once under its
-        // source's outgoing list, once under its target's incoming list — so a
-        // partial reader (grove_view) can page in either endpoint's block and see
-        // that side of the edge without loading the other endpoint.
-        auto write_edge_ref = [&](std::ostream& zos, key_ptr other, const auto& e) {
-            auto found = key_to_id.find(other);
-            if (found == key_to_id.end()) {
-                throw std::runtime_error("Failed to serialize grove: edge endpoint not indexed");
-            }
-            detail::block_id ob = found->second.first;
-            uint32_t oslot = found->second.second;
-            detail::write_pod(zos, ob);
-            detail::write_pod(zos, oslot);
-            if constexpr (!std::is_void_v<edge_data_type>) {
-                gdt::serializer<edge_data_type>::write(zos, e.metadata);
-            }
-        };
-        auto write_key_edges = [&](std::ostream& zos, auto first, auto last) {
-            for (auto it = first; it != last; ++it) {
-                key_ptr k = *it;
-                const auto& out_edges = graph_data.get_edge_list(k);
-                uint32_t out_count = static_cast<uint32_t>(out_edges.size());
-                detail::write_pod(zos, out_count);
-                for (const auto& e : out_edges) {
-                    write_edge_ref(zos, e.target, e);
-                }
-                const auto& in_edges = graph_data.get_in_edge_list(k);
-                uint32_t in_count = static_cast<uint32_t>(in_edges.size());
-                detail::write_pod(zos, in_count);
-                for (const auto& e : in_edges) {
-                    write_edge_ref(zos, e.source, e);
-                }
-            }
-        };
-
-        // ---- Phase 2: write magic + directory ----
-        os.write(detail::grove_stream_magic.data(),
-                 static_cast<std::streamsize>(detail::grove_stream_magic.size()));
-
-        detail::write_pod(os, this->order);
-        uint32_t num_indices = static_cast<uint32_t>(index_roots.size());
-        detail::write_pod(os, num_indices);
-        for (const auto& [name, root_id] : index_roots) {
-            uint32_t name_len = static_cast<uint32_t>(name.size());
-            detail::write_pod(os, name_len);
-            os.write(name.data(), static_cast<std::streamsize>(name_len));
-            detail::block_id rid = root_id;
-            detail::write_pod(os, rid);
-        }
-        detail::write_pod(os, num_blocks);
-        detail::block_id ext_begin_field = ext_block_begin;
-        detail::write_pod(os, ext_begin_field);
-        uint64_t leaf_count_field = leaf_keys_total;
-        detail::write_pod(os, leaf_count_field);
-        uint64_t external_count_field = static_cast<uint64_t>(external_key_storage.size());
-        detail::write_pod(os, external_count_field);
-
-        // ---- Phase 3: compress each block and write it directly ----
-        // One deflate state and one uncompressed-scratch stream reused across all
-        // blocks (deflateReset per block, no per-block deflateInit or stream
-        // construction), each block written length-prefixed as it is produced —
-        // no whole-payload buffering.
-        detail::block_deflater deflater;
-        std::string comp;
-        std::ostringstream raw(std::ios::binary);
-        auto write_block = [&](auto&& write_fn) {
-            raw.str(std::string());  // reset content + put pointer, reuse capacity
-            raw.clear();             // clear any residual state flags
-            write_fn(raw);
-            if (!raw) {
-                throw std::runtime_error("Failed to serialize grove: block stream error");
-            }
-            deflater.compress(raw.view(), comp);  // view(): compress without a copy
-            uint64_t clen = static_cast<uint64_t>(comp.size());
-            detail::write_pod(os, clen);
-            os.write(comp.data(), static_cast<std::streamsize>(comp.size()));
-        };
-
-        for (detail::block_id b = 0; b < ext_block_begin; ++b) {
-            const node<key_type, data_type>* n = node_blocks[b];
-            write_block([&](std::ostream& zos) {
-                n->serialize_block(zos, node_to_block);
-                if (n->get_is_leaf()) {
-                    write_key_edges(zos, n->get_keys().begin(), n->get_keys().end());
-                }
-            });
-        }
-        for (const auto& [start, end] : ext_ranges) {
-            write_block([&](std::ostream& zos) {
-                uint32_t cnt = static_cast<uint32_t>(end - start);
-                detail::write_pod(zos, cnt);
-                std::vector<key_ptr> keyptrs;
-                keyptrs.reserve(cnt);
-                for (size_t j = start; j < end; ++j) {
-                    const auto& k = external_key_storage[j];
-                    k.get_value().serialize(zos);
-                    if constexpr (!std::is_void_v<data_type>) {
-                        gdt::serializer<data_type>::write(zos, k.get_data());
-                    }
-                    keyptrs.push_back(&k);
-                }
-                write_key_edges(zos, keyptrs.begin(), keyptrs.end());
-            });
-        }
-
+        serialize_layout layout = assign_serialize_layout();
+        write_serialize_header(os, layout);
+        write_serialize_blocks(os, layout);
         if (!os) {
             throw std::runtime_error("Failed to serialize grove: stream error");
         }
@@ -305,6 +152,193 @@ public:
     }
 
 private:
+    // ---- serialize() phases -------------------------------------------------
+    // serialize() is orchestration only: assign block/key ids, write the
+    // header, write every block. Split into phases so each is independently
+    // readable; behavior is unchanged from the single-function version.
+
+    using key_ptr = const gdt::key<key_type, data_type>*;
+
+    // Block/key id assignment plus everything the write phases need: which
+    // node owns which block id, where each key (indexed or external) lives as
+    // (block_id, slot), per-index root block ids, and the external-key chunk
+    // ranges.
+    struct serialize_layout {
+        std::unordered_map<const node<key_type, data_type>*, detail::block_id> node_to_block;
+        std::vector<const node<key_type, data_type>*> node_blocks;  // block_id -> node
+        std::unordered_map<key_ptr, std::pair<detail::block_id, uint32_t>> key_to_id;
+        std::vector<std::pair<std::string, detail::block_id>> index_roots;
+        uint64_t leaf_keys_total = 0;
+        detail::block_id ext_block_begin = 0;
+        std::vector<std::pair<size_t, size_t>> ext_ranges;  // [begin,end) in external_key_storage
+        detail::block_id num_blocks = 0;
+    };
+
+    // Walks every index's tree in DFS pre-order to assign block ids (node
+    // blocks first, per index in root_nodes iteration order), then
+    // distributes external keys into fixed-size chunks (#484) to assign their
+    // block ids. Every key's global id — (block_id, slot) — is recorded in
+    // key_to_id as it's assigned.
+    [[nodiscard]] serialize_layout assign_serialize_layout() const {
+        serialize_layout layout;
+
+        auto assign = [&](const node<key_type, data_type>* n, auto&& self) -> void {
+            detail::block_id id = static_cast<detail::block_id>(layout.node_blocks.size());
+            layout.node_to_block[n] = id;
+            layout.node_blocks.push_back(n);
+            if (n->get_is_leaf()) {
+                const auto& ks = n->get_keys();
+                layout.leaf_keys_total += ks.size();
+                for (uint32_t i = 0; i < ks.size(); ++i) {
+                    layout.key_to_id[ks[i]] = {id, i};
+                }
+            } else {
+                for (const auto* child : n->get_children()) {
+                    self(child, self);
+                }
+            }
+        };
+        for (const auto& [name, root] : root_nodes) {
+            layout.index_roots.emplace_back(name, static_cast<detail::block_id>(layout.node_blocks.size()));
+            assign(root, assign);
+        }
+        layout.ext_block_begin = static_cast<detail::block_id>(layout.node_blocks.size());
+
+        // External keys are distributed into fixed-size blocks so a partial read
+        // can page in one registry chunk at a time (never the whole registry).
+        // ext_chunk is a compression-vs-granularity knob; deserialization caps the
+        // per-block count at this same constant (see gg_block_format.hpp, #484).
+        constexpr uint32_t ext_chunk = detail::max_external_keys_per_block;
+        for (size_t start = 0; start < external_key_storage.size(); start += ext_chunk) {
+            size_t end = std::min(start + static_cast<size_t>(ext_chunk), external_key_storage.size());
+            detail::block_id id = layout.ext_block_begin + static_cast<detail::block_id>(layout.ext_ranges.size());
+            for (size_t j = start; j < end; ++j) {
+                layout.key_to_id[&external_key_storage[j]] = {id, static_cast<uint32_t>(j - start)};
+            }
+            layout.ext_ranges.emplace_back(start, end);
+        }
+        layout.num_blocks = layout.ext_block_begin + static_cast<detail::block_id>(layout.ext_ranges.size());
+
+        return layout;
+    }
+
+    // Writes one edge reference: the other endpoint's (block_id, slot), then
+    // metadata if edge_data_type is non-void.
+    void write_edge_ref(std::ostream& zos, key_ptr other, const auto& e,
+                        const serialize_layout& layout) const {
+        auto found = layout.key_to_id.find(other);
+        if (found == layout.key_to_id.end()) {
+            throw std::runtime_error("Failed to serialize grove: edge endpoint not indexed");
+        }
+        detail::block_id ob = found->second.first;
+        uint32_t oslot = found->second.second;
+        detail::write_pod(zos, ob);
+        detail::write_pod(zos, oslot);
+        if constexpr (!std::is_void_v<edge_data_type>) {
+            gdt::serializer<edge_data_type>::write(zos, e.metadata);
+        }
+    }
+
+    // Writes one key's outgoing then incoming edge lists. Generic over the key
+    // pointer iterator so leaf keys (key*) and external keys (const key*)
+    // share it. Every edge is thus written twice — once under its source's
+    // outgoing list, once under its target's incoming list — so a partial
+    // reader (grove_view) can page in either endpoint's block and see that
+    // side of the edge without loading the other endpoint.
+    void write_key_edges(std::ostream& zos, auto first, auto last,
+                         const serialize_layout& layout) const {
+        for (auto it = first; it != last; ++it) {
+            key_ptr k = *it;
+            const auto& out_edges = graph_data.get_edge_list(k);
+            uint32_t out_count = static_cast<uint32_t>(out_edges.size());
+            detail::write_pod(zos, out_count);
+            for (const auto& e : out_edges) {
+                write_edge_ref(zos, e.target, e, layout);
+            }
+            const auto& in_edges = graph_data.get_in_edge_list(k);
+            uint32_t in_count = static_cast<uint32_t>(in_edges.size());
+            detail::write_pod(zos, in_count);
+            for (const auto& e : in_edges) {
+                write_edge_ref(zos, e.source, e, layout);
+            }
+        }
+    }
+
+    // Writes the plain (uncompressed) magic + order + index directory +
+    // block/key counts.
+    void write_serialize_header(std::ostream& os, const serialize_layout& layout) const {
+        os.write(detail::grove_stream_magic.data(),
+                 static_cast<std::streamsize>(detail::grove_stream_magic.size()));
+
+        detail::write_pod(os, this->order);
+        uint32_t num_indices = static_cast<uint32_t>(layout.index_roots.size());
+        detail::write_pod(os, num_indices);
+        for (const auto& [name, root_id] : layout.index_roots) {
+            uint32_t name_len = static_cast<uint32_t>(name.size());
+            detail::write_pod(os, name_len);
+            os.write(name.data(), static_cast<std::streamsize>(name_len));
+            detail::block_id rid = root_id;
+            detail::write_pod(os, rid);
+        }
+        detail::write_pod(os, layout.num_blocks);
+        detail::block_id ext_begin_field = layout.ext_block_begin;
+        detail::write_pod(os, ext_begin_field);
+        uint64_t leaf_count_field = layout.leaf_keys_total;
+        detail::write_pod(os, leaf_count_field);
+        uint64_t external_count_field = static_cast<uint64_t>(external_key_storage.size());
+        detail::write_pod(os, external_count_field);
+    }
+
+    // Compresses and writes every block, node blocks then external blocks,
+    // each length-prefixed as it is produced (no whole-payload buffering).
+    void write_serialize_blocks(std::ostream& os, const serialize_layout& layout) const {
+        // One deflate state and one uncompressed-scratch stream reused across all
+        // blocks (deflateReset per block, no per-block deflateInit or stream
+        // construction).
+        detail::block_deflater deflater;
+        std::string comp;
+        std::ostringstream raw(std::ios::binary);
+        auto write_block = [&](auto&& write_fn) {
+            raw.str(std::string());  // reset content + put pointer, reuse capacity
+            raw.clear();             // clear any residual state flags
+            write_fn(raw);
+            if (!raw) {
+                throw std::runtime_error("Failed to serialize grove: block stream error");
+            }
+            deflater.compress(raw.view(), comp);  // view(): compress without a copy
+            uint64_t clen = static_cast<uint64_t>(comp.size());
+            detail::write_pod(os, clen);
+            os.write(comp.data(), static_cast<std::streamsize>(comp.size()));
+        };
+
+        for (detail::block_id b = 0; b < layout.ext_block_begin; ++b) {
+            const node<key_type, data_type>* n = layout.node_blocks[b];
+            write_block([&](std::ostream& zos) {
+                n->serialize_block(zos, layout.node_to_block);
+                if (n->get_is_leaf()) {
+                    write_key_edges(zos, n->get_keys().begin(), n->get_keys().end(), layout);
+                }
+            });
+        }
+        for (const auto& [start, end] : layout.ext_ranges) {
+            write_block([&](std::ostream& zos) {
+                uint32_t cnt = static_cast<uint32_t>(end - start);
+                detail::write_pod(zos, cnt);
+                std::vector<key_ptr> keyptrs;
+                keyptrs.reserve(cnt);
+                for (size_t j = start; j < end; ++j) {
+                    const auto& k = external_key_storage[j];
+                    k.get_value().serialize(zos);
+                    if constexpr (!std::is_void_v<data_type>) {
+                        gdt::serializer<data_type>::write(zos, k.get_data());
+                    }
+                    keyptrs.push_back(&k);
+                }
+                write_key_edges(zos, keyptrs.begin(), keyptrs.end(), layout);
+            });
+        }
+    }
+
     // ---- deserialize() phases ---------------------------------------------
     // deserialize() is orchestration only: read the header, read every block,
     // link the tree structure, resolve graph edges, validate directory counts,

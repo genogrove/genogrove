@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Refactored
 - **Split `grove::deserialize()` into phases**: had grown to 373 lines doing everything inline across several PRs (header parsing, block reading, tree linking, edge resolution, validation). Split into orchestration (~40 lines) plus named private static phases — `read_deserialize_header`, `read_deserialize_blocks` (itself further split into `read_one_block`/`read_node_block`/`read_external_block`/`read_key_edges`/`read_in_edge_refs`), `link_deserialize_structure`, `resolve_deserialize_edges` — each taking only the state it needs by reference. Pure code movement, no logic or behavior change. ([#547](https://github.com/genogrove/genogrove/pull/547))
+- **Split `grove::serialize()` into phases**: same treatment as `deserialize()`, 161 lines doing block/key id assignment, header writing, and block writing inline. Split into orchestration (8 lines) plus named private `const` member phases — `assign_serialize_layout`, `write_edge_ref`/`write_key_edges`, `write_serialize_header`, `write_serialize_blocks`. Pure code movement, no logic or behavior change. ([#548](https://github.com/genogrove/genogrove/pull/548))
 
 ## [0.26.0] - 2026-08-17
 
