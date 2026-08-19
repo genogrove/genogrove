@@ -465,12 +465,9 @@ class graph_overlay {
     /**
      * @brief Find the `occurrence`-th edge iterator for a specific directed edge.
      *
-     * Parallel edges (multiple add_edge calls for the same source/target pair,
-     * e.g. distinct transcript metadata between the same exon pair) file
-     * multiple matches under `incident[source]`, in the order they were added.
-     * `occurrence` (0-indexed) selects among them, so a caller resolving several
-     * incoming refs that name the same source can walk 0, 1, 2, ... to get each
-     * distinct edge instead of always the first.
+     * Parallel edges (same source/target pair, e.g. distinct transcript
+     * metadata between the same exon pair) file multiple matches; `occurrence`
+     * (0-indexed) picks among them instead of always returning the first.
      *
      * @param source Pointer to source key
      * @param target Pointer to target key
@@ -496,30 +493,24 @@ class graph_overlay {
     [[nodiscard]] edge_iterator edge_end() { return edges_.end(); }
 
     /**
-     * @brief Reorder the incoming side of incident[target] to match a given
-     *        sequence of edge iterators, in place.
+     * @brief Overwrite incident[target]'s incoming slots, in place, to match
+     *        a given order.
      *
-     * Used by grove::deserialize() to restore the on-disk incoming-edge order
-     * that add_edge() replay (in block-visitation order) does not preserve.
+     * Used by grove::deserialize() to restore on-disk incoming-edge order
+     * after add_edge() replay (block-visitation order) scrambles it.
+     * Overwrites each target==target slot left to right instead of
+     * erase+append, so slots never physically relocate — erase+append would
+     * shove a self-loop's shared slot to the end, corrupting
+     * get_edge_list(target)'s outgoing order. If `ordered` runs out early
+     * (a malformed file whose incoming section names an unresolvable
+     * source), leftover slots keep their replay value rather than being
+     * dropped.
      *
-     * Overwrites each target==target slot in incident[target], left to right,
-     * with the corresponding entry from `ordered` — it never erases or
-     * appends, so slots are never physically relocated. This matters for a
-     * self-loop, which occupies one shared slot serving both directions
-     * (register_edge files it once, not twice): erase-then-append would move
-     * it to the end of the bucket, corrupting get_edge_list(target)'s
-     * outgoing order for any key with both a self-loop and other outgoing
-     * edges. In-place overwrite leaves every non-incoming slot — including a
-     * self-loop's shared slot when `ordered` already agrees with its current
-     * position — untouched.
-     *
-     * If `ordered` has fewer entries than there are incoming slots (only
-     * possible when a source referenced in the on-disk incoming section
-     * couldn't be resolved to an edge — a malformed/tampered file, since a
-     * file this codebase's own writer produces always has consistent
-     * outgoing/incoming sections), the remaining slots keep whatever
-     * add_edge() replay left there rather than being dropped — a matching
-     * edge stays reachable, just not necessarily in the right order.
+     * ponytail: known gap (#546) — a self-loop interleaved with another
+     * source to the same key can still land in the wrong outgoing position;
+     * a real fix needs a merge at self-loop sync points, not a positional
+     * overwrite. Unfixed: narrow trigger, and reverse traversal has no
+     * callers in this repo yet.
      *
      * @param target Pointer to the target key whose incoming order to fix.
      * @param ordered_begin Beginning of an iterator range of edge_iterator values
