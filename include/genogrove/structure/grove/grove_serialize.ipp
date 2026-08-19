@@ -422,6 +422,163 @@ private:
         uint64_t actual_leaf_key_count = 0;
     };
 
+    // Reads ecount (block_id, slot[, metadata]) entries and records the
+    // (source_block, source_slot) pairs into `out` for later resolution.
+    // Metadata is skipped — only the order matters for incident[target].
+    static void read_in_edge_refs(std::istream& zis, uint32_t ecount,
+                                  std::vector<std::pair<detail::block_id, uint32_t>>& out) {
+        detail::require_backing_bytes(zis, ecount, sizeof(detail::block_id) + sizeof(uint32_t),
+                                      "edge");
+        for (uint32_t i = 0; i < ecount; ++i) {
+            detail::block_id b;
+            uint32_t s;
+            detail::read_pod(zis, b);
+            detail::read_pod(zis, s);
+            if (!zis) {
+                throw std::runtime_error("Failed to deserialize grove: stream error reading edge");
+            }
+            if constexpr (!std::is_void_v<edge_data_type>) {
+                [[maybe_unused]] auto meta = gdt::serializer<edge_data_type>::read(zis);
+                if (!zis) {
+                    throw std::runtime_error("Failed to deserialize grove: stream error reading edge metadata");
+                }
+            }
+            out.emplace_back(b, s);
+        }
+    }
+
+    // Reads one key's outgoing then incoming edge record (the .gg writer's
+    // per-key layout): outgoing refs go to result.pending for later add_edge()
+    // replay, incoming refs to result.pending_in for later reorder.
+    static void read_key_edges(std::istream& zis, gdt::key<key_type, data_type>* src,
+                               deserialize_blocks_result& result) {
+        uint32_t ecount;
+        detail::read_pod(zis, ecount);
+        if (!zis) {
+            throw std::runtime_error("Failed to deserialize grove: stream error reading edge count");
+        }
+        detail::require_backing_bytes(zis, ecount, sizeof(detail::block_id) + sizeof(uint32_t),
+                                      "edge");
+        for (uint32_t i = 0; i < ecount; ++i) {
+            detail::block_id tb;
+            uint32_t ts;
+            detail::read_pod(zis, tb);
+            detail::read_pod(zis, ts);
+            if (!zis) {
+                throw std::runtime_error("Failed to deserialize grove: stream error reading edge");
+            }
+            if constexpr (std::is_void_v<edge_data_type>) {
+                result.pending.push_back(pending_edge{src, tb, ts, {}});
+            } else {
+                auto meta = gdt::serializer<edge_data_type>::read(zis);
+                if (!zis) {
+                    throw std::runtime_error("Failed to deserialize grove: stream error reading edge metadata");
+                }
+                result.pending.push_back(pending_edge{src, tb, ts, std::move(meta)});
+            }
+        }
+        uint32_t in_ecount;
+        detail::read_pod(zis, in_ecount);
+        if (!zis) {
+            throw std::runtime_error("Failed to deserialize grove: stream error reading in-edge count");
+        }
+        // Skip keys with no incoming edges so the reorder pass below only
+        // visits keys that actually need it.
+        if (in_ecount > 0) {
+            read_in_edge_refs(zis, in_ecount, result.pending_in[src]);
+        }
+    }
+
+    // Reads block b's length-prefixed, compressed bytes and inflates them into
+    // raw_buf. block_bytes_left bounds clen against the file's remaining size
+    // without a seek (#513); inflater/comp_buf/raw_buf are reused scratch state
+    // across all blocks in a stream (one inflateReset per block).
+    static void read_one_block(std::istream& is, std::streamoff& block_bytes_left,
+                               detail::block_inflater& inflater, std::string& comp_buf,
+                               std::string& raw_buf) {
+        uint64_t clen;
+        detail::read_pod(is, clen);
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize grove: stream error reading block length");
+        }
+        // clen is file-controlled: reject a value that would overflow the
+        // signed streamsize cast (a negative read count is UB) before it
+        // sizes the buffer.
+        if (clen > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
+            throw std::runtime_error("Failed to deserialize grove: block length out of range");
+        }
+        // clen bytes must actually remain: reject a bogus multi-GB length
+        // before resize allocates it (OOM guard). Arithmetic only — the
+        // budget was measured once above.
+        if (block_bytes_left >= 0) {
+            block_bytes_left -= static_cast<std::streamoff>(sizeof(clen));
+            if (block_bytes_left < 0 || clen > static_cast<uint64_t>(block_bytes_left)) {
+                throw std::runtime_error("Failed to deserialize grove: compressed block length exceeds remaining stream");
+            }
+            block_bytes_left -= static_cast<std::streamoff>(clen);
+        }
+        comp_buf.resize(static_cast<size_t>(clen));
+        is.read(comp_buf.data(), static_cast<std::streamsize>(clen));
+        if (is.gcount() != static_cast<std::streamsize>(clen)) {
+            throw std::runtime_error("Failed to deserialize grove: truncated block");
+        }
+        inflater.decompress(comp_buf.data(), static_cast<size_t>(clen), raw_buf);
+    }
+
+    // Deserializes node block b from its already-decompressed bytes: the node
+    // itself (keys + child/next block ids), then edges for each leaf key.
+    static void read_node_block(std::istream& zis, const deserialize_header& header,
+                                grove& g, deserialize_blocks_result& result, detail::block_id b) {
+        node<key_type, data_type>* n = node<key_type, data_type>::deserialize_block(
+            zis, header.order, g.key_storage, result.child_ids[b], result.next_ids[b]);
+        result.block_node[b] = n;
+        if (n->get_is_leaf()) {
+            result.actual_leaf_key_count += n->get_keys().size();
+            for (auto* k : n->get_keys()) {
+                read_key_edges(zis, k, result);
+            }
+        }
+    }
+
+    // Reads external block b's packed keys (up to max_external_keys_per_block,
+    // enforced below) into g.external_key_storage, then each key's edges.
+    static void read_external_block(std::istream& zis, grove& g,
+                                    deserialize_blocks_result& result, std::size_t ext_index) {
+        uint32_t cnt;
+        detail::read_pod(zis, cnt);
+        if (!zis) {
+            throw std::runtime_error("Failed to deserialize grove: stream error reading external block count");
+        }
+        // cnt is file-controlled. Reject a count the writer could never have
+        // produced (it packs at most max_external_keys_per_block per block)
+        // before allocating or looping — otherwise a bogus cnt spins appending
+        // garbage into external storage until OOM.
+        if (cnt > detail::max_external_keys_per_block) {
+            throw std::runtime_error("Failed to deserialize grove: external block key count exceeds limit");
+        }
+        auto& ekeys = result.ext_block_keys[ext_index];
+        ekeys.reserve(cnt);
+        for (uint32_t i = 0; i < cnt; ++i) {
+            key_type key_value = key_type::deserialize(zis);
+            if constexpr (std::is_void_v<data_type>) {
+                if (!zis) {
+                    throw std::runtime_error("Failed to deserialize grove: stream error reading external key");
+                }
+                g.external_key_storage.emplace_back(key_value);
+            } else {
+                data_type data_value = gdt::serializer<data_type>::read(zis);
+                if (!zis) {
+                    throw std::runtime_error("Failed to deserialize grove: stream error reading external key");
+                }
+                g.external_key_storage.emplace_back(key_value, data_value);
+            }
+            ekeys.push_back(&g.external_key_storage.back());
+        }
+        for (auto* k : ekeys) {
+            read_key_edges(zis, k, result);
+        }
+    }
+
     // Reads every length-prefixed block (node blocks then external blocks),
     // each independently inflated from an isolated buffer. Only records
     // child/next block ids and per-key edge references — node linking happens
@@ -434,155 +591,22 @@ private:
         result.next_ids.assign(header.ext_block_begin, detail::no_block);
         result.ext_block_keys.assign(header.num_blocks - header.ext_block_begin, {});
 
-        // Reads ecount (block_id, slot[, metadata]) entries and records the
-        // (source_block, source_slot) pairs into `out` for later resolution.
-        // Metadata is skipped — only the order matters for incident[target].
-        auto read_in_edge_refs = [&](std::istream& zis, uint32_t ecount,
-                                     std::vector<std::pair<detail::block_id, uint32_t>>& out) {
-            detail::require_backing_bytes(zis, ecount, sizeof(detail::block_id) + sizeof(uint32_t),
-                                          "edge");
-            for (uint32_t i = 0; i < ecount; ++i) {
-                detail::block_id b;
-                uint32_t s;
-                detail::read_pod(zis, b);
-                detail::read_pod(zis, s);
-                if (!zis) {
-                    throw std::runtime_error("Failed to deserialize grove: stream error reading edge");
-                }
-                if constexpr (!std::is_void_v<edge_data_type>) {
-                    [[maybe_unused]] auto meta = gdt::serializer<edge_data_type>::read(zis);
-                    if (!zis) {
-                        throw std::runtime_error("Failed to deserialize grove: stream error reading edge metadata");
-                    }
-                }
-                out.emplace_back(b, s);
-            }
-        };
-        auto read_key_edges = [&](std::istream& zis, gdt::key<key_type, data_type>* src) {
-            uint32_t ecount;
-            detail::read_pod(zis, ecount);
-            if (!zis) {
-                throw std::runtime_error("Failed to deserialize grove: stream error reading edge count");
-            }
-            detail::require_backing_bytes(zis, ecount, sizeof(detail::block_id) + sizeof(uint32_t),
-                                          "edge");
-            for (uint32_t i = 0; i < ecount; ++i) {
-                detail::block_id tb;
-                uint32_t ts;
-                detail::read_pod(zis, tb);
-                detail::read_pod(zis, ts);
-                if (!zis) {
-                    throw std::runtime_error("Failed to deserialize grove: stream error reading edge");
-                }
-                if constexpr (std::is_void_v<edge_data_type>) {
-                    result.pending.push_back(pending_edge{src, tb, ts, {}});
-                } else {
-                    auto meta = gdt::serializer<edge_data_type>::read(zis);
-                    if (!zis) {
-                        throw std::runtime_error("Failed to deserialize grove: stream error reading edge metadata");
-                    }
-                    result.pending.push_back(pending_edge{src, tb, ts, std::move(meta)});
-                }
-            }
-            uint32_t in_ecount;
-            detail::read_pod(zis, in_ecount);
-            if (!zis) {
-                throw std::runtime_error("Failed to deserialize grove: stream error reading in-edge count");
-            }
-            // Skip keys with no incoming edges so the reorder pass below only
-            // visits keys that actually need it.
-            if (in_ecount > 0) {
-                read_in_edge_refs(zis, in_ecount, result.pending_in[src]);
-            }
-        };
-
         // One inflate state and two scratch buffers reused across all blocks
         // (inflateReset per block, no per-block inflateInit or buffer copy).
         detail::block_inflater inflater;
         std::string comp_buf;
         std::string raw_buf;
-        // Bytes remaining in the block region, measured once. Each block's
-        // file-controlled clen is validated against this by plain subtraction
-        // instead of a per-block seek-to-end — seeking every block dominated
-        // deserialize (#513). -1 means the source is not seekable, so the
-        // per-block clen bound is skipped (the truncated-read check still fires).
         std::streamoff block_bytes_left = detail::remaining_bytes(is);
 
         for (detail::block_id b = 0; b < header.num_blocks; ++b) {
-            uint64_t clen;
-            detail::read_pod(is, clen);
-            if (!is) {
-                throw std::runtime_error("Failed to deserialize grove: stream error reading block length");
-            }
-            // clen is file-controlled: reject a value that would overflow the
-            // signed streamsize cast (a negative read count is UB) before it
-            // sizes the buffer.
-            if (clen > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
-                throw std::runtime_error("Failed to deserialize grove: block length out of range");
-            }
-            // clen bytes must actually remain: reject a bogus multi-GB length
-            // before resize allocates it (OOM guard). Arithmetic only — the
-            // budget was measured once above.
-            if (block_bytes_left >= 0) {
-                block_bytes_left -= static_cast<std::streamoff>(sizeof(clen));
-                if (block_bytes_left < 0 || clen > static_cast<uint64_t>(block_bytes_left)) {
-                    throw std::runtime_error("Failed to deserialize grove: compressed block length exceeds remaining stream");
-                }
-                block_bytes_left -= static_cast<std::streamoff>(clen);
-            }
-            comp_buf.resize(static_cast<size_t>(clen));
-            is.read(comp_buf.data(), static_cast<std::streamsize>(clen));
-            if (is.gcount() != static_cast<std::streamsize>(clen)) {
-                throw std::runtime_error("Failed to deserialize grove: truncated block");
-            }
-            inflater.decompress(comp_buf.data(), static_cast<size_t>(clen), raw_buf);
+            read_one_block(is, block_bytes_left, inflater, comp_buf, raw_buf);
             detail::memory_streambuf mb(raw_buf.data(), raw_buf.size());
             std::istream zis(&mb);
 
             if (b < header.ext_block_begin) {
-                node<key_type, data_type>* n = node<key_type, data_type>::deserialize_block(
-                    zis, header.order, g.key_storage, result.child_ids[b], result.next_ids[b]);
-                result.block_node[b] = n;
-                if (n->get_is_leaf()) {
-                    result.actual_leaf_key_count += n->get_keys().size();
-                    for (auto* k : n->get_keys()) {
-                        read_key_edges(zis, k);
-                    }
-                }
+                read_node_block(zis, header, g, result, b);
             } else {
-                uint32_t cnt;
-                detail::read_pod(zis, cnt);
-                if (!zis) {
-                    throw std::runtime_error("Failed to deserialize grove: stream error reading external block count");
-                }
-                // cnt is file-controlled. Reject a count the writer could never
-                // have produced (it packs at most max_external_keys_per_block per
-                // block) before allocating or looping — otherwise a bogus cnt
-                // spins appending garbage into external storage until OOM.
-                if (cnt > detail::max_external_keys_per_block) {
-                    throw std::runtime_error("Failed to deserialize grove: external block key count exceeds limit");
-                }
-                auto& ekeys = result.ext_block_keys[b - header.ext_block_begin];
-                ekeys.reserve(cnt);
-                for (uint32_t i = 0; i < cnt; ++i) {
-                    key_type key_value = key_type::deserialize(zis);
-                    if constexpr (std::is_void_v<data_type>) {
-                        if (!zis) {
-                            throw std::runtime_error("Failed to deserialize grove: stream error reading external key");
-                        }
-                        g.external_key_storage.emplace_back(key_value);
-                    } else {
-                        data_type data_value = gdt::serializer<data_type>::read(zis);
-                        if (!zis) {
-                            throw std::runtime_error("Failed to deserialize grove: stream error reading external key");
-                        }
-                        g.external_key_storage.emplace_back(key_value, data_value);
-                    }
-                    ekeys.push_back(&g.external_key_storage.back());
-                }
-                for (auto* k : ekeys) {
-                    read_key_edges(zis, k);
-                }
+                read_external_block(zis, g, result, b - header.ext_block_begin);
             }
         }
     }
