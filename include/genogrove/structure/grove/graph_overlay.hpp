@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <concepts>
+#include <cstddef>
 #include <list>
 #include <stdexcept>
 #include <type_traits>
@@ -316,7 +317,7 @@ class graph_overlay {
      * @param source Pointer to source key
      * @return Number of outgoing edges
      */
-    [[nodiscard]] size_t out_degree(const gdt::key<key_type, data_type>* source) const {
+    [[nodiscard]] std::size_t out_degree(const gdt::key<key_type, data_type>* source) const {
         auto it = incident.find(source);
         if (it == incident.end()) return 0;
         return static_cast<size_t>(std::ranges::count_if(it->second, [source](const auto& edge_it) {
@@ -329,7 +330,7 @@ class graph_overlay {
      * @param target Pointer to target key
      * @return Number of incoming edges
      */
-    [[nodiscard]] size_t in_degree(const gdt::key<key_type, data_type>* target) const {
+    [[nodiscard]] std::size_t in_degree(const gdt::key<key_type, data_type>* target) const {
         auto it = incident.find(target);
         if (it == incident.end()) return 0;
         return static_cast<size_t>(std::ranges::count_if(it->second, [target](const auto& edge_it) {

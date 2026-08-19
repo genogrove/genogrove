@@ -165,7 +165,7 @@ public:
      * @param source Pointer to source key
      * @return Number of outgoing edges from source key
      */
-    [[nodiscard]] size_t out_degree(const gdt::key<key_type, data_type>* source) const {
+    [[nodiscard]] std::size_t out_degree(const gdt::key<key_type, data_type>* source) const {
         return graph_data.out_degree(source);
     }
 
@@ -174,7 +174,7 @@ public:
      * @param target Pointer to target key
      * @return Number of incoming edges to target key
      */
-    [[nodiscard]] size_t in_degree(const gdt::key<key_type, data_type>* target) const {
+    [[nodiscard]] std::size_t in_degree(const gdt::key<key_type, data_type>* target) const {
         return graph_data.in_degree(target);
     }
 
