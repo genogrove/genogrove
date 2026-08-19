@@ -497,11 +497,29 @@ class graph_overlay {
 
     /**
      * @brief Reorder the incoming side of incident[target] to match a given
-     *        sequence of edge iterators.
+     *        sequence of edge iterators, in place.
      *
      * Used by grove::deserialize() to restore the on-disk incoming-edge order
      * that add_edge() replay (in block-visitation order) does not preserve.
-     * Self-loops are filed once, not twice, matching register_edge's convention.
+     *
+     * Overwrites each target==target slot in incident[target], left to right,
+     * with the corresponding entry from `ordered` — it never erases or
+     * appends, so slots are never physically relocated. This matters for a
+     * self-loop, which occupies one shared slot serving both directions
+     * (register_edge files it once, not twice): erase-then-append would move
+     * it to the end of the bucket, corrupting get_edge_list(target)'s
+     * outgoing order for any key with both a self-loop and other outgoing
+     * edges. In-place overwrite leaves every non-incoming slot — including a
+     * self-loop's shared slot when `ordered` already agrees with its current
+     * position — untouched.
+     *
+     * If `ordered` has fewer entries than there are incoming slots (only
+     * possible when a source referenced in the on-disk incoming section
+     * couldn't be resolved to an edge — a malformed/tampered file, since a
+     * file this codebase's own writer produces always has consistent
+     * outgoing/incoming sections), the remaining slots keep whatever
+     * add_edge() replay left there rather than being dropped — a matching
+     * edge stays reachable, just not necessarily in the right order.
      *
      * @param target Pointer to the target key whose incoming order to fix.
      * @param ordered_begin Beginning of an iterator range of edge_iterator values
@@ -514,16 +532,12 @@ class graph_overlay {
         std::vector<edge_iterator>::const_iterator ordered_end) {
         auto it = incident.find(target);
         if (it == incident.end()) return;
-        // Remove all incoming edges from this bucket.
-        it->second.erase(
-            std::remove_if(it->second.begin(), it->second.end(),
-                           [target](edge_iterator eit) { return eit->target == target; }),
-            it->second.end());
-        // Re-append in the order provided by the caller (on-disk order).
-        for (auto oit = ordered_begin; oit != ordered_end; ++oit) {
-            if ((*oit)->target == target) {
-                it->second.push_back(*oit);
-            }
+        auto oit = ordered_begin;
+        for (auto& slot : it->second) {
+            if (slot->target != target) continue;
+            if (oit == ordered_end) break;
+            slot = *oit;
+            ++oit;
         }
     }
 

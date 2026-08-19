@@ -519,3 +519,48 @@ TEST(SerializationTest, ParallelEdgesPreserveDistinctMetadataAfterReorder) {
     EXPECT_EQ(out[0].metadata, "first");
     EXPECT_EQ(out[1].metadata, "second");
 }
+
+TEST(SerializationTest, SelfLoopDoesNotDisturbOutgoingOrderAfterReorder) {
+    // A self-loop occupies one shared incident slot (register_edge files it
+    // once, under source==target==self) — it is simultaneously an outgoing
+    // and an incoming entry for the same key. reorder_incoming's original
+    // erase-then-append implementation always moved the incoming entries it
+    // touched to the end of the bucket, which physically relocated a
+    // self-loop relative to any *other* outgoing edge of the same key,
+    // corrupting get_edge_list(target)'s outgoing order (caught in #545
+    // review). The fix overwrites incoming slots in place instead.
+    using grove_t = gst::grove<gdt::interval, int>;
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    {
+        grove_t g(4);
+        auto* t = g.insert_data("chr1", gdt::interval{100, 200}, 1, gst::sorted);
+        auto* other = g.insert_data("chr1", gdt::interval{300, 400}, 2, gst::sorted);
+        // Self-loop first, then an outgoing edge to another key — this
+        // relative order is what get_edge_list(t) must reproduce.
+        g.add_edge(t, t);
+        g.add_edge(t, other);
+
+        auto original_out = g.graph().get_edge_list(t);
+        ASSERT_EQ(original_out.size(), 2u);
+        EXPECT_EQ(original_out[0].target, t);      // self-loop first
+        EXPECT_EQ(original_out[1].target, other);  // then t->other
+
+        g.serialize(ss);
+    }
+
+    ss.seekg(0);
+    auto r = grove_t::deserialize(ss);
+    auto rt = r.intersect(gdt::interval{100, 200}, "chr1");
+    ASSERT_EQ(rt.get_keys().size(), 1u);
+    auto* tgt = rt.get_keys()[0];
+
+    auto out = r.graph().get_edge_list(tgt);
+    ASSERT_EQ(out.size(), 2u);
+    EXPECT_EQ(out[0].target->get_data(), 1);  // self-loop (t itself) first
+    EXPECT_EQ(out[1].target->get_data(), 2);  // then t->other
+
+    // Incoming side (self-loop only) must also survive.
+    auto in = r.graph().get_in_edge_list(tgt);
+    ASSERT_EQ(in.size(), 1u);
+    EXPECT_EQ(in[0].source->get_data(), 1);
+}
