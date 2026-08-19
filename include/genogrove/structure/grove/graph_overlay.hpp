@@ -459,6 +459,79 @@ class graph_overlay {
         }
     }
 
+  public:
+    using edge_iterator = std::list<edge>::iterator;
+
+    /**
+     * @brief Find the `occurrence`-th edge iterator for a specific directed edge.
+     *
+     * Parallel edges (same source/target pair, e.g. distinct transcript
+     * metadata between the same exon pair) file multiple matches; `occurrence`
+     * (0-indexed) picks among them instead of always returning the first.
+     *
+     * @param source Pointer to source key
+     * @param target Pointer to target key
+     * @param occurrence 0-indexed match to return among parallel source→target edges
+     * @return Iterator to the edge, or edge_end() if not found
+     */
+    [[nodiscard]] edge_iterator find_edge(
+        const gdt::key<key_type, data_type>* source,
+        const gdt::key<key_type, data_type>* target,
+        std::size_t occurrence = 0) {
+        auto it = incident.find(source);
+        if (it == incident.end()) return edges_.end();
+        for (auto eit : it->second) {
+            if (eit->source == source && eit->target == target) {
+                if (occurrence == 0) return eit;
+                --occurrence;
+            }
+        }
+        return edges_.end();
+    }
+
+    /// Past-the-end iterator for the edge list.
+    [[nodiscard]] edge_iterator edge_end() { return edges_.end(); }
+
+    /**
+     * @brief Overwrite incident[target]'s incoming slots, in place, to match
+     *        a given order.
+     *
+     * Used by grove::deserialize() to restore on-disk incoming-edge order
+     * after add_edge() replay (block-visitation order) scrambles it.
+     * Overwrites each target==target slot left to right instead of
+     * erase+append, so slots never physically relocate — erase+append would
+     * shove a self-loop's shared slot to the end, corrupting
+     * get_edge_list(target)'s outgoing order. If `ordered` runs out early
+     * (a malformed file whose incoming section names an unresolvable
+     * source), leftover slots keep their replay value rather than being
+     * dropped.
+     *
+     * ponytail: known gap (#546) — a self-loop interleaved with another
+     * source to the same key can still land in the wrong outgoing position;
+     * a real fix needs a merge at self-loop sync points, not a positional
+     * overwrite. Unfixed: narrow trigger, and reverse traversal has no
+     * callers in this repo yet.
+     *
+     * @param target Pointer to the target key whose incoming order to fix.
+     * @param ordered_begin Beginning of an iterator range of edge_iterator values
+     *        representing the desired incoming order for `target`.
+     * @param ordered_end End of the iterator range.
+     */
+    void reorder_incoming(
+        const gdt::key<key_type, data_type>* target,
+        std::vector<edge_iterator>::const_iterator ordered_begin,
+        std::vector<edge_iterator>::const_iterator ordered_end) {
+        auto it = incident.find(target);
+        if (it == incident.end()) return;
+        auto oit = ordered_begin;
+        for (auto& slot : it->second) {
+            if (slot->target != target) continue;
+            if (oit == ordered_end) break;
+            slot = *oit;
+            ++oit;
+        }
+    }
+
     /**
      * @brief Clear all edges
      */
@@ -477,7 +550,6 @@ class graph_overlay {
 
   private:
     using edge_list_t = std::list<edge>;
-    using edge_iterator = edge_list_t::iterator;
 
     // Files a newly-inserted edge under both of its endpoints in `incident`.
     // A self-loop (source == target) is filed once, not twice — filing it

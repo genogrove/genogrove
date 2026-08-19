@@ -20,6 +20,7 @@
 #include <genogrove/data_type/serialization_traits.hpp>
 #include <genogrove/structure/grove/gg_block_format.hpp>
 #include <genogrove/structure/grove/grove.hpp>
+#include <genogrove/structure/grove/grove_view.hpp>
 #include <genogrove/structure/grove/zlib_streambuf.hpp>
 
 namespace gst = genogrove::structure;
@@ -406,4 +407,160 @@ TEST(SerializationDoSTest, InflaterEnforcesOutputCap) {
     // With a sufficient cap it round-trips exactly.
     inflater.decompress(compressed.data(), compressed.size(), out, payload.size());
     EXPECT_EQ(out, payload);
+}
+
+TEST(SerializationTest, IncomingEdgeOrderPreservedAcrossRoundTrip) {
+    // A target whose sources live in non-sequential block order: the on-disk
+    // incoming section records the original insertion order, but add_edge()
+    // replay in block-visitation order would scramble it without the reorder
+    // step (#540).  Build a grove where insertion order ≠ block-id order, then
+    // verify that both the eager grove and grove_view preserve the original
+    // incoming-edge list order.
+    using grove_t = gst::grove<gdt::interval, int>;
+    using key_t = gdt::key<gdt::interval, int>;
+
+    key_t* src_early = nullptr;
+    key_t* src_late = nullptr;
+    key_t* target = nullptr;
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    {
+        grove_t g(4);
+        // Insert sources so that early (inserted first) has a higher spatial
+        // position than late (inserted second).  Both are on chr1 so they
+        // share a single index tree; their leaf positions are determined by
+        // interval start.
+        src_late  = g.insert_data("chr1", gdt::interval{10, 20}, 1, gst::sorted);   // spatially first
+        src_early = g.insert_data("chr1", gdt::interval{500, 600}, 2, gst::sorted); // spatially last
+        target    = g.insert_data("chr1", gdt::interval{1000, 1100}, 3, gst::sorted);
+        // Add edges in chronological order: early→target first, late→target second.
+        g.add_edge(src_early, target);
+        g.add_edge(src_late, target);
+
+        // Pre-serialize: original insertion order.
+        auto original_in = g.graph().get_in_edge_list(target);
+        ASSERT_EQ(original_in.size(), 2u);
+        EXPECT_EQ(original_in[0].source, src_early);
+        EXPECT_EQ(original_in[1].source, src_late);
+
+        g.serialize(ss);
+    }
+
+    // Eager deserialize — must preserve the original incoming order.
+    {
+        ss.seekg(0);
+        auto r = grove_t::deserialize(ss);
+        auto ra = r.intersect(gdt::interval{1000, 1100}, "chr1");
+        ASSERT_EQ(ra.get_keys().size(), 1u);
+        auto* tgt = ra.get_keys()[0];
+
+        auto in = r.graph().get_in_edge_list(tgt);
+        ASSERT_EQ(in.size(), 2u);
+        EXPECT_EQ(in[0].source->get_data(), 2);  // src_early
+        EXPECT_EQ(in[1].source->get_data(), 1);  // src_late
+    }
+
+    // grove_view — must also match.
+    {
+        fs::path path = fs::temp_directory_path() / "genogrove_inorder_test.gg";
+        {
+            ss.seekg(0);
+            std::ofstream ofs(path, std::ios::binary);
+            ofs << ss.rdbuf();
+        }
+        auto view = gst::grove_view<gdt::interval, int>::open(path.string());
+        auto rv = view.intersect(gdt::interval{1000, 1100}, "chr1");
+        ASSERT_EQ(rv.get_keys().size(), 1u);
+        auto* tgt = rv.get_keys()[0];
+
+        auto in = view.get_in_neighbors(tgt);
+        ASSERT_EQ(in.size(), 2u);
+        EXPECT_EQ(in[0]->get_data(), 2);  // src_early
+        EXPECT_EQ(in[1]->get_data(), 1);  // src_late
+
+        fs::remove(path);
+    }
+}
+
+TEST(SerializationTest, ParallelEdgesPreserveDistinctMetadataAfterReorder) {
+    // Two edges sharing both endpoints (parallel edges — e.g. distinct
+    // transcript metadata linking the same exon pair, see link_if's own docs)
+    // exercise find_edge()'s occurrence parameter: naive first-match-only
+    // resolution would collapse both incoming refs onto the same edge,
+    // duplicating one metadata value and silently dropping the other from the
+    // target's incoming view (source's outgoing view stays correct either way,
+    // since it's built directly from replay, not from reorder_incoming).
+    using grove_t = gst::grove<gdt::interval, int, std::string>;
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    {
+        grove_t g(4);
+        auto* a = g.insert_data("chr1", gdt::interval{100, 200}, 1, gst::sorted);
+        auto* t = g.insert_data("chr1", gdt::interval{300, 400}, 2, gst::sorted);
+        g.add_edge(a, t, std::string{"first"});
+        g.add_edge(a, t, std::string{"second"});
+        g.serialize(ss);
+    }
+
+    ss.seekg(0);
+    auto r = grove_t::deserialize(ss);
+    auto ra = r.intersect(gdt::interval{100, 200}, "chr1");
+    auto rt = r.intersect(gdt::interval{300, 400}, "chr1");
+    ASSERT_EQ(ra.get_keys().size(), 1u);
+    ASSERT_EQ(rt.get_keys().size(), 1u);
+
+    // Target's incoming view: both edges present, distinct metadata, in order.
+    auto in = r.graph().get_in_edge_list(rt.get_keys()[0]);
+    ASSERT_EQ(in.size(), 2u);
+    EXPECT_EQ(in[0].metadata, "first");
+    EXPECT_EQ(in[1].metadata, "second");
+
+    // Source's outgoing view: unaffected by the reorder step either way.
+    auto out = r.graph().get_edge_list(ra.get_keys()[0]);
+    ASSERT_EQ(out.size(), 2u);
+    EXPECT_EQ(out[0].metadata, "first");
+    EXPECT_EQ(out[1].metadata, "second");
+}
+
+TEST(SerializationTest, SelfLoopDoesNotDisturbOutgoingOrderAfterReorder) {
+    // A self-loop occupies one shared incident slot (register_edge files it
+    // once, under source==target==self) — it is simultaneously an outgoing
+    // and an incoming entry for the same key. reorder_incoming's original
+    // erase-then-append implementation always moved the incoming entries it
+    // touched to the end of the bucket, which physically relocated a
+    // self-loop relative to any *other* outgoing edge of the same key,
+    // corrupting get_edge_list(target)'s outgoing order (caught in #545
+    // review). The fix overwrites incoming slots in place instead.
+    using grove_t = gst::grove<gdt::interval, int>;
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    {
+        grove_t g(4);
+        auto* t = g.insert_data("chr1", gdt::interval{100, 200}, 1, gst::sorted);
+        auto* other = g.insert_data("chr1", gdt::interval{300, 400}, 2, gst::sorted);
+        // Self-loop first, then an outgoing edge to another key — this
+        // relative order is what get_edge_list(t) must reproduce.
+        g.add_edge(t, t);
+        g.add_edge(t, other);
+
+        auto original_out = g.graph().get_edge_list(t);
+        ASSERT_EQ(original_out.size(), 2u);
+        EXPECT_EQ(original_out[0].target, t);      // self-loop first
+        EXPECT_EQ(original_out[1].target, other);  // then t->other
+
+        g.serialize(ss);
+    }
+
+    ss.seekg(0);
+    auto r = grove_t::deserialize(ss);
+    auto rt = r.intersect(gdt::interval{100, 200}, "chr1");
+    ASSERT_EQ(rt.get_keys().size(), 1u);
+    auto* tgt = rt.get_keys()[0];
+
+    auto out = r.graph().get_edge_list(tgt);
+    ASSERT_EQ(out.size(), 2u);
+    EXPECT_EQ(out[0].target->get_data(), 1);  // self-loop (t itself) first
+    EXPECT_EQ(out[1].target->get_data(), 2);  // then t->other
+
+    // Incoming side (self-loop only) must also survive.
+    auto in = r.graph().get_in_edge_list(tgt);
+    ASSERT_EQ(in.size(), 1u);
+    EXPECT_EQ(in[0].source->get_data(), 1);
 }

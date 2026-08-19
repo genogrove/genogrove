@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **`grove::get_neighbors_if` missing its predicate constraint**: was missing the `std::predicate<Predicate, const edge_data_type&>` constraint its sibling `get_in_neighbors_if` has had since #532. Compile-time diagnostics only — a non-conforming callable already failed to compile via the call inside `graph_overlay::get_neighbors_if`, just with a worse error; no runtime behavior change. ([#542](https://github.com/genogrove/genogrove/issues/542), [#543](https://github.com/genogrove/genogrove/pull/543))
+- **`grove::deserialize()` scrambled incoming-edge order**: the eager reader discarded the on-disk incoming-edge section and rebuilt a target's incoming order by replaying `add_edge()` from outgoing sections in block-visitation order, which diverges from original insertion order whenever a target's sources live in non-sequential blocks (`grove_view` was unaffected — it already read the incoming section directly). `graph_overlay` gains `find_edge`/`edge_end`/`reorder_incoming` so deserialize can restore the on-disk order after replay, including correct handling of parallel edges between the same source/target pair. ([#540](https://github.com/genogrove/genogrove/issues/540), [#545](https://github.com/genogrove/genogrove/pull/545))
 
 ## [0.26.0] - 2026-08-17
 
