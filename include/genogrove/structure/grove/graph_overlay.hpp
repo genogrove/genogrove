@@ -320,7 +320,7 @@ class graph_overlay {
     [[nodiscard]] std::size_t out_degree(const gdt::key<key_type, data_type>* source) const {
         auto it = incident.find(source);
         if (it == incident.end()) return 0;
-        return static_cast<size_t>(std::ranges::count_if(it->second, [source](const auto& edge_it) {
+        return static_cast<std::size_t>(std::ranges::count_if(it->second, [source](const auto& edge_it) {
             return edge_it->source == source;
         }));
     }
@@ -333,7 +333,7 @@ class graph_overlay {
     [[nodiscard]] std::size_t in_degree(const gdt::key<key_type, data_type>* target) const {
         auto it = incident.find(target);
         if (it == incident.end()) return 0;
-        return static_cast<size_t>(std::ranges::count_if(it->second, [target](const auto& edge_it) {
+        return static_cast<std::size_t>(std::ranges::count_if(it->second, [target](const auto& edge_it) {
             return edge_it->target == target;
         }));
     }
