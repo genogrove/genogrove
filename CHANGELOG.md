@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Split `grove::deserialize()` into phases**: had grown to 373 lines doing everything inline across several PRs (header parsing, block reading, tree linking, edge resolution, validation). Split into orchestration (~40 lines) plus named private static phases — `read_deserialize_header`, `read_deserialize_blocks` (itself further split into `read_one_block`/`read_node_block`/`read_external_block`/`read_key_edges`/`read_in_edge_refs`), `link_deserialize_structure`, `resolve_deserialize_edges` — each taking only the state it needs by reference. Pure code movement, no logic or behavior change. ([#547](https://github.com/genogrove/genogrove/pull/547))
 - **Split `grove::serialize()` into phases**: same treatment as `deserialize()`, 161 lines doing block/key id assignment, header writing, and block writing inline. Split into orchestration (8 lines) plus named private `const` member phases — `assign_serialize_layout`, `write_edge_ref`/`write_key_edges`, `write_serialize_header`, `write_serialize_blocks`. Pure code movement, no logic or behavior change. ([#548](https://github.com/genogrove/genogrove/pull/548))
 
+### Changed
+- **Standardized `out_degree`/`in_degree` on `std::size_t`**: `grove_view::out_degree`/`in_degree` (added in #539) used `std::size_t`; `graph_overlay::out_degree`/`in_degree` and `grove`'s forwarding wrapper used bare `size_t`. Standardized all three on `std::size_t`, matching `grove_view`'s existing convention. Functionally identical either way — same underlying type on every real toolchain. ([#544](https://github.com/genogrove/genogrove/issues/544), [#549](https://github.com/genogrove/genogrove/pull/549))
+
 ## [0.26.0] - 2026-08-17
 
 ### Added
