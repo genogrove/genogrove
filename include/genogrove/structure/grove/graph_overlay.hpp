@@ -506,24 +506,32 @@ class graph_overlay {
     [[nodiscard]] edge_iterator edge_end() { return edges_.end(); }
 
     /**
-     * @brief Overwrite incident[target]'s incoming slots, in place, to match
-     *        a given order.
+     * @brief Rebuild incident[target] so both its outgoing order and its
+     *        incoming order (the given `ordered` sequence) are correct
+     *        simultaneously.
      *
      * Used by grove::deserialize() to restore on-disk incoming-edge order
-     * after add_edge() replay (block-visitation order) scrambles it.
-     * Overwrites each target==target slot left to right instead of
-     * erase+append, so slots never physically relocate — erase+append would
-     * shove a self-loop's shared slot to the end, corrupting
-     * get_edge_list(target)'s outgoing order. If `ordered` runs out early
-     * (a malformed file whose incoming section names an unresolvable
-     * source), leftover slots keep their replay value rather than being
-     * dropped.
+     * after add_edge() replay (block-visitation order) scrambles it, without
+     * disturbing outgoing order (which replay already gets right).
      *
-     * ponytail: known gap (#546) — a self-loop interleaved with another
-     * source to the same key can still land in the wrong outgoing position;
-     * a real fix needs a merge at self-loop sync points, not a positional
-     * overwrite. Unfixed: narrow trigger, and reverse traversal has no
-     * callers in this repo yet.
+     * A self-loop occupies one shared incident[target] slot (register_edge
+     * files it once, serving both directions at once), so a naive
+     * erase+append or positional overwrite can satisfy one direction's order
+     * only by breaking the other whenever a self-loop is interleaved with
+     * another source targeting the same key (#546). This instead merges two
+     * already-correct sequences — incident[target] filtered by
+     * source==target (untouched by replay, so already right) and `ordered`
+     * (the desired incoming order) — using self-loops as sync points: they
+     * are the only entries present in both sequences, and their relative
+     * order is identical in each (both are projections of the same original
+     * incident bucket), so segments between consecutive self-loops can be
+     * concatenated in either order while each self-loop anchors where both
+     * sequences must align.
+     *
+     * If `ordered` doesn't account for an incoming-role entry actually in
+     * incident[target] (a malformed/tampered file whose incoming section
+     * disagrees with what add_edge() replay created from the outgoing
+     * sections), that entry is appended at the end rather than dropped.
      *
      * @param target Pointer to the target key whose incoming order to fix.
      * @param ordered_begin Beginning of an iterator range of edge_iterator values
@@ -536,13 +544,47 @@ class graph_overlay {
         std::vector<edge_iterator>::const_iterator ordered_end) {
         auto it = incident.find(target);
         if (it == incident.end()) return;
-        auto oit = ordered_begin;
-        for (auto& slot : it->second) {
-            if (slot->target != target) continue;
-            if (oit == ordered_end) break;
-            slot = *oit;
-            ++oit;
+
+        auto is_self_loop = [target](edge_iterator e) {
+            return e->source == target && e->target == target;
+        };
+
+        std::vector<edge_iterator> outgoing_correct;
+        std::vector<edge_iterator> incoming_asis;
+        for (edge_iterator e : it->second) {
+            if (e->source == target) outgoing_correct.push_back(e);
+            if (e->target == target) incoming_asis.push_back(e);
         }
+
+        std::vector<edge_iterator> merged;
+        merged.reserve(it->second.size());
+        std::size_t oi = 0;
+        auto ci = ordered_begin;
+        while (oi < outgoing_correct.size() || ci != ordered_end) {
+            while (oi < outgoing_correct.size() && !is_self_loop(outgoing_correct[oi])) {
+                merged.push_back(outgoing_correct[oi++]);
+            }
+            while (ci != ordered_end && !is_self_loop(*ci)) {
+                merged.push_back(*ci++);
+            }
+            if (oi < outgoing_correct.size() && ci != ordered_end) {
+                merged.push_back(outgoing_correct[oi]);  // same self-loop on both sides
+                ++oi;
+                ++ci;
+            } else if (oi < outgoing_correct.size()) {
+                merged.push_back(outgoing_correct[oi++]);
+            } else if (ci != ordered_end) {
+                merged.push_back(*ci++);
+            }
+        }
+
+        for (edge_iterator e : incoming_asis) {
+            if (std::find(merged.begin(), merged.end(), e) == merged.end()) {
+                merged.push_back(e);
+            }
+        }
+
+        it->second = std::move(merged);
     }
 
     /**

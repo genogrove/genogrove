@@ -564,3 +564,53 @@ TEST(SerializationTest, SelfLoopDoesNotDisturbOutgoingOrderAfterReorder) {
     ASSERT_EQ(in.size(), 1u);
     EXPECT_EQ(in[0].source->get_data(), 1);
 }
+
+TEST(SerializationTest, SelfLoopInterleavedWithAnotherSourceRoundTrips) {
+    // A self-loop interleaved with another source targeting the same key: a
+    // self-loop's shared incident slot can't satisfy an outgoing-order
+    // constraint and an incoming-order constraint via positional overwrite
+    // alone when the two don't already coincide (#546). Repro from the
+    // issue: a->target, then target->target (self-loop), then
+    // target->other, with `target` spatially first (block visited before
+    // `a`'s block during replay) so the bug's precondition — block-visitation
+    // order diverging from chronological order — actually holds.
+    using grove_t = gst::grove<gdt::interval, int>;
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    {
+        grove_t g(4);
+        auto* target = g.insert_data("chr1", gdt::interval{10, 20}, 1, gst::sorted);    // spatially first
+        auto* a      = g.insert_data("chr1", gdt::interval{500, 600}, 2, gst::sorted);  // spatially last
+        auto* other  = g.insert_data("chr1", gdt::interval{1000, 1100}, 3, gst::sorted);
+        g.add_edge(a, target);
+        g.add_edge(target, target);  // self-loop
+        g.add_edge(target, other);
+
+        auto original_out = g.graph().get_edge_list(target);
+        ASSERT_EQ(original_out.size(), 2u);
+        EXPECT_EQ(original_out[0].target, target);  // self-loop first
+        EXPECT_EQ(original_out[1].target, other);   // then target->other
+
+        auto original_in = g.graph().get_in_edge_list(target);
+        ASSERT_EQ(original_in.size(), 2u);
+        EXPECT_EQ(original_in[0].source, a);        // a->target first
+        EXPECT_EQ(original_in[1].source, target);   // then the self-loop
+
+        g.serialize(ss);
+    }
+
+    ss.seekg(0);
+    auto r = grove_t::deserialize(ss);
+    auto rt = r.intersect(gdt::interval{10, 20}, "chr1");
+    ASSERT_EQ(rt.get_keys().size(), 1u);
+    auto* tgt = rt.get_keys()[0];
+
+    auto out = r.graph().get_edge_list(tgt);
+    ASSERT_EQ(out.size(), 2u);
+    EXPECT_EQ(out[0].target->get_data(), 1);  // self-loop (target itself) first
+    EXPECT_EQ(out[1].target->get_data(), 3);  // then target->other
+
+    auto in = r.graph().get_in_edge_list(tgt);
+    ASSERT_EQ(in.size(), 2u);
+    EXPECT_EQ(in[0].source->get_data(), 2);  // a->target first
+    EXPECT_EQ(in[1].source->get_data(), 1);  // then the self-loop
+}
