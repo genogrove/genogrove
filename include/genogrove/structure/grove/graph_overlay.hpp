@@ -579,7 +579,7 @@ class graph_overlay {
         }
 
         for (edge_iterator e : incoming_asis) {
-            if (std::find(ordered_begin, ordered_end, e) == ordered_end) {
+            if (std::find(merged.begin(), merged.end(), e) == merged.end()) {
                 merged.push_back(e);
             }
         }
