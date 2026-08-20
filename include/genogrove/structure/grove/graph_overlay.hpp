@@ -215,6 +215,9 @@ class graph_overlay {
      * @return Vector of edges (empty if no outgoing edges)
      */
     [[nodiscard]] std::vector<edge> get_edge_list(const gdt::key<key_type, data_type>* source) const {
+        if (!source) {
+            throw std::invalid_argument("get_edge_list: source must not be null");
+        }
         std::vector<edge> result;
         auto it = incident.find(source);
         if (it != incident.end()) {
@@ -234,6 +237,9 @@ class graph_overlay {
      * @return Vector of edges (empty if no incoming edges)
      */
     [[nodiscard]] std::vector<edge> get_in_edge_list(const gdt::key<key_type, data_type>* target) const {
+        if (!target) {
+            throw std::invalid_argument("get_in_edge_list: target must not be null");
+        }
         std::vector<edge> result;
         auto it = incident.find(target);
         if (it != incident.end()) {
@@ -258,6 +264,9 @@ class graph_overlay {
         const gdt::key<key_type, data_type>* source,
         Predicate predicate) const
         requires (!std::is_void_v<edge_data_type> && std::predicate<Predicate, const edge_data_type&>) {
+        if (!source) {
+            throw std::invalid_argument("get_neighbors_if: source must not be null");
+        }
         std::vector<gdt::key<key_type, data_type>*> neighbors;
         auto it = incident.find(source);
         if (it != incident.end()) {
@@ -282,6 +291,9 @@ class graph_overlay {
         const gdt::key<key_type, data_type>* target,
         Predicate predicate) const
         requires (!std::is_void_v<edge_data_type> && std::predicate<Predicate, const edge_data_type&>) {
+        if (!target) {
+            throw std::invalid_argument("get_in_neighbors_if: target must not be null");
+        }
         std::vector<gdt::key<key_type, data_type>*> sources;
         auto it = incident.find(target);
         if (it != incident.end()) {
