@@ -873,6 +873,31 @@ TEST(GraphOverlayTest, ReverseTraversalNullThrows) {
     EXPECT_THROW((void)grove.get_in_neighbors(nullptr), std::invalid_argument);
 }
 
+TEST(GraphOverlayTest, FilteredAndEdgeListNullThrows) {
+    // get_neighbors_if/get_in_neighbors_if/get_edge_list/get_in_edge_list
+    // previously had no null check at all, silently returning empty via
+    // incident.find(nullptr) -- inconsistent with get_neighbors/
+    // get_in_neighbors, which have always thrown (#541). Use non-void
+    // edge_data_type because get_neighbors_if/get_in_neighbors_if require it
+    // (get_edge_list/get_in_edge_list work with either, but sharing one grove
+    // keeps this test simple).
+    gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
+    auto always_true = [](const auto&) { return true; };
+
+    EXPECT_THROW((void)grove.graph().get_neighbors_if(nullptr, always_true), std::invalid_argument);
+    EXPECT_THROW((void)grove.graph().get_in_neighbors_if(nullptr, always_true), std::invalid_argument);
+    EXPECT_THROW((void)grove.graph().get_edge_list(nullptr), std::invalid_argument);
+    EXPECT_THROW((void)grove.graph().get_in_edge_list(nullptr), std::invalid_argument);
+
+    // Also exercise the grove-level forwarders — same reasoning as
+    // ReverseTraversalNullThrows: a broken forwarder shouldn't be able to
+    // pass this suite.
+    EXPECT_THROW((void)grove.get_neighbors_if(nullptr, always_true), std::invalid_argument);
+    EXPECT_THROW((void)grove.get_in_neighbors_if(nullptr, always_true), std::invalid_argument);
+    EXPECT_THROW((void)grove.get_edge_list(nullptr), std::invalid_argument);
+    EXPECT_THROW((void)grove.get_in_edge_list(nullptr), std::invalid_argument);
+}
+
 TEST(GraphOverlayTest, GetEdgeListReturnsByValue) {
     gst::grove<gdt::interval, std::string, TranscriptEdge> grove(5);
 
