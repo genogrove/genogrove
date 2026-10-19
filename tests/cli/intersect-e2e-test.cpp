@@ -599,10 +599,29 @@ TEST_F(CLIIntersectHopsE2ETest, ReachedIntervalPrintedOnceUnderNearestSeedInPlac
     write_file(hops_query, "chr1\t150\t700\n");
     auto result = run_command(isec_hops("--hops 2 --in-place"));
     EXPECT_EQ(result.exit_code, 0) << result.output;
-    EXPECT_EQ(result.output,
-              "chr1\t100\t500\n"
-              "chr1\t600\t900\n"
-              "chr1\t150\t700\tchr1\t600\t900\tchr2\t200\t400\t1\n");
+    // run_command merges stderr, which carries the --in-place cannot-verify
+    // note, so match the rows as a suffix rather than the whole output.
+    EXPECT_TRUE(result.output.ends_with(
+                    "chr1\t100\t500\n"
+                    "chr1\t600\t900\n"
+                    "chr1\t150\t700\tchr1\t600\t900\tchr2\t200\t400\t1\n"))
+        << result.output;
+}
+
+TEST_F(CLIIntersectHopsE2ETest, InPlaceHopsOnIndexWithoutLinksWarnsAndReachesNothing) {
+    // grove_view cannot tell a link-less index apart without paging every
+    // block, so the in-place path warns on stderr and walks an empty graph
+    // instead of erroring like the eager path does.
+    auto idx = run_command(cli(
+        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
+    ));
+    ASSERT_EQ(idx.exit_code, 0) << idx.output;
+    write_file(hops_query, "chr1\t150\t250\n");
+    auto result = run_command(isec_hops("--hops all --in-place"));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("Warning: --in-place cannot verify"), std::string::npos)
+        << result.output;
+    EXPECT_TRUE(result.output.ends_with("chr1\t100\t500\n")) << result.output;
 }
 
 TEST_F(CLIIntersectHopsE2ETest, HopsRequiresIndex) {

@@ -19,6 +19,7 @@
 #include <deque>
 #include <fstream>
 #include <ios>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <ostream>
@@ -44,7 +45,7 @@ enum class direction { out, in, both };
 // connected component.
 constexpr std::size_t HOPS_ALL = std::numeric_limits<std::size_t>::max();
 
-std::size_t parse_hops(const std::string& s) {
+[[nodiscard]] std::size_t parse_hops(const std::string& s) {
     if (s == "all") {
         return HOPS_ALL;
     }
@@ -58,7 +59,7 @@ std::size_t parse_hops(const std::string& s) {
     return v;
 }
 
-direction parse_direction(const std::string& s) {
+[[nodiscard]] direction parse_direction(const std::string& s) {
     if (s == "out") return direction::out;
     if (s == "in") return direction::in;
     if (s == "both") return direction::both;
@@ -79,9 +80,9 @@ struct reached_key {
 // earlier seed wins — so each key is reported once, with min hops, under one
 // seed. Seeds themselves are hop 0 and never reported as reached.
 template <handlers::interval_queryable grove_t, typename key_ptr>
-std::vector<reached_key<key_ptr>> walk_links(grove_t& grove,
-                                             const std::vector<key_ptr>& seeds,
-                                             std::size_t max_hops, direction dir) {
+[[nodiscard]] std::vector<reached_key<key_ptr>> walk_links(
+    grove_t& grove, const std::vector<key_ptr>& seeds, std::size_t max_hops,
+    direction dir) {
     struct item { key_ptr key; std::size_t seed; std::size_t hops; };
     std::unordered_set<const void*> seen(seeds.begin(), seeds.end());
     std::deque<item> frontier;
@@ -179,7 +180,13 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
         // grove_view only knows the edges of blocks it has paged in, and the
         // .gg directory carries no edge total, so an index built without
         // --links cannot be detected here without reading every block. It
-        // walks an empty graph instead of failing up front like the eager path.
+        // walks an empty graph instead of failing up front like the eager
+        // path; say so once on stderr so empty traversals are not a surprise.
+        if(max_hops > 0) {
+            std::cerr << "Warning: --in-place cannot verify that " << index_path
+                      << " was built with 'idx --links'; a link-less index yields "
+                         "no reached rows\n";
+        }
         auto grove = ggs::grove_view<gdt::interval, payload_t, std::string>::open(
             index_path, data_offset);
         run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir);
@@ -290,7 +297,8 @@ void intersect::validate(const cxxopts::ParseResult& args) {
         throw std::runtime_error(
             "Error: --hops requires a prebuilt index (-i) built with 'idx --links'");
     }
-    parse_direction(args["direction"].as<std::string>());
+    // Called for its throw on an invalid value; execute() parses it again.
+    static_cast<void>(parse_direction(args["direction"].as<std::string>()));
 }
 
 void intersect::execute(const cxxopts::ParseResult& args) {

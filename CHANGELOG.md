@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **`isec --hops <N|all>` / `--direction out|in|both`**: follows the graph edges of a `--links` index from every overlapping interval and prints one extra row per reached interval (`<query> <seed> <reached> <hops>`). A multi-source BFS per query reports each interval once with its minimum hop count, under the seed that reached it first; works with both `-i` and `--in-place`. `--hops` with `-t`, or on an eager index without edges, is an error. `print_bed_result`/`print_gff_result` no longer emit the trailing newline. ([#569](https://github.com/genogrove/genogrove/issues/569), [#570](https://github.com/genogrove/genogrove/pull/570))
+- **`isec --hops <N|all>` / `--direction out|in|both`**: follows the graph edges of a `--links` index from every overlapping interval and prints one extra row per reached interval (`<query> <seed> <reached> <hops>`). A multi-source BFS per query reports each interval once with its minimum hop count, under the seed that reached it first; works with both `-i` and `--in-place`. `--hops` with `-t`, or on an eager index without edges, is an error; `--in-place` cannot check for edges and warns on stderr instead. `print_bed_result`/`print_gff_result` no longer emit the trailing newline. ([#569](https://github.com/genogrove/genogrove/issues/569), [#570](https://github.com/genogrove/genogrove/pull/570))
 
 ## [0.26.1] - 2026-08-20
 
