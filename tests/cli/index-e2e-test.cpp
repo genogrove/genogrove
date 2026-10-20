@@ -231,7 +231,7 @@ TEST_F(CLIIndexE2ETest, IndexProducesDeserializableGffGrove) {
     auto grove = ggs::grove<gdt::interval, gio::gff_entry, std::string>::deserialize(in);
     EXPECT_EQ(grove.indexed_vertex_count(), 3u);
 
-    // chr1:101-500 (gene1) is stored as interval [101, 500]; a query at 200
+    // chr1:101-500 (gene1) is stored as interval [100, 499]; a query at 200
     // must return it with the original GFF payload intact.
     auto hits = grove.intersect(gdt::interval(200, 200), "chr1");
     ASSERT_EQ(hits.get_keys().size(), 1u);

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`isec --hops <N|all>` / `--direction out|in|both`**: follows the graph edges of a `--links` index from every overlapping interval and prints one extra row per reached interval (`<query> <seed> <reached> <hops>`). A multi-source BFS per query reports each interval once with its minimum hop count, under the seed that reached it first; works with both `-i` and `--in-place`. `--hops` with `-t`, or on an eager index without edges, is an error; `--in-place` cannot check for edges and warns on stderr instead. `print_bed_result`/`print_gff_result` no longer emit the trailing newline. ([#569](https://github.com/genogrove/genogrove/issues/569), [#570](https://github.com/genogrove/genogrove/pull/570))
+- **CLI test coverage**: `tests/cli/gff-test.cpp` tests `handlers::gff` directly (coordinate conversion, attribute-based name resolution, missing/duplicate-tag errors), where previously only subprocess e2e tests reached it. A new e2e case covers `idx --links` on a BED target with unnamed records: they index but cannot be link endpoints. ([#568](https://github.com/genogrove/genogrove/issues/568), [#571](https://github.com/genogrove/genogrove/pull/571))
 
 ## [0.26.1] - 2026-08-20
 
