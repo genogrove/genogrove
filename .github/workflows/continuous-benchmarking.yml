@@ -94,9 +94,15 @@ jobs:
           auto-push: true
           # Only keep the last 25 commits in the chart
           max-items-in-chart: 25
-          # Show alert with commit comment on detecting possible performance regression
-          alert-threshold: '200%'
-          comment-on-alert: true
+          # No alert from this chart. It compares a commit against its
+          # predecessor measured on whichever shared runner each one drew, and
+          # those runners are different CPU models, not just different speeds:
+          # one class has 4x the L2 cache of another, so the grove working set
+          # stays in L2 there and every tree benchmark runs ~2x faster while
+          # the 4 MiB control chase runs ~3x slower. No scalar normalisation
+          # cancels that. The alert fired three times on untouched code and
+          # never on a real regression (#518 reached main under it). The PR
+          # A/B job holds the host constant and is the only alert (#574).
+          comment-on-alert: false
           fail-on-alert: false
-          alert-comment-cc-users: '@riasc'
           gh-repository: 'github.com/genogrove/genogrove'
