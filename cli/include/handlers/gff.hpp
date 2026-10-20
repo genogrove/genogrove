@@ -56,10 +56,11 @@ void for_each_gff_query(const std::string& queryfile, F&& cb) {
     }
 }
 
-// Print one result row for a GFF-payload hit. The output format tracks the
-// target payload type, independent of the query file type.
+// Print the fields of one GFF-payload hit (no trailing newline, so the caller
+// can embed it in a wider row — see the --hops output in run_intersect). The
+// output format tracks the target payload type, independent of the query type.
 inline void print_gff_result(std::ostream& output, const gio::gff_entry& payload) {
-    output << payload.seqid << "\t" << payload.start << "\t" << payload.end << "\n";
+    output << payload.seqid << "\t" << payload.start << "\t" << payload.end;
 }
 
 } // namespace gff

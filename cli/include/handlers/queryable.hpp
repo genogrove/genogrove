@@ -15,12 +15,15 @@ namespace handlers {
 namespace gdt = genogrove::data_type;
 
 // A grove-like type the intersect runner can query: it exposes
-// intersect(interval, index). Satisfied by both the in-memory grove<> and the
-// partial-read grove_view<>, so run_intersect is written once over either and
-// a non-grove argument fails at the boundary instead of deep in the body.
+// intersect(interval, index) plus the forward/reverse edge walk the --hops
+// traversal uses. Satisfied by both the in-memory grove<> and the partial-read
+// grove_view<>, so run_intersect is written once over either and a non-grove
+// argument fails at the boundary instead of deep in the body.
 template <typename G>
 concept interval_queryable = requires(G& g, const gdt::interval& q, std::string_view idx) {
     g.intersect(q, idx);
+    { g.get_neighbors(*g.intersect(q, idx).get_keys().begin()) };
+    { g.get_in_neighbors(*g.intersect(q, idx).get_keys().begin()) };
 };
 
 } // namespace handlers

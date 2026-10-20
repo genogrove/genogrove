@@ -504,3 +504,155 @@ TEST_F(CLIIntersectE2ETest, VcfQueryAgainstPrebuiltIndexInPlace) {
     EXPECT_NE(result.output.find("chr1\t600\t900"), std::string::npos) << result.output;
     EXPECT_EQ(result.output.find("chr2"), std::string::npos) << result.output;
 }
+
+// ==========================================
+// --hops: follow graph edges from each overlap
+// ==========================================
+//
+// target_links.bed: geneA chr1:100-500, geneB chr1:600-900, geneC chr2:200-400
+// links.tsv:        geneA -> geneB, geneB -> geneC
+//
+// Reached rows are: <query chrom start end> <seed row> <reached row> <hops>.
+
+namespace {
+void write_file(const fs::path& p, const std::string& content) {
+    std::ofstream out(p);
+    out << content;
+}
+} // namespace
+
+class CLIIntersectHopsE2ETest : public CLIIntersectE2ETest {
+protected:
+    fs::path hops_query;
+
+    void SetUp() override {
+        CLIIntersectE2ETest::SetUp();
+        hops_query = fs::temp_directory_path() / "genogrove_e2e_hops_query.bed";
+        auto idx = run_command(cli(
+            "idx \"" + (test_data_dir / "target_links.bed").string() +
+            "\" --links \"" + (test_data_dir / "links.tsv").string() +
+            "\" -o \"" + tmp_index.string() + "\""
+        ));
+        ASSERT_EQ(idx.exit_code, 0) << idx.output;
+    }
+
+    void TearDown() override {
+        if(fs::exists(hops_query)) {
+            fs::remove(hops_query);
+        }
+        CLIIntersectE2ETest::TearDown();
+    }
+
+    std::string isec_hops(const std::string& extra) {
+        return cli("isec -q \"" + hops_query.string() + "\" -i \"" + tmp_index.string() +
+                   "\" " + extra);
+    }
+};
+
+TEST_F(CLIIntersectHopsE2ETest, OneHopOutReportsDirectTargetOnly) {
+    write_file(hops_query, "chr1\t150\t250\n");  // hits geneA
+    auto result = run_command(isec_hops("--hops 1 --direction out"));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_EQ(result.output,
+              "chr1\t100\t500\n"
+              "chr1\t150\t250\tchr1\t100\t500\tchr1\t600\t900\t1\n");
+}
+
+TEST_F(CLIIntersectHopsE2ETest, HopsAllReachesWholeComponentWithMinHops) {
+    write_file(hops_query, "chr1\t150\t250\n");  // hits geneA
+    auto result = run_command(isec_hops("--hops all"));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_EQ(result.output,
+              "chr1\t100\t500\n"
+              "chr1\t150\t250\tchr1\t100\t500\tchr1\t600\t900\t1\n"
+              "chr1\t150\t250\tchr1\t100\t500\tchr2\t200\t400\t2\n");
+}
+
+TEST_F(CLIIntersectHopsE2ETest, DirectionInFollowsOnlyIncomingEdges) {
+    write_file(hops_query, "chr2\t250\t300\n");  // hits geneC, which only has an in-edge
+    auto result = run_command(isec_hops("--hops all --direction in"));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_EQ(result.output,
+              "chr2\t200\t400\n"
+              "chr2\t250\t300\tchr2\t200\t400\tchr1\t600\t900\t1\n"
+              "chr2\t250\t300\tchr2\t200\t400\tchr1\t100\t500\t2\n");
+
+    // geneA has no incoming edge, so the same walk from it reaches nothing.
+    write_file(hops_query, "chr1\t150\t250\n");
+    result = run_command(isec_hops("--hops all --direction in"));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_EQ(result.output, "chr1\t100\t500\n");
+}
+
+TEST_F(CLIIntersectHopsE2ETest, HopsZeroKeepsPlainOverlapOutput) {
+    write_file(hops_query, "chr1\t150\t250\n");
+    auto result = run_command(isec_hops("--hops 0"));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_EQ(result.output, "chr1\t100\t500\n");
+}
+
+TEST_F(CLIIntersectHopsE2ETest, ReachedIntervalPrintedOnceUnderNearestSeedInPlace) {
+    // The query overlaps geneA and geneB (two seeds). geneC is 2 hops from A
+    // and 1 from B: it must appear once, under B, with hops=1. Seeds are never
+    // reported as reached from each other. Also exercises grove_view paging in
+    // the cross-chromosome target block on demand.
+    write_file(hops_query, "chr1\t150\t700\n");
+    auto result = run_command(isec_hops("--hops 2 --in-place"));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    // run_command merges stderr, which carries the --in-place cannot-verify
+    // note, so match the rows as a suffix rather than the whole output.
+    EXPECT_TRUE(result.output.ends_with(
+                    "chr1\t100\t500\n"
+                    "chr1\t600\t900\n"
+                    "chr1\t150\t700\tchr1\t600\t900\tchr2\t200\t400\t1\n"))
+        << result.output;
+}
+
+TEST_F(CLIIntersectHopsE2ETest, InPlaceHopsOnIndexWithoutLinksWarnsAndReachesNothing) {
+    // grove_view cannot tell a link-less index apart without paging every
+    // block, so the in-place path warns on stderr and walks an empty graph
+    // instead of erroring like the eager path does.
+    auto idx = run_command(cli(
+        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
+    ));
+    ASSERT_EQ(idx.exit_code, 0) << idx.output;
+    write_file(hops_query, "chr1\t150\t250\n");
+    auto result = run_command(isec_hops("--hops all --in-place"));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("Warning: --in-place cannot verify"), std::string::npos)
+        << result.output;
+    EXPECT_TRUE(result.output.ends_with("chr1\t100\t500\n")) << result.output;
+}
+
+TEST_F(CLIIntersectHopsE2ETest, HopsRequiresIndex) {
+    write_file(hops_query, "chr1\t150\t250\n");
+    auto result = run_command(cli(
+        "isec -q \"" + hops_query.string() + "\" -t \"" + target_path.string() +
+        "\" --hops 1"
+    ));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("--hops requires a prebuilt index"), std::string::npos)
+        << result.output;
+}
+
+TEST_F(CLIIntersectHopsE2ETest, HopsRejectsIndexBuiltWithoutLinks) {
+    auto idx = run_command(cli(
+        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
+    ));
+    ASSERT_EQ(idx.exit_code, 0) << idx.output;
+    write_file(hops_query, "chr1\t150\t250\n");
+    auto result = run_command(isec_hops("--hops 1"));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("idx --links"), std::string::npos) << result.output;
+}
+
+TEST_F(CLIIntersectHopsE2ETest, InvalidHopsAndDirectionRejected) {
+    write_file(hops_query, "chr1\t150\t250\n");
+    auto result = run_command(isec_hops("--hops two"));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("--hops must be"), std::string::npos) << result.output;
+
+    result = run_command(isec_hops("--hops 1 --direction sideways"));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("--direction must be"), std::string::npos) << result.output;
+}

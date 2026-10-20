@@ -54,10 +54,11 @@ void for_each_bed_query(const std::string& queryfile, F&& cb) {
     }
 }
 
-// Print one result row for a BED-payload hit. The output format tracks the
-// target payload type, independent of the query file type.
+// Print the fields of one BED-payload hit (no trailing newline, so the caller
+// can embed it in a wider row — see the --hops output in run_intersect). The
+// output format tracks the target payload type, independent of the query type.
 inline void print_bed_result(std::ostream& output, const gio::bed_entry& payload) {
-    output << payload.chrom << "\t" << payload.start << "\t" << payload.end << "\n";
+    output << payload.chrom << "\t" << payload.start << "\t" << payload.end;
 }
 
 } // namespace bed
