@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Dashboard benchmark alert switched off**: the continuous-benchmarking chart no longer posts regression comments on main. It compares commits measured on different CPU models (one runner class has 4x the L2 cache), so its alert fired three times on untouched code and never on a real regression. The PR A/B job, which runs both sides on one runner, is the only alert. ([#574](https://github.com/genogrove/genogrove/issues/574), [#575](https://github.com/genogrove/genogrove/pull/575))
+
 ## [0.26.2] - 2026-10-19
 
 ### Added
