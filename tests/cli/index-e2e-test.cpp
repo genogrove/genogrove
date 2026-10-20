@@ -597,3 +597,55 @@ TEST_F(CLIIndexE2ETest, IndexEmptyInputProducesDeserializableIndex) {
 
     fs::remove(empty_bed);
 }
+
+TEST_F(CLIIndexE2ETest, IndexWithLinksSkipsUnnamedBedRecords) {
+    // BED records without column 4 are left out of the name map: they still
+    // index, but no link row can name them. A named pair around an unnamed
+    // record links fine; a row that tries to reach the unnamed record fails.
+    fs::path mixed_bed = fs::temp_directory_path() / "genogrove_idx_mixed_names.bed";
+    {
+        std::ofstream out(mixed_bed);
+        out << "chr1\t100\t500\tgeneA\t0\t+\n"
+            << "chr1\t600\t900\n"                   // BED3: no name
+            << "chr2\t200\t400\tgeneC\t0\t+\n";
+    }
+    fs::path ok_links = fs::temp_directory_path() / "genogrove_idx_mixed_ok.tsv";
+    { std::ofstream out(ok_links); out << "geneA\tgeneC\n"; }
+
+    auto result = run_command(cli(
+        "idx \"" + mixed_bed.string() + "\" --links \"" + ok_links.string() +
+        "\" -o \"" + tmp_links_output.string() + "\""
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+
+    std::ifstream in(tmp_links_output, std::ios::binary);
+    ASSERT_TRUE(in.is_open());
+    (void)gio::gg_header::read(in);
+    auto grove = ggs::grove<gdt::interval, gio::bed_entry, std::string>::deserialize(in);
+
+    auto a_hits = grove.intersect(gdt::interval(300, 300), "chr1");
+    auto unnamed_hits = grove.intersect(gdt::interval(700, 700), "chr1");
+    auto c_hits = grove.intersect(gdt::interval(300, 300), "chr2");
+    ASSERT_EQ(a_hits.get_keys().size(), 1u);
+    ASSERT_EQ(unnamed_hits.get_keys().size(), 1u);  // indexed despite having no name
+    ASSERT_EQ(c_hits.get_keys().size(), 1u);
+    EXPECT_FALSE(unnamed_hits.get_keys()[0]->get_data().name.has_value());
+    EXPECT_TRUE(grove.has_edge(a_hits.get_keys()[0], c_hits.get_keys()[0]));
+    EXPECT_EQ(grove.out_degree(unnamed_hits.get_keys()[0]), 0u);
+    EXPECT_EQ(grove.in_degree(unnamed_hits.get_keys()[0]), 0u);
+    EXPECT_EQ(grove.edge_count(), 1u);
+
+    // The unnamed record cannot be a link endpoint under any name.
+    fs::path bad_links = fs::temp_directory_path() / "genogrove_idx_mixed_bad.tsv";
+    { std::ofstream out(bad_links); out << "geneA\tgeneB\n"; }
+    auto bad = run_command(cli(
+        "idx \"" + mixed_bed.string() + "\" --links \"" + bad_links.string() +
+        "\" -o \"" + tmp_links_output.string() + "\""
+    ));
+    EXPECT_NE(bad.exit_code, 0);
+    EXPECT_NE(bad.output.find("'geneB' which is not present"), std::string::npos) << bad.output;
+
+    fs::remove(mixed_bed);
+    fs::remove(ok_links);
+    fs::remove(bad_links);
+}
