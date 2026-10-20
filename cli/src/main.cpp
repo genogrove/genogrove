@@ -5,6 +5,7 @@
 
 // standard
 #include <iostream>
+#include <memory>
 #include <string_view>
 #include "cxxopts.hpp"
 
@@ -89,9 +90,13 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        // parse additional options for the subcommand
+        // Re-parse the raw argv shifted by one: cxxopts always skips argv[0] as
+        // the program name, so the subcommand word lands in that slot and the
+        // subcommand's parser sees exactly its own options. Not an off-by-one.
+        // Any new top-level flag must stay allow_unrecognised_options()-safe,
+        // since the top-level parse above still sees the subcommand's flags.
         cxxopts::Options subcallOptions = command->build_options();
-        cxxopts::ParseResult subcallArgs = subcallOptions.parse(argc -1, argv + 1);
+        cxxopts::ParseResult subcallArgs = subcallOptions.parse(argc - 1, argv + 1);
 
         if(subcallArgs.count("help")) {
             std::cout << subcallOptions.help() << "\n";

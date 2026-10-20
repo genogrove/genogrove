@@ -17,6 +17,7 @@
 #include <charconv>
 #include <cstddef>
 #include <deque>
+#include <filesystem>
 #include <fstream>
 #include <ios>
 #include <iostream>
@@ -205,8 +206,6 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
 
 namespace subcalls {
 
-constexpr std::string_view DEFAULT_TREE_ORDER = "3";
-
 cxxopts::Options intersect::build_options() {
     cxxopts::Options options("intersect", "Search for interval overlaps in the index");
     options.add_options()
@@ -222,7 +221,7 @@ cxxopts::Options intersect::build_options() {
             ("o,outputfile", "Write the intersection results to the specified file",
              cxxopts::value<std::string>()->default_value("stdout"))
             ("k,order", "The order of the tree",
-             cxxopts::value<int>()->default_value(std::string(DEFAULT_TREE_ORDER)))
+             cxxopts::value<int>()->default_value(std::to_string(DEFAULT_TREE_ORDER)))
             ("hops", "Follow the index's graph edges (idx --links) from each "
                      "overlapping interval up to N hops, or 'all' for the whole "
                      "connected component, and report each reached interval once "
@@ -284,12 +283,7 @@ void intersect::validate(const cxxopts::ParseResult& args) {
         }
     }
 
-    if(args.count("k")) {
-        int k = args["k"].as<int>();
-        if(k < 3) {
-            throw std::runtime_error("Error: order must be at least 3");
-        }
-    }
+    validate_tree_order(args);
 
     // A target (-t) is built in memory without links, so there is no graph to
     // walk; edges only exist in an index written by `idx --links`.

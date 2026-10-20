@@ -272,6 +272,8 @@ TEST_F(CLIIndexE2ETest, IndexWithLinksAddsGraphEdges) {
     ));
     EXPECT_EQ(result.exit_code, 0) << result.output;
     ASSERT_TRUE(fs::exists(tmp_links_output));
+    // links.tsv has two rows, so --links reports two distinct edges.
+    EXPECT_NE(result.output.find("Added 2 graph edges"), std::string::npos) << result.output;
 
     std::ifstream in(tmp_links_output, std::ios::binary);
     ASSERT_TRUE(in.is_open());

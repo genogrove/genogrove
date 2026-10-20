@@ -6,18 +6,8 @@
 #ifndef GENOGROVE_CLI_INDEX_HPP
 #define GENOGROVE_CLI_INDEX_HPP
 
-// standard
-#include <cstdlib>
-#include <filesystem>
-#include <iostream>
-
-// genogrove
-#include <genogrove/data_type/interval.hpp>
-#include <genogrove/structure/grove/grove.hpp>
-
 // genogrove-cli
 #include <subcalls/subcall.hpp>
-
 
 // CXXopts
 #include <cxxopts.hpp>
