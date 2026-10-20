@@ -12,18 +12,18 @@
 #include <genogrove/io/gg_format.hpp>
 
 #include <chrono>
+#include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 #include <string>
-#include <string_view>
 
 namespace subcalls {
 
 namespace gdt = genogrove::data_type;
 namespace ggs = genogrove::structure;
 namespace gio = genogrove::io;
-
-constexpr std::string_view DEFAULT_TREE_ORDER = "3";
 
 namespace {
 
@@ -56,8 +56,8 @@ cxxopts::Options index::build_options() {
             ("o,outputfile", "Write the index to the specified file",
                     cxxopts::value<std::string>())
             ("k,order", "The order of the tree",
-                    cxxopts::value<int>()->default_value(std::string(DEFAULT_TREE_ORDER)))
-            ("s,sorted", "Interval in the input file are sorted",
+                    cxxopts::value<int>()->default_value(std::to_string(DEFAULT_TREE_ORDER)))
+            ("s,sorted", "Intervals in the input file are sorted",
                     cxxopts::value<bool>()->default_value("false"))
             ("t,timed", "Measure the time taken for indexing",
                     cxxopts::value<bool>()->default_value("false"))
@@ -88,12 +88,7 @@ void index::validate(const cxxopts::ParseResult& args) {
         throw std::runtime_error("Error: file does not exist: " + inputfile);
     }
 
-    if(args.count("k")) {
-        int order = args["k"].as<int>();
-        if(order < 3) {
-            throw std::runtime_error("Error: order must be at least 3");
-        }
-    }
+    validate_tree_order(args);
 
     if(args.count("outputfile")) {
         std::filesystem::path outputfile_path(args["outputfile"].as<std::string>());
@@ -145,6 +140,7 @@ void index::execute(const cxxopts::ParseResult& args) {
     }
 
     const auto start_time = std::chrono::steady_clock::now();
+    std::size_t edges_added = 0;  // reported after the write when --links was used
 
     // Build the grove in memory first, then open the output file and write
     // the header + serialised payload. This way a parse error or malformed
@@ -160,7 +156,7 @@ void index::execute(const cxxopts::ParseResult& args) {
             grove, inputfile, sorted, has_links ? &name_map : nullptr);
 
         if(has_links) {
-            handlers::links::apply_to_grove(
+            edges_added = handlers::links::apply_to_grove(
                 grove, args["links"].as<std::string>(), name_map);
         }
 
@@ -178,7 +174,7 @@ void index::execute(const cxxopts::ParseResult& args) {
             grove, inputfile, sorted, has_links ? &name_map : nullptr, name_tag);
 
         if(has_links) {
-            handlers::links::apply_to_grove(
+            edges_added = handlers::links::apply_to_grove(
                 grove, args["links"].as<std::string>(), name_map);
         }
 
@@ -191,6 +187,9 @@ void index::execute(const cxxopts::ParseResult& args) {
         std::cout << "Indexed in " << ms << " ms\n";
     }
     std::cout << "Index written to " << outputfile << "\n";
+    if(has_links) {
+        std::cout << "Added " << edges_added << " graph edges\n";
+    }
 }
 
 }

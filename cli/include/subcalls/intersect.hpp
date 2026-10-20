@@ -6,13 +6,6 @@
 #ifndef GENOGROVE_CLI_INTERSECT_HPP
 #define GENOGROVE_CLI_INTERSECT_HPP
 
-// standard
-#include <iostream>
-
-// genogrove
-#include <genogrove/structure/all.hpp>
-#include <genogrove/io/filetype_detector.hpp>
-
 // cli
 #include "subcall.hpp"
 
