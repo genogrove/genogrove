@@ -213,7 +213,7 @@ cxxopts::Options intersect::build_options() {
              cxxopts::value<std::string>())
             ("t,targetfile", "The target file to build the grove from (BED or GFF/GTF)",
                     cxxopts::value<std::string>())
-            ("i,indexfile", "A prebuilt .gg index to search against (instead of -t)",
+            ("i,indexfile", "A prebuilt .gg index to search against",
                     cxxopts::value<std::string>())
             ("in-place", "Query the prebuilt index (-i) in place: read only the "
                          "blocks each query touches instead of loading the whole "

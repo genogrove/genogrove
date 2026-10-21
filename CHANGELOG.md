@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- **`isec` rejects `-t` together with `-i`**: the index used to win silently and the target was not even checked for existence. `validate()` now fails with a clear message, the target is always checked when given, and the `-i` help text says it replaces `-t`. ([#578](https://github.com/genogrove/genogrove/issues/578), [#579](https://github.com/genogrove/genogrove/pull/579))
+- **`isec` rejects `-t` together with `-i`**: the index used to win silently and the target was not even checked for existence. `validate()` now fails with a clear message and the target is always checked when given. ([#578](https://github.com/genogrove/genogrove/issues/578), [#579](https://github.com/genogrove/genogrove/pull/579))
 - **`isec` rejects `-k/--order` with a prebuilt index**: the order only shapes a tree built from `-t`; with `-i` it was silently ignored. `validate()` now fails with a clear message, and the `-k` help text says so. ([#558](https://github.com/genogrove/genogrove/issues/558), [#577](https://github.com/genogrove/genogrove/pull/577))
 - **`interval::deserialize` enforces `start <= end`**: it now constructs through the checked constructor, so a corrupted `.gg` payload throws `std::invalid_argument` instead of yielding a key that silently misorders the tree. `genomic_coordinate` and `kmer` already did this. ([#554](https://github.com/genogrove/genogrove/issues/554), [#576](https://github.com/genogrove/genogrove/pull/576))
 
