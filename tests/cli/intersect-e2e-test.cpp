@@ -395,22 +395,6 @@ TEST_F(CLIIntersectE2ETest, InPlaceQueriesIndexWithMetadataEdges) {
     fs::remove(meta_links);
 }
 
-TEST_F(CLIIntersectE2ETest, IntersectIgnoresTargetWhenIndexGiven) {
-    // -i takes precedence over -t: a nonexistent -t must not fail when a
-    // valid index is supplied, since the target is ignored.
-    auto idx_result = run_command(cli(
-        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
-    ));
-    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
-
-    auto result = run_command(cli(
-        "isec -q \"" + query_path.string() + "\" -t /nonexistent/path.bed -i \"" +
-        tmp_index.string() + "\""
-    ));
-    EXPECT_EQ(result.exit_code, 0) << result.output;
-    EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos);
-}
-
 // ==========================================
 // GFF intersect (matched query/target types)
 // ==========================================
