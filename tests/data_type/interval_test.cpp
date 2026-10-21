@@ -367,6 +367,18 @@ TEST(intervalTest, serializeToFailedStream) {
     EXPECT_THROW(intvl.serialize(ss), std::runtime_error);
 }
 
+TEST(intervalTest, deserializeRejectsStartGreaterThanEnd) {
+    // A well-formed stream cannot carry start > end, so write the raw fields
+    // by hand to stand in for a corrupted .gg payload.
+    const std::size_t start = 200, end = 100;
+    std::stringstream ss;
+    ss.write(reinterpret_cast<const char*>(&start), sizeof(start));
+    ss.write(reinterpret_cast<const char*>(&end), sizeof(end));
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = gdt::interval::deserialize(ss);
+    }, std::invalid_argument);
+}
+
 // =============================================================================
 // Edge case: zero-length (point) intervals
 // =============================================================================
