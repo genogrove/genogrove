@@ -333,6 +333,25 @@ TEST_F(CLIIntersectE2ETest, OrderRejectedWithPrebuiltIndex) {
               std::string::npos);
 }
 
+TEST_F(CLIIntersectE2ETest, TargetRejectedWithPrebuiltIndex) {
+    // -t and -i name two different sources; the index used to win silently,
+    // leaving the user believing the target was searched. The target here
+    // does not even exist, which the old code never checked once -i was set.
+    auto idx_result = run_command(cli(
+        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
+    ));
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
+
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -t \"" +
+        (test_data_dir / "missing.bed").string() + "\" -i \"" +
+        tmp_index.string() + "\""
+    ));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("-t and -i are mutually exclusive"),
+              std::string::npos);
+}
+
 TEST_F(CLIIntersectE2ETest, OrderAcceptedWithTarget) {
     // The same -k on the build-from-target path must keep working, so the new
     // rejection is scoped to -i and nothing else.
@@ -374,22 +393,6 @@ TEST_F(CLIIntersectE2ETest, InPlaceQueriesIndexWithMetadataEdges) {
     EXPECT_EQ(result.output.find("chr2"), std::string::npos) << result.output;
 
     fs::remove(meta_links);
-}
-
-TEST_F(CLIIntersectE2ETest, IntersectIgnoresTargetWhenIndexGiven) {
-    // -i takes precedence over -t: a nonexistent -t must not fail when a
-    // valid index is supplied, since the target is ignored.
-    auto idx_result = run_command(cli(
-        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
-    ));
-    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
-
-    auto result = run_command(cli(
-        "isec -q \"" + query_path.string() + "\" -t /nonexistent/path.bed -i \"" +
-        tmp_index.string() + "\""
-    ));
-    EXPECT_EQ(result.exit_code, 0) << result.output;
-    EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos);
 }
 
 // ==========================================

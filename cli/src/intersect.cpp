@@ -250,9 +250,15 @@ void intersect::validate(const cxxopts::ParseResult& args) {
         throw std::runtime_error(
             "Error: a target file (-t) or a prebuilt index (-i) is required");
     }
-    // When an index is given it takes precedence and the target is ignored,
-    // so only the target actually in use is required to exist.
-    if(has_target && !has_index) {
+    // Both at once would leave one unused. The index used to win silently, so
+    // a stale -i next to a fresh -t queried the wrong data without a word;
+    // reject the pair instead of picking one.
+    if(has_target && has_index) {
+        throw std::runtime_error(
+            "Error: -t and -i are mutually exclusive; pass a target to build from "
+            "or a prebuilt index to query");
+    }
+    if(has_target) {
         auto targetfile = args["targetfile"].as<std::string>();
         if(!std::filesystem::exists(targetfile)) {
             throw std::runtime_error("Error: file does not exist: " + targetfile);
