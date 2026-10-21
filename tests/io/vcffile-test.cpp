@@ -391,6 +391,28 @@ TEST_F(VcfReaderTest, EmptyVcfHeaderOnly) {
     fs::remove(empty_vcf);
 }
 
+TEST_F(VcfReaderTest, MalformedPosThrowsOnRead) {
+    // htslib rejects a non-numeric POS with a parse error (< -1 from
+    // bcf_read), and read_next() must turn that into a runtime_error with the
+    // message set, instead of returning false as if the file had ended.
+    // The header is valid, so construction succeeds; the first read fails.
+    fs::path bad_vcf = test_data_dir / "test_malformed_pos.vcf";
+    {
+        std::ofstream out(bad_vcf);
+        out << "##fileformat=VCFv4.2\n";
+        out << "##contig=<ID=chr1,length=1000000>\n";
+        out << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n";
+        out << "chr1\tINVALID\t.\tA\tT\t.\tPASS\t.\n";
+    }
+
+    gio::vcf_reader reader(bad_vcf);
+    gio::vcf_entry entry;
+    EXPECT_THROW(reader.read_next(entry), std::runtime_error);
+    EXPECT_FALSE(reader.get_error_message().empty());
+
+    fs::remove(bad_vcf);
+}
+
 TEST_F(VcfReaderTest, LineCounter) {
     gio::vcf_reader reader(vcf_path);
     EXPECT_EQ(reader.get_current_line(), 0u);  // before first read

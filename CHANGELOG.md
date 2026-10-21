@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`vcf_reader` malformed-record test**: `MalformedPosThrowsOnRead` pins that a non-numeric POS makes `read_next()` throw `std::runtime_error` with the error message set, instead of ending the file silently. The reader had no negative test past file-not-found. ([#563](https://github.com/genogrove/genogrove/issues/563), [#580](https://github.com/genogrove/genogrove/pull/580))
+
 ### Fixed
 - **`isec` rejects `-t` together with `-i`**: the index used to win silently and the target was not even checked for existence. `validate()` now fails with a clear message and the target is always checked when given. ([#578](https://github.com/genogrove/genogrove/issues/578), [#579](https://github.com/genogrove/genogrove/pull/579))
 - **`isec` rejects `-k/--order` with a prebuilt index**: the order only shapes a tree built from `-t`; with `-i` it was silently ignored. `validate()` now fails with a clear message, and the `-k` help text says so. ([#558](https://github.com/genogrove/genogrove/issues/558), [#577](https://github.com/genogrove/genogrove/pull/577))
