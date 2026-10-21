@@ -220,7 +220,7 @@ cxxopts::Options intersect::build_options() {
                          "file into memory (requires -i)")
             ("o,outputfile", "Write the intersection results to the specified file",
              cxxopts::value<std::string>()->default_value("stdout"))
-            ("k,order", "The order of the tree",
+            ("k,order", "The order of the tree built from -t (not allowed with -i)",
              cxxopts::value<int>()->default_value(std::to_string(DEFAULT_TREE_ORDER)))
             ("hops", "Follow the index's graph edges (idx --links) from each "
                      "overlapping interval up to N hops, or 'all' for the whole "
@@ -284,6 +284,15 @@ void intersect::validate(const cxxopts::ParseResult& args) {
     }
 
     validate_tree_order(args);
+    // The order is only consumed when a target (-t) is built in memory. A
+    // prebuilt index carries its own order, so -k with -i would be silently
+    // ignored; reject it rather than let a user believe it took effect.
+    // count() only sees flags given on the command line, not the default.
+    if(args.count("order") && has_index) {
+        throw std::runtime_error(
+            "Error: -k/--order only applies when building from a target (-t); "
+            "a prebuilt index (-i) keeps the order it was built with");
+    }
 
     // A target (-t) is built in memory without links, so there is no graph to
     // walk; edges only exist in an index written by `idx --links`.
