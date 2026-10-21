@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`interval::deserialize` enforces `start <= end`**: it now constructs through the checked constructor, so a corrupted `.gg` payload throws `std::invalid_argument` instead of yielding a key that silently misorders the tree. `genomic_coordinate` and `kmer` already did this. ([#554](https://github.com/genogrove/genogrove/issues/554), [#576](https://github.com/genogrove/genogrove/pull/576))
+
 ### Changed
 - **Dashboard benchmark alert switched off**: the continuous-benchmarking chart no longer posts regression comments on main. It compares commits measured on different CPU models (one runner class has 4x the L2 cache), so its alert fired three times on untouched code and never on a real regression. The PR A/B job, which runs both sides on one runner, is the only alert. ([#574](https://github.com/genogrove/genogrove/issues/574), [#575](https://github.com/genogrove/genogrove/pull/575))
 

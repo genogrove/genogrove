@@ -212,6 +212,8 @@ namespace genogrove::data_type {
              *
              * @param is Input stream to read from
              * @return Deserialized interval
+             * @throws std::runtime_error if the stream fails or ends early
+             * @throws std::invalid_argument if the stored start > end
              */
             [[nodiscard]] static interval deserialize(std::istream& is);
 
