@@ -316,6 +316,34 @@ TEST_F(CLIIntersectE2ETest, InPlaceRequiresIndex) {
               std::string::npos);
 }
 
+TEST_F(CLIIntersectE2ETest, OrderRejectedWithPrebuiltIndex) {
+    // -k only shapes a tree built from -t; a prebuilt index keeps its own
+    // order, so passing both must fail loudly instead of silently ignoring -k.
+    auto idx_result = run_command(cli(
+        "idx \"" + target_path.string() + "\" -o \"" + tmp_index.string() + "\""
+    ));
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
+
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -i \"" + tmp_index.string() +
+        "\" -k 7"
+    ));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("-k/--order only applies when building from a target"),
+              std::string::npos);
+}
+
+TEST_F(CLIIntersectE2ETest, OrderAcceptedWithTarget) {
+    // The same -k on the build-from-target path must keep working, so the new
+    // rejection is scoped to -i and nothing else.
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -t \"" + target_path.string() +
+        "\" -k 7"
+    ));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(result.output.find("chr1\t100\t500"), std::string::npos);
+}
+
 TEST_F(CLIIntersectE2ETest, InPlaceQueriesIndexWithMetadataEdges) {
     // Build a --links index whose edges carry 3rd-column metadata, then query
     // it with --in-place. grove_view must parse the leaf blocks past the
