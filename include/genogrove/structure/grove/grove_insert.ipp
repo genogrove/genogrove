@@ -440,14 +440,28 @@ private:
      */
     node<key_type, data_type>* promote_new_root(node<key_type, data_type>* old_root,
                                                 std::string_view index, bool sorted_append) {
-        auto* new_root = new node<key_type, data_type>(this->order);
-        new_root->add_child(old_root, 0);
+        // Resolve the map slot first: building the key string is the one step
+        // after the split that can still throw, and a split cannot be undone
+        // once it has moved keys. Map references stay valid across the split.
+        auto& slot = this->root_nodes[std::string(index)];
+
+        auto new_root = std::make_unique<node<key_type, data_type>>(this->order);
         new_root->set_is_leaf(false);
-        old_root->set_parent(new_root);
-        split_node(new_root, 0, index, sorted_append);
+        new_root->add_child(old_root, 0);
+        old_root->set_parent(new_root.get());
+        try {
+            split_node(new_root.get(), 0, index, sorted_append);
+        } catch (...) {
+            // new_root is internal, so its destructor would delete old_root as
+            // a child. Detach it so the still-published root survives, and
+            // clear the parent link so nothing can reach the node being freed.
+            new_root->get_children().clear();
+            old_root->set_parent(nullptr);
+            throw;
+        }
         new_root->refresh_subtree_max();
-        this->root_nodes[std::string(index)] = new_root;
-        return new_root;
+        slot = new_root.release();
+        return slot;
     }
 
     /**

@@ -247,11 +247,20 @@ class grove {
         if(ggu::value_lookup(this->root_nodes, key_str)) {
             throw std::runtime_error("Root node already exists for key: " + key_str);
         }
-        node<key_type, data_type>* root = new node<key_type, data_type>(this->order);
-        this->root_nodes.insert({key_str, root});
+        // unique_ptr owns the node until both maps know about it, so a throw
+        // from either insert (allocation, rehash) cannot leak it. The two maps
+        // must also agree: if the second insert throws, the first is undone,
+        // otherwise a later lookup would find a root with no rightmost leaf.
+        auto root = std::make_unique<node<key_type, data_type>>(this->order);
         root->set_is_leaf(true);
-        this->rightmost_nodes.insert({key_str, root});
-        return root;
+        auto [root_it, inserted] = this->root_nodes.insert({key_str, root.get()});
+        try {
+            this->rightmost_nodes.insert({key_str, root.get()});
+        } catch (...) {
+            this->root_nodes.erase(root_it);
+            throw;
+        }
+        return root.release();
     }
 
     // =========================================================================
