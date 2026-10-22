@@ -61,7 +61,15 @@ namespace genogrove::data_type {
     class genomic_coordinate {
         public:
             /**
-             * @brief Default constructor creating an invalid coordinate (strand='.', start=0, end=0).
+             * @brief Default constructor: unstranded coordinate at position 0 (strand='.', start=0, end=0).
+             *
+             * This is a valid coordinate, not a sentinel. It passes every check
+             * the class applies and takes part in ordering, overlap and
+             * aggregation like any stored record.
+             *
+             * @warning A default-constructed genomic_coordinate and a real record
+             *          at [0, 0] on strand '.' are indistinguishable. Don't rely
+             *          on the default being distinct from stored data.
              */
             constexpr genomic_coordinate() : strand('.'), start(0), end(0) {}
 
