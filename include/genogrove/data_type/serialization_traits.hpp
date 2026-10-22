@@ -118,9 +118,14 @@ struct serializer {
 
 template<typename T>
 struct serialization_traits {
-    static_assert(std::is_trivially_copyable_v<T>,
-        "Default serialization only works for trivially copyable types. "
-        "Specialize serialization_traits for complex types.");
+    // deserialize() below does `T value;` before reading into it, so the
+    // type must be default-constructible as well as trivially copyable.
+    // Without the second check that line fails with a bare compiler error
+    // instead of this message.
+    static_assert(std::is_trivially_copyable_v<T> && std::is_default_constructible_v<T>,
+        "Default serialization only works for trivially copyable, "
+        "default-constructible types. Specialize serialization_traits for "
+        "complex types.");
 
     static void serialize(std::ostream& os, const T& value) {
         os.write(reinterpret_cast<const char*>(&value), sizeof(T));
