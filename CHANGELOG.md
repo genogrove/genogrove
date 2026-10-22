@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **`vcf_reader` malformed-record test**: `MalformedPosThrowsOnRead` pins that a non-numeric POS makes `read_next()` throw `std::runtime_error` with the error message set, instead of ending the file silently. The reader had no negative test past file-not-found. ([#563](https://github.com/genogrove/genogrove/issues/563), [#580](https://github.com/genogrove/genogrove/pull/580))
 
+### Refactored
+- **data_type polish**: the `genomic_coordinate` default-constructor docstring now says it builds a valid unstranded coordinate at [0, 0] and warns, like `numeric`, that it is indistinguishable from a real record. The generic `serialization_traits` fallback also asserts default constructibility, since `deserialize()` needs it. No behavior change. ([#564](https://github.com/genogrove/genogrove/issues/564), [#582](https://github.com/genogrove/genogrove/pull/582))
+
 ### Fixed
 - **Exception-safe root creation and promotion**: `grove::insert_root` and `promote_new_root` hold the new node in a `unique_ptr` until it is fully registered. A throw during the split no longer leaks the new root or leaves the published root pointing at it, and the two root maps cannot disagree. ([#557](https://github.com/genogrove/genogrove/issues/557), [#581](https://github.com/genogrove/genogrove/pull/581))
 - **`isec` rejects `-t` together with `-i`**: the index used to win silently and the target was not even checked for existence. `validate()` now fails with a clear message and the target is always checked when given. ([#578](https://github.com/genogrove/genogrove/issues/578), [#579](https://github.com/genogrove/genogrove/pull/579))
