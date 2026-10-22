@@ -171,6 +171,12 @@ class graph_overlay {
      * @brief Get edge metadata for all outgoing edges
      * @param source Pointer to source key
      * @return Vector of edge metadata (only available when edge_data_type != void)
+     * @note Returns an empty vector if `source` is null or has no recorded
+     *       edges. This differs from the target-resolving accessors
+     *       (get_neighbors, get_neighbors_if, get_edge_list), which throw
+     *       std::invalid_argument on null: those must dereference a key to
+     *       follow it, while this one only reads metadata and has nothing to
+     *       dereference. grove_view documents the same split.
      */
     template<typename M = edge_data_type>
     [[nodiscard]] std::vector<M> get_edges(const gdt::key<key_type, data_type>* source) const
@@ -192,6 +198,10 @@ class graph_overlay {
      * @brief Get edge metadata for all incoming edges (reverse of get_edges)
      * @param target Pointer to target key
      * @return Vector of edge metadata (only available when edge_data_type != void)
+     * @note Returns an empty vector if `target` is null or has no recorded
+     *       incoming edges, for the same reason as get_edges: metadata-only
+     *       accessors have nothing to dereference, so null is "no edges" here
+     *       and an error only in the target-resolving accessors.
      */
     template<typename M = edge_data_type>
     [[nodiscard]] std::vector<M> get_in_edges(const gdt::key<key_type, data_type>* target) const
