@@ -49,9 +49,12 @@ namespace genogrove::io {
          * themselves, so callers must not treat GZIP here as "run it through gzip" and
          * double-decompress.
          */
-        [[nodiscard]] std::tuple<filetype, compression_type> detect_filetype(const fs::path& filepath);
+        [[nodiscard]] static std::tuple<filetype, compression_type> detect_filetype(const fs::path& filepath);
     private:
-        compression_type detect_compression(const fs::path& filepath);
+        // Both functions are pure in their arguments and the class holds no
+        // state, so they are static: callers detect without constructing an
+        // object. Existing `detector.detect_filetype(...)` calls still compile.
+        [[nodiscard]] static compression_type detect_compression(const fs::path& filepath);
     };
 }
 #endif //GENOGROVE_FILETYPE_DETECTOR_HPP

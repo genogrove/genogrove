@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`vcf_reader` malformed-record test**: `MalformedPosThrowsOnRead` pins that a non-numeric POS makes `read_next()` throw `std::runtime_error` with the error message set, instead of ending the file silently. The reader had no negative test past file-not-found. ([#563](https://github.com/genogrove/genogrove/issues/563), [#580](https://github.com/genogrove/genogrove/pull/580))
 
 ### Refactored
+- **graph_overlay null-key notes, static `filetype_detector`**: `get_edges`/`get_in_edges` document why a null key yields an empty vector while the target-resolving accessors throw. `filetype_detector::detect_filetype` and `detect_compression` are `static` (the class has no state); the CLI calls them without a temporary, and the object form still compiles. ([#565](https://github.com/genogrove/genogrove/issues/565), [#566](https://github.com/genogrove/genogrove/issues/566), [#583](https://github.com/genogrove/genogrove/pull/583))
 - **data_type polish**: the `genomic_coordinate` default-constructor docstring now says it builds a valid unstranded coordinate at [0, 0] and warns, like `numeric`, that it is indistinguishable from a real record. The generic `serialization_traits` fallback also asserts default constructibility, since `deserialize()` needs it. No behavior change. ([#564](https://github.com/genogrove/genogrove/issues/564), [#582](https://github.com/genogrove/genogrove/pull/582))
 
 ### Fixed
