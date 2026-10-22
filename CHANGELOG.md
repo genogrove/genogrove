@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.3] - 2026-10-21
+
 ### Added
 - **`vcf_reader` malformed-record test**: `MalformedPosThrowsOnRead` pins that a non-numeric POS makes `read_next()` throw `std::runtime_error` with the error message set, instead of ending the file silently. The reader had no negative test past file-not-found. ([#563](https://github.com/genogrove/genogrove/issues/563), [#580](https://github.com/genogrove/genogrove/pull/580))
 
