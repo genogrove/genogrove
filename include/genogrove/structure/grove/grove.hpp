@@ -140,7 +140,7 @@ inline even_distribution distribute_evenly(std::size_t total, std::size_t max_pe
  * g.add_edge(key_ptr, another_key);  // Build graph relationships
  * @endcode
  */
-template <typename key_type, typename data_type = void, typename edge_data_type = void>
+template <gdt::key_type_base key_type, typename data_type = void, typename edge_data_type = void>
 class grove {
 
   public:
