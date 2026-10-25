@@ -53,7 +53,7 @@ namespace genogrove::structure {
  * @note Only internal nodes delete their children; leaf nodes have no children to delete
  * @note The order must be at least 2
  */
-template <typename key_type, typename data_type = void>
+template <gdt::key_type_base key_type, typename data_type = void>
 class node {
   public:
     /**
@@ -523,7 +523,7 @@ class node {
 
 namespace genogrove::structure {
 
-template<typename key_type, typename data_type>
+template<gdt::key_type_base key_type, typename data_type>
 void node<key_type, data_type>::serialize_block(std::ostream& os,
         const std::unordered_map<const node<key_type, data_type>*, detail::block_id>& node_to_block) const {
     // Pack is_leaf into high bit of key count (saves 5B per node vs separate bool + size_t)
@@ -571,7 +571,7 @@ void node<key_type, data_type>::serialize_block(std::ostream& os,
     }
 }
 
-template<typename key_type, typename data_type>
+template<gdt::key_type_base key_type, typename data_type>
 node<key_type, data_type>* node<key_type, data_type>::deserialize_block(
         std::istream& is, int order,
         std::deque<gdt::key<key_type, data_type>>& key_storage,
