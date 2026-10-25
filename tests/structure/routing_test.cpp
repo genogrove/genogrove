@@ -244,7 +244,7 @@ TEST(grove_routing, compact_keeps_the_routing_cache_usable) {
     for (size_t i = 0; i < data.size(); i += 2) {
         const auto result = grove.intersect(data[i].first, "chr1");
         if (!result.get_keys().empty()) {
-            grove.remove_key("chr1", result.get_keys()[0]);
+            ASSERT_TRUE(grove.remove_key("chr1", result.get_keys()[0]));
         }
     }
     grove.compact();

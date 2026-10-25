@@ -607,7 +607,7 @@ TEST(GroveRemoveTest, IntersectAllIndicesAfterRemoval) {
     auto keys_chr1 = insert_intervals(grove, "chr1", 5);
     auto keys_chr2 = insert_intervals(grove, "chr2", 5);
 
-    grove.remove_key("chr1", keys_chr1[2]);
+    ASSERT_TRUE(grove.remove_key("chr1", keys_chr1[2]));
 
     // Query across all indices
     auto result = grove.intersect(gdt::interval{20, 25});
@@ -839,7 +839,7 @@ TEST(GroveCompactTest, QueriesStillWorkAfterCompact) {
     auto keys = insert_intervals(grove, "chr1", 20);
 
     for (int i = 0; i < 10; ++i) {
-        grove.remove_key("chr1", keys[i]);
+        ASSERT_TRUE(grove.remove_key("chr1", keys[i]));
     }
     grove.compact();
 
@@ -942,7 +942,7 @@ TEST(GroveCompactTest, RoundtripSerializationAfterCompact) {
     gst::grove<gdt::interval, int> grove(4);
     auto keys = insert_intervals(grove, "chr1", 20);
     for (int i = 0; i < 10; ++i) {
-        grove.remove_key("chr1", keys[i]);
+        ASSERT_TRUE(grove.remove_key("chr1", keys[i]));
     }
     grove.compact();
 

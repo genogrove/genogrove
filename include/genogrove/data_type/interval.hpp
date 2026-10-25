@@ -172,7 +172,7 @@ namespace genogrove::data_type {
              *
              * @return Start position
              */
-            constexpr size_t get_start() const noexcept { return start; }
+            [[nodiscard]] constexpr size_t get_start() const noexcept { return start; }
 
             /**
              * @brief Set both start and end positions atomically.
@@ -194,7 +194,7 @@ namespace genogrove::data_type {
              *
              * @return End position
              */
-            constexpr size_t get_end() const noexcept { return end; }
+            [[nodiscard]] constexpr size_t get_end() const noexcept { return end; }
 
             /**
              * @brief Serialize the interval to an output stream.

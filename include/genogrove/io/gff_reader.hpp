@@ -46,28 +46,28 @@ namespace genogrove::io {
 
         // GTF-specific helper methods
         // Returns the value of the gene_id attribute (GTF standard)
-        std::optional<std::string> get_gene_id() const;
+        [[nodiscard]] std::optional<std::string> get_gene_id() const;
 
         // Returns the value of the transcript_id attribute (GTF standard)
-        std::optional<std::string> get_transcript_id() const;
+        [[nodiscard]] std::optional<std::string> get_transcript_id() const;
 
         // Returns the value of the exon_number attribute (GTF standard)
-        std::optional<int> get_exon_number() const;
+        [[nodiscard]] std::optional<int> get_exon_number() const;
 
         // Returns the value of the gene_name attribute (GTF common)
-        std::optional<std::string> get_gene_name() const;
+        [[nodiscard]] std::optional<std::string> get_gene_name() const;
 
         // Returns the value of the gene_biotype/gene_type attribute (GTF common)
-        std::optional<std::string> get_gene_biotype() const;
+        [[nodiscard]] std::optional<std::string> get_gene_biotype() const;
 
         // Generic attribute getter with optional default value
-        std::optional<std::string> get_attribute(std::string_view key) const;
+        [[nodiscard]] std::optional<std::string> get_attribute(std::string_view key) const;
 
         // Check if this entry is in GTF format
-        bool is_gtf() const { return format == gff_format::GTF; }
+        [[nodiscard]] bool is_gtf() const { return format == gff_format::GTF; }
 
         // Check if this entry is in GFF3 format
-        bool is_gff3() const { return format == gff_format::GFF3; }
+        [[nodiscard]] bool is_gff3() const { return format == gff_format::GFF3; }
 
         // Serialize this entry to a binary output stream. Used by
         // grove<gdt::interval, gff_entry>::serialize().

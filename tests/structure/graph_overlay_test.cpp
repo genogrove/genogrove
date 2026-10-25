@@ -181,7 +181,7 @@ TEST(GraphOverlayTest, EdgeRemoval) {
     grove.add_edge(k1, k3);
     ASSERT_EQ(grove.graph().out_degree(k1), 2);
 
-    grove.remove_edge(k1, k2);
+    EXPECT_TRUE(grove.remove_edge(k1, k2));
     EXPECT_EQ(grove.graph().out_degree(k1), 1);
 
     auto neighbors = grove.get_neighbors(k1);

@@ -10,7 +10,7 @@ namespace genogrove::utility {
 
     /// Locale-independent digit check, used by bed_reader and gff_reader
     /// for coordinate validation.
-    constexpr bool is_digit(unsigned char c) {
+    [[nodiscard]] constexpr bool is_digit(unsigned char c) {
         return c >= '0' && c <= '9';
     }
 

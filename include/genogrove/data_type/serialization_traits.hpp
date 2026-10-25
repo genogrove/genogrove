@@ -134,7 +134,7 @@ struct serialization_traits {
         }
     }
 
-    static T deserialize(std::istream& is) {
+    [[nodiscard]] static T deserialize(std::istream& is) {
         T value;
         is.read(reinterpret_cast<char*>(&value), sizeof(T));
         if(!is) {
@@ -156,7 +156,7 @@ struct serialization_traits<std::string> {
         }
     }
 
-    static std::string deserialize(std::istream& is) {
+    [[nodiscard]] static std::string deserialize(std::istream& is) {
         uint32_t length;
         is.read(reinterpret_cast<char*>(&length), sizeof(length));
         if (!is) {
