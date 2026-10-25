@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`std::hash` for `genomic_coordinate`, `numeric` and `kmer`**: each type's header now specializes `std::hash`, mixing exactly the fields `operator==` compares. The types work in `std::unordered_set`/`unordered_map` and satisfy the `registry_value` concept; pygenogrove can call `std::hash<T>{}` instead of its hand-written copies. ([#585](https://github.com/genogrove/genogrove/issues/585), [#586](https://github.com/genogrove/genogrove/pull/586))
+
 ## [0.26.3] - 2026-10-21
 
 ### Added

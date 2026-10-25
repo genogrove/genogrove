@@ -9,6 +9,7 @@
 // Standard
 #include <sstream>
 #include <algorithm>
+#include <unordered_set>
 
 // Genogrove
 #include <genogrove/data_type/kmer.hpp>
@@ -381,4 +382,18 @@ TEST(kmerTest, serializeToFailedStream) {
     std::stringstream ss;
     ss.setstate(std::ios::failbit);
     EXPECT_THROW(k.serialize(ss), std::runtime_error);
+}
+
+TEST(kmerTest, stdHash) {
+    gdt::kmer a{"ACGT"};
+    gdt::kmer a_copy{"ACGT"};
+    gdt::kmer b{"ACGA"};
+
+    std::hash<gdt::kmer> hasher;
+    EXPECT_EQ(hasher(a), hasher(a_copy));
+
+    std::unordered_set<gdt::kmer> set{a, a_copy, b};
+    EXPECT_EQ(set.size(), 2u);
+    EXPECT_TRUE(set.contains(a));
+    EXPECT_TRUE(set.contains(b));
 }

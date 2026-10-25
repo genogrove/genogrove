@@ -9,6 +9,7 @@
 // Standard
 #include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -272,5 +273,22 @@ namespace genogrove::data_type {
             std::size_t end;     ///< End position (0-based, inclusive)
     };
 }
+
+/**
+ * @brief std::hash specialization for genomic_coordinate.
+ *
+ * Mixes exactly the fields operator== compares (strand, start, end), so
+ * equal coordinates hash equal. Enables use in std::unordered_set/map and
+ * satisfies the registry_value concept.
+ */
+template <>
+struct std::hash<genogrove::data_type::genomic_coordinate> {
+    size_t operator()(const genogrove::data_type::genomic_coordinate& c) const noexcept {
+        size_t h = std::hash<char>{}(c.get_strand());
+        h ^= std::hash<size_t>{}(c.get_start()) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        h ^= std::hash<size_t>{}(c.get_end()) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        return h;
+    }
+};
 
 #endif //DATATYPE_GENOMICCOORDINATE_HPP

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <limits>
 #include <sstream>
+#include <unordered_set>
 
 // Genogrove
 #include <genogrove/data_type/numeric.hpp>
@@ -300,4 +301,18 @@ TEST(numericTest, defaultOverlapsWithIntMin) {
     gdt::numeric nmin(std::numeric_limits<int>::min());
 
     EXPECT_TRUE(gdt::numeric::overlaps(def, nmin));
+}
+
+TEST(numericTest, stdHash) {
+    gdt::numeric a(42);
+    gdt::numeric a_copy(42);
+    gdt::numeric b(43);
+
+    std::hash<gdt::numeric> hasher;
+    EXPECT_EQ(hasher(a), hasher(a_copy));
+
+    std::unordered_set<gdt::numeric> set{a, a_copy, b};
+    EXPECT_EQ(set.size(), 2u);
+    EXPECT_TRUE(set.contains(a));
+    EXPECT_TRUE(set.contains(b));
 }
