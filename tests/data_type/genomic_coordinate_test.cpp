@@ -9,6 +9,7 @@
 // Standard
 #include <algorithm>
 #include <sstream>
+#include <unordered_set>
 
 // Genogrove
 #include <genogrove/data_type/genomic_coordinate.hpp>
@@ -426,4 +427,18 @@ TEST(genomicCoordinateTest, serializeToFailedStream) {
     std::stringstream ss;
     ss.setstate(std::ios::failbit);
     EXPECT_THROW(coord.serialize(ss), std::runtime_error);
+}
+
+TEST(genomicCoordinateTest, stdHash) {
+    gdt::genomic_coordinate a('+', 10, 20);
+    gdt::genomic_coordinate a_copy('+', 10, 20);
+    gdt::genomic_coordinate b('-', 10, 20);
+
+    std::hash<gdt::genomic_coordinate> hasher;
+    EXPECT_EQ(hasher(a), hasher(a_copy));
+
+    std::unordered_set<gdt::genomic_coordinate> set{a, a_copy, b};
+    EXPECT_EQ(set.size(), 2u);
+    EXPECT_TRUE(set.contains(a));
+    EXPECT_TRUE(set.contains(b));
 }

@@ -7,6 +7,7 @@
 #define GENOGROVE_DATA_TYPE_NUMERIC_HPP
 
 #include <cstddef>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -192,5 +193,18 @@ namespace genogrove::data_type {
             int value;   ///< The wrapped integer value
     };
 }
+
+/**
+ * @brief std::hash specialization for numeric.
+ *
+ * Hashes the wrapped value, the only field operator== compares. Enables use
+ * in std::unordered_set/map and satisfies the registry_value concept.
+ */
+template <>
+struct std::hash<genogrove::data_type::numeric> {
+    size_t operator()(const genogrove::data_type::numeric& n) const noexcept {
+        return std::hash<int>{}(n.get_value());
+    }
+};
 
 #endif // GENOGROVE_DATA_TYPE_NUMERIC_HPP

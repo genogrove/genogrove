@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -274,5 +275,21 @@ namespace genogrove::data_type {
     };
 
 }
+
+/**
+ * @brief std::hash specialization for kmer.
+ *
+ * Mixes exactly the fields operator== compares (encoding, k), so equal
+ * k-mers hash equal. Enables use in std::unordered_set/map and satisfies
+ * the registry_value concept.
+ */
+template <>
+struct std::hash<genogrove::data_type::kmer> {
+    size_t operator()(const genogrove::data_type::kmer& km) const noexcept {
+        size_t h = std::hash<uint64_t>{}(km.get_encoding());
+        h ^= std::hash<uint8_t>{}(km.get_k()) + 0x9e3779b9 + (h << 6) + (h >> 2);
+        return h;
+    }
+};
 
 #endif // GENOGROVE_DATA_TYPE_KMER_HPP
