@@ -354,7 +354,7 @@ TEST(SerializationDoSTest, HugeStringLengthRejected) {
     put_pod<std::uint32_t>(bytes, 0xFFFFFFFFu);  // claimed string length
     bytes.append(4, 'x');                        // only 4 bytes of content
     std::stringstream ss(bytes, std::ios::in | std::ios::binary);
-    EXPECT_THROW(gdt::serialization_traits<std::string>::deserialize(ss), std::runtime_error);
+    EXPECT_THROW((void)gdt::serialization_traits<std::string>::deserialize(ss), std::runtime_error);
 }
 
 TEST(SerializationDoSTest, HugeCompressedBlockLengthRejected) {

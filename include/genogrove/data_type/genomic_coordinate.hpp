@@ -197,28 +197,28 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept for debugging/display
              */
-            std::string to_string() const;
+            [[nodiscard]] std::string to_string() const;
 
             /**
              * @brief Get the strand indicator.
              *
              * @return Strand character ('+', '-', '.', or '*')
              */
-            constexpr char get_strand() const noexcept { return strand; }
+            [[nodiscard]] constexpr char get_strand() const noexcept { return strand; }
 
             /**
              * @brief Get the start position (0-based, inclusive).
              *
              * @return Start position
              */
-            constexpr std::size_t get_start() const noexcept { return start; }
+            [[nodiscard]] constexpr std::size_t get_start() const noexcept { return start; }
 
             /**
              * @brief Get the end position (0-based, inclusive).
              *
              * @return End position
              */
-            constexpr std::size_t get_end() const noexcept { return end; }
+            [[nodiscard]] constexpr std::size_t get_end() const noexcept { return end; }
 
             /**
              * @brief Set the strand indicator.

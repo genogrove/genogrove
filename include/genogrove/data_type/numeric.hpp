@@ -154,14 +154,14 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept for debugging/display
              */
-            std::string to_string() const;
+            [[nodiscard]] std::string to_string() const;
 
             /**
              * @brief Get the integer value.
              *
              * @return The wrapped integer value
              */
-            constexpr int get_value() const noexcept { return value; }
+            [[nodiscard]] constexpr int get_value() const noexcept { return value; }
 
             /**
              * @brief Set the integer value.

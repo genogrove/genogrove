@@ -94,7 +94,7 @@ TEST(serialization_traits_test, serialize_to_bad_stream) {
 
 TEST(serialization_traits_test, deserialize_from_empty_stream) {
     std::istringstream is;
-    EXPECT_THROW(gdt::serialization_traits<int>::deserialize(is), std::runtime_error);
+    EXPECT_THROW((void)gdt::serialization_traits<int>::deserialize(is), std::runtime_error);
 }
 
 TEST(serialization_traits_test, deserialize_from_truncated_stream) {
@@ -102,7 +102,7 @@ TEST(serialization_traits_test, deserialize_from_truncated_stream) {
     std::stringstream ss;
     char buf[2] = {0x01, 0x02};
     ss.write(buf, 2);
-    EXPECT_THROW(gdt::serialization_traits<int>::deserialize(ss), std::runtime_error);
+    EXPECT_THROW((void)gdt::serialization_traits<int>::deserialize(ss), std::runtime_error);
 }
 
 TEST(serialization_traits_test, string_deserialize_truncated_content) {
@@ -110,7 +110,7 @@ TEST(serialization_traits_test, string_deserialize_truncated_content) {
     std::stringstream ss;
     uint32_t fake_length = 100;
     ss.write(reinterpret_cast<const char*>(&fake_length), sizeof(fake_length));
-    EXPECT_THROW(gdt::serialization_traits<std::string>::deserialize(ss), std::runtime_error);
+    EXPECT_THROW((void)gdt::serialization_traits<std::string>::deserialize(ss), std::runtime_error);
 }
 
 TEST(serialization_traits_test, string_deserialize_truncated_header) {
@@ -118,7 +118,7 @@ TEST(serialization_traits_test, string_deserialize_truncated_header) {
     std::stringstream ss;
     char buf[2] = {0x05, 0x00};
     ss.write(buf, 2);
-    EXPECT_THROW(gdt::serialization_traits<std::string>::deserialize(ss), std::runtime_error);
+    EXPECT_THROW((void)gdt::serialization_traits<std::string>::deserialize(ss), std::runtime_error);
 }
 
 // ==========================================

@@ -191,21 +191,21 @@ namespace genogrove::data_type {
              *
              * @note Required by key_type_base concept for debugging/display
              */
-            std::string to_string() const;
+            [[nodiscard]] std::string to_string() const;
 
             /**
              * @brief Get the 2-bit encoding value.
              *
              * @return The encoded k-mer as a 64-bit integer
              */
-            constexpr uint64_t get_encoding() const noexcept { return encoding; }
+            [[nodiscard]] constexpr uint64_t get_encoding() const noexcept { return encoding; }
 
             /**
              * @brief Get the k-mer length.
              *
              * @return The value of k (1-32)
              */
-            constexpr uint8_t get_k() const noexcept { return k; }
+            [[nodiscard]] constexpr uint8_t get_k() const noexcept { return k; }
 
             /**
              * @brief Serialize the k-mer to an output stream.

@@ -18,7 +18,7 @@ namespace genogrove::utility {
      * @param delimiter Field separator character (default: tab)
      * @return The next field, or nullopt when pos >= line.size()
      */
-    inline std::optional<std::string_view> next_field(
+    [[nodiscard]] inline std::optional<std::string_view> next_field(
         std::string_view line, size_t& pos, char delimiter = '\t') {
         if (pos >= line.size()) return std::nullopt;
 
@@ -41,7 +41,7 @@ namespace genogrove::utility {
      * @param pos In/out cursor position; advanced past the delimiter on return
      * @return The next field, or nullopt when pos >= line.size()
      */
-    inline std::optional<std::string_view> next_gtf_field(
+    [[nodiscard]] inline std::optional<std::string_view> next_gtf_field(
         std::string_view line, size_t& pos) {
         if (pos >= line.size()) return std::nullopt;
 
