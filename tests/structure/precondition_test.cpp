@@ -9,6 +9,7 @@
 // Standard
 #include <sstream>
 #include <type_traits>
+#include <utility>
 
 // genogrove
 #include <genogrove/data_type/interval.hpp>
@@ -43,6 +44,18 @@ TEST(grovePreconditionTest, constructorAcceptsOrderThree) {
 // =============================================================================
 // Node preconditions
 // =============================================================================
+
+TEST(nodePreconditionTest, constNavigationReturnsConstPointers) {
+    // A const node must not hand out a mutable pointer into the tree: the
+    // const overloads of get_parent/get_next/get_child return const node*.
+    using node_t = gst::node<gdt::interval, int>;
+    static_assert(std::is_same_v<decltype(std::declval<const node_t&>().get_parent()), const node_t*>);
+    static_assert(std::is_same_v<decltype(std::declval<const node_t&>().get_next()), const node_t*>);
+    static_assert(std::is_same_v<decltype(std::declval<const node_t&>().get_child(0)), const node_t*>);
+    static_assert(std::is_same_v<decltype(std::declval<node_t&>().get_parent()), node_t*>);
+    static_assert(std::is_same_v<decltype(std::declval<node_t&>().get_next()), node_t*>);
+    static_assert(std::is_same_v<decltype(std::declval<node_t&>().get_child(0)), node_t*>);
+}
 
 TEST(nodePreconditionTest, constructorRejectsOrderBelowTwo) {
     EXPECT_THROW((gst::node<gdt::interval, int>(1)), std::invalid_argument);
