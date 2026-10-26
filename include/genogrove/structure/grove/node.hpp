@@ -184,7 +184,15 @@ class node {
      * @brief Get pointer to parent node
      * @return Pointer to parent node, or nullptr if this is root
      */
-    [[nodiscard]] node* get_parent() const noexcept {
+    [[nodiscard]] node* get_parent() noexcept {
+        return this->parent;
+    }
+
+    /**
+     * @brief Get pointer to parent node (const version)
+     * @return Const pointer to parent node, or nullptr if this is root
+     */
+    [[nodiscard]] const node* get_parent() const noexcept {
         return this->parent;
     }
 
@@ -201,7 +209,16 @@ class node {
      * @return Pointer to next leaf node, or nullptr if no next sibling
      * @note Only meaningful for leaf nodes that are chained together
      */
-    [[nodiscard]] node* get_next() const noexcept {
+    [[nodiscard]] node* get_next() noexcept {
+        return this->next;
+    }
+
+    /**
+     * @brief Get pointer to next sibling node (const version)
+     * @return Const pointer to next leaf node, or nullptr if no next sibling
+     * @note Only meaningful for leaf nodes that are chained together
+     */
+    [[nodiscard]] const node* get_next() const noexcept {
         return this->next;
     }
 
@@ -359,10 +376,10 @@ class node {
     /**
      * @brief Get child node at the specified index (const version)
      * @param index Position of the child to retrieve (0-based)
-     * @return Pointer to the child node
+     * @return Const pointer to the child node
      * @throws std::out_of_range if index is invalid
      */
-    [[nodiscard]] node* get_child(int index) const {
+    [[nodiscard]] const node* get_child(int index) const {
         if(index < 0 || static_cast<size_t>(index) >= this->children.size()) {
             throw std::out_of_range("child index out of range");
         }
