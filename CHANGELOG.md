@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.4] - 2026-10-25
+
 ### Changed
 - **`grove` and `node` constrained on `key_type_base`**: both class templates (and `node`'s out-of-class member definitions) now require `gdt::key_type_base key_type`, as `grove_view` already did. A malformed key type fails at the caller's `grove<bad_t>` line with the unsatisfied requirement named, instead of deep inside `key.hpp`. No change for conforming types. ([#587](https://github.com/genogrove/genogrove/issues/587), [#588](https://github.com/genogrove/genogrove/pull/588))
 - **`std::hash` for `genomic_coordinate`, `numeric` and `kmer`**: each type's header now specializes `std::hash`, mixing exactly the fields `operator==` compares. The types work in `std::unordered_set`/`unordered_map` and satisfy the `registry_value` concept; pygenogrove can call `std::hash<T>{}` instead of its hand-written copies. ([#585](https://github.com/genogrove/genogrove/issues/585), [#586](https://github.com/genogrove/genogrove/pull/586))
