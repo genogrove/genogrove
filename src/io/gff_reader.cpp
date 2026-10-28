@@ -8,6 +8,7 @@
 
 // standard
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <charconv>
 #include <clocale>
@@ -31,12 +32,38 @@ namespace genogrove::io {
     // gff_entry helper methods
     // ==========================================
 
+    std::vector<std::string> gff_entry::get_parent_ids() const {
+        std::vector<std::string> ids;
+        auto parent = get_attribute("Parent");
+        if (!parent) return ids;
+        for (auto id : std::views::split(*parent, ',')) {
+            if (!id.empty()) ids.emplace_back(id.begin(), id.end());
+        }
+        return ids;
+    }
+
     std::optional<std::string> gff_entry::get_gene_id() const {
-        return get_attribute("gene_id");
+        if (auto id = get_attribute("gene_id")) return id;
+        if (!is_gff3()) return std::nullopt;
+        if (type == "gene") return get_attribute("ID");
+        // A transcript's gene is its own Parent
+        static constexpr std::array<std::string_view, 6> transcript_types = {
+            "mRNA", "transcript", "lnc_RNA", "ncRNA", "rRNA", "tRNA"};
+        if (std::ranges::find(transcript_types, type) == transcript_types.end()) return std::nullopt;
+        auto parents = get_parent_ids();
+        if (parents.size() != 1) return std::nullopt;
+        return parents.front();
     }
 
     std::optional<std::string> gff_entry::get_transcript_id() const {
-        return get_attribute("transcript_id");
+        if (auto id = get_attribute("transcript_id")) return id;
+        if (!is_gff3()) return std::nullopt;
+        static constexpr std::array<std::string_view, 5> child_types = {
+            "exon", "CDS", "five_prime_UTR", "three_prime_UTR", "UTR"};
+        if (std::ranges::find(child_types, type) == child_types.end()) return std::nullopt;
+        auto parents = get_parent_ids();
+        if (parents.size() != 1) return std::nullopt;
+        return parents.front();
     }
 
     std::optional<int> gff_entry::get_exon_number() const {

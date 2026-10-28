@@ -9,9 +9,11 @@
 // standard
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 // genogrove
 #include <genogrove/data_type/interval.hpp>
@@ -687,8 +689,10 @@ TEST_F(gfffileTest, gff3HelperMethods) {
     ASSERT_TRUE(reader.read_next(entry));
 
     // GFF3 uses different attribute names
-    // get_gene_id looks for "gene_id" which doesn't exist in GFF3
-    EXPECT_FALSE(entry.get_gene_id().has_value());
+    // GFF3 gene feature: gene id comes from ID
+    ASSERT_TRUE(entry.get_gene_id().has_value());
+    EXPECT_EQ(entry.get_gene_id().value(), "gene1");
+    EXPECT_FALSE(entry.get_transcript_id().has_value());
 
     // But get_gene_name should work with "Name" attribute
     auto name = entry.get_gene_name();
@@ -704,6 +708,43 @@ TEST_F(gfffileTest, gff3HelperMethods) {
     auto id = entry.get_attribute("ID");
     ASSERT_TRUE(id.has_value());
     EXPECT_EQ(id.value(), "gene1");
+}
+
+namespace {
+    gio::gff_entry make_gff3(const std::string& type, std::map<std::string, std::string, std::less<>> attrs) {
+        gio::gff_entry e("chr1", 1, 10, type);
+        e.format = gio::gff_format::GFF3;
+        e.attributes = std::move(attrs);
+        return e;
+    }
+}
+
+TEST(gffEntryGff3Ids, parentIds) {
+    EXPECT_TRUE(make_gff3("exon", {}).get_parent_ids().empty());
+    EXPECT_EQ(make_gff3("exon", {{"Parent", "t1"}}).get_parent_ids(), (std::vector<std::string>{"t1"}));
+    EXPECT_EQ(make_gff3("exon", {{"Parent", "t1,t2"}}).get_parent_ids(), (std::vector<std::string>{"t1", "t2"}));
+}
+
+TEST(gffEntryGff3Ids, transcriptId) {
+    EXPECT_EQ(make_gff3("exon", {{"Parent", "t1"}}).get_transcript_id(), "t1");
+    EXPECT_EQ(make_gff3("CDS", {{"Parent", "t1"}}).get_transcript_id(), "t1");
+    EXPECT_EQ(make_gff3("exon", {{"transcript_id", "x"}, {"Parent", "t1"}}).get_transcript_id(), "x");
+    EXPECT_FALSE(make_gff3("exon", {{"Parent", "t1,t2"}}).get_transcript_id().has_value());
+    EXPECT_FALSE(make_gff3("mRNA", {{"Parent", "g1"}}).get_transcript_id().has_value());
+}
+
+TEST(gffEntryGff3Ids, geneId) {
+    EXPECT_EQ(make_gff3("gene", {{"ID", "g1"}}).get_gene_id(), "g1");
+    EXPECT_EQ(make_gff3("mRNA", {{"ID", "t1"}, {"Parent", "g1"}}).get_gene_id(), "g1");
+    EXPECT_FALSE(make_gff3("exon", {{"Parent", "t1"}}).get_gene_id().has_value());
+}
+
+TEST(gffEntryGff3Ids, gtfUnaffected) {
+    gio::gff_entry e("chr1", 1, 10, "exon");
+    e.format = gio::gff_format::GTF;
+    e.attributes = {{"ID", "x"}, {"Parent", "y"}};
+    EXPECT_FALSE(e.get_gene_id().has_value());
+    EXPECT_FALSE(e.get_transcript_id().has_value());
 }
 
 TEST_F(gfffileTest, genericAttributeGetter) {
