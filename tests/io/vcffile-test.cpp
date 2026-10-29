@@ -556,3 +556,18 @@ TEST(vcfEntryConversion, snpIsSingleBaseInterval) {
     EXPECT_EQ(e.to_interval(), gdt::interval(99, 99));
     EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('.', 99, 99));
 }
+
+TEST_F(VcfReaderTest, ConversionOfParsedRecord) {
+    gio::vcf_reader reader(vcf_path);
+    gio::vcf_entry entry;
+    ASSERT_TRUE(reader.read_next(entry));  // chr1:100 A>G
+    EXPECT_EQ(entry.to_interval(), gdt::interval(99, 99));
+    EXPECT_EQ(entry.to_coordinate(), gdt::genomic_coordinate('.', 99, 99));
+}
+
+TEST(vcfEntryConversion, multiBaseRefSpansWholeAllele) {
+    gio::vcf_entry e;
+    e.start = 99;
+    e.end = 103;  // REF of length 4
+    EXPECT_EQ(e.to_interval(), gdt::interval(99, 102));
+}

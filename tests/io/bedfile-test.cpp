@@ -1203,3 +1203,11 @@ TEST(bedEntryConversion, emptyRecordThrows) {
     EXPECT_THROW((void)gio::bed_entry("chr1", 10, 10).to_interval(), std::invalid_argument);
     EXPECT_THROW((void)gio::bed_entry("chr1", 10, 5).to_coordinate(), std::invalid_argument);
 }
+
+TEST_F(bedfileTest, conversionOfParsedRecords) {
+    gio::bed_reader reader(bed3_path);
+    gio::bed_entry entry;
+    ASSERT_TRUE(reader.read_next(entry));  // chr1 1000 2000
+    EXPECT_EQ(entry.to_interval(), gdt::interval(1000, 1999));
+    EXPECT_EQ(entry.to_coordinate(), gdt::genomic_coordinate('.', 1000, 1999));
+}

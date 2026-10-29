@@ -1321,3 +1321,21 @@ TEST(gffEntryConversion, unsetAndUnknownStrandAreDot) {
     e.strand = '?';
     EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('.', 0, 0));
 }
+
+TEST_F(gfffileTest, conversionOfParsedRecords) {
+    gio::gff_reader reader(gff3_path);
+    std::vector<gio::gff_entry> entries(reader.begin(), reader.end());
+    ASSERT_GE(entries.size(), 3u);
+
+    // chr1 gene 1000-2000 (+): 1-based closed -> 0-based closed
+    EXPECT_EQ(entries[0].to_interval(), gdt::interval(999, 1999));
+    EXPECT_EQ(entries[0].to_coordinate(), gdt::genomic_coordinate('+', 999, 1999));
+    // chr2 gene 5000-8000 (-)
+    EXPECT_EQ(entries[2].to_coordinate(), gdt::genomic_coordinate('-', 4999, 7999));
+}
+
+TEST(gffEntryConversion, singleBaseAndMinusStrand) {
+    gio::gff_entry e("chr1", 7, 7, "SNV");
+    e.strand = '-';
+    EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('-', 6, 6));
+}

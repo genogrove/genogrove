@@ -70,7 +70,9 @@ namespace genogrove::io {
         // Generic attribute getter with optional default value
         [[nodiscard]] std::optional<std::string> get_attribute(std::string_view key) const;
 
-        // Grove key for this record: GFF is 1-based closed, so [start - 1, end - 1] (0-based closed)
+        // Grove key for this record: GFF is 1-based closed, so [start - 1, end - 1] (0-based closed).
+        // Precondition: start >= 1 and end >= 1, which parsed records satisfy; a hand-built entry
+        // with a zero coordinate underflows.
         [[nodiscard]] genogrove::data_type::interval to_interval() const {
             return genogrove::data_type::interval(start - 1, end - 1);
         }

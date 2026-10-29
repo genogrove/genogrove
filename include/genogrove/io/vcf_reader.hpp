@@ -126,6 +126,7 @@ namespace genogrove::io {
 
         /// Grove key for this record: closed `[start, end - 1]` (0-based). A record
         /// spans at least its REF base, so `end > start` holds for parsed records.
+        /// Precondition: `end > start`; a hand-built entry with `end == start` (or `end == 0`) underflows.
         [[nodiscard]] genogrove::data_type::interval to_interval() const {
             return genogrove::data_type::interval(start, end - 1);
         }
