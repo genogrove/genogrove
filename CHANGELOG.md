@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-10-29
+
 ### Fixed
 - **Cyclic block ids hung or crashed `grove_view` queries**: `grove_view` now rejects a child id that repeats or precedes its parent's block id, and a leaf `next` id that does not exceed the leaf's, with `std::runtime_error`. `intersect` also rejects a `next` that is not a leaf; flanking queries never follow `next`. Before, a self-referencing or backward id made queries recurse or loop without bound. ([#602](https://github.com/genogrove/genogrove/issues/602), [#603](https://github.com/genogrove/genogrove/pull/603))
 - **Malformed `.gg` files could double-free on load**: `grove::deserialize` now rejects block ids that do not form a forest (shared, self-referencing or backward child ids, a root claimed twice, a leaf `next` that is not a leaf, orphan node blocks, duplicate index names) with `std::runtime_error`. `grove_view::open()` also gains corrupt-input tests. ([#553](https://github.com/genogrove/genogrove/issues/553), [#555](https://github.com/genogrove/genogrove/issues/555), [#600](https://github.com/genogrove/genogrove/pull/600))
@@ -20,8 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Type tag in the `.gg` stream header**: the grove stream now records the key kind (`interval`, `genomic_coordinate`, `numeric`, `kmer`, `custom`) and whether data and edge data are present. `grove::deserialize` and `grove_view::open` throw `std::runtime_error` naming both types on a mismatch instead of misparsing blocks. Stream magic is now `GGB\x04` and `gg_header` format minor is 4, so existing indexes must be re-created. ([#593](https://github.com/genogrove/genogrove/issues/593), [#596](https://github.com/genogrove/genogrove/pull/596))
 - **Fixed-width little-endian `.gg` layout**: every fixed-width integer, enum and `float`/`double` in a serialized grove, registry, `bed_entry` and `gff_entry` is written little-endian, and position fields (`size_t`) as 8 bytes, so a file reads the same on any platform. `long`, `unsigned long` and `wchar_t` keep the platform's width, so key and data types should use `int32_t`, `uint64_t` and the like. Reading a position that does not fit `size_t` throws `std::runtime_error`. The format version stays 0.4, so `.gg` files written by earlier development builds must be re-created; trivially copyable payload structs still use raw bytes unless they specialize `serialization_traits`. ([#420](https://github.com/genogrove/genogrove/issues/420), [#605](https://github.com/genogrove/genogrove/pull/605))
-
-### Changed
 - **`gff_entry` id helpers understand GFF3**: `get_transcript_id()` falls back to the single `Parent` of an exon/CDS/UTR feature, and `get_gene_id()` to a gene's `ID` or a transcript's `Parent`, when the GTF attribute is absent. New `get_parent_ids()` returns every comma-separated `Parent`; multi-parent features yield `nullopt` from `get_transcript_id()`. ([#594](https://github.com/genogrove/genogrove/issues/594), [#595](https://github.com/genogrove/genogrove/pull/595))
 
 ## [0.26.4] - 2026-10-25
