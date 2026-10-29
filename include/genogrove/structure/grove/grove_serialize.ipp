@@ -69,8 +69,9 @@ public:
      * @brief Serialize the grove to a block-structured binary output stream
      * @param os Output stream to write to
      *
-     * Format 0.3 (block-structured, random-access-capable):
-     *   [magic "GGB\x03"]
+     * Format 0.4 (block-structured, random-access-capable):
+     *   [magic "GGB\x04"]
+     *   [type tag]: key kind, data / edge-data presence; checked on read
      *   [directory, plain]: order; per-index (name, root block_id); block count;
      *       external-block-begin; leaf-key count; external-key count
      *   [blocks]: each a length-prefixed, independently zlib-compressed record
@@ -101,7 +102,7 @@ public:
 
     /**
      * @brief Deserialize a grove from a block-structured binary input stream
-     * @param is Input stream produced by serialize() (format 0.3)
+     * @param is Input stream produced by serialize() (format 0.4)
      * @return Deserialized grove object
      *
      * Eager reader: reads the directory, then reads every length-prefixed block
@@ -269,6 +270,8 @@ private:
     void write_serialize_header(std::ostream& os, const serialize_layout& layout) const {
         os.write(detail::grove_stream_magic.data(),
                  static_cast<std::streamsize>(detail::grove_stream_magic.size()));
+        detail::write_pod(
+            os, detail::make_stream_type_tag<key_type, data_type, edge_data_type>());
 
         detail::write_pod(os, this->order);
         uint32_t num_indices = static_cast<uint32_t>(layout.index_roots.size());
@@ -364,8 +367,16 @@ private:
         if (is.gcount() != static_cast<std::streamsize>(magic.size()) ||
             magic != detail::grove_stream_magic) {
             throw std::runtime_error(
-                "Failed to deserialize grove: bad magic (not a format 0.3 grove stream)");
+                "Failed to deserialize grove: bad magic (not a format 0.4 grove stream)");
         }
+        detail::stream_type_tag written;
+        detail::read_pod(is, written);
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize grove: stream error reading type tag");
+        }
+        detail::check_stream_type_tag(
+            written, detail::make_stream_type_tag<key_type, data_type, edge_data_type>(),
+            "Failed to deserialize grove");
 
         deserialize_header h;
         detail::read_pod(is, h.order);
