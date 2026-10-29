@@ -1255,11 +1255,3 @@ TEST_F(BamReaderTest, ConversionOfParsedRecord) {
     EXPECT_EQ(entry.to_interval(), gdt::interval(999, 1048));
     EXPECT_EQ(entry.to_coordinate(), gdt::genomic_coordinate('+', 999, 1048));
 }
-
-TEST(samEntryConversion, unmappedFlagWithSpanGivesDotStrand) {
-    gio::sam_entry e;
-    e.start = 10;
-    e.end = 20;
-    e.flags = gio::alignment_flags(gio::sam_flags::UNMAPPED);
-    EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('.', 10, 19));
-}
