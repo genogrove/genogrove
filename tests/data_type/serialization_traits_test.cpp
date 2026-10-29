@@ -12,6 +12,10 @@
 #include <limits>
 
 // Genogrove
+#include <genogrove/data_type/genomic_coordinate.hpp>
+#include <genogrove/data_type/interval.hpp>
+#include <genogrove/data_type/kmer.hpp>
+#include <genogrove/data_type/numeric.hpp>
 #include <genogrove/data_type/serialization_traits.hpp>
 
 namespace gdt = genogrove::data_type;
@@ -179,4 +183,50 @@ TEST(serialization_traits_test, multiple_values_roundtrip) {
     EXPECT_EQ(gdt::serializer<std::string>::read(ss), "hello");
     EXPECT_DOUBLE_EQ(gdt::serializer<double>::read(ss), 2.718);
     EXPECT_EQ(gdt::serializer<std::string>::read(ss), "");
+}
+
+// ==========================================
+// Fixed-width little-endian bytes on disk
+// ==========================================
+
+namespace {
+
+template <typename T>
+std::string written(const T& value) {
+    std::ostringstream os(std::ios::binary);
+    gdt::serializer<T>::write(os, value);
+    return os.str();
+}
+
+}  // namespace
+
+TEST(serialization_traits_test, int_is_four_little_endian_bytes) {
+    EXPECT_EQ(written<int>(0x01020304), std::string("\x04\x03\x02\x01", 4));
+}
+
+TEST(serialization_traits_test, size_t_is_eight_bytes_on_any_platform) {
+    EXPECT_EQ(written<std::size_t>(1), std::string("\x01\0\0\0\0\0\0\0", 8));
+}
+
+TEST(serialization_traits_test, string_length_prefix_is_little_endian) {
+    EXPECT_EQ(written<std::string>("ab"), std::string("\x02\0\0\0" "ab", 6));
+}
+
+TEST(serialization_traits_test, interval_is_two_eight_byte_little_endian_fields) {
+    EXPECT_EQ(written(gdt::interval(1, 2)),
+              std::string("\x01\0\0\0\0\0\0\0\x02\0\0\0\0\0\0\0", 16));
+}
+
+TEST(serialization_traits_test, genomic_coordinate_is_strand_byte_then_two_fields) {
+    EXPECT_EQ(written(gdt::genomic_coordinate('+', 1, 2)),
+              std::string("+\x01\0\0\0\0\0\0\0\x02\0\0\0\0\0\0\0", 17));
+}
+
+TEST(serialization_traits_test, numeric_is_four_little_endian_bytes) {
+    EXPECT_EQ(written(gdt::numeric(-2)), std::string("\xFE\xFF\xFF\xFF", 4));
+}
+
+TEST(serialization_traits_test, kmer_is_encoding_then_length_byte) {
+    EXPECT_EQ(written(gdt::kmer(std::uint64_t{5}, std::uint8_t{3})),
+              std::string("\x05\0\0\0\0\0\0\0\x03", 9));
 }

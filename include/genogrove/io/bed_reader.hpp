@@ -39,6 +39,9 @@ namespace genogrove::io {
 
         thick_info() = default;
         thick_info(uint64_t start_val, uint64_t end_val) : start(start_val), end(end_val) {}
+
+        void serialize(std::ostream& os) const;
+        [[nodiscard]] static thick_info deserialize(std::istream& is);
     };
 
     struct block_info {

@@ -4,6 +4,7 @@
  */
 
 #include <genogrove/data_type/kmer.hpp>
+#include <genogrove/utility/le_io.hpp>
 #include <stdexcept>
 
 namespace genogrove::data_type {
@@ -43,8 +44,8 @@ namespace genogrove::data_type {
     }
 
     void kmer::serialize(std::ostream& os) const {
-        os.write(reinterpret_cast<const char*>(&encoding), sizeof(encoding));
-        os.write(reinterpret_cast<const char*>(&k), sizeof(k));
+        genogrove::utility::write_le(os, encoding);
+        genogrove::utility::write_le(os, k);
         if (!os) {
             throw std::runtime_error("Failed to serialize kmer: stream error");
         }
@@ -53,8 +54,8 @@ namespace genogrove::data_type {
     kmer kmer::deserialize(std::istream& is) {
         uint64_t enc;
         uint8_t len;
-        is.read(reinterpret_cast<char*>(&enc), sizeof(enc));
-        is.read(reinterpret_cast<char*>(&len), sizeof(len));
+        genogrove::utility::read_le(is, enc);
+        genogrove::utility::read_le(is, len);
         if(!is) {
             throw std::runtime_error("Failed to deserialize k-mer: stream error");
         }

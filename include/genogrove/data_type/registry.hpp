@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <genogrove/data_type/serialization_traits.hpp>
+#include <genogrove/utility/le_io.hpp>
 
 namespace genogrove::data_type {
 
@@ -298,7 +299,7 @@ class registry {
     void serialize(std::ostream& os) const {
         std::lock_guard lock(mtx);
         uint64_t count = storage.size();
-        os.write(reinterpret_cast<const char*>(&count), sizeof(count));
+        genogrove::utility::write_le(os, count);
 
         if constexpr (key_is_payload) {
             for (const auto& entry : storage) {
@@ -337,7 +338,7 @@ class registry {
      */
     [[nodiscard]] static registry& deserialize(std::istream& is) {
         uint64_t count;
-        is.read(reinterpret_cast<char*>(&count), sizeof(count));
+        genogrove::utility::read_le(is, count);
         if (!is) {
             throw std::runtime_error("Failed to deserialize registry: stream error reading count");
         }

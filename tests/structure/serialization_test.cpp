@@ -1056,3 +1056,13 @@ TEST(GroveViewCorruptTest, UntamperedStreamStillQueries) {
     auto v = view_ii::open(f.path.string());
     EXPECT_EQ(v.intersect(gdt::interval{0, 1000}, "chr1").get_keys().size(), 40u);
 }
+
+// ---- fixed-width little-endian layout --------------------------------------
+
+TEST(SerializationLayoutTest, HeaderFieldsAreLittleEndian) {
+    const auto bytes = write_multilevel_grove();  // order 3, one index
+    ASSERT_GT(bytes.size(), 15u);
+    // after the 4-byte magic and the 3-byte type tag: order (int), index count (uint32)
+    EXPECT_EQ(bytes.substr(7, 4), std::string("\x03\0\0\0", 4));
+    EXPECT_EQ(bytes.substr(11, 4), std::string("\x01\0\0\0", 4));
+}

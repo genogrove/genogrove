@@ -13,6 +13,8 @@
 #include <string>
 #include <type_traits>
 
+#include <genogrove/utility/le_io.hpp>
+
 namespace genogrove::data_type {
 
 /**
@@ -39,8 +41,14 @@ namespace genogrove::data_type {
  *
  * ## Alternatives for types you don't control
  *
- * 1. **Trivially copyable types** (int, etc.): Work automatically via raw memory copy
- * 2. **Specialize serialization_traits<T>**: For third-party types (e.g., std::string)
+ * 1. **Integers, enums and floats**: Work automatically and are written
+ *    fixed-width little-endian (`std::size_t` as 8 bytes), so files are
+ *    portable across platforms.
+ * 2. **Other trivially copyable types** (plain structs): Work automatically via
+ *    raw memory copy. The bytes are the host's layout, so a struct holding
+ *    anything wider than a byte is not portable; specialize
+ *    serialization_traits<T> (or add member serialize/deserialize) for it.
+ * 3. **Specialize serialization_traits<T>**: For third-party types (e.g., std::string)
  *
  * ## Example
  *
@@ -128,7 +136,11 @@ struct serialization_traits {
         "complex types.");
 
     static void serialize(std::ostream& os, const T& value) {
-        os.write(reinterpret_cast<const char*>(&value), sizeof(T));
+        if constexpr (genogrove::utility::wire_scalar<T>) {
+            genogrove::utility::write_le(os, value);
+        } else {
+            os.write(reinterpret_cast<const char*>(&value), sizeof(T));
+        }
         if(!os) {
             throw std::runtime_error("Serialization failed!");
         }
@@ -136,7 +148,11 @@ struct serialization_traits {
 
     [[nodiscard]] static T deserialize(std::istream& is) {
         T value;
-        is.read(reinterpret_cast<char*>(&value), sizeof(T));
+        if constexpr (genogrove::utility::wire_scalar<T>) {
+            genogrove::utility::read_le(is, value);
+        } else {
+            is.read(reinterpret_cast<char*>(&value), sizeof(T));
+        }
         if(!is) {
             throw std::runtime_error("Deserialization failed!");
         }
@@ -149,7 +165,7 @@ template<>
 struct serialization_traits<std::string> {
     static void serialize(std::ostream& os, const std::string& value) {
         uint32_t length = static_cast<uint32_t>(value.length());
-        os.write(reinterpret_cast<const char*>(&length), sizeof(length));
+        genogrove::utility::write_le(os, length);
         os.write(value.data(), length);
         if (!os) {
             throw std::runtime_error("Failed to serialize string: stream error");
@@ -158,7 +174,7 @@ struct serialization_traits<std::string> {
 
     [[nodiscard]] static std::string deserialize(std::istream& is) {
         uint32_t length;
-        is.read(reinterpret_cast<char*>(&length), sizeof(length));
+        genogrove::utility::read_le(is, length);
         if (!is) {
             throw std::runtime_error("Failed to deserialize string: stream error reading length");
         }

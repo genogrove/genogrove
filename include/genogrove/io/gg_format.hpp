@@ -37,7 +37,9 @@ namespace genogrove::io {
     ///       10     2  reserved        (zero)
     ///
     /// Format 0.4 adds a key/data/edge type tag after the grove stream magic, so a
-    /// reader instantiated with different template arguments fails fast.
+    /// reader instantiated with different template arguments fails fast. Every
+    /// integer, enum and float in the stream is fixed-width little-endian
+    /// (`size_t` as 8 bytes), so a file reads the same on any platform.
     ///
     /// The payload is block-structured and random-access-capable:
     /// a plain directory (per-index root block ids + block metadata) followed by

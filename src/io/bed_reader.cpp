@@ -19,6 +19,7 @@
 // genogrove
 #include <genogrove/data_type/serialization_traits.hpp>
 #include <genogrove/utility/char_utils.hpp>
+#include <genogrove/utility/le_io.hpp>
 #include <genogrove/utility/tokenizer.hpp>
 
 namespace ggu = genogrove::utility;
@@ -491,10 +492,9 @@ namespace genogrove::io {
         // A vector is written as a 4-byte length followed by the elements.
         void write_size_vector(std::ostream& os, const std::vector<size_t>& v) {
             const uint32_t n = static_cast<uint32_t>(v.size());
-            os.write(reinterpret_cast<const char*>(&n), sizeof(n));
-            if (n > 0) {
-                os.write(reinterpret_cast<const char*>(v.data()),
-                         static_cast<std::streamsize>(n * sizeof(size_t)));
+            ggu::write_le(os, n);
+            for (size_t element : v) {
+                ggu::write_le(os, element);
             }
             if (!os) {
                 throw std::runtime_error("Failed to serialize block_info: stream error");
@@ -509,7 +509,7 @@ namespace genogrove::io {
 
         std::vector<size_t> read_size_vector(std::istream& is) {
             uint32_t n = 0;
-            is.read(reinterpret_cast<char*>(&n), sizeof(n));
+            ggu::read_le(is, n);
             if (!is) {
                 throw std::runtime_error("Failed to deserialize block_info: stream error reading vector length");
             }
@@ -518,19 +518,36 @@ namespace genogrove::io {
                     "Failed to deserialize block_info: unreasonable block count");
             }
             std::vector<size_t> v(n);
-            if (n > 0) {
-                is.read(reinterpret_cast<char*>(v.data()),
-                        static_cast<std::streamsize>(n * sizeof(size_t)));
-                if (!is) {
-                    throw std::runtime_error("Failed to deserialize block_info: stream error reading vector data");
-                }
+            for (size_t& element : v) {
+                ggu::read_le(is, element);
+            }
+            if (!is) {
+                throw std::runtime_error("Failed to deserialize block_info: stream error reading vector data");
             }
             return v;
         }
     } // namespace
 
+    void thick_info::serialize(std::ostream& os) const {
+        ggu::write_le(os, start);
+        ggu::write_le(os, end);
+        if (!os) {
+            throw std::runtime_error("Failed to serialize thick_info: stream error");
+        }
+    }
+
+    thick_info thick_info::deserialize(std::istream& is) {
+        thick_info ti;
+        ggu::read_le(is, ti.start);
+        ggu::read_le(is, ti.end);
+        if (!is) {
+            throw std::runtime_error("Failed to deserialize thick_info: stream error");
+        }
+        return ti;
+    }
+
     void block_info::serialize(std::ostream& os) const {
-        os.write(reinterpret_cast<const char*>(&count), sizeof(count));
+        ggu::write_le(os, count);
         write_size_vector(os, sizes);
         write_size_vector(os, starts);
         if (!os) {
@@ -540,7 +557,7 @@ namespace genogrove::io {
 
     block_info block_info::deserialize(std::istream& is) {
         block_info bi;
-        is.read(reinterpret_cast<char*>(&bi.count), sizeof(bi.count));
+        ggu::read_le(is, bi.count);
         if (!is) {
             throw std::runtime_error("Failed to deserialize block_info: stream error reading count");
         }
@@ -551,8 +568,8 @@ namespace genogrove::io {
 
     void bed_entry::serialize(std::ostream& os) const {
         gdt::serializer<std::string>::write(os, chrom);
-        os.write(reinterpret_cast<const char*>(&start), sizeof(start));
-        os.write(reinterpret_cast<const char*>(&end), sizeof(end));
+        ggu::write_le(os, start);
+        ggu::write_le(os, end);
         write_optional(os, name);
         write_optional(os, score);
         write_optional(os, strand);
@@ -567,8 +584,8 @@ namespace genogrove::io {
     bed_entry bed_entry::deserialize(std::istream& is) {
         bed_entry entry;
         entry.chrom = gdt::serializer<std::string>::read(is);
-        is.read(reinterpret_cast<char*>(&entry.start), sizeof(entry.start));
-        is.read(reinterpret_cast<char*>(&entry.end), sizeof(entry.end));
+        ggu::read_le(is, entry.start);
+        ggu::read_le(is, entry.end);
         if (!is) {
             throw std::runtime_error("Failed to deserialize bed_entry: stream error reading coordinates");
         }
