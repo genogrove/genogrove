@@ -136,10 +136,17 @@ public:
                 throw std::runtime_error("Failed to deserialize grove: external key count mismatch");
             }
         } catch (...) {
+            // Collect first: deleting a parent frees its linked children, so
+            // reading their (dangling) block_node entries afterwards is a
+            // use-after-free.
+            std::vector<node<key_type, data_type>*> parentless;
             for (auto* n : blocks.block_node) {
                 if (n != nullptr && n->get_parent() == nullptr) {
-                    delete n;
+                    parentless.push_back(n);
                 }
+            }
+            for (auto* n : parentless) {
+                delete n;
             }
             throw;
         }
