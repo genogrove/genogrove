@@ -979,6 +979,14 @@ TEST(GroveViewCorruptTest, SelfReferencingChildRejected) {
     EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
 }
 
+TEST(GroveViewCorruptTest, RepeatedChildBlockRejected) {
+    auto s = split(write_multilevel_grove());
+    const auto b = find_internal(s);
+    auto& blk = s.blocks[b];
+    set_pod(blk, child_id_at(blk, 1), get_pod<std::uint32_t>(blk, child_id_at(blk, 0)));
+    EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
+}
+
 TEST(GroveViewCorruptTest, ChildPointingBackToRootRejected) {
     auto s = split(write_multilevel_grove());
     const auto b = find_internal(s);
