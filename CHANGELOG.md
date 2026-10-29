@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Type tag in the `.gg` stream header**: the grove stream now records the key kind (`interval`, `genomic_coordinate`, `numeric`, `kmer`, `custom`) and whether data and edge data are present. `grove::deserialize` and `grove_view::open` throw `std::runtime_error` naming both types on a mismatch instead of misparsing blocks. Stream magic is now `GGB\x04` and `gg_header` format minor is 4, so existing indexes must be re-created. ([#593](https://github.com/genogrove/genogrove/issues/593), [#596](https://github.com/genogrove/genogrove/pull/596))
+
+### Changed
 - **`gff_entry` id helpers understand GFF3**: `get_transcript_id()` falls back to the single `Parent` of an exon/CDS/UTR feature, and `get_gene_id()` to a gene's `ID` or a transcript's `Parent`, when the GTF attribute is absent. New `get_parent_ids()` returns every comma-separated `Parent`; multi-parent features yield `nullopt` from `get_transcript_id()`. ([#594](https://github.com/genogrove/genogrove/issues/594), [#595](https://github.com/genogrove/genogrove/pull/595))
 
 ## [0.26.4] - 2026-10-25
