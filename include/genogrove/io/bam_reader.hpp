@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <format>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -18,6 +19,8 @@
 #include <vector>
 
 // genogrove
+#include <genogrove/data_type/genomic_coordinate.hpp>
+#include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/file_reader.hpp>
 
 // htslib
@@ -284,6 +287,22 @@ namespace genogrove::io {
          */
         [[nodiscard]] bool consumes_reference() const {
             return start < end;
+        }
+
+        /// Grove key for this record: closed `[start, end - 1]` (0-based).
+        /// @throws std::invalid_argument if `!consumes_reference()` (the closed form would underflow)
+        [[nodiscard]] genogrove::data_type::interval to_interval() const {
+            if (!consumes_reference()) {
+                throw std::invalid_argument("sam_entry::to_interval: record does not consume reference");
+            }
+            return genogrove::data_type::interval(start, end - 1);
+        }
+
+        /// Stranded grove key; strand comes from FLAG (see get_strand()).
+        /// @throws std::invalid_argument if `!consumes_reference()`
+        [[nodiscard]] genogrove::data_type::genomic_coordinate to_coordinate() const {
+            const auto iv = to_interval();
+            return genogrove::data_type::genomic_coordinate(get_strand(), iv.get_start(), iv.get_end());
         }
 
         /// Convert CIGAR to string representation

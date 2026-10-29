@@ -8,6 +8,7 @@
 
 // standard
 #include <filesystem>
+#include <stdexcept>
 #include <fstream>
 #include <algorithm>
 
@@ -17,6 +18,7 @@
 
 namespace fs = std::filesystem;
 namespace gio = genogrove::io;
+namespace gdt = genogrove::data_type;
 
 // ==========================================
 // Test Fixture for BAM/SAM file tests
@@ -1228,3 +1230,20 @@ TEST_F(BamReaderTest, BamFileIterator) {
     EXPECT_EQ(it->qname, "read002");
 }
 
+
+TEST(samEntryConversion, mappedRecordToClosed) {
+    gio::sam_entry e;
+    e.start = 100;
+    e.end = 150;
+    EXPECT_EQ(e.to_interval(), gdt::interval(100, 149));
+    EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('+', 100, 149));
+
+    e.flags = gio::alignment_flags(gio::sam_flags::REVERSE);
+    EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('-', 100, 149));
+}
+
+TEST(samEntryConversion, noReferenceConsumedThrows) {
+    gio::sam_entry e;  // start == end == 0 (unmapped / pure soft-clip)
+    EXPECT_THROW((void)e.to_interval(), std::invalid_argument);
+    EXPECT_THROW((void)e.to_coordinate(), std::invalid_argument);
+}

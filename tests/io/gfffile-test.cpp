@@ -1306,3 +1306,18 @@ TEST_F(gfffileTest, regionOnNonIndexedFileThrows) {
     fs::path plain = test_data_dir / "test_gff3.gff";
     EXPECT_THROW(gio::gff_reader(plain, {.region = "chr1:1-1000"}), std::runtime_error);
 }
+
+TEST(gffEntryConversion, oneBasedClosedToZeroBasedClosed) {
+    gio::gff_entry e("chr1", 101, 200, "exon");
+    EXPECT_EQ(e.to_interval(), gdt::interval(100, 199));
+
+    e.strand = '+';
+    EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('+', 100, 199));
+}
+
+TEST(gffEntryConversion, unsetAndUnknownStrandAreDot) {
+    gio::gff_entry e("chr1", 1, 1, "exon");
+    EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('.', 0, 0));
+    e.strand = '?';
+    EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('.', 0, 0));
+}

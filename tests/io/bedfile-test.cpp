@@ -8,6 +8,7 @@
 
 // standard
 #include <filesystem>
+#include <stdexcept>
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -20,6 +21,7 @@
 
 namespace fs = std::filesystem;
 namespace gio = genogrove::io;
+namespace gdt = genogrove::data_type;
 
 // ==========================================
 // Test Fixture for BED file tests
@@ -1177,4 +1179,27 @@ TEST_F(bedfileTest, regionOnNonIndexedFileThrows) {
     // Plain (uncompressed, unindexed) BED cannot be seeked by region.
     fs::path plain = test_data_dir / "test_bed3.bed";
     EXPECT_THROW(gio::bed_reader(plain, {.region = "chr1:1-1000"}), std::runtime_error);
+}
+
+// ==========================================
+// to_interval() / to_coordinate()
+// ==========================================
+
+TEST(bedEntryConversion, closedHalfOpenToClosed) {
+    gio::bed_entry e("chr1", 100, 200);
+    EXPECT_EQ(e.to_interval(), gdt::interval(100, 199));
+
+    e.strand = '-';
+    EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('-', 100, 199));
+}
+
+TEST(bedEntryConversion, missingStrandIsDot) {
+    gio::bed_entry e("chr1", 5, 6);
+    EXPECT_EQ(e.to_interval(), gdt::interval(5, 5));
+    EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('.', 5, 5));
+}
+
+TEST(bedEntryConversion, emptyRecordThrows) {
+    EXPECT_THROW((void)gio::bed_entry("chr1", 10, 10).to_interval(), std::invalid_argument);
+    EXPECT_THROW((void)gio::bed_entry("chr1", 10, 5).to_coordinate(), std::invalid_argument);
 }

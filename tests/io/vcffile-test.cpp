@@ -8,6 +8,7 @@
 
 // standard
 #include <filesystem>
+#include <stdexcept>
 #include <fstream>
 #include <vector>
 
@@ -17,6 +18,7 @@
 
 namespace fs = std::filesystem;
 namespace gio = genogrove::io;
+namespace gdt = genogrove::data_type;
 
 // ==========================================
 // Test Fixture for VCF file tests
@@ -545,4 +547,12 @@ TEST_F(VcfReaderTest, RegionOnBcfUsesBcfItrPath) {
     ASSERT_EQ(entries.size(), 2u);
     EXPECT_EQ(entries[0].start, 99u);
     EXPECT_EQ(entries[1].start, 149u);
+}
+
+TEST(vcfEntryConversion, snpIsSingleBaseInterval) {
+    gio::vcf_entry e;
+    e.start = 99;
+    e.end = 100;
+    EXPECT_EQ(e.to_interval(), gdt::interval(99, 99));
+    EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('.', 99, 99));
 }
