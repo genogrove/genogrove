@@ -797,6 +797,17 @@ std::uint32_t find_internal(const split_stream& s) {
     return 0;
 }
 
+// First leaf block; ADD_FAILUREs if the stream has none.
+std::uint32_t find_first_leaf(const split_stream& s) {
+    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
+        if (is_leaf_block(s.blocks[b])) {
+            return b;
+        }
+    }
+    ADD_FAILURE() << "no leaf block";
+    return 0;
+}
+
 using grove_ii = gst::grove<gdt::interval, int>;
 
 void expect_rejected(const split_stream& s) {
@@ -838,23 +849,15 @@ TEST(SerializationStructureTest, ChildPointingBackToRootRejected) {
 
 TEST(SerializationStructureTest, LeafNextPointingAtInternalNodeRejected) {
     auto s = split(write_multilevel_grove());
-    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
-        if (is_leaf_block(s.blocks[b])) {
-            set_pod(s.blocks[b], next_id_at(s.blocks[b]), std::uint32_t{0});  // block 0 is the internal root
-            break;
-        }
-    }
+    const auto leaf = find_first_leaf(s);
+    set_pod(s.blocks[leaf], next_id_at(s.blocks[leaf]), std::uint32_t{0});  // block 0 is the internal root
     expect_rejected(s);
 }
 
 TEST(SerializationStructureTest, LeafNextPointingBackwardRejected) {
     auto s = split(write_multilevel_grove());
-    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
-        if (is_leaf_block(s.blocks[b])) {
-            set_pod(s.blocks[b], next_id_at(s.blocks[b]), b);  // a leaf that is its own successor
-            break;
-        }
-    }
+    const auto leaf = find_first_leaf(s);
+    set_pod(s.blocks[leaf], next_id_at(s.blocks[leaf]), leaf);  // a leaf that is its own successor
     expect_rejected(s);
 }
 
@@ -970,7 +973,7 @@ TEST(GroveViewCorruptTest, CorruptBlockPayloadRejected) {
     EXPECT_THROW(open_and_query(bytes), std::runtime_error);
 }
 
-// ---- grove_view on cyclic or misordered block ids (#602) -------------------
+// ---- grove_view on cyclic or misordered block ids --------------------------
 
 TEST(GroveViewCorruptTest, SelfReferencingChildRejected) {
     auto s = split(write_multilevel_grove());
@@ -987,6 +990,17 @@ TEST(GroveViewCorruptTest, RepeatedChildBlockRejected) {
     EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
 }
 
+TEST(GroveViewCorruptTest, DescendingChildBlocksRejected) {
+    auto s = split(write_multilevel_grove());
+    const auto b = find_internal(s);
+    auto& blk = s.blocks[b];
+    const auto first = get_pod<std::uint32_t>(blk, child_id_at(blk, 0));
+    const auto second = get_pod<std::uint32_t>(blk, child_id_at(blk, 1));
+    set_pod(blk, child_id_at(blk, 0), second);  // both still follow the parent, only their order is wrong
+    set_pod(blk, child_id_at(blk, 1), first);
+    EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
+}
+
 TEST(GroveViewCorruptTest, ChildPointingBackToRootRejected) {
     auto s = split(write_multilevel_grove());
     const auto b = find_internal(s);
@@ -997,25 +1011,14 @@ TEST(GroveViewCorruptTest, ChildPointingBackToRootRejected) {
 
 TEST(GroveViewCorruptTest, LeafNextPointingBackwardRejected) {
     auto s = split(write_multilevel_grove());
-    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
-        if (is_leaf_block(s.blocks[b])) {
-            set_pod(s.blocks[b], next_id_at(s.blocks[b]), b);  // a leaf that is its own successor
-            break;
-        }
-    }
+    const auto leaf = find_first_leaf(s);
+    set_pod(s.blocks[leaf], next_id_at(s.blocks[leaf]), leaf);  // a leaf that is its own successor
     EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
 }
 
 TEST(GroveViewCorruptTest, LeafNextPointingAtInternalNodeRejected) {
     auto s = split(write_multilevel_grove());
-    std::uint32_t first_leaf = s.ext_block_begin;
-    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
-        if (is_leaf_block(s.blocks[b])) {
-            first_leaf = b;
-            break;
-        }
-    }
-    ASSERT_LT(first_leaf, s.ext_block_begin);
+    const auto first_leaf = find_first_leaf(s);
     // an internal block after the leaf, so only the leaf check can reject it
     std::uint32_t later_internal = s.ext_block_begin;
     for (std::uint32_t b = first_leaf + 1; b < s.ext_block_begin; ++b) {
@@ -1030,7 +1033,7 @@ TEST(GroveViewCorruptTest, LeafNextPointingAtInternalNodeRejected) {
 }
 
 TEST(GroveViewCorruptTest, UntamperedStreamStillQueries) {
-    // Guards the new checks against rejecting what serialize() writes.
+    // Guards the block-id checks against rejecting what serialize() writes.
     view_file f(join(split(write_multilevel_grove())));
     auto v = view_ii::open(f.path.string());
     EXPECT_EQ(v.intersect(gdt::interval{0, 1000}, "chr1").get_keys().size(), 40u);

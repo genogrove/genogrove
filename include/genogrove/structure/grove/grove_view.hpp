@@ -593,23 +593,24 @@ class grove_view {
         std::unique_ptr<node_t> owner(
             node_t::deserialize_block(zis, order, key_storage, child_ids, next_id));
         node_t* n = owner.get();
-        // The writer numbers blocks in DFS pre-order, so child and next ids
-        // always exceed the block's own id, and a node's children ascend. Anything
-        // else is a cycle that would recurse or loop without bound, or a repeated
-        // child that multiplies the work of a descent.
-        detail::block_id prev_child = b;
-        for (detail::block_id cid : child_ids) {
-            if (cid <= prev_child) {
-                throw std::runtime_error("grove_view: child block repeats or precedes its parent");
-            }
-            prev_child = cid;
-        }
-        if (next_id != detail::no_block && next_id <= b) {
-            throw std::runtime_error("grove_view: next block does not follow its leaf");
-        }
+        // The writer numbers blocks in DFS pre-order. Any other id order is a
+        // cycle that would recurse or loop without bound.
         if (n->get_is_leaf()) {
+            // a leaf's successor is its right sibling, numbered later
+            if (next_id != detail::no_block && next_id <= b) {
+                throw std::runtime_error("grove_view: next block does not follow its leaf");
+            }
             for (auto* k : n->get_keys()) {
                 read_key_edges(zis, k);
+            }
+        } else {
+            // children ascend past the parent; a repeat would multiply the work of a descent
+            detail::block_id prev_child = b;
+            for (detail::block_id cid : child_ids) {
+                if (cid <= prev_child) {
+                    throw std::runtime_error("grove_view: child block repeats or precedes its parent");
+                }
+                prev_child = cid;
             }
         }
         node_block[n] = b;
