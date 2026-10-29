@@ -494,7 +494,7 @@ namespace genogrove::io {
             const uint32_t n = static_cast<uint32_t>(v.size());
             ggu::write_le(os, n);
             for (size_t element : v) {
-                ggu::write_le(os, element);
+                ggu::write_size(os, element);
             }
             if (!os) {
                 throw std::runtime_error("Failed to serialize block_info: stream error");
@@ -519,7 +519,7 @@ namespace genogrove::io {
             }
             std::vector<size_t> v(n);
             for (size_t& element : v) {
-                ggu::read_le(is, element);
+                ggu::read_size(is, element);
             }
             if (!is) {
                 throw std::runtime_error("Failed to deserialize block_info: stream error reading vector data");
@@ -568,8 +568,8 @@ namespace genogrove::io {
 
     void bed_entry::serialize(std::ostream& os) const {
         gdt::serializer<std::string>::write(os, chrom);
-        ggu::write_le(os, start);
-        ggu::write_le(os, end);
+        ggu::write_size(os, start);
+        ggu::write_size(os, end);
         write_optional(os, name);
         write_optional(os, score);
         write_optional(os, strand);
@@ -584,8 +584,8 @@ namespace genogrove::io {
     bed_entry bed_entry::deserialize(std::istream& is) {
         bed_entry entry;
         entry.chrom = gdt::serializer<std::string>::read(is);
-        ggu::read_le(is, entry.start);
-        ggu::read_le(is, entry.end);
+        ggu::read_size(is, entry.start);
+        ggu::read_size(is, entry.end);
         if (!is) {
             throw std::runtime_error("Failed to deserialize bed_entry: stream error reading coordinates");
         }

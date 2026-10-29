@@ -15,8 +15,8 @@ namespace genogrove::data_type {
 
     void genomic_coordinate::serialize(std::ostream& os) const {
         genogrove::utility::write_le(os, this->strand);
-        genogrove::utility::write_le(os, this->start);
-        genogrove::utility::write_le(os, this->end);
+        genogrove::utility::write_size(os, this->start);
+        genogrove::utility::write_size(os, this->end);
         if (!os) {
             throw std::runtime_error("Failed to serialize genomic_coordinate: stream error");
         }
@@ -26,8 +26,8 @@ namespace genogrove::data_type {
         char strand;
         std::size_t start, end;
         genogrove::utility::read_le(is, strand);
-        genogrove::utility::read_le(is, start);
-        genogrove::utility::read_le(is, end);
+        genogrove::utility::read_size(is, start);
+        genogrove::utility::read_size(is, end);
         if(!is) {
             throw std::runtime_error("Failed to deserialize genomic coordinate: stream error");
         }

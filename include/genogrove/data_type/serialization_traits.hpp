@@ -41,9 +41,11 @@ namespace genogrove::data_type {
  *
  * ## Alternatives for types you don't control
  *
- * 1. **Integers, enums and floats**: Work automatically and are written
- *    fixed-width little-endian (`std::size_t` as 8 bytes), so files are
- *    portable across platforms.
+ * 1. **Integers, enums, `float` and `double`**: Work automatically and are
+ *    written little-endian at their own width, so files are portable across
+ *    platforms. A position held in a `std::size_t` has the platform's width
+ *    (4 bytes on a 32-bit ABI); write it with `utility::write_size()` to get
+ *    8 bytes everywhere.
  * 2. **Other trivially copyable types** (plain structs): Work automatically via
  *    raw memory copy. The bytes are the host's layout, so a struct holding
  *    anything wider than a byte is not portable; specialize

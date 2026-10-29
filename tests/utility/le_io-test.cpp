@@ -61,8 +61,33 @@ TEST(le_io, enum_uses_its_underlying_width) {
     EXPECT_EQ(written(small_enum::high), std::string("\xCD\xAB", 2));
 }
 
-TEST(le_io, size_t_is_always_eight_bytes) {
-    EXPECT_EQ(written<std::size_t>(1), std::string("\x01\0\0\0\0\0\0\0", 8));
+TEST(le_io, write_size_is_always_eight_bytes) {
+    std::ostringstream os(std::ios::binary);
+    ggu::write_size(os, 1);
+    EXPECT_EQ(os.str(), std::string("\x01\0\0\0\0\0\0\0", 8));
+}
+
+TEST(le_io, write_size_round_trips_the_largest_value) {
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    ggu::write_size(ss, std::numeric_limits<std::size_t>::max());
+    std::size_t out = 0;
+    ggu::read_size(ss, out);
+    EXPECT_EQ(out, std::numeric_limits<std::size_t>::max());
+}
+
+TEST(le_io, read_size_short_read_sets_failbit_and_zeroes_the_value) {
+    std::stringstream ss(std::string("\x01\x02\x03", 3), std::ios::in | std::ios::binary);
+    std::size_t out = 99;
+    ggu::read_size(ss, out);
+    EXPECT_FALSE(ss);
+    EXPECT_EQ(out, 0u);
+}
+
+TEST(le_io, only_float_and_double_are_floating_point_scalars) {
+    static_assert(ggu::wire_scalar<float>);
+    static_assert(ggu::wire_scalar<double>);
+    static_assert(!ggu::wire_scalar<long double>);
+    SUCCEED();
 }
 
 TEST(le_io, floats_use_ieee754_bit_patterns) {
@@ -74,7 +99,6 @@ TEST(le_io, round_trips_extremes) {
     EXPECT_EQ(round_trip(std::numeric_limits<std::int32_t>::min()), std::numeric_limits<std::int32_t>::min());
     EXPECT_EQ(round_trip(std::numeric_limits<std::int64_t>::min()), std::numeric_limits<std::int64_t>::min());
     EXPECT_EQ(round_trip(std::numeric_limits<std::uint64_t>::max()), std::numeric_limits<std::uint64_t>::max());
-    EXPECT_EQ(round_trip(std::numeric_limits<std::size_t>::max()), std::numeric_limits<std::size_t>::max());
     EXPECT_EQ(round_trip(small_enum::high), small_enum::high);
     EXPECT_EQ(round_trip(-0.5), -0.5);
     EXPECT_EQ(round_trip(true), true);

@@ -563,8 +563,8 @@ namespace genogrove::io {
         gdt::serializer<std::string>::write(os, seqid);
         gdt::serializer<std::string>::write(os, source);
         gdt::serializer<std::string>::write(os, type);
-        ggu::write_le(os, start);
-        ggu::write_le(os, end);
+        ggu::write_size(os, start);
+        ggu::write_size(os, end);
         write_optional(os, score);
         write_optional(os, strand);
         write_optional(os, phase);
@@ -581,8 +581,8 @@ namespace genogrove::io {
         entry.seqid = gdt::serializer<std::string>::read(is);
         entry.source = gdt::serializer<std::string>::read(is);
         entry.type = gdt::serializer<std::string>::read(is);
-        ggu::read_le(is, entry.start);
-        ggu::read_le(is, entry.end);
+        ggu::read_size(is, entry.start);
+        ggu::read_size(is, entry.end);
         if (!is) {
             throw std::runtime_error("Failed to deserialize gff_entry: stream error reading coordinates");
         }

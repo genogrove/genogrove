@@ -204,10 +204,6 @@ TEST(serialization_traits_test, int_is_four_little_endian_bytes) {
     EXPECT_EQ(written<int>(0x01020304), std::string("\x04\x03\x02\x01", 4));
 }
 
-TEST(serialization_traits_test, size_t_is_eight_bytes_on_any_platform) {
-    EXPECT_EQ(written<std::size_t>(1), std::string("\x01\0\0\0\0\0\0\0", 8));
-}
-
 TEST(serialization_traits_test, string_length_prefix_is_little_endian) {
     EXPECT_EQ(written<std::string>("ab"), std::string("\x02\0\0\0" "ab", 6));
 }
