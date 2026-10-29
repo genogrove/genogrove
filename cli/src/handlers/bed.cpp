@@ -17,7 +17,7 @@ void grove_insert(
     gio::bed_reader reader(filepath);
 
     for (const auto& entry : reader) {
-        gdt::interval iv(entry.start, entry.end - 1);
+        gdt::interval iv = entry.to_interval();
         gdt::key<gdt::interval, gio::bed_entry>* key_ptr = sorted
             ? grove.insert_data(entry.chrom, iv, entry, ggs::sorted)
             : grove.insert_data(entry.chrom, iv, entry);
