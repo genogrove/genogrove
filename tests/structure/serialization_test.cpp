@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 #include <cstdint>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -707,8 +708,8 @@ split_stream split(const std::string& bytes) {
         off += sizeof(gst::detail::block_id);
     }
     out.num_blocks = get_pod<std::uint32_t>(bytes, off);
-    out.ext_block_begin = get_pod<std::uint32_t>(bytes, off + sizeof(std::uint32_t));
-    off += 2 * sizeof(std::uint32_t) + 2 * sizeof(std::uint64_t);
+    out.ext_block_begin = get_pod<std::uint32_t>(bytes, off + sizeof(gst::detail::block_id));
+    off += 2 * sizeof(gst::detail::block_id) + 2 * sizeof(std::uint64_t);
     out.dir = bytes.substr(0, off);
 
     gst::detail::block_inflater inflater;
@@ -846,6 +847,36 @@ TEST(SerializationStructureTest, LeafNextPointingAtInternalNodeRejected) {
     expect_rejected(s);
 }
 
+TEST(SerializationStructureTest, LeafNextPointingBackwardRejected) {
+    auto s = split(write_multilevel_grove());
+    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
+        if (is_leaf_block(s.blocks[b])) {
+            set_pod(s.blocks[b], next_id_at(s.blocks[b]), b);  // a leaf that is its own successor
+            break;
+        }
+    }
+    expect_rejected(s);
+}
+
+TEST(SerializationStructureTest, GroveAfterManyRemovalsStillRoundTrips) {
+    // Merges and borrows rewire the leaf chain and parents; the structural checks
+    // must still accept everything serialize() writes.
+    grove_ii g(3);
+    std::vector<gdt::key<gdt::interval, int>*> keys;
+    for (std::size_t i = 0; i < 60; ++i) {
+        keys.push_back(g.insert_data("chr1", gdt::interval{i * 10, i * 10 + 5}, static_cast<int>(i), gst::sorted));
+    }
+    for (std::size_t i = 0; i < keys.size(); ++i) {
+        if (i % 4 != 0) {
+            ASSERT_TRUE(g.remove_key("chr1", keys[i]));
+        }
+    }
+    std::stringstream ss;
+    g.serialize(ss);
+    auto r = grove_ii::deserialize(ss);
+    EXPECT_EQ(r.intersect(gdt::interval{0, 1000}, "chr1").get_keys().size(), 15u);
+}
+
 TEST(SerializationStructureTest, DuplicateIndexRootRejected) {
     auto s = split(write_multilevel_grove(/*two_indices=*/true));
     ASSERT_EQ(s.root_id_at.size(), 2u);
@@ -865,7 +896,10 @@ TEST(SerializationStructureTest, RootInsideAnotherTreeRejected) {
 namespace {
 
 struct view_file {
-    fs::path path = fs::temp_directory_path() / "genogrove_view_corrupt_test.gg";
+    // unique per instance so overlapping test processes cannot collide
+    fs::path path = fs::temp_directory_path() /
+                    ("genogrove_view_corrupt_" +
+                     std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".gg");
     explicit view_file(const std::string& bytes) {
         std::ofstream ofs(path, std::ios::binary);
         ofs << bytes;
@@ -875,7 +909,8 @@ struct view_file {
 
 using view_ii = gst::grove_view<gdt::interval, int>;
 
-// open() plus a query: a corrupt block may only surface when it is loaded.
+// open() plus a query: some corruption (a damaged zlib stream) only surfaces
+// when the block is loaded, not while open() scans the block lengths.
 void open_and_query(const std::string& bytes) {
     view_file f(bytes);
     auto v = view_ii::open(f.path.string());
@@ -920,7 +955,9 @@ TEST(GroveViewCorruptTest, HugeBlockCountRejected) {
 TEST(GroveViewCorruptTest, OversizedBlockLengthRejected) {
     auto bytes = write_multilevel_grove();
     const auto dir_len = split(bytes).dir.size();
-    set_pod(bytes, dir_len, std::uint64_t{0x00FFFFFFFFFFFFFFull});  // first block's length prefix
+    // The first block's length prefix now runs past the file, so open() fails
+    // while scanning the (wrongly placed) next length prefix.
+    set_pod(bytes, dir_len, std::uint64_t{0x00FFFFFFFFFFFFFFull});
     EXPECT_THROW(open_and_query(bytes), std::runtime_error);
 }
 

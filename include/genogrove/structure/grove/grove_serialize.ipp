@@ -708,6 +708,11 @@ private:
                     if (!blocks.block_node[nid]->get_is_leaf()) {
                         throw std::runtime_error("Failed to deserialize grove: next block is not a leaf");
                     }
+                    // A leaf's successor is its right sibling, which DFS pre-order
+                    // numbers later; anything else could loop a leaf-chain walk.
+                    if (nid <= b) {
+                        throw std::runtime_error("Failed to deserialize grove: next block does not follow its leaf");
+                    }
                     n->set_next(blocks.block_node[nid]);
                 }
             }
