@@ -4,6 +4,7 @@
  */
 
 #include <genogrove/data_type/numeric.hpp>
+#include <genogrove/utility/le_io.hpp>
 
 // standard
 #include <stdexcept>
@@ -15,7 +16,7 @@ namespace genogrove::data_type {
     }
 
     void numeric::serialize(std::ostream& os) const {
-        os.write(reinterpret_cast<const char*>(&this->value), sizeof(this->value));
+        genogrove::utility::write_le(os, this->value);
         if (!os) {
             throw std::runtime_error("Failed to serialize numeric: stream error");
         }
@@ -23,7 +24,7 @@ namespace genogrove::data_type {
 
     numeric numeric::deserialize(std::istream& is) {
         numeric n;
-        is.read(reinterpret_cast<char*>(&n.value), sizeof(n.value));
+        genogrove::utility::read_le(is, n.value);
         if(!is) {
             throw std::runtime_error("Failed to deserialize numeric: stream error");
         }

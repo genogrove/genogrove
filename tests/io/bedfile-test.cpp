@@ -1199,6 +1199,21 @@ TEST(bedEntryConversion, missingStrandIsDot) {
     EXPECT_EQ(e.to_coordinate(), gdt::genomic_coordinate('.', 5, 5));
 }
 
+TEST(bedEntrySerialization, thickInfoIsTwoEightByteLittleEndianFields) {
+    std::ostringstream os(std::ios::binary);
+    gio::thick_info(1, 2).serialize(os);
+    EXPECT_EQ(os.str(), std::string("\x01\0\0\0\0\0\0\0\x02\0\0\0\0\0\0\0", 16));
+}
+
+TEST(bedEntrySerialization, blockInfoLayoutIsLittleEndian) {
+    std::ostringstream os(std::ios::binary);
+    gio::block_info(2, {3}, {4}).serialize(os);
+    // int count; then sizes and starts, each a uint32 length followed by 8-byte elements
+    EXPECT_EQ(os.str(), std::string("\x02\0\0\0"
+                                    "\x01\0\0\0\x03\0\0\0\0\0\0\0"
+                                    "\x01\0\0\0\x04\0\0\0\0\0\0\0", 28));
+}
+
 TEST(bedEntryConversion, emptyRecordThrows) {
     EXPECT_THROW((void)gio::bed_entry("chr1", 10, 10).to_interval(), std::invalid_argument);
     EXPECT_THROW((void)gio::bed_entry("chr1", 10, 5).to_coordinate(), std::invalid_argument);

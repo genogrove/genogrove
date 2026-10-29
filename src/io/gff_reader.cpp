@@ -19,6 +19,7 @@
 // genogrove
 #include <genogrove/data_type/serialization_traits.hpp>
 #include <genogrove/utility/char_utils.hpp>
+#include <genogrove/utility/le_io.hpp>
 #include <genogrove/utility/tokenizer.hpp>
 
 namespace gdt = genogrove::data_type;
@@ -528,7 +529,7 @@ namespace genogrove::io {
         void write_string_map(std::ostream& os,
                               const std::map<std::string, std::string, std::less<>>& m) {
             const uint32_t n = static_cast<uint32_t>(m.size());
-            os.write(reinterpret_cast<const char*>(&n), sizeof(n));
+            ggu::write_le(os, n);
             for (const auto& [k, v] : m) {
                 gdt::serializer<std::string>::write(os, k);
                 gdt::serializer<std::string>::write(os, v);
@@ -540,7 +541,7 @@ namespace genogrove::io {
 
         std::map<std::string, std::string, std::less<>> read_string_map(std::istream& is) {
             uint32_t n = 0;
-            is.read(reinterpret_cast<char*>(&n), sizeof(n));
+            ggu::read_le(is, n);
             if (!is) {
                 throw std::runtime_error("Failed to deserialize gff_entry: stream error reading attributes count");
             }
@@ -562,8 +563,8 @@ namespace genogrove::io {
         gdt::serializer<std::string>::write(os, seqid);
         gdt::serializer<std::string>::write(os, source);
         gdt::serializer<std::string>::write(os, type);
-        os.write(reinterpret_cast<const char*>(&start), sizeof(start));
-        os.write(reinterpret_cast<const char*>(&end), sizeof(end));
+        ggu::write_size(os, start);
+        ggu::write_size(os, end);
         write_optional(os, score);
         write_optional(os, strand);
         write_optional(os, phase);
@@ -580,8 +581,8 @@ namespace genogrove::io {
         entry.seqid = gdt::serializer<std::string>::read(is);
         entry.source = gdt::serializer<std::string>::read(is);
         entry.type = gdt::serializer<std::string>::read(is);
-        is.read(reinterpret_cast<char*>(&entry.start), sizeof(entry.start));
-        is.read(reinterpret_cast<char*>(&entry.end), sizeof(entry.end));
+        ggu::read_size(is, entry.start);
+        ggu::read_size(is, entry.end);
         if (!is) {
             throw std::runtime_error("Failed to deserialize gff_entry: stream error reading coordinates");
         }

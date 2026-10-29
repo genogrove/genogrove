@@ -13,6 +13,8 @@
 #include <string>
 #include <type_traits>
 
+#include "genogrove/utility/le_io.hpp"
+
 namespace genogrove::structure::detail {
 
 /// Bytes from the current get position to the end of the stream, or -1 if the
@@ -64,22 +66,32 @@ inline void require_backing_bytes(std::istream& is, std::uint64_t count,
     }
 }
 
-/// Write a trivially-copyable POD value to a binary output stream.
+/// Write a trivially-copyable POD value to a binary output stream. Integers,
+/// enums and floats are written fixed-width little-endian; any other type is
+/// written as raw bytes, so it must itself consist of single bytes to be portable.
 template<typename T>
 inline void write_pod(std::ostream& os, const T& value) {
     static_assert(std::is_trivially_copyable_v<T>,
                   "write_pod requires a trivially-copyable type");
-    os.write(reinterpret_cast<const char*>(&value), sizeof(T));
+    if constexpr (genogrove::utility::wire_scalar<T>) {
+        genogrove::utility::write_le(os, value);
+    } else {
+        os.write(reinterpret_cast<const char*>(&value), sizeof(T));
+    }
 }
 
-/// Read a trivially-copyable POD value from a binary input stream.
-/// The caller is responsible for checking stream state afterward so
-/// that error messages can name the specific field that failed to read.
+/// Read a trivially-copyable POD value from a binary input stream (the inverse
+/// of write_pod). The caller is responsible for checking stream state afterward
+/// so that error messages can name the specific field that failed to read.
 template<typename T>
 inline void read_pod(std::istream& is, T& value) {
     static_assert(std::is_trivially_copyable_v<T>,
                   "read_pod requires a trivially-copyable type");
-    is.read(reinterpret_cast<char*>(&value), sizeof(T));
+    if constexpr (genogrove::utility::wire_scalar<T>) {
+        genogrove::utility::read_le(is, value);
+    } else {
+        is.read(reinterpret_cast<char*>(&value), sizeof(T));
+    }
 }
 
 } // namespace genogrove::structure::detail

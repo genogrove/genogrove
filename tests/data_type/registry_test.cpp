@@ -372,6 +372,19 @@ TEST_F(RegistryTest, IdsAfterClearRestartFromZero) {
 
 // --- Serialization Tests ---
 
+TEST_F(RegistryTest, SerializedCountIsEightLittleEndianBytes) {
+    auto& reg = gdt::registry<int>::instance();
+
+    std::ignore = reg.intern(7);
+    std::ignore = reg.intern(8);
+
+    std::stringstream ss;
+    reg.serialize(ss);
+
+    // uint64 count, then each int as 4 little-endian bytes
+    EXPECT_EQ(ss.str(), std::string("\x02\0\0\0\0\0\0\0\x07\0\0\0\x08\0\0\0", 16));
+}
+
 TEST_F(RegistryTest, SerializeDeserializeInts) {
     auto& reg = gdt::registry<int>::instance();
 
