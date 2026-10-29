@@ -666,13 +666,10 @@ private:
     // from the block ids read_deserialize_blocks() recorded, then rebuilds
     // per-index roots and rightmost leaves.
     //
-    // The block ids come from the file, and nodes delete their children in
-    // their destructor, so the result must be a forest: every node block has
-    // exactly one owner (one parent, or one index root). Shared, self- and
-    // cyclic references would otherwise double-free on destruction. The
-    // writer assigns ids in DFS pre-order, so a valid child id is always
-    // greater than its parent's; requiring that rules out cycles without a
-    // graph walk.
+    // Nodes delete their children, so every node block needs exactly one owner
+    // (a parent or an index root); a shared or cyclic id from a bad file would
+    // double-free. The writer numbers blocks in DFS pre-order, so a child id
+    // must exceed its parent's, which also rules out cycles.
     [[nodiscard]] static deserialize_linked link_deserialize_structure(
         const deserialize_header& header, deserialize_blocks_result& blocks) {
         std::vector<bool> owned(header.ext_block_begin, false);
