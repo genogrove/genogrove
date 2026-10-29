@@ -13,6 +13,7 @@
 #include <optional>
 #include <map>
 #include <memory>
+#include <vector>
 
 // genogrove
 #include <genogrove/io/file_reader.hpp>
@@ -44,11 +45,15 @@ namespace genogrove::io {
         gff_entry(std::string seqid, size_t start, size_t end, std::string type)
             : seqid(std::move(seqid)), start(start), end(end), type(std::move(type)), format(gff_format::UNKNOWN) {}
 
-        // GTF-specific helper methods
-        // Returns the value of the gene_id attribute (GTF standard)
+        // Returns the IDs listed in the GFF3 Parent attribute (comma-separated); empty when absent
+        [[nodiscard]] std::vector<std::string> get_parent_ids() const;
+
+        // Returns gene_id (GTF). In GFF3: the ID of a gene feature, or the Parent of a
+        // transcript-level feature (mRNA, transcript, lnc_RNA, ncRNA, rRNA, tRNA)
         [[nodiscard]] std::optional<std::string> get_gene_id() const;
 
-        // Returns the value of the transcript_id attribute (GTF standard)
+        // Returns transcript_id (GTF). In GFF3: the single Parent of an exon, CDS or UTR
+        // feature. nullopt when there are several parents; use get_parent_ids() then.
         [[nodiscard]] std::optional<std::string> get_transcript_id() const;
 
         // Returns the value of the exon_number attribute (GTF standard)
