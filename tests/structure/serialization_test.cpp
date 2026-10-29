@@ -10,12 +10,14 @@
 
 #include <gtest/gtest.h>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <streambuf>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #include <genogrove/data_type/serialization_traits.hpp>
 #include <genogrove/structure/grove/gg_block_format.hpp>
@@ -664,4 +666,269 @@ TEST(SerializationTest, TypeTagMismatchedViewOpenThrows) {
                  std::runtime_error);
     EXPECT_NO_THROW((void)(gst::grove_view<gdt::interval, int>::open(path.string())));
     fs::remove(path);
+}
+
+// ---- Structural validation of untrusted streams (#553, #555) ---------------
+
+namespace {
+
+// A grove stream split into its plain directory and inflated blocks, so a test
+// can patch one block (or a directory field) and re-emit a stream.
+struct split_stream {
+    std::string dir;                      // magic .. directory counts, as written
+    std::vector<std::string> blocks;      // inflated block payloads
+    std::vector<std::size_t> root_id_at;  // byte offset of each index's root id in dir
+    std::uint32_t num_blocks = 0;
+    std::uint32_t ext_block_begin = 0;
+};
+
+template <typename T>
+T get_pod(const std::string& s, std::size_t at) {
+    T v;
+    std::memcpy(&v, s.data() + at, sizeof(T));
+    return v;
+}
+
+template <typename T>
+void set_pod(std::string& s, std::size_t at, T v) {
+    std::memcpy(s.data() + at, &v, sizeof(T));
+}
+
+split_stream split(const std::string& bytes) {
+    split_stream out;
+    std::size_t off = gst::detail::grove_stream_magic.size() + sizeof(gst::detail::stream_type_tag);
+    off += sizeof(int);  // order
+    const auto num_indices = get_pod<std::uint32_t>(bytes, off);
+    off += sizeof(std::uint32_t);
+    for (std::uint32_t i = 0; i < num_indices; ++i) {
+        const auto name_len = get_pod<std::uint32_t>(bytes, off);
+        off += sizeof(std::uint32_t) + name_len;
+        out.root_id_at.push_back(off);
+        off += sizeof(gst::detail::block_id);
+    }
+    out.num_blocks = get_pod<std::uint32_t>(bytes, off);
+    out.ext_block_begin = get_pod<std::uint32_t>(bytes, off + sizeof(std::uint32_t));
+    off += 2 * sizeof(std::uint32_t) + 2 * sizeof(std::uint64_t);
+    out.dir = bytes.substr(0, off);
+
+    gst::detail::block_inflater inflater;
+    for (std::uint32_t b = 0; b < out.num_blocks; ++b) {
+        const auto clen = get_pod<std::uint64_t>(bytes, off);
+        off += sizeof(std::uint64_t);
+        std::string raw;
+        inflater.decompress(bytes.data() + off, static_cast<std::size_t>(clen), raw);
+        out.blocks.push_back(std::move(raw));
+        off += static_cast<std::size_t>(clen);
+    }
+    return out;
+}
+
+std::string join(const split_stream& s) {
+    std::string out = s.dir;
+    gst::detail::block_deflater deflater;
+    std::string comp;
+    for (const auto& raw : s.blocks) {
+        deflater.compress(raw, comp);
+        const std::uint64_t clen = comp.size();
+        put_pod(out, clen);
+        out += comp;
+    }
+    return out;
+}
+
+bool is_leaf_block(const std::string& blk) {
+    return (get_pod<std::uint32_t>(blk, 0) & 0x80000000u) != 0;
+}
+
+std::uint32_t key_count(const std::string& blk) {
+    return get_pod<std::uint32_t>(blk, 0) & 0x7FFFFFFFu;
+}
+
+// Serialized size of one key of grove<interval, int> (value + data).
+std::size_t key_bytes() {
+    std::ostringstream o;
+    gdt::interval{1, 2}.serialize(o);
+    gdt::serializer<int>::write(o, 0);
+    return o.str().size();
+}
+
+// Internal block: packed, keys, child count, child ids (nothing after them).
+std::uint32_t child_count(const std::string& blk) {
+    return static_cast<std::uint32_t>((blk.size() - 2 * sizeof(std::uint32_t) - key_count(blk) * key_bytes()) /
+                                      sizeof(gst::detail::block_id));
+}
+
+std::size_t child_id_at(const std::string& blk, std::uint32_t i) {
+    return blk.size() - sizeof(gst::detail::block_id) * (child_count(blk) - i);
+}
+
+// Leaf block: packed, keys, next id, then edge lists.
+std::size_t next_id_at(const std::string& blk) {
+    return sizeof(std::uint32_t) + key_count(blk) * key_bytes();
+}
+
+// Order-3 tree with several levels so internal blocks have >= 2 children.
+std::string write_multilevel_grove(bool two_indices = false) {
+    gst::grove<gdt::interval, int> g(3);
+    for (std::size_t i = 0; i < 40; ++i) {
+        g.insert_data("chr1", gdt::interval{i * 10, i * 10 + 5}, static_cast<int>(i), gst::sorted);
+        if (two_indices) {
+            g.insert_data("chr2", gdt::interval{i * 10, i * 10 + 5}, static_cast<int>(i), gst::sorted);
+        }
+    }
+    std::stringstream ss;
+    g.serialize(ss);
+    return ss.str();
+}
+
+// First internal block with at least two children; ASSERTs the layout the
+// patch helpers rely on.
+std::uint32_t find_internal(const split_stream& s) {
+    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
+        if (!is_leaf_block(s.blocks[b]) && child_count(s.blocks[b]) >= 2) {
+            const auto first = get_pod<std::uint32_t>(s.blocks[b], child_id_at(s.blocks[b], 0));
+            EXPECT_GT(first, b) << "layout assumption: child ids follow the parent";
+            EXPECT_LT(first, s.num_blocks);
+            return b;
+        }
+    }
+    ADD_FAILURE() << "no internal block with two children";
+    return 0;
+}
+
+using grove_ii = gst::grove<gdt::interval, int>;
+
+void expect_rejected(const split_stream& s) {
+    std::stringstream ss(join(s));
+    EXPECT_THROW((void)grove_ii::deserialize(ss), std::runtime_error);
+}
+
+}  // namespace
+
+TEST(SerializationStructureTest, UntamperedRebuildRoundTrips) {
+    // Guards the split/join helpers: an unpatched stream must still load.
+    std::stringstream ss(join(split(write_multilevel_grove())));
+    auto g = grove_ii::deserialize(ss);
+    EXPECT_EQ(g.intersect(gdt::interval{0, 5}, "chr1").get_keys().size(), 1u);
+}
+
+TEST(SerializationStructureTest, SharedChildBlockRejected) {
+    auto s = split(write_multilevel_grove());
+    const auto b = find_internal(s);
+    auto& blk = s.blocks[b];
+    set_pod(blk, child_id_at(blk, 1), get_pod<std::uint32_t>(blk, child_id_at(blk, 0)));
+    expect_rejected(s);
+}
+
+TEST(SerializationStructureTest, SelfReferencingChildRejected) {
+    auto s = split(write_multilevel_grove());
+    const auto b = find_internal(s);
+    set_pod(s.blocks[b], child_id_at(s.blocks[b], 0), b);
+    expect_rejected(s);
+}
+
+TEST(SerializationStructureTest, ChildPointingBackToRootRejected) {
+    auto s = split(write_multilevel_grove());
+    const auto b = find_internal(s);
+    auto& blk = s.blocks[b];
+    set_pod(blk, child_id_at(blk, child_count(blk) - 1), std::uint32_t{0});
+    expect_rejected(s);
+}
+
+TEST(SerializationStructureTest, LeafNextPointingAtInternalNodeRejected) {
+    auto s = split(write_multilevel_grove());
+    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
+        if (is_leaf_block(s.blocks[b])) {
+            set_pod(s.blocks[b], next_id_at(s.blocks[b]), std::uint32_t{0});  // block 0 is the internal root
+            break;
+        }
+    }
+    expect_rejected(s);
+}
+
+TEST(SerializationStructureTest, DuplicateIndexRootRejected) {
+    auto s = split(write_multilevel_grove(/*two_indices=*/true));
+    ASSERT_EQ(s.root_id_at.size(), 2u);
+    set_pod(s.dir, s.root_id_at[1], get_pod<std::uint32_t>(s.dir, s.root_id_at[0]));
+    expect_rejected(s);
+}
+
+TEST(SerializationStructureTest, RootInsideAnotherTreeRejected) {
+    auto s = split(write_multilevel_grove());
+    const auto root_child = get_pod<std::uint32_t>(s.blocks[0], child_id_at(s.blocks[0], 0));
+    set_pod(s.dir, s.root_id_at[0], root_child);
+    expect_rejected(s);
+}
+
+// ---- grove_view::open() on corrupt input (#555) ----------------------------
+
+namespace {
+
+struct view_file {
+    fs::path path = fs::temp_directory_path() / "genogrove_view_corrupt_test.gg";
+    explicit view_file(const std::string& bytes) {
+        std::ofstream ofs(path, std::ios::binary);
+        ofs << bytes;
+    }
+    ~view_file() { std::error_code ec; fs::remove(path, ec); }
+};
+
+using view_ii = gst::grove_view<gdt::interval, int>;
+
+// open() plus a query: a corrupt block may only surface when it is loaded.
+void open_and_query(const std::string& bytes) {
+    view_file f(bytes);
+    auto v = view_ii::open(f.path.string());
+    (void)v.intersect(gdt::interval{0, 1000}, "chr1");
+}
+
+}  // namespace
+
+TEST(GroveViewCorruptTest, BadMagicRejected) {
+    auto bytes = write_multilevel_grove();
+    bytes[0] ^= 0x7F;
+    view_file f(bytes);
+    EXPECT_THROW((void)view_ii::open(f.path.string()), std::runtime_error);
+}
+
+TEST(GroveViewCorruptTest, EveryTruncationOfTheDirectoryRejected) {
+    const auto bytes = write_multilevel_grove();
+    const auto dir_len = split(bytes).dir.size();
+    for (std::size_t len = 0; len < dir_len; ++len) {
+        view_file f(bytes.substr(0, len));
+        EXPECT_THROW((void)view_ii::open(f.path.string()), std::runtime_error) << "prefix length " << len;
+    }
+}
+
+TEST(GroveViewCorruptTest, ExternalBlockBeginPastBlockCountRejected) {
+    auto bytes = write_multilevel_grove();
+    const auto dir_len = split(bytes).dir.size();
+    // directory tail: num_blocks, ext_block_begin, leaf count (8), external count (8)
+    set_pod(bytes, dir_len - 2 * sizeof(std::uint64_t) - sizeof(std::uint32_t), std::uint32_t{0xFFFFFFFFu});
+    view_file f(bytes);
+    EXPECT_THROW((void)view_ii::open(f.path.string()), std::runtime_error);
+}
+
+TEST(GroveViewCorruptTest, HugeBlockCountRejected) {
+    auto bytes = write_multilevel_grove();
+    const auto dir_len = split(bytes).dir.size();
+    set_pod(bytes, dir_len - 2 * sizeof(std::uint64_t) - 2 * sizeof(std::uint32_t), std::uint32_t{0xFFFFFFF0u});
+    view_file f(bytes);
+    EXPECT_THROW((void)view_ii::open(f.path.string()), std::runtime_error);
+}
+
+TEST(GroveViewCorruptTest, OversizedBlockLengthRejected) {
+    auto bytes = write_multilevel_grove();
+    const auto dir_len = split(bytes).dir.size();
+    set_pod(bytes, dir_len, std::uint64_t{0x00FFFFFFFFFFFFFFull});  // first block's length prefix
+    EXPECT_THROW(open_and_query(bytes), std::runtime_error);
+}
+
+TEST(GroveViewCorruptTest, CorruptBlockPayloadRejected) {
+    auto bytes = write_multilevel_grove();
+    const auto dir_len = split(bytes).dir.size();
+    for (std::size_t i = dir_len + sizeof(std::uint64_t); i < dir_len + sizeof(std::uint64_t) + 8; ++i) {
+        bytes[i] ^= 0x5A;  // damage the first block's zlib stream
+    }
+    EXPECT_THROW(open_and_query(bytes), std::runtime_error);
 }
