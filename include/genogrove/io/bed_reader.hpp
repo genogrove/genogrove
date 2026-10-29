@@ -14,8 +14,11 @@
 #include <optional>
 #include <vector>
 #include <memory>
+#include <stdexcept>
 
 // genogrove
+#include <genogrove/data_type/genomic_coordinate.hpp>
+#include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/file_reader.hpp>
 #include <genogrove/io/bgzf_utils.hpp>
 
@@ -85,6 +88,22 @@ namespace genogrove::io {
         bed_entry() = default;
         bed_entry(std::string chrom, size_t start, size_t end)
             : chrom(std::move(chrom)), start(start), end(end) {}
+
+        /// Grove key for this record: closed `[start, end - 1]` (0-based).
+        /// @throws std::invalid_argument if `end <= start` (an empty record has no closed form)
+        [[nodiscard]] genogrove::data_type::interval to_interval() const {
+            if (end <= start) {
+                throw std::invalid_argument("bed_entry::to_interval: end must be > start");
+            }
+            return genogrove::data_type::interval(start, end - 1);
+        }
+
+        /// Stranded grove key; strand is column 6, or '.' when absent.
+        /// @throws std::invalid_argument if `end <= start`
+        [[nodiscard]] genogrove::data_type::genomic_coordinate to_coordinate() const {
+            const auto iv = to_interval();
+            return genogrove::data_type::genomic_coordinate(strand.value_or('.'), iv.get_start(), iv.get_end());
+        }
 
         void serialize(std::ostream& os) const;
         [[nodiscard]] static bed_entry deserialize(std::istream& is);

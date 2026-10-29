@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`to_interval()` / `to_coordinate()` on reader records**: `bed_entry`, `gff_entry`, `sam_entry` and `vcf_entry` convert their native coordinates to 0-based closed grove keys, so callers no longer repeat the per-format arithmetic. `bed_entry` throws `std::invalid_argument` when `end <= start`, `sam_entry` when `!consumes_reference()`; a GFF strand of `?` maps to `.`. ([#592](https://github.com/genogrove/genogrove/issues/592), [#598](https://github.com/genogrove/genogrove/pull/598))
+
 ### Changed
 - **Type tag in the `.gg` stream header**: the grove stream now records the key kind (`interval`, `genomic_coordinate`, `numeric`, `kmer`, `custom`) and whether data and edge data are present. `grove::deserialize` and `grove_view::open` throw `std::runtime_error` naming both types on a mismatch instead of misparsing blocks. Stream magic is now `GGB\x04` and `gg_header` format minor is 4, so existing indexes must be re-created. ([#593](https://github.com/genogrove/genogrove/issues/593), [#596](https://github.com/genogrove/genogrove/pull/596))
 

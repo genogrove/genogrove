@@ -17,6 +17,8 @@
 #include <vector>
 
 // genogrove
+#include <genogrove/data_type/genomic_coordinate.hpp>
+#include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/file_reader.hpp>
 
 // htslib
@@ -121,6 +123,18 @@ namespace genogrove::io {
         std::vector<sample_genotype> samples; ///< Per-sample data, indexed parallel to get_sample_names()
 
         vcf_entry() = default;
+
+        /// Grove key for this record: closed `[start, end - 1]` (0-based). A record
+        /// spans at least its REF base, so `end > start` holds for parsed records.
+        /// Precondition: `end > start`; a hand-built entry with `end == start` (or `end == 0`) underflows.
+        [[nodiscard]] genogrove::data_type::interval to_interval() const {
+            return genogrove::data_type::interval(start, end - 1);
+        }
+
+        /// Unstranded ('.') grove key.
+        [[nodiscard]] genogrove::data_type::genomic_coordinate to_coordinate() const {
+            return genogrove::data_type::genomic_coordinate('.', start, end - 1);
+        }
 
         /// True if FILTER is PASS or unset (".").
         [[nodiscard]] bool passed_filter() const {

@@ -16,6 +16,8 @@
 #include <vector>
 
 // genogrove
+#include <genogrove/data_type/genomic_coordinate.hpp>
+#include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/file_reader.hpp>
 #include <genogrove/io/bgzf_utils.hpp>
 
@@ -67,6 +69,19 @@ namespace genogrove::io {
 
         // Generic attribute getter with optional default value
         [[nodiscard]] std::optional<std::string> get_attribute(std::string_view key) const;
+
+        // Grove key for this record: GFF is 1-based closed, so [start - 1, end - 1] (0-based closed).
+        // Precondition: start >= 1 and end >= 1, which parsed records satisfy; a hand-built entry
+        // with a zero coordinate underflows.
+        [[nodiscard]] genogrove::data_type::interval to_interval() const {
+            return genogrove::data_type::interval(start - 1, end - 1);
+        }
+
+        // Stranded grove key; strand is column 7, with '?' (unknown) and unset mapped to '.'
+        [[nodiscard]] genogrove::data_type::genomic_coordinate to_coordinate() const {
+            const char s = strand.value_or('.');
+            return genogrove::data_type::genomic_coordinate(s == '?' ? '.' : s, start - 1, end - 1);
+        }
 
         // Check if this entry is in GTF format
         [[nodiscard]] bool is_gtf() const { return format == gff_format::GTF; }
