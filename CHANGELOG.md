@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`gff_entry` id helpers understand GFF3**: `get_transcript_id()` falls back to the single `Parent` of an exon/CDS/UTR feature, and `get_gene_id()` to a gene's `ID` or a transcript's `Parent`, when the GTF attribute is absent. New `get_parent_ids()` returns every comma-separated `Parent`; multi-parent features yield `nullopt` from `get_transcript_id()`. ([#594](https://github.com/genogrove/genogrove/issues/594), [#595](https://github.com/genogrove/genogrove/pull/595))
+
 ## [0.26.4] - 2026-10-25
 
 ### Changed
