@@ -1001,6 +1001,24 @@ TEST(GroveViewCorruptTest, DescendingChildBlocksRejected) {
     EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
 }
 
+TEST(GroveViewCorruptTest, FirstChildPrecedingNonRootParentRejected) {
+    // The parent is not block 0, so a child id of 1 is above 0 yet still before its parent:
+    // only a comparison against the parent's own id rejects it. A query descends only the
+    // path to its first match, so ask for the last key to reach the last internal block.
+    auto s = split(write_multilevel_grove());
+    std::uint32_t parent = 0;
+    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
+        if (!is_leaf_block(s.blocks[b])) {
+            parent = b;  // keep the last internal block, the deepest id
+        }
+    }
+    ASSERT_GE(parent, 2u);
+    set_pod(s.blocks[parent], child_id_at(s.blocks[parent], 0), std::uint32_t{1});
+    view_file f(join(s));
+    auto v = view_ii::open(f.path.string());
+    EXPECT_THROW((void)v.intersect(gdt::interval{390, 395}, "chr1"), std::runtime_error);
+}
+
 TEST(GroveViewCorruptTest, ChildPointingBackToRootRejected) {
     auto s = split(write_multilevel_grove());
     const auto b = find_internal(s);
