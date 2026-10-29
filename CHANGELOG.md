@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Cyclic block ids hung or crashed `grove_view` queries**: `grove_view` now rejects a child id that repeats or precedes its parent's block id, and a leaf `next` id that does not exceed the leaf's, with `std::runtime_error`. `intersect` also rejects a `next` that is not a leaf; flanking queries never follow `next`. Before, a self-referencing or backward id made queries recurse or loop without bound. ([#602](https://github.com/genogrove/genogrove/issues/602), [#603](https://github.com/genogrove/genogrove/pull/603))
 - **Malformed `.gg` files could double-free on load**: `grove::deserialize` now rejects block ids that do not form a forest (shared, self-referencing or backward child ids, a root claimed twice, a leaf `next` that is not a leaf, orphan node blocks, duplicate index names) with `std::runtime_error`. `grove_view::open()` also gains corrupt-input tests. ([#553](https://github.com/genogrove/genogrove/issues/553), [#555](https://github.com/genogrove/genogrove/issues/555), [#600](https://github.com/genogrove/genogrove/pull/600))
 
 ### Refactored
