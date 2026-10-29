@@ -43,16 +43,16 @@ void grove_insert(
 );
 
 // Iterate a GFF/GTF query file, invoking cb(interval, seqid) for each record.
-// The interval is converted to the CLI's canonical 0-based-inclusive space:
-// GFF is 1-based inclusive, so [start, end] -> interval(start-1, end-1). This
-// matches the BED conversion, so a GFF query and a BED query over the same
-// physical region produce the same interval (see run_intersect). Split from
-// result printing so a GFF query can run against a target of any payload type.
+// The interval is in the CLI's canonical 0-based-inclusive space
+// (gff_entry::to_interval). This matches the BED conversion, so a GFF query and
+// a BED query over the same physical region produce the same interval (see
+// run_intersect). Split from result printing so a GFF query can run against a
+// target of any payload type.
 template <typename F>
 void for_each_gff_query(const std::string& queryfile, F&& cb) {
     gio::gff_reader reader(queryfile);
     for (const auto& query_entry : reader) {
-        cb(gdt::interval(query_entry.start - 1, query_entry.end - 1), query_entry.seqid);
+        cb(query_entry.to_interval(), query_entry.seqid);
     }
 }
 

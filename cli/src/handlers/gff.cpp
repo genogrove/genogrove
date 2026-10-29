@@ -21,11 +21,10 @@ void grove_insert(
     gio::gff_reader reader(filepath);
 
     for (const auto& entry : reader) {
-        // Canonical 0-based-inclusive space: GFF is 1-based inclusive, so
-        // [start, end] -> [start-1, end-1]. Matches the BED conversion so
+        // Canonical 0-based-inclusive space, matching the BED conversion so
         // cross-type queries (BED query vs GFF index, and vice versa) overlap
         // in a common coordinate space. Output still prints raw entry coords.
-        gdt::interval iv(entry.start - 1, entry.end - 1);
+        gdt::interval iv = entry.to_interval();
         gdt::key<gdt::interval, gio::gff_entry>* key_ptr = sorted
             ? grove.insert_data(entry.seqid, iv, entry, ggs::sorted)
             : grove.insert_data(entry.seqid, iv, entry);
