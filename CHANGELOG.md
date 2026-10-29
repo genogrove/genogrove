@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Malformed `.gg` files could double-free on load**: `grove::deserialize` now rejects block ids that do not form a forest (shared, self-referencing or backward child ids, a root claimed twice, a leaf `next` that is not a leaf, orphan node blocks, duplicate index names) with `std::runtime_error`. `grove_view::open()` also gains corrupt-input tests. ([#553](https://github.com/genogrove/genogrove/issues/553), [#555](https://github.com/genogrove/genogrove/issues/555), [#600](https://github.com/genogrove/genogrove/pull/600))
+
 ### Refactored
 - **CLI handlers use `to_interval()`**: the BED, GFF and VCF handlers call the entry conversion members instead of repeating the per-format `end - 1` / `start - 1, end - 1` arithmetic. No behavior change. ([#597](https://github.com/genogrove/genogrove/issues/597), [#599](https://github.com/genogrove/genogrove/pull/599))
 

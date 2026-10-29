@@ -136,10 +136,17 @@ public:
                 throw std::runtime_error("Failed to deserialize grove: external key count mismatch");
             }
         } catch (...) {
+            // Collect first: deleting a parent frees its linked children, so
+            // reading their (dangling) block_node entries afterwards is a
+            // use-after-free.
+            std::vector<node<key_type, data_type>*> parentless;
             for (auto* n : blocks.block_node) {
                 if (n != nullptr && n->get_parent() == nullptr) {
-                    delete n;
+                    parentless.push_back(n);
                 }
+            }
+            for (auto* n : parentless) {
+                delete n;
             }
             throw;
         }
@@ -665,8 +672,14 @@ private:
     // Links each internal node's children and each leaf's next-leaf pointer
     // from the block ids read_deserialize_blocks() recorded, then rebuilds
     // per-index roots and rightmost leaves.
+    //
+    // Nodes delete their children, so every node block needs exactly one owner
+    // (a parent or an index root); a shared or cyclic id from a bad file would
+    // double-free. The writer numbers blocks in DFS pre-order, so a child id
+    // must exceed its parent's, which also rules out cycles.
     [[nodiscard]] static deserialize_linked link_deserialize_structure(
         const deserialize_header& header, deserialize_blocks_result& blocks) {
+        std::vector<bool> owned(header.ext_block_begin, false);
         for (detail::block_id b = 0; b < header.ext_block_begin; ++b) {
             node<key_type, data_type>* n = blocks.block_node[b];
             if (n == nullptr) {
@@ -679,6 +692,11 @@ private:
                     if (cid >= header.ext_block_begin || blocks.block_node[cid] == nullptr) {
                         throw std::runtime_error("Failed to deserialize grove: invalid child block id");
                     }
+                    if (cid <= b || owned[cid]) {
+                        throw std::runtime_error(
+                            "Failed to deserialize grove: child block is shared or precedes its parent");
+                    }
+                    owned[cid] = true;
                     // push before set_parent: if push_back throws, the child
                     // stays parent-less and is freed directly by the guard
                     // (never both directly and via this parent's subtree).
@@ -691,6 +709,14 @@ private:
                     if (nid >= header.ext_block_begin || blocks.block_node[nid] == nullptr) {
                         throw std::runtime_error("Failed to deserialize grove: invalid next block id");
                     }
+                    if (!blocks.block_node[nid]->get_is_leaf()) {
+                        throw std::runtime_error("Failed to deserialize grove: next block is not a leaf");
+                    }
+                    // A leaf's successor is its right sibling, which DFS pre-order
+                    // numbers later; anything else could loop a leaf-chain walk.
+                    if (nid <= b) {
+                        throw std::runtime_error("Failed to deserialize grove: next block does not follow its leaf");
+                    }
                     n->set_next(blocks.block_node[nid]);
                 }
             }
@@ -701,18 +727,29 @@ private:
             if (root_id >= header.ext_block_begin || blocks.block_node[root_id] == nullptr) {
                 throw std::runtime_error("Failed to deserialize grove: invalid root block id");
             }
+            if (owned[root_id]) {
+                throw std::runtime_error(
+                    "Failed to deserialize grove: root block is already owned by a parent or another index");
+            }
+            owned[root_id] = true;
             node<key_type, data_type>* root = blocks.block_node[root_id];
 
             // Routing maxima are derived state, so they are not serialized —
             // rebuild them now that children are linked. O(nodes).
             root->refresh_subtree_max_recursive();
 
-            linked.local_roots[name] = root;
+            if (!linked.local_roots.emplace(name, root).second) {
+                throw std::runtime_error("Failed to deserialize grove: duplicate index name");
+            }
             node<key_type, data_type>* cur = root;
             while (!cur->get_is_leaf() && !cur->get_children().empty()) {
                 cur = cur->get_children().back();
             }
             linked.local_rightmost[name] = cur;
+        }
+        // A node block no parent or root claims would never be freed.
+        if (std::find(owned.begin(), owned.end(), false) != owned.end()) {
+            throw std::runtime_error("Failed to deserialize grove: orphan node block");
         }
         return linked;
     }
