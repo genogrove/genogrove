@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Refactored
+- **CLI handlers use `to_interval()`**: the BED, GFF and VCF handlers call the entry conversion members instead of repeating the per-format `end - 1` / `start - 1, end - 1` arithmetic. No behavior change. ([#597](https://github.com/genogrove/genogrove/issues/597), [#599](https://github.com/genogrove/genogrove/pull/599))
+
 ### Added
 - **`to_interval()` / `to_coordinate()` on reader records**: `bed_entry`, `gff_entry`, `sam_entry` and `vcf_entry` convert their native coordinates to 0-based closed grove keys, so callers no longer repeat the per-format arithmetic. `bed_entry` throws `std::invalid_argument` when `end <= start`, `sam_entry` when `!consumes_reference()`; a GFF strand of `?` maps to `.`. ([#592](https://github.com/genogrove/genogrove/issues/592), [#598](https://github.com/genogrove/genogrove/pull/598))
 
