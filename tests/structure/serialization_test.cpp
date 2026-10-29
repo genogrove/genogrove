@@ -51,11 +51,12 @@ void put_pod(std::string& s, const T& v) {
     s.append(p, sizeof(T));
 }
 
-// Start a grove stream: magic + order + num_indices. Callers append index
+// Start a grove stream (typed for grove<interval, int>): magic + type tag + order + num_indices. Callers append index
 // entries / directory fields to craft a corrupt header for the DoS bounds.
 std::string start_stream(std::uint32_t num_indices, int order = 3) {
     std::string s;
     s.append(gst::detail::grove_stream_magic.data(), gst::detail::grove_stream_magic.size());
+    put_pod(s, gst::detail::make_stream_type_tag<gdt::interval, int, void>());
     put_pod<int>(s, order);
     put_pod<std::uint32_t>(s, num_indices);
     return s;
@@ -613,4 +614,54 @@ TEST(SerializationTest, SelfLoopInterleavedWithAnotherSourceRoundTrips) {
     ASSERT_EQ(in.size(), 2u);
     EXPECT_EQ(in[0].source->get_data(), 2);  // a->target first
     EXPECT_EQ(in[1].source->get_data(), 1);  // then the self-loop
+}
+
+// ---- Type tag (#593) -------------------------------------------------------
+
+namespace {
+
+std::string write_interval_int_grove() {
+    gst::grove<gdt::interval, int> g(3);
+    g.insert_data("chr1", gdt::interval{1, 2}, 7, gst::sorted);
+    std::stringstream ss;
+    g.serialize(ss);
+    return ss.str();
+}
+
+} // namespace
+
+TEST(SerializationTest, TypeTagMismatchedKeyTypeThrowsNamingBoth) {
+    std::stringstream ss(write_interval_int_grove());
+    try {
+        (void)gst::grove<gdt::genomic_coordinate, int>::deserialize(ss);
+        FAIL() << "expected std::runtime_error";
+    } catch (const std::runtime_error& e) {
+        std::string msg = e.what();
+        EXPECT_NE(msg.find("key type interval"), std::string::npos) << msg;
+        EXPECT_NE(msg.find("key type genomic_coordinate"), std::string::npos) << msg;
+    }
+}
+
+TEST(SerializationTest, TypeTagMismatchedDataPresenceThrows) {
+    std::stringstream ss(write_interval_int_grove());
+    EXPECT_THROW((void)gst::grove<gdt::interval>::deserialize(ss), std::runtime_error);
+}
+
+TEST(SerializationTest, TypeTagMismatchedEdgeDataPresenceThrows) {
+    // CLI case: written with string edge metadata, read by a void-edge reader.
+    std::stringstream ss(write_interval_int_grove());
+    EXPECT_THROW((void)(gst::grove<gdt::interval, int, std::string>::deserialize(ss)),
+                 std::runtime_error);
+}
+
+TEST(SerializationTest, TypeTagMismatchedViewOpenThrows) {
+    auto path = fs::temp_directory_path() / "genogrove_type_tag_view_test.bin";
+    {
+        std::ofstream ofs(path, std::ios::binary);
+        ofs << write_interval_int_grove();
+    }
+    EXPECT_THROW((void)(gst::grove_view<gdt::genomic_coordinate, int>::open(path.string())),
+                 std::runtime_error);
+    EXPECT_NO_THROW((void)(gst::grove_view<gdt::interval, int>::open(path.string())));
+    fs::remove(path);
 }

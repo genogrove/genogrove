@@ -29,14 +29,17 @@ namespace genogrove::io {
     ///   offset  size  field
     ///        0     4  magic           = "GROV"
     ///        4     1  format_major    = 0   (pre-1.0; format still evolving, may break)
-    ///        5     1  format_minor    = 3   (block-structured payload; see grove serialize)
+    ///        5     1  format_minor    = 4   (block-structured payload; see grove serialize)
     ///        6     1  lib_major       = genogrove_VERSION_MAJOR (informational)
     ///        7     1  lib_minor       = genogrove_VERSION_MINOR (informational)
     ///        8     1  lib_patch       = genogrove_VERSION_PATCH (informational)
     ///        9     1  payload_type    (BED = 0x01, GFF = 0x02)
     ///       10     2  reserved        (zero)
     ///
-    /// Format 0.3 is the block-structured, random-access-capable payload:
+    /// Format 0.4 adds a key/data/edge type tag after the grove stream magic, so a
+    /// reader instantiated with different template arguments fails fast.
+    ///
+    /// The payload is block-structured and random-access-capable:
     /// a plain directory (per-index root block ids + block metadata) followed by
     /// independently zlib-compressed, length-prefixed node and external-key
     /// blocks, each key's edges recorded as an outgoing then an incoming list so
@@ -51,7 +54,7 @@ namespace genogrove::io {
     struct gg_header {
         static constexpr std::array<char, 4> MAGIC = {'G', 'R', 'O', 'V'};
         static constexpr uint8_t CURRENT_FORMAT_MAJOR = 0;
-        static constexpr uint8_t CURRENT_FORMAT_MINOR = 3;
+        static constexpr uint8_t CURRENT_FORMAT_MINOR = 4;
         static constexpr std::size_t SIZE = 12;
 
         uint8_t format_major = CURRENT_FORMAT_MAJOR;

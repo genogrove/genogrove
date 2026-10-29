@@ -36,7 +36,7 @@
 namespace genogrove::structure {
 
 /**
- * @brief Read-only, partial reader over a serialized (format 0.3) grove.
+ * @brief Read-only, partial reader over a serialized (format 0.4) grove.
  *
  * Where grove::deserialize eagerly loads every block, grove_view loads only the
  * blocks a query walks. It reads the directory and builds a block_id -> file
@@ -60,7 +60,7 @@ class grove_view {
   public:
     /**
      * @brief Open a serialized grove for partial reading.
-     * @param path Path to a file containing a `.gg` grove stream (format 0.3).
+     * @param path Path to a file containing a `.gg` grove stream (format 0.4).
      * @param data_offset Byte offset where the grove stream starts. Defaults to
      *        0 (a bare grove stream); pass the size of any leading wrapper (e.g.
      *        the CLI's `gg_header`) when the grove is embedded after a header.
@@ -441,8 +441,16 @@ class grove_view {
         is.read(magic.data(), static_cast<std::streamsize>(magic.size()));
         if (is.gcount() != static_cast<std::streamsize>(magic.size()) ||
             magic != detail::grove_stream_magic) {
-            throw std::runtime_error("grove_view: bad magic (not a format 0.3 grove stream)");
+            throw std::runtime_error("grove_view: bad magic (not a format 0.4 grove stream)");
         }
+        detail::stream_type_tag written;
+        detail::read_pod(is, written);
+        if (!is) {
+            throw std::runtime_error("grove_view: stream error reading type tag");
+        }
+        detail::check_stream_type_tag(
+            written, detail::make_stream_type_tag<key_type, data_type, edge_data_type>(),
+            "grove_view");
 
         detail::read_pod(is, order);
         if (!is) {
