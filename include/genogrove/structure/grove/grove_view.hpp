@@ -593,6 +593,17 @@ class grove_view {
         std::unique_ptr<node_t> owner(
             node_t::deserialize_block(zis, order, key_storage, child_ids, next_id));
         node_t* n = owner.get();
+        // The writer numbers blocks in DFS pre-order, so child and next ids
+        // always exceed the block's own id. Anything else is a cycle that would
+        // recurse or loop without bound.
+        for (detail::block_id cid : child_ids) {
+            if (cid <= b) {
+                throw std::runtime_error("grove_view: child block does not follow its parent");
+            }
+        }
+        if (next_id != detail::no_block && next_id <= b) {
+            throw std::runtime_error("grove_view: next block does not follow its leaf");
+        }
         if (n->get_is_leaf()) {
             for (auto* k : n->get_keys()) {
                 read_key_edges(zis, k);
@@ -734,7 +745,11 @@ class grove_view {
             if (nid == detail::no_block) {
                 return nullptr;
             }
-            return g->load_node(nid);
+            node_t* next_leaf = g->load_node(nid);
+            if (!next_leaf->get_is_leaf()) {
+                throw std::runtime_error("grove_view: next block is not a leaf");
+            }
+            return next_leaf;
         }
     };
 };

@@ -969,3 +969,61 @@ TEST(GroveViewCorruptTest, CorruptBlockPayloadRejected) {
     }
     EXPECT_THROW(open_and_query(bytes), std::runtime_error);
 }
+
+// ---- grove_view on cyclic or misordered block ids (#602) -------------------
+
+TEST(GroveViewCorruptTest, SelfReferencingChildRejected) {
+    auto s = split(write_multilevel_grove());
+    const auto b = find_internal(s);
+    set_pod(s.blocks[b], child_id_at(s.blocks[b], 0), b);
+    EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
+}
+
+TEST(GroveViewCorruptTest, ChildPointingBackToRootRejected) {
+    auto s = split(write_multilevel_grove());
+    const auto b = find_internal(s);
+    auto& blk = s.blocks[b];
+    set_pod(blk, child_id_at(blk, child_count(blk) - 1), std::uint32_t{0});
+    EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
+}
+
+TEST(GroveViewCorruptTest, LeafNextPointingBackwardRejected) {
+    auto s = split(write_multilevel_grove());
+    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
+        if (is_leaf_block(s.blocks[b])) {
+            set_pod(s.blocks[b], next_id_at(s.blocks[b]), b);  // a leaf that is its own successor
+            break;
+        }
+    }
+    EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
+}
+
+TEST(GroveViewCorruptTest, LeafNextPointingAtInternalNodeRejected) {
+    auto s = split(write_multilevel_grove());
+    std::uint32_t first_leaf = s.ext_block_begin;
+    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
+        if (is_leaf_block(s.blocks[b])) {
+            first_leaf = b;
+            break;
+        }
+    }
+    ASSERT_LT(first_leaf, s.ext_block_begin);
+    // an internal block after the leaf, so only the leaf check can reject it
+    std::uint32_t later_internal = s.ext_block_begin;
+    for (std::uint32_t b = first_leaf + 1; b < s.ext_block_begin; ++b) {
+        if (!is_leaf_block(s.blocks[b])) {
+            later_internal = b;
+            break;
+        }
+    }
+    ASSERT_LT(later_internal, s.ext_block_begin);
+    set_pod(s.blocks[first_leaf], next_id_at(s.blocks[first_leaf]), later_internal);
+    EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
+}
+
+TEST(GroveViewCorruptTest, UntamperedStreamStillQueries) {
+    // Guards the new checks against rejecting what serialize() writes.
+    view_file f(join(split(write_multilevel_grove())));
+    auto v = view_ii::open(f.path.string());
+    EXPECT_EQ(v.intersect(gdt::interval{0, 1000}, "chr1").get_keys().size(), 40u);
+}
