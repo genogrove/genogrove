@@ -38,14 +38,14 @@ void grove_insert(
         // string_view probe the std::string-keyed attribute map without a copy.
         const auto& attrs = key_ptr->get_data().attributes;
         const auto attr_it = attrs.find(name_tag);
-        if (attr_it == attrs.end()) {
+        if (attr_it == attrs.end() || attr_it->second.empty()) {
             throw std::runtime_error(
                 "Error: GFF/GTF record '" + entry.seqid + ":" +
                 std::to_string(entry.start) + "-" + std::to_string(entry.end) +
                 "' has no '" + std::string(name_tag) +
                 "' attribute (required by --gff-name-tag for --links)");
         }
-        const std::string& value = attr_it->second;
+        const std::string& value = attr_it->second.front();
         std::string_view value_view(value.data(), value.size());
         auto [it, inserted] = name_map->emplace(value_view, key_ptr);
         if (!inserted) {

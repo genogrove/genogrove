@@ -145,7 +145,7 @@ TEST_F(CLIGffHandlerTest, NameMapKeysPointIntoStoredPayload) {
 
     auto it = name_map.find(std::string_view("gene1"));
     ASSERT_NE(it, name_map.end());
-    const std::string& stored = it->second->get_data().attributes.at("ID");
+    const std::string& stored = it->second->get_data().attributes.at("ID").front();
     EXPECT_EQ(it->first.data(), stored.data());
 }
 

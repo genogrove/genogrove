@@ -39,7 +39,8 @@ namespace genogrove::io {
         std::optional<double> score;    // score (if not '.')
         std::optional<char> strand;     // strand (+, -, ., or ?)
         std::optional<int> phase;       // phase for CDS features (0, 1, or 2)
-        std::map<std::string, std::string, std::less<>> attributes;  // key-value pairs from column 9
+        // key-value pairs from column 9; a key repeated on one line (GTF `tag`) keeps all values in order
+        std::map<std::string, std::vector<std::string>, std::less<>> attributes;
         gff_format format;              // detected format (GFF3 or GTF)
 
 
@@ -67,8 +68,8 @@ namespace genogrove::io {
         // Returns the value of the gene_biotype/gene_type attribute (GTF common)
         [[nodiscard]] std::optional<std::string> get_gene_biotype() const;
 
-        // Generic attribute getter with optional default value
-        [[nodiscard]] std::optional<std::string> get_attribute(std::string_view key) const;
+        // Every value of the key in file order; empty when absent
+        [[nodiscard]] std::vector<std::string> get_attributes(std::string_view key) const;
 
         // Grove key for this record: GFF is 1-based closed, so [start - 1, end - 1] (0-based closed).
         // Precondition: start >= 1 and end >= 1, which parsed records satisfy; a hand-built entry
@@ -170,7 +171,8 @@ namespace genogrove::io {
 
         // Helper to parse attributes (handles both GFF3 and GTF formats)
         // Returns the detected format
-        gff_format parse_attributes(std::string_view attr_string, std::map<std::string, std::string, std::less<>>& attributes);
+        gff_format parse_attributes(std::string_view attr_string,
+                                    std::map<std::string, std::vector<std::string>, std::less<>>& attributes);
 
         // Helpers for parsing individual GFF fields
         bool parse_score(gff_entry& entry, std::string_view score_str);
