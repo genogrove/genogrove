@@ -100,17 +100,17 @@ TEST_F(gfffileTest, readGFF3Format) {
     ASSERT_TRUE(entries[0].strand.has_value());
     EXPECT_EQ(entries[0].strand.value(), '+');
     EXPECT_FALSE(entries[0].phase.has_value());
-    EXPECT_EQ(entries[0].attributes.at("ID"), "gene1");
-    EXPECT_EQ(entries[0].attributes.at("Name"), "TEST1");
-    EXPECT_EQ(entries[0].attributes.at("biotype"), "protein_coding");
+    EXPECT_EQ(entries[0].attributes.at("ID").front(), "gene1");
+    EXPECT_EQ(entries[0].attributes.at("Name").front(), "TEST1");
+    EXPECT_EQ(entries[0].attributes.at("biotype").front(), "protein_coding");
 
     // Second entry - exon
     EXPECT_EQ(entries[1].seqid, "chr1");
     EXPECT_EQ(entries[1].type, "exon");
     EXPECT_EQ(entries[1].start, 1000);
     EXPECT_EQ(entries[1].end, 1500);
-    EXPECT_EQ(entries[1].attributes.at("ID"), "exon1");
-    EXPECT_EQ(entries[1].attributes.at("Parent"), "gene1");
+    EXPECT_EQ(entries[1].attributes.at("ID").front(), "exon1");
+    EXPECT_EQ(entries[1].attributes.at("Parent").front(), "gene1");
 
     // Third entry - gene with score
     EXPECT_EQ(entries[2].seqid, "chr2");
@@ -148,9 +148,9 @@ TEST_F(gfffileTest, readGTFFormat) {
     EXPECT_EQ(entries[0].type, "gene");
     EXPECT_EQ(entries[0].start, 1000);
     EXPECT_EQ(entries[0].end, 2000);
-    EXPECT_EQ(entries[0].attributes.at("gene_id"), "ENSG00000001");
-    EXPECT_EQ(entries[0].attributes.at("gene_name"), "TEST1");
-    EXPECT_EQ(entries[0].attributes.at("gene_biotype"), "protein_coding");
+    EXPECT_EQ(entries[0].attributes.at("gene_id").front(), "ENSG00000001");
+    EXPECT_EQ(entries[0].attributes.at("gene_name").front(), "TEST1");
+    EXPECT_EQ(entries[0].attributes.at("gene_biotype").front(), "protein_coding");
 
     // Verify format detection
     EXPECT_TRUE(entries[0].is_gtf());
@@ -167,9 +167,9 @@ TEST_F(gfffileTest, readGTFFormat) {
 
     // Second entry - exon in GTF format
     EXPECT_EQ(entries[1].type, "exon");
-    EXPECT_EQ(entries[1].attributes.at("gene_id"), "ENSG00000001");
-    EXPECT_EQ(entries[1].attributes.at("transcript_id"), "ENST00000001");
-    EXPECT_EQ(entries[1].attributes.at("exon_number"), "1");
+    EXPECT_EQ(entries[1].attributes.at("gene_id").front(), "ENSG00000001");
+    EXPECT_EQ(entries[1].attributes.at("transcript_id").front(), "ENST00000001");
+    EXPECT_EQ(entries[1].attributes.at("exon_number").front(), "1");
 
     // Test transcript_id and exon_number helpers
     ASSERT_TRUE(entries[1].get_transcript_id().has_value());
@@ -554,7 +554,7 @@ TEST_F(gfffileTest, readGzippedGFF3Format) {
     EXPECT_EQ(entries[0].type, "gene");
     EXPECT_EQ(entries[0].start, 1000);
     EXPECT_EQ(entries[0].end, 2000);
-    EXPECT_EQ(entries[0].attributes.at("ID"), "gene1");
+    EXPECT_EQ(entries[0].attributes.at("ID").front(), "gene1");
 
     // Second entry
     EXPECT_EQ(entries[1].type, "exon");
@@ -580,8 +580,8 @@ TEST_F(gfffileTest, readGzippedGTFFormat) {
     // First entry - gene
     EXPECT_EQ(entries[0].seqid, "chr1");
     EXPECT_EQ(entries[0].type, "gene");
-    EXPECT_EQ(entries[0].attributes.at("gene_id"), "ENSG00000001");
-    EXPECT_EQ(entries[0].attributes.at("gene_name"), "TEST1");
+    EXPECT_EQ(entries[0].attributes.at("gene_id").front(), "ENSG00000001");
+    EXPECT_EQ(entries[0].attributes.at("gene_name").front(), "TEST1");
 
     // Remaining entries exist
     EXPECT_FALSE(entries[1].seqid.empty());
@@ -704,17 +704,15 @@ TEST_F(gfffileTest, gff3HelperMethods) {
     ASSERT_TRUE(biotype.has_value());
     EXPECT_EQ(biotype.value(), "protein_coding");
 
-    // Generic get_attribute should work
-    auto id = entry.get_attribute("ID");
-    ASSERT_TRUE(id.has_value());
-    EXPECT_EQ(id.value(), "gene1");
+    // Generic get_attributes should work
+    EXPECT_EQ(entry.get_attributes("ID"), (std::vector<std::string>{"gene1"}));
 }
 
 namespace {
     gio::gff_entry make_gff3(const std::string& type, std::map<std::string, std::string, std::less<>> attrs) {
         gio::gff_entry e("chr1", 1, 10, type);
         e.format = gio::gff_format::GFF3;
-        e.attributes = std::move(attrs);
+        for (auto& [k, v] : attrs) e.attributes[k] = {std::move(v)};
         return e;
     }
 }
@@ -742,7 +740,7 @@ TEST(gffEntryGff3Ids, geneId) {
 TEST(gffEntryGff3Ids, gtfUnaffected) {
     gio::gff_entry e("chr1", 1, 10, "exon");
     e.format = gio::gff_format::GTF;
-    e.attributes = {{"ID", "x"}, {"Parent", "y"}};
+    e.attributes = {{"ID", {"x"}}, {"Parent", {"y"}}};
     EXPECT_FALSE(e.get_gene_id().has_value());
     EXPECT_FALSE(e.get_transcript_id().has_value());
 }
@@ -753,14 +751,11 @@ TEST_F(gfffileTest, genericAttributeGetter) {
 
     ASSERT_TRUE(reader.read_next(entry));
 
-    // Test generic get_attribute
-    auto gene_id = entry.get_attribute("gene_id");
-    ASSERT_TRUE(gene_id.has_value());
-    EXPECT_EQ(gene_id.value(), "ENSG00000001");
+    // Test generic get_attributes
+    EXPECT_EQ(entry.get_attributes("gene_id"), (std::vector<std::string>{"ENSG00000001"}));
 
     // Test non-existent attribute
-    auto missing = entry.get_attribute("nonexistent");
-    EXPECT_FALSE(missing.has_value());
+    EXPECT_TRUE(entry.get_attributes("nonexistent").empty());
 }
 
 // ==========================================
@@ -877,8 +872,7 @@ TEST_F(gfffileTest, iteratorAccessAttributes) {
 
         // Use arrow operator to access members
         if (entry.type == "gene") {
-            auto id = entry.get_attribute("ID");
-            ASSERT_TRUE(id.has_value());
+            EXPECT_FALSE(entry.get_attributes("ID").empty());
         }
     }
     EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
@@ -972,7 +966,7 @@ TEST_F(gfffileTest, gffStartOneBoundary) {
     // start=1 stored as native 1-based
     EXPECT_EQ(entries[0].start, 1);
     EXPECT_EQ(entries[0].end, 100);
-    EXPECT_EQ(entries[0].attributes.at("ID"), "gene_at_start");
+    EXPECT_EQ(entries[0].attributes.at("ID").front(), "gene_at_start");
 }
 
 TEST_F(gfffileTest, gffSingleBaseFeature) {
@@ -991,7 +985,7 @@ TEST_F(gfffileTest, gffSingleBaseFeature) {
     // Single-base feature: start == end
     EXPECT_EQ(entries[1].start, 50);
     EXPECT_EQ(entries[1].end, 50);
-    EXPECT_EQ(entries[1].attributes.at("ID"), "single_base");
+    EXPECT_EQ(entries[1].attributes.at("ID").front(), "single_base");
 }
 
 // ==========================================
@@ -1016,9 +1010,9 @@ TEST_F(gfffileTest, gff3AttributeWithSemicolonInValue) {
     EXPECT_TRUE(reader.get_error_message().empty()) << "Unexpected error: " << reader.get_error_message();
 
     ASSERT_EQ(entries.size(), 1);
-    EXPECT_EQ(entries[0].attributes.at("ID"), "gene1");
+    EXPECT_EQ(entries[0].attributes.at("ID").front(), "gene1");
     // URL-encoded semicolon is stored as-is (reader doesn't decode %3B)
-    EXPECT_EQ(entries[0].attributes.at("Note"), "first%3Bsecond");
+    EXPECT_EQ(entries[0].attributes.at("Note").front(), "first%3Bsecond");
 
     fs::remove(temp_file);
 }
@@ -1041,14 +1035,14 @@ TEST_F(gfffileTest, gtfAttributeWithQuotedSemicolon) {
     ASSERT_EQ(entries.size(), 2);
 
     // First entry: gene_name contains a semicolon
-    EXPECT_EQ(entries[0].attributes.at("gene_id"), "ENSG00000001");
-    EXPECT_EQ(entries[0].attributes.at("gene_name"), "test;name");
-    EXPECT_EQ(entries[0].attributes.at("gene_biotype"), "protein_coding");
+    EXPECT_EQ(entries[0].attributes.at("gene_id").front(), "ENSG00000001");
+    EXPECT_EQ(entries[0].attributes.at("gene_name").front(), "test;name");
+    EXPECT_EQ(entries[0].attributes.at("gene_biotype").front(), "protein_coding");
 
     // Second entry: note contains multiple semicolons
-    EXPECT_EQ(entries[1].attributes.at("gene_id"), "ENSG00000002");
-    EXPECT_EQ(entries[1].attributes.at("gene_name"), "normal");
-    EXPECT_EQ(entries[1].attributes.at("note"), "a;b;c");
+    EXPECT_EQ(entries[1].attributes.at("gene_id").front(), "ENSG00000002");
+    EXPECT_EQ(entries[1].attributes.at("gene_name").front(), "normal");
+    EXPECT_EQ(entries[1].attributes.at("note").front(), "a;b;c");
 }
 
 // ==========================================
@@ -1134,9 +1128,9 @@ TEST(gffEntrySerialization, gff3FullRoundTrip) {
     in.strand = '-';
     in.phase = 1;
     in.format = gio::gff_format::GFF3;
-    in.attributes["ID"] = "exon:ENSE00001";
-    in.attributes["Parent"] = "transcript:ENST00001";
-    in.attributes["gene_id"] = "ENSG00001";
+    in.attributes["ID"] = {"exon:ENSE00001"};
+    in.attributes["Parent"] = {"transcript:ENST00001"};
+    in.attributes["gene_id"] = {"ENSG00001"};
     auto out = gff_roundtrip(in);
 
     EXPECT_EQ(out.source, "ENSEMBL");
@@ -1148,24 +1142,24 @@ TEST(gffEntrySerialization, gff3FullRoundTrip) {
     EXPECT_EQ(*out.phase, 1);
     EXPECT_EQ(out.format, gio::gff_format::GFF3);
     EXPECT_EQ(out.attributes.size(), 3u);
-    EXPECT_EQ(out.attributes.at("ID"), "exon:ENSE00001");
-    EXPECT_EQ(out.attributes.at("Parent"), "transcript:ENST00001");
-    EXPECT_EQ(out.attributes.at("gene_id"), "ENSG00001");
+    EXPECT_EQ(out.attributes.at("ID").front(), "exon:ENSE00001");
+    EXPECT_EQ(out.attributes.at("Parent").front(), "transcript:ENST00001");
+    EXPECT_EQ(out.attributes.at("gene_id").front(), "ENSG00001");
 }
 
 TEST(gffEntrySerialization, gtfRoundTrip) {
     gio::gff_entry in("chr2", 500, 600, "CDS");
     in.format = gio::gff_format::GTF;
     in.phase = 0;
-    in.attributes["gene_id"] = "G1";
-    in.attributes["transcript_id"] = "T1";
+    in.attributes["gene_id"] = {"G1"};
+    in.attributes["transcript_id"] = {"T1"};
     auto out = gff_roundtrip(in);
 
     EXPECT_EQ(out.format, gio::gff_format::GTF);
     EXPECT_TRUE(out.is_gtf());
     EXPECT_FALSE(out.is_gff3());
-    EXPECT_EQ(out.attributes.at("gene_id"), "G1");
-    EXPECT_EQ(out.attributes.at("transcript_id"), "T1");
+    EXPECT_EQ(out.attributes.at("gene_id").front(), "G1");
+    EXPECT_EQ(out.attributes.at("transcript_id").front(), "T1");
 }
 
 TEST(gffEntrySerialization, emptyAttributesMap) {
@@ -1183,14 +1177,79 @@ TEST(gffEntrySerialization, preservesEmbeddedNulInAttributes) {
     // Attribute values go through the length-prefixed string serializer, so
     // embedded NULs must survive the round-trip in both key and value.
     gio::gff_entry in("chr1", 5, 10, "feature");
-    in.attributes[std::string("k\0ey", 4)] = std::string("va\0lue", 6);
+    in.attributes[std::string("k\0ey", 4)] = {std::string("va\0lue", 6)};
     auto out = gff_roundtrip(in);
 
     ASSERT_EQ(out.attributes.size(), 1u);
     const auto it = out.attributes.find(std::string("k\0ey", 4));
     ASSERT_NE(it, out.attributes.end());
-    EXPECT_EQ(it->second.size(), 6u);
-    EXPECT_EQ(it->second[2], '\0');
+    ASSERT_EQ(it->second.size(), 1u);
+    EXPECT_EQ(it->second[0].size(), 6u);
+    EXPECT_EQ(it->second[0][2], '\0');
+}
+
+TEST(gffEntrySerialization, repeatedAttributeRoundTrip) {
+    gio::gff_entry in("chr1", 1, 10, "transcript");
+    in.format = gio::gff_format::GTF;
+    in.attributes["tag"] = {"basic", "cds_start_NF", "Ensembl_canonical"};
+    in.attributes["gene_id"] = {"G1"};
+    auto out = gff_roundtrip(in);
+
+    EXPECT_EQ(out.attributes, in.attributes);
+}
+
+TEST(gffEntrySerialization, attributeValueLimit) {
+    // 4096 values per record is the reader's bound; the writer must stop at the
+    // same point instead of writing a record the reader rejects.
+    gio::gff_entry in("chr1", 1, 10, "transcript");
+    in.attributes["tag"] = std::vector<std::string>(4096, "x");
+    EXPECT_EQ(gff_roundtrip(in).attributes, in.attributes);
+
+    in.attributes["tag"].push_back("x");
+    EXPECT_THROW(gff_roundtrip(in), std::runtime_error);
+}
+
+TEST(gffEntryRepeatedAttributes, gtfKeepsEveryTagInOrder) {
+    const auto path = fs::temp_directory_path() / "gg_repeated_tag.gtf";
+    {
+        std::ofstream f(path);
+        f << "chr1\tensembl\ttranscript\t1\t100\t.\t+\t.\t"
+             "gene_id \"G1\"; transcript_id \"T1\"; tag \"cds_start_NF\"; tag \"basic\"; tag \"Ensembl_canonical\";\n";
+    }
+    gio::gff_reader reader(path);
+    gio::gff_entry entry;
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.get_attributes("tag"),
+              (std::vector<std::string>{"cds_start_NF", "basic", "Ensembl_canonical"}));
+    EXPECT_TRUE(entry.get_attributes("missing").empty());
+    fs::remove(path);
+}
+
+TEST(gffEntryRepeatedAttributes, gff3KeepsRepeatedKeyInOrder) {
+    const auto path = fs::temp_directory_path() / "gg_repeated_key.gff3";
+    {
+        std::ofstream f(path);
+        f << "chr1\tsrc\tgene\t1\t100\t.\t+\t.\tID=g1;Note=x;Note=y\n";
+    }
+    gio::gff_reader reader(path);
+    gio::gff_entry entry;
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.get_attributes("Note"), (std::vector<std::string>{"x", "y"}));
+    fs::remove(path);
+}
+
+TEST(gffEntryRepeatedAttributes, parentIdsCollectEveryParentKey) {
+    gio::gff_entry e("chr1", 1, 10, "exon");
+    e.format = gio::gff_format::GFF3;
+    e.attributes["Parent"] = {"t1,t2", "t3"};
+    EXPECT_EQ(e.get_parent_ids(), (std::vector<std::string>{"t1", "t2", "t3"}));
+}
+
+TEST(gffEntryRepeatedAttributes, singleValueHelpersReadFirstValue) {
+    gio::gff_entry e("chr1", 1, 10, "gene");
+    e.format = gio::gff_format::GTF;
+    e.attributes["gene_id"] = {"A", "B"};
+    EXPECT_EQ(e.get_gene_id(), "A");
 }
 
 TEST(gffEntrySerialization, rejectsUnknownFormatValue) {
@@ -1216,12 +1275,12 @@ TEST(gffEntrySerialization, groveRoundTrip) {
 
     gio::gff_entry e1("chr1", 100, 200, "gene");
     e1.format = gio::gff_format::GFF3;
-    e1.attributes["ID"] = "gene1";
+    e1.attributes["ID"] = {"gene1"};
     e1.strand = '+';
 
     gio::gff_entry e2("chr1", 300, 400, "exon");
     e2.format = gio::gff_format::GFF3;
-    e2.attributes["Parent"] = "gene1";
+    e2.attributes["Parent"] = {"gene1"};
 
     grove.insert_data("chr1", gdt::interval(100, 200), e1);
     grove.insert_data("chr1", gdt::interval(300, 400), e2);
@@ -1233,14 +1292,14 @@ TEST(gffEntrySerialization, groveRoundTrip) {
     auto r1 = restored.intersect(gdt::interval(150, 150), "chr1");
     ASSERT_EQ(r1.get_keys().size(), 1u);
     EXPECT_EQ(r1.get_keys()[0]->get_data().type, "gene");
-    EXPECT_EQ(r1.get_keys()[0]->get_data().attributes.at("ID"), "gene1");
+    EXPECT_EQ(r1.get_keys()[0]->get_data().attributes.at("ID").front(), "gene1");
     ASSERT_TRUE(r1.get_keys()[0]->get_data().strand.has_value());
     EXPECT_EQ(*r1.get_keys()[0]->get_data().strand, '+');
 
     auto r2 = restored.intersect(gdt::interval(350, 350), "chr1");
     ASSERT_EQ(r2.get_keys().size(), 1u);
     EXPECT_EQ(r2.get_keys()[0]->get_data().type, "exon");
-    EXPECT_EQ(r2.get_keys()[0]->get_data().attributes.at("Parent"), "gene1");
+    EXPECT_EQ(r2.get_keys()[0]->get_data().attributes.at("Parent").front(), "gene1");
 }
 
 // ==========================================

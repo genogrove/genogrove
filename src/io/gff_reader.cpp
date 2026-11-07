@@ -33,20 +33,29 @@ namespace genogrove::io {
     // gff_entry helper methods
     // ==========================================
 
+    namespace {
+        // First value of a key; the single-valued helpers below (gene_id, exon_number, ...) use it.
+        std::optional<std::string> first_attribute(const gff_entry& e, std::string_view key) {
+            auto it = e.attributes.find(key);
+            if (it != e.attributes.end() && !it->second.empty()) return it->second.front();
+            return std::nullopt;
+        }
+    } // namespace
+
     std::vector<std::string> gff_entry::get_parent_ids() const {
         std::vector<std::string> ids;
-        auto parent = get_attribute("Parent");
-        if (!parent) return ids;
-        for (auto id : std::views::split(*parent, ',')) {
-            if (!id.empty()) ids.emplace_back(id.begin(), id.end());
+        for (const auto& parent : get_attributes("Parent")) {
+            for (auto id : std::views::split(parent, ',')) {
+                if (!id.empty()) ids.emplace_back(id.begin(), id.end());
+            }
         }
         return ids;
     }
 
     std::optional<std::string> gff_entry::get_gene_id() const {
-        if (auto id = get_attribute("gene_id")) return id;
+        if (auto id = first_attribute(*this, "gene_id")) return id;
         if (!is_gff3()) return std::nullopt;
-        if (type == "gene") return get_attribute("ID");
+        if (type == "gene") return first_attribute(*this, "ID");
         // A transcript's gene is its own Parent
         static constexpr std::array<std::string_view, 6> transcript_types = {
             "mRNA", "transcript", "lnc_RNA", "ncRNA", "rRNA", "tRNA"};
@@ -57,7 +66,7 @@ namespace genogrove::io {
     }
 
     std::optional<std::string> gff_entry::get_transcript_id() const {
-        if (auto id = get_attribute("transcript_id")) return id;
+        if (auto id = first_attribute(*this, "transcript_id")) return id;
         if (!is_gff3()) return std::nullopt;
         static constexpr std::array<std::string_view, 5> child_types = {
             "exon", "CDS", "five_prime_UTR", "three_prime_UTR", "UTR"};
@@ -68,7 +77,7 @@ namespace genogrove::io {
     }
 
     std::optional<int> gff_entry::get_exon_number() const {
-        auto exon_num_str = get_attribute("exon_number");
+        auto exon_num_str = first_attribute(*this, "exon_number");
         if (!exon_num_str) return std::nullopt;
 
         int value = 0;
@@ -82,28 +91,25 @@ namespace genogrove::io {
 
     std::optional<std::string> gff_entry::get_gene_name() const {
         // Try both gene_name and Name (GFF3 standard)
-        auto name = get_attribute("gene_name");
+        auto name = first_attribute(*this, "gene_name");
         if (name) return name;
-        return get_attribute("Name");
+        return first_attribute(*this, "Name");
     }
 
     std::optional<std::string> gff_entry::get_gene_biotype() const {
         // Try multiple common attribute names
-        auto biotype = get_attribute("gene_biotype");
+        auto biotype = first_attribute(*this, "gene_biotype");
         if (biotype) return biotype;
 
-        biotype = get_attribute("gene_type");
+        biotype = first_attribute(*this, "gene_type");
         if (biotype) return biotype;
 
-        return get_attribute("biotype");
+        return first_attribute(*this, "biotype");
     }
 
-    std::optional<std::string> gff_entry::get_attribute(std::string_view key) const {
+    std::vector<std::string> gff_entry::get_attributes(std::string_view key) const {
         auto it = attributes.find(key);
-        if (it != attributes.end()) {
-            return it->second;
-        }
-        return std::nullopt;
+        return it != attributes.end() ? it->second : std::vector<std::string>{};
     }
 
     // ==========================================
@@ -200,7 +206,7 @@ namespace genogrove::io {
     }
 
     gff_format gff_reader::parse_attributes(std::string_view attr_string,
-        std::map<std::string, std::string, std::less<>>& attributes) {
+        std::map<std::string, std::vector<std::string>, std::less<>>& attributes) {
         attributes.clear();
 
         std::string_view sv(attr_string);
@@ -233,8 +239,7 @@ namespace genogrove::io {
                     value_sv = value_sv.substr(1, value_sv.size() - 2);
                 }
 
-                attributes.insert_or_assign(std::string(trimmed.substr(0, space_pos)),
-                                           std::string(value_sv));
+                attributes[std::string(trimmed.substr(0, space_pos))].emplace_back(value_sv);
             }
             return gff_format::GTF;
         } else {
@@ -256,8 +261,7 @@ namespace genogrove::io {
                 size_t eq_pos = trimmed.find('=');
                 if (eq_pos == std::string_view::npos) continue;
 
-                attributes.insert_or_assign(std::string(trimmed.substr(0, eq_pos)),
-                                           std::string(trimmed.substr(eq_pos + 1)));
+                attributes[std::string(trimmed.substr(0, eq_pos))].emplace_back(trimmed.substr(eq_pos + 1));
             }
             return gff_format::GFF3;
         }
@@ -517,29 +521,37 @@ namespace genogrove::io {
             return gdt::serializer<T>::read(is);
         }
 
-        // Sanity bound on the attribute-count field. 4096 attributes per
-        // record is orders of magnitude beyond any plausible GFF row (real
-        // rows are tens of attributes); anything larger is a corrupt stream
-        // and would otherwise OOM the process trying to read up to 4 billion
-        // (key, value) pairs from a uint32_t count.
+        // Bound on attribute values per record (a repeated key counts once per
+        // value). Real rows have tens; more is a corrupt stream that would
+        // otherwise OOM on a uint32_t count. The writer enforces it too.
         static constexpr uint32_t MAX_ATTRIBUTES_PER_RECORD = 4096;
 
-        // The attributes map is written as a 4-byte count followed by
-        // (key, value) pairs, both as length-prefixed strings.
-        void write_string_map(std::ostream& os,
-                              const std::map<std::string, std::string, std::less<>>& m) {
-            const uint32_t n = static_cast<uint32_t>(m.size());
-            ggu::write_le(os, n);
-            for (const auto& [k, v] : m) {
-                gdt::serializer<std::string>::write(os, k);
-                gdt::serializer<std::string>::write(os, v);
+        using attribute_map = std::map<std::string, std::vector<std::string>, std::less<>>;
+
+        // The attributes map is written as a 4-byte count of values followed by
+        // one (key, value) pair per value, both as length-prefixed strings. A
+        // repeated key is written once per value, in order.
+        void write_attributes(std::ostream& os, const attribute_map& m) {
+            size_t n = 0;
+            for (const auto& kv : m) n += kv.second.size();
+            if (n > MAX_ATTRIBUTES_PER_RECORD) {
+                throw std::runtime_error("Failed to serialize gff_entry: " + std::to_string(n) +
+                                         " attribute values exceed the limit of " +
+                                         std::to_string(MAX_ATTRIBUTES_PER_RECORD));
+            }
+            ggu::write_le(os, static_cast<uint32_t>(n));
+            for (const auto& [k, values] : m) {
+                for (const auto& v : values) {
+                    gdt::serializer<std::string>::write(os, k);
+                    gdt::serializer<std::string>::write(os, v);
+                }
             }
             if (!os) {
                 throw std::runtime_error("Failed to serialize gff_entry: stream error writing attributes");
             }
         }
 
-        std::map<std::string, std::string, std::less<>> read_string_map(std::istream& is) {
+        attribute_map read_attributes(std::istream& is) {
             uint32_t n = 0;
             ggu::read_le(is, n);
             if (!is) {
@@ -549,11 +561,11 @@ namespace genogrove::io {
                 throw std::runtime_error(
                     "Failed to deserialize gff_entry: unreasonable attribute count");
             }
-            std::map<std::string, std::string, std::less<>> m;
+            attribute_map m;
             for (uint32_t i = 0; i < n; ++i) {
                 std::string k = gdt::serializer<std::string>::read(is);
                 std::string v = gdt::serializer<std::string>::read(is);
-                m.emplace(std::move(k), std::move(v));
+                m[std::move(k)].push_back(std::move(v));
             }
             return m;
         }
@@ -568,7 +580,7 @@ namespace genogrove::io {
         write_optional(os, score);
         write_optional(os, strand);
         write_optional(os, phase);
-        write_string_map(os, attributes);
+        write_attributes(os, attributes);
         const uint8_t fmt = static_cast<uint8_t>(format);
         os.write(reinterpret_cast<const char*>(&fmt), sizeof(fmt));
         if (!os) {
@@ -589,7 +601,7 @@ namespace genogrove::io {
         entry.score = read_optional<double>(is);
         entry.strand = read_optional<char>(is);
         entry.phase = read_optional<int>(is);
-        entry.attributes = read_string_map(is);
+        entry.attributes = read_attributes(is);
         uint8_t fmt = 0;
         is.read(reinterpret_cast<char*>(&fmt), sizeof(fmt));
         if (!is) {

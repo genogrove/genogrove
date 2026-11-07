@@ -237,7 +237,7 @@ TEST_F(CLIIndexE2ETest, IndexProducesDeserializableGffGrove) {
     ASSERT_EQ(hits.get_keys().size(), 1u);
     EXPECT_EQ(hits.get_keys()[0]->get_data().seqid, "chr1");
     EXPECT_EQ(hits.get_keys()[0]->get_data().type, "gene");
-    EXPECT_EQ(hits.get_keys()[0]->get_data().attributes.at("ID"), "gene1");
+    EXPECT_EQ(hits.get_keys()[0]->get_data().attributes.at("ID").front(), "gene1");
     EXPECT_EQ(hits.get_keys()[0]->get_data().format, gio::gff_format::GFF3);
 }
 

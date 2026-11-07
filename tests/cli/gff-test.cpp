@@ -145,8 +145,20 @@ TEST_F(CLIGffHandlerTest, NameMapKeysPointIntoStoredPayload) {
 
     auto it = name_map.find(std::string_view("gene1"));
     ASSERT_NE(it, name_map.end());
-    const std::string& stored = it->second->get_data().attributes.at("ID");
+    const std::string& stored = it->second->get_data().attributes.at("ID").front();
     EXPECT_EQ(it->first.data(), stored.data());
+}
+
+TEST_F(CLIGffHandlerTest, NameMapUsesFirstValueOfRepeatedTag) {
+    write_file(tmp_gff,
+               "chr1\ttest\tgene\t101\t500\t.\t+\t.\tgene_id \"g1\"; tag \"a\"; tag \"b\";\n");
+    gff_grove grove(3);
+    handlers::gff::name_to_key_map name_map;
+    handlers::gff::grove_insert(grove, tmp_gff.string(), false, &name_map, "tag");
+
+    EXPECT_EQ(name_map.size(), 1u);
+    EXPECT_TRUE(name_map.contains(std::string_view("a")));
+    EXPECT_FALSE(name_map.contains(std::string_view("b")));
 }
 
 TEST_F(CLIGffHandlerTest, NameMapMissingTagThrows) {
