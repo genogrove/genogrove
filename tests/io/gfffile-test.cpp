@@ -1198,6 +1198,17 @@ TEST(gffEntrySerialization, repeatedAttributeRoundTrip) {
     EXPECT_EQ(out.attributes, in.attributes);
 }
 
+TEST(gffEntrySerialization, attributeValueLimit) {
+    // 4096 values per record is the reader's bound; the writer must stop at the
+    // same point instead of writing a record the reader rejects.
+    gio::gff_entry in("chr1", 1, 10, "transcript");
+    in.attributes["tag"] = std::vector<std::string>(4096, "x");
+    EXPECT_EQ(gff_roundtrip(in).attributes, in.attributes);
+
+    in.attributes["tag"].push_back("x");
+    EXPECT_THROW(gff_roundtrip(in), std::runtime_error);
+}
+
 TEST(gffEntryRepeatedAttributes, gtfKeepsEveryTagInOrder) {
     const auto path = fs::temp_directory_path() / "gg_repeated_tag.gtf";
     {
@@ -1225,6 +1236,20 @@ TEST(gffEntryRepeatedAttributes, gff3KeepsRepeatedKeyInOrder) {
     ASSERT_TRUE(reader.read_next(entry));
     EXPECT_EQ(entry.get_attributes("Note"), (std::vector<std::string>{"x", "y"}));
     fs::remove(path);
+}
+
+TEST(gffEntryRepeatedAttributes, parentIdsCollectEveryParentKey) {
+    gio::gff_entry e("chr1", 1, 10, "exon");
+    e.format = gio::gff_format::GFF3;
+    e.attributes["Parent"] = {"t1,t2", "t3"};
+    EXPECT_EQ(e.get_parent_ids(), (std::vector<std::string>{"t1", "t2", "t3"}));
+}
+
+TEST(gffEntryRepeatedAttributes, singleValueHelpersReadFirstValue) {
+    gio::gff_entry e("chr1", 1, 10, "gene");
+    e.format = gio::gff_format::GTF;
+    e.attributes["gene_id"] = {"A", "B"};
+    EXPECT_EQ(e.get_gene_id(), "A");
 }
 
 TEST(gffEntrySerialization, rejectsUnknownFormatValue) {

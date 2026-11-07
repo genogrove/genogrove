@@ -521,11 +521,9 @@ namespace genogrove::io {
             return gdt::serializer<T>::read(is);
         }
 
-        // Sanity bound on the attribute-count field. 4096 attributes per
-        // record is orders of magnitude beyond any plausible GFF row (real
-        // rows are tens of attributes); anything larger is a corrupt stream
-        // and would otherwise OOM the process trying to read up to 4 billion
-        // (key, value) pairs from a uint32_t count.
+        // Bound on attribute values per record (a repeated key counts once per
+        // value). Real rows have tens; more is a corrupt stream that would
+        // otherwise OOM on a uint32_t count. The writer enforces it too.
         static constexpr uint32_t MAX_ATTRIBUTES_PER_RECORD = 4096;
 
         using attribute_map = std::map<std::string, std::vector<std::string>, std::less<>>;
@@ -533,10 +531,15 @@ namespace genogrove::io {
         // The attributes map is written as a 4-byte count of values followed by
         // one (key, value) pair per value, both as length-prefixed strings. A
         // repeated key is written once per value, in order.
-        void write_string_map(std::ostream& os, const attribute_map& m) {
-            uint32_t n = 0;
-            for (const auto& kv : m) n += static_cast<uint32_t>(kv.second.size());
-            ggu::write_le(os, n);
+        void write_attributes(std::ostream& os, const attribute_map& m) {
+            size_t n = 0;
+            for (const auto& kv : m) n += kv.second.size();
+            if (n > MAX_ATTRIBUTES_PER_RECORD) {
+                throw std::runtime_error("Failed to serialize gff_entry: " + std::to_string(n) +
+                                         " attribute values exceed the limit of " +
+                                         std::to_string(MAX_ATTRIBUTES_PER_RECORD));
+            }
+            ggu::write_le(os, static_cast<uint32_t>(n));
             for (const auto& [k, values] : m) {
                 for (const auto& v : values) {
                     gdt::serializer<std::string>::write(os, k);
@@ -548,7 +551,7 @@ namespace genogrove::io {
             }
         }
 
-        attribute_map read_string_map(std::istream& is) {
+        attribute_map read_attributes(std::istream& is) {
             uint32_t n = 0;
             ggu::read_le(is, n);
             if (!is) {
@@ -577,7 +580,7 @@ namespace genogrove::io {
         write_optional(os, score);
         write_optional(os, strand);
         write_optional(os, phase);
-        write_string_map(os, attributes);
+        write_attributes(os, attributes);
         const uint8_t fmt = static_cast<uint8_t>(format);
         os.write(reinterpret_cast<const char*>(&fmt), sizeof(fmt));
         if (!os) {
@@ -598,7 +601,7 @@ namespace genogrove::io {
         entry.score = read_optional<double>(is);
         entry.strand = read_optional<char>(is);
         entry.phase = read_optional<int>(is);
-        entry.attributes = read_string_map(is);
+        entry.attributes = read_attributes(is);
         uint8_t fmt = 0;
         is.read(reinterpret_cast<char*>(&fmt), sizeof(fmt));
         if (!is) {

@@ -149,6 +149,18 @@ TEST_F(CLIGffHandlerTest, NameMapKeysPointIntoStoredPayload) {
     EXPECT_EQ(it->first.data(), stored.data());
 }
 
+TEST_F(CLIGffHandlerTest, NameMapUsesFirstValueOfRepeatedTag) {
+    write_file(tmp_gff,
+               "chr1\ttest\tgene\t101\t500\t.\t+\t.\tgene_id \"g1\"; tag \"a\"; tag \"b\";\n");
+    gff_grove grove(3);
+    handlers::gff::name_to_key_map name_map;
+    handlers::gff::grove_insert(grove, tmp_gff.string(), false, &name_map, "tag");
+
+    EXPECT_EQ(name_map.size(), 1u);
+    EXPECT_TRUE(name_map.contains(std::string_view("a")));
+    EXPECT_FALSE(name_map.contains(std::string_view("b")));
+}
+
 TEST_F(CLIGffHandlerTest, NameMapMissingTagThrows) {
     // target.gff records carry only ID; asking for Name must fail — the user
     // picked that tag as the identifier, so a record without it is an error.
