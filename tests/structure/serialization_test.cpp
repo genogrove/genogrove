@@ -861,6 +861,44 @@ TEST(SerializationStructureTest, LeafNextPointingBackwardRejected) {
     expect_rejected(s);
 }
 
+namespace {
+
+// One-key grove re-emitted with `depth` one-child internal blocks above its leaf.
+split_stream write_chain_grove(std::uint32_t depth) {
+    grove_ii g(3);
+    g.insert_data("chr1", gdt::interval{0, 5}, 1, gst::sorted);
+    std::stringstream ss;
+    g.serialize(ss);
+    auto s = split(ss.str());
+    std::vector<std::string> chain;
+    for (std::uint32_t i = 0; i < depth; ++i) {
+        std::string blk(3 * sizeof(std::uint32_t), '\0');  // packed, child count, child id
+        set_pod(blk, sizeof(std::uint32_t), std::uint32_t{1});
+        set_pod(blk, 2 * sizeof(std::uint32_t), i + 1);
+        chain.push_back(std::move(blk));
+    }
+    s.blocks.insert(s.blocks.begin(), chain.begin(), chain.end());
+    // Directory tail: num_blocks, ext_block_begin, two uint64 counters.
+    const auto at = s.dir.size() - 2 * sizeof(std::uint64_t) - 2 * sizeof(gst::detail::block_id);
+    const auto n = static_cast<std::uint32_t>(s.blocks.size());
+    set_pod(s.dir, at, n);
+    set_pod(s.dir, at + sizeof(gst::detail::block_id), n);
+    return s;
+}
+
+}  // namespace
+
+TEST(SerializationStructureTest, TreeAtDepthLimitLoads) {
+    std::stringstream ss(join(write_chain_grove(gst::detail::max_tree_depth)));
+    EXPECT_NO_THROW((void)grove_ii::deserialize(ss));
+}
+
+TEST(SerializationStructureTest, TreeBeyondDepthLimitRejected) {
+    // A chain this deep would recurse once per level in root refresh and node
+    // destruction; it must be refused before that.
+    expect_rejected(write_chain_grove(gst::detail::max_tree_depth + 1));
+}
+
 TEST(SerializationStructureTest, GroveAfterManyRemovalsStillRoundTrips) {
     // Merges and borrows rewire the leaf chain and parents; the structural checks
     // must still accept everything serialize() writes.

@@ -680,6 +680,8 @@ private:
     [[nodiscard]] static deserialize_linked link_deserialize_structure(
         const deserialize_header& header, deserialize_blocks_result& blocks) {
         std::vector<bool> owned(header.ext_block_begin, false);
+        // Parents have lower ids, so depth[b] is final when b is reached.
+        std::vector<uint32_t> depth(header.ext_block_begin, 0);
         for (detail::block_id b = 0; b < header.ext_block_begin; ++b) {
             node<key_type, data_type>* n = blocks.block_node[b];
             if (n == nullptr) {
@@ -695,6 +697,10 @@ private:
                     if (cid <= b || owned[cid]) {
                         throw std::runtime_error(
                             "Failed to deserialize grove: child block is shared or precedes its parent");
+                    }
+                    depth[cid] = depth[b] + 1;
+                    if (depth[cid] > detail::max_tree_depth) {
+                        throw std::runtime_error("Failed to deserialize grove: tree is too deep");
                     }
                     owned[cid] = true;
                     // push before set_parent: if push_back throws, the child
