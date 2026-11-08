@@ -819,30 +819,6 @@ void expect_rejected(const split_stream& s) {
     EXPECT_THROW((void)grove_ii::deserialize(ss), std::runtime_error);
 }
 
-// One-key grove with `depth` one-child internal blocks spliced above its leaf.
-// The grove has no external blocks, so ext_block_begin equals num_blocks.
-split_stream write_chain_grove(std::uint32_t depth) {
-    grove_ii g(3);
-    g.insert_data("chr1", gdt::interval{0, 5}, 1, gst::sorted);
-    std::stringstream ss;
-    g.serialize(ss);
-    auto s = split(ss.str());
-    std::vector<std::string> chain;
-    for (std::uint32_t i = 0; i < depth; ++i) {
-        std::string blk(3 * sizeof(std::uint32_t), '\0');  // zero-key internal: packed, child count, child id
-        set_pod(blk, sizeof(std::uint32_t), std::uint32_t{1});
-        set_pod(blk, 2 * sizeof(std::uint32_t), i + 1);
-        chain.push_back(std::move(blk));
-    }
-    s.blocks.insert(s.blocks.begin(), chain.begin(), chain.end());
-    // Directory tail: num_blocks, ext_block_begin, two uint64 counters.
-    const auto at = s.dir.size() - 2 * sizeof(std::uint64_t) - 2 * sizeof(gst::detail::block_id);
-    const auto n = static_cast<std::uint32_t>(s.blocks.size());
-    set_pod(s.dir, at, n);
-    set_pod(s.dir, at + sizeof(gst::detail::block_id), n);
-    return s;
-}
-
 // Ids of every leaf block, in file (tree) order.
 std::vector<std::uint32_t> leaf_blocks(const split_stream& s) {
     std::vector<std::uint32_t> out;
@@ -914,6 +890,19 @@ split_stream write_deep_grove(std::uint32_t depth) {
     return s;
 }
 
+// Valid-shaped one-level grove whose root (block 0) is swapped for an internal
+// block with zero keys and one child. Block 2 is left orphaned on purpose: both
+// readers fail while parsing block 0, before any structural check runs.
+split_stream write_zero_key_root_grove() {
+    auto s = write_deep_grove(1);
+    std::string blk;
+    put_pod<std::uint32_t>(blk, 0);  // packed header: internal node, zero keys
+    put_pod<std::uint32_t>(blk, 1);  // child count
+    put_pod<std::uint32_t>(blk, 1);  // child id
+    s.blocks[0] = std::move(blk);
+    return s;
+}
+
 }  // namespace
 
 TEST(SerializationStructureTest, UntamperedRebuildRoundTrips) {
@@ -974,13 +963,23 @@ TEST(SerializationStructureTest, LeafNextSkippingAcrossParentsRejected) {
     expect_rejected(s);
 }
 
+TEST(SerializationStructureTest, ZeroKeyInternalNodeRejected) {
+    std::stringstream ss(join(write_zero_key_root_grove()));
+    try {
+        (void)grove_ii::deserialize(ss);
+        FAIL() << "expected std::runtime_error";
+    } catch (const std::runtime_error& e) {
+        EXPECT_NE(std::string(e.what()).find("no keys"), std::string::npos) << e.what();
+    }
+}
+
 TEST(SerializationStructureTest, TreeAtDepthLimitLoads) {
-    std::stringstream ss(join(write_chain_grove(gst::detail::max_tree_depth)));
+    std::stringstream ss(join(write_deep_grove(gst::detail::max_tree_depth)));
     EXPECT_NO_THROW((void)grove_ii::deserialize(ss));
 }
 
 TEST(SerializationStructureTest, TreeBeyondDepthLimitRejected) {
-    std::stringstream ss(join(write_chain_grove(gst::detail::max_tree_depth + 1)));
+    std::stringstream ss(join(write_deep_grove(gst::detail::max_tree_depth + 1)));
     try {
         (void)grove_ii::deserialize(ss);
         FAIL() << "expected std::runtime_error";
@@ -1237,6 +1236,17 @@ TEST(GroveViewCorruptTest, TreeBeyondDepthLimitRejected) {
         FAIL() << "expected std::runtime_error";
     } catch (const std::runtime_error& e) {
         EXPECT_NE(std::string(e.what()).find("too deep"), std::string::npos) << e.what();
+    }
+}
+
+TEST(GroveViewCorruptTest, ZeroKeyInternalNodeRejected) {
+    view_file f(join(write_zero_key_root_grove()));
+    auto v = view_ii::open(f.path.string());
+    try {
+        (void)v.intersect(gdt::interval{100, 105}, "chr1");
+        FAIL() << "expected std::runtime_error";
+    } catch (const std::runtime_error& e) {
+        EXPECT_NE(std::string(e.what()).find("no keys"), std::string::npos) << e.what();
     }
 }
 

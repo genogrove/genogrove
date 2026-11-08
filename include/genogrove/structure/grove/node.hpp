@@ -645,6 +645,10 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize_block(
         if (num_children != num_keys + 1) {
             throw std::runtime_error("Failed to deserialize node block: child count does not match key count");
         }
+        // search_overlaps reads keys[0] on every internal node.
+        if (num_keys == 0) {
+            throw std::runtime_error("Failed to deserialize node block: internal node has no keys");
+        }
         out_child_ids.reserve(num_children);
         for (uint32_t i = 0; i < num_children; ++i) {
             detail::block_id child_id;
