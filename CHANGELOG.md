@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **macOS CI runs on `macos-15` and `macos-26`**: GitHub retired the `macos-14` runner, so the Apple Clang 15 job is gone and Apple Clang 21 (macOS 26) is added; Apple Clang 15 is no longer tested. The README compiler table lists the versions printed by the CI jobs. ([#609](https://github.com/genogrove/genogrove/pull/609))
 
+### Added
+- **Unit tests for the `kmer` key wrapper, `flanking_query_result` and `key<>`**: `kmer_key_test.cpp` covers construction, copy/move and serialization of `key<kmer, D>` and joins the shared comparison suite. `flanking_query_result_test.cpp` covers the null default and set/get. `key_test.cpp` gains serialize/deserialize, `to_string` and value-only comparison tests. ([#562](https://github.com/genogrove/genogrove/issues/562), [#614](https://github.com/genogrove/genogrove/pull/614))
+
 ## [0.27.0] - 2026-10-29
 
 > **Breaking release: the `.gg` file format changed (format 0.4).** Indexes written by 0.26.x and earlier can no longer be read. Re-create every `.gg` file with this version.
