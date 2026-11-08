@@ -38,6 +38,11 @@ inline constexpr block_id no_block = 0xFFFFFFFFu;
 /// chunk size and this cap in lock-step by referencing this constant in both.
 inline constexpr std::uint32_t max_external_keys_per_block = 512;
 
+/// Deepest tree (root = depth 0) deserialization accepts. A valid tree is about
+/// log2(keys) deep; node refresh and destruction recurse per level, so a deeper
+/// chain could overflow the stack.
+inline constexpr std::uint32_t max_tree_depth = 128;
+
 /// Magic + version at the very start of a grove serialization stream (distinct
 /// from the CLI-level io::gg_header that wraps a .gg file). Lets grove::deserialize
 /// reject a foreign / older-layout stream with a clear error before parsing. The
