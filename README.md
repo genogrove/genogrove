@@ -62,8 +62,8 @@ for (auto* key : results.get_keys()) {
 |----------|----------|----------|
 | Ubuntu 24.04 | GCC | 13, 14 |
 | Ubuntu 24.04 | Clang (LLVM) | 16, 17, 18 |
-| macOS 14 | Apple Clang | 15 (Xcode 15.4) |
-| macOS 15 | Apple Clang | 16 (Xcode 16.x) |
+| macOS 15 | Apple Clang | 17 (Xcode 16.4) |
+| macOS 26 | Apple Clang | 21 (Xcode 26.6) |
 
 All configurations are tested in both Debug and Release modes.
 
