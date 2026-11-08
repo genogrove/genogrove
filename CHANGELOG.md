@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **`gff_entry` kept only the last value of a repeated attribute — breaking change**: `attributes` now maps each key to a `std::vector<std::string>` in file order, so GTF keys such as Ensembl's `tag` keep every value. `get_attribute()` is removed; use `get_attributes()`. The single-value helpers (`get_gene_id()`, `get_gene_name()`, ...) now read the first value of a repeated key, where they used to read the last. ([#607](https://github.com/genogrove/genogrove/issues/607), [#608](https://github.com/genogrove/genogrove/pull/608))
 
+### Changed
+- **macOS CI runs on `macos-15` and `macos-26`**: GitHub retired the `macos-14` runner, so the Apple Clang 15 job is gone and Apple Clang 21 (macOS 26) is added; Apple Clang 15 is no longer tested. The README compiler table lists the versions printed by the CI jobs. ([#609](https://github.com/genogrove/genogrove/pull/609))
+
 ## [0.27.0] - 2026-10-29
 
 > **Breaking release: the `.gg` file format changed (format 0.4).** Indexes written by 0.26.x and earlier can no longer be read. Re-create every `.gg` file with this version.
