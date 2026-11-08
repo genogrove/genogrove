@@ -6,6 +6,7 @@
 #ifndef GENOGROVE_STRUCTURE_GROVE_GROVE_VIEW_HPP
 #define GENOGROVE_STRUCTURE_GROVE_GROVE_VIEW_HPP
 
+#include <algorithm>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
@@ -20,6 +21,7 @@
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -96,7 +98,7 @@ class grove_view {
             return result;
         }
         block_resolver res{this};
-        detail::search_overlaps(res, load_node(it->second), query, result);
+        detail::search_overlaps(res, load_root(it->second), query, result);
         return result;
     }
 
@@ -105,7 +107,7 @@ class grove_view {
         gdt::query_result<key_type, data_type> result{query};
         block_resolver res{this};
         for (const auto& [name, root_id] : index_roots) {
-            detail::search_overlaps(res, load_node(root_id), query, result);
+            detail::search_overlaps(res, load_root(root_id), query, result);
         }
         return result;
     }
@@ -146,7 +148,7 @@ class grove_view {
             return result;
         }
         block_resolver res{this};
-        detail::search_flanking(res, load_node(it->second), query, is_compatible, result);
+        detail::search_flanking(res, load_root(it->second), query, is_compatible, result);
         return result;
     }
 
@@ -403,6 +405,11 @@ class grove_view {
         std::unique_ptr<node_t> n;
         std::vector<detail::block_id> child_ids;
         detail::block_id next_id;
+        bool next_checked = false;  // leaves only: next_id verified against the tree
+    };
+    struct claim_info {
+        detail::block_id owner;  // parent block, or no_block for an index root
+        std::uint32_t depth;
     };
 
     std::unique_ptr<std::ifstream> file;  // seekable source, owned
@@ -415,6 +422,7 @@ class grove_view {
 
     std::deque<key_t> key_storage;  // stable addresses for loaded keys
     std::unordered_map<detail::block_id, loaded_node> node_cache;
+    std::unordered_map<detail::block_id, claim_info> claims;  // filled as descents reach blocks
     std::unordered_map<const node_t*, detail::block_id> node_block;  // reverse map for the resolver
     std::unordered_map<detail::block_id, std::vector<key_t*>> ext_cache;
     std::unordered_map<const key_t*, std::vector<edge_ref>> adjacency;
@@ -465,6 +473,7 @@ class grove_view {
         if (!is) {
             throw std::runtime_error("grove_view: stream error reading index count");
         }
+        std::unordered_set<detail::block_id> seen_roots;
         for (std::uint32_t i = 0; i < num_indices; ++i) {
             std::uint32_t name_len;
             detail::read_pod(is, name_len);
@@ -481,6 +490,9 @@ class grove_view {
             detail::read_pod(is, root_id);
             if (!is) {
                 throw std::runtime_error("grove_view: stream error reading root block id");
+            }
+            if (!seen_roots.insert(root_id).second) {
+                throw std::runtime_error("grove_view: two indices share a root block");
             }
             index_roots.emplace(std::move(name), root_id);
         }
@@ -619,6 +631,76 @@ class grove_view {
         return ins->second.n.get();
     }
 
+    // Records that `owner` lists `b` as a child (no_block for an index root). A
+    // block with two owners is a shared subtree, and a tree deeper than
+    // max_tree_depth would overflow the stack in a query; a valid file has neither.
+    void claim(detail::block_id b, detail::block_id owner) {
+        std::uint32_t depth = 0;
+        if (owner != detail::no_block) {
+            auto o = claims.find(owner);
+            if (o == claims.end()) {
+                throw std::runtime_error("grove_view: block reached through an unclaimed parent");
+            }
+            depth = o->second.depth + 1;
+        }
+        if (depth > detail::max_tree_depth) {
+            throw std::runtime_error("grove_view: tree is too deep");
+        }
+        auto [it, inserted] = claims.try_emplace(b, claim_info{owner, depth});
+        if (!inserted && it->second.owner != owner) {
+            throw std::runtime_error("grove_view: block is claimed by two parents");
+        }
+    }
+
+    node_t* load_root(detail::block_id b) {
+        claim(b, detail::no_block);
+        return load_node(b);
+    }
+
+    // First leaf under `b`, found down the leftmost edge.
+    detail::block_id leftmost_leaf(detail::block_id b, detail::block_id owner) {
+        for (;;) {
+            claim(b, owner);
+            if (load_node(b)->get_is_leaf()) {
+                return b;
+            }
+            owner = b;
+            b = node_cache.at(b).child_ids.front();
+        }
+    }
+
+    // A leaf's successor is the leftmost leaf under the nearest ancestor sibling
+    // to its right, or none for the last leaf. Checked once per leaf so a forged
+    // next cannot make a range scan skip leaves.
+    void check_next(detail::block_id leaf, detail::block_id next_id) {
+        detail::block_id expected = detail::no_block;
+        detail::block_id cur = leaf;
+        for (;;) {
+            auto c = claims.find(cur);
+            if (c == claims.end()) {
+                throw std::runtime_error("grove_view: leaf reached without a parent");
+            }
+            const detail::block_id parent = c->second.owner;
+            if (parent == detail::no_block) {
+                break;
+            }
+            const auto& siblings = node_cache.at(parent).child_ids;
+            // child ids ascend (checked on load), so a binary search finds cur
+            auto pos = std::lower_bound(siblings.begin(), siblings.end(), cur);
+            if (pos == siblings.end() || *pos != cur) {
+                throw std::runtime_error("grove_view: block missing from its parent's child list");
+            }
+            if (pos + 1 != siblings.end()) {
+                expected = leftmost_leaf(*(pos + 1), parent);
+                break;
+            }
+            cur = parent;
+        }
+        if (next_id != expected) {
+            throw std::runtime_error("grove_view: next block is not the leaf's right neighbour");
+        }
+    }
+
     // Load (or return cached) an external key block.
     std::vector<key_t*>& load_external(detail::block_id b) {
         auto cached = ext_cache.find(b);
@@ -736,24 +818,27 @@ class grove_view {
     struct block_resolver {
         grove_view* g;
         node_t* child(node_t* n, std::size_t i) {
-            loaded_node& lb = g->node_cache.at(g->node_block.at(n));
+            const detail::block_id nb = g->node_block.at(n);
+            loaded_node& lb = g->node_cache.at(nb);
             if (i >= lb.child_ids.size()) {
                 return nullptr;
             }
             detail::block_id cid = lb.child_ids[i];
+            g->claim(cid, nb);
             return g->load_node(cid);
         }
         node_t* next(node_t* n) {
-            loaded_node& lb = g->node_cache.at(g->node_block.at(n));
+            const detail::block_id nb = g->node_block.at(n);
+            loaded_node& lb = g->node_cache.at(nb);
             detail::block_id nid = lb.next_id;
+            if (!lb.next_checked) {
+                g->check_next(nb, nid);
+                lb.next_checked = true;
+            }
             if (nid == detail::no_block) {
                 return nullptr;
             }
-            node_t* next_leaf = g->load_node(nid);
-            if (!next_leaf->get_is_leaf()) {
-                throw std::runtime_error("grove_view: next block is not a leaf");
-            }
-            return next_leaf;
+            return g->load_node(nid);
         }
     };
 };
