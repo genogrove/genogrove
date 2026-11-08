@@ -890,6 +890,19 @@ split_stream write_deep_grove(std::uint32_t depth) {
     return s;
 }
 
+// Valid-shaped one-level grove whose root (block 0) is swapped for an internal
+// block with zero keys and one child. Block 2 is left orphaned on purpose: both
+// readers fail while parsing block 0, before any structural check runs.
+split_stream write_zero_key_root_grove() {
+    auto s = write_deep_grove(1);
+    std::string blk;
+    put_pod<std::uint32_t>(blk, 0);  // packed header: internal node, zero keys
+    put_pod<std::uint32_t>(blk, 1);  // child count
+    put_pod<std::uint32_t>(blk, 1);  // child id
+    s.blocks[0] = std::move(blk);
+    return s;
+}
+
 }  // namespace
 
 TEST(SerializationStructureTest, UntamperedRebuildRoundTrips) {
@@ -951,12 +964,7 @@ TEST(SerializationStructureTest, LeafNextSkippingAcrossParentsRejected) {
 }
 
 TEST(SerializationStructureTest, ZeroKeyInternalNodeRejected) {
-    auto s = write_deep_grove(1);
-    std::string blk(3 * sizeof(std::uint32_t), '\0');  // zero-key internal: packed, child count, child id
-    set_pod(blk, sizeof(std::uint32_t), std::uint32_t{1});
-    set_pod(blk, 2 * sizeof(std::uint32_t), std::uint32_t{1});
-    s.blocks[0] = std::move(blk);
-    std::stringstream ss(join(s));
+    std::stringstream ss(join(write_zero_key_root_grove()));
     try {
         (void)grove_ii::deserialize(ss);
         FAIL() << "expected std::runtime_error";
@@ -1228,6 +1236,17 @@ TEST(GroveViewCorruptTest, TreeBeyondDepthLimitRejected) {
         FAIL() << "expected std::runtime_error";
     } catch (const std::runtime_error& e) {
         EXPECT_NE(std::string(e.what()).find("too deep"), std::string::npos) << e.what();
+    }
+}
+
+TEST(GroveViewCorruptTest, ZeroKeyInternalNodeRejected) {
+    view_file f(join(write_zero_key_root_grove()));
+    auto v = view_ii::open(f.path.string());
+    try {
+        (void)v.intersect(gdt::interval{100, 105}, "chr1");
+        FAIL() << "expected std::runtime_error";
+    } catch (const std::runtime_error& e) {
+        EXPECT_NE(std::string(e.what()).find("no keys"), std::string::npos) << e.what();
     }
 }
 
