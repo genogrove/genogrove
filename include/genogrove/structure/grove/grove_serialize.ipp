@@ -672,23 +672,27 @@ private:
     // Each leaf's next must be the following leaf in tree order, none for the
     // last; anything else makes a range scan skip leaves or leave the tree.
     static void check_leaf_chain(node<key_type, data_type>* root) {
-        std::vector<node<key_type, data_type>*> leaves;
+        const auto fail = [] {
+            throw std::runtime_error(
+                "Failed to deserialize grove: next block is not the leaf's right neighbour");
+        };
+        node<key_type, data_type>* prev = nullptr;
         std::vector<node<key_type, data_type>*> stack{root};
         while (!stack.empty()) {
             auto* cur = stack.back();
             stack.pop_back();
-            if (cur->get_is_leaf()) {
-                leaves.push_back(cur);
+            if (!cur->get_is_leaf()) {
+                auto& kids = cur->get_children();
+                stack.insert(stack.end(), kids.rbegin(), kids.rend());
                 continue;
             }
-            auto& kids = cur->get_children();
-            stack.insert(stack.end(), kids.rbegin(), kids.rend());
-        }
-        for (std::size_t i = 0; i < leaves.size(); ++i) {
-            if (leaves[i]->get_next() != (i + 1 < leaves.size() ? leaves[i + 1] : nullptr)) {
-                throw std::runtime_error(
-                    "Failed to deserialize grove: next block is not the leaf's right neighbour");
+            if (prev != nullptr && prev->get_next() != cur) {
+                fail();
             }
+            prev = cur;
+        }
+        if (prev != nullptr && prev->get_next() != nullptr) {
+            fail();
         }
     }
 

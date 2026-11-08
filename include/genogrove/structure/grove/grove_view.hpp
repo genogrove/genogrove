@@ -21,6 +21,7 @@
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -472,6 +473,7 @@ class grove_view {
         if (!is) {
             throw std::runtime_error("grove_view: stream error reading index count");
         }
+        std::unordered_set<detail::block_id> seen_roots;
         for (std::uint32_t i = 0; i < num_indices; ++i) {
             std::uint32_t name_len;
             detail::read_pod(is, name_len);
@@ -488,6 +490,9 @@ class grove_view {
             detail::read_pod(is, root_id);
             if (!is) {
                 throw std::runtime_error("grove_view: stream error reading root block id");
+            }
+            if (!seen_roots.insert(root_id).second) {
+                throw std::runtime_error("grove_view: two indices share a root block");
             }
             index_roots.emplace(std::move(name), root_id);
         }
@@ -638,12 +643,12 @@ class grove_view {
             }
             depth = o->second.depth + 1;
         }
+        if (depth > detail::max_tree_depth) {
+            throw std::runtime_error("grove_view: tree is too deep");
+        }
         auto [it, inserted] = claims.try_emplace(b, claim_info{owner, depth});
         if (!inserted && it->second.owner != owner) {
             throw std::runtime_error("grove_view: block is claimed by two parents");
-        }
-        if (depth > detail::max_tree_depth) {
-            throw std::runtime_error("grove_view: tree is too deep");
         }
     }
 
@@ -680,8 +685,12 @@ class grove_view {
                 break;
             }
             const auto& siblings = node_cache.at(parent).child_ids;
-            auto pos = std::find(siblings.begin(), siblings.end(), cur);
-            if (pos != siblings.end() && pos + 1 != siblings.end()) {
+            // child ids ascend (checked on load), so a binary search finds cur
+            auto pos = std::lower_bound(siblings.begin(), siblings.end(), cur);
+            if (pos == siblings.end() || *pos != cur) {
+                throw std::runtime_error("grove_view: block missing from its parent's child list");
+            }
+            if (pos + 1 != siblings.end()) {
                 expected = leftmost_leaf(*(pos + 1), parent);
                 break;
             }

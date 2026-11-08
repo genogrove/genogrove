@@ -9,6 +9,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cstdint>
 #include <chrono>
 #include <cstring>
@@ -768,10 +769,13 @@ std::size_t next_id_at(const std::string& blk) {
     return sizeof(std::uint32_t) + key_count(blk) * key_bytes();
 }
 
+// Keys per index in write_multilevel_grove(), at [10 i, 10 i + 5].
+constexpr std::size_t multilevel_keys = 40;
+
 // Order-3 tree with several levels so internal blocks have >= 2 children.
 std::string write_multilevel_grove(bool two_indices = false) {
     gst::grove<gdt::interval, int> g(3);
-    for (std::size_t i = 0; i < 40; ++i) {
+    for (std::size_t i = 0; i < multilevel_keys; ++i) {
         g.insert_data("chr1", gdt::interval{i * 10, i * 10 + 5}, static_cast<int>(i), gst::sorted);
         if (two_indices) {
             g.insert_data("chr2", gdt::interval{i * 10, i * 10 + 5}, static_cast<int>(i), gst::sorted);
@@ -862,6 +866,18 @@ std::vector<std::uint32_t> leaf_parent_blocks(const split_stream& s) {
     return out;
 }
 
+// Forge L2 -> L4 in "A: L1 L2 | B: L3 L4": a next that skips L3 where two parents meet.
+void skip_past_parent_boundary(split_stream& s) {
+    const auto parents = leaf_parent_blocks(s);
+    const auto leaves = leaf_blocks(s);
+    ASSERT_GE(parents.size(), 2u);
+    const auto& p = s.blocks[parents.front()];
+    const auto last_leaf = get_pod<std::uint32_t>(p, child_id_at(p, child_count(p) - 1));
+    const auto at = static_cast<std::size_t>(std::find(leaves.begin(), leaves.end(), last_leaf) - leaves.begin());
+    ASSERT_GE(leaves.size(), at + 3);
+    set_pod(s.blocks[last_leaf], next_id_at(s.blocks[last_leaf]), leaves[at + 2]);
+}
+
 // Valid-shaped tree `depth` internal levels deep: each internal block has one
 // key and two children (a leaf, then the next internal block), and the leaves
 // are chained left to right. Blocks alternate internal (2i), leaf (2i+1), and
@@ -949,6 +965,12 @@ TEST(SerializationStructureTest, LeafNextSkippingRightSiblingRejected) {
     const auto leaves = leaf_blocks(s);
     ASSERT_GE(leaves.size(), 3u);
     set_pod(s.blocks[leaves[0]], next_id_at(s.blocks[leaves[0]]), leaves[2]);  // skips leaves[1]
+    expect_rejected(s);
+}
+
+TEST(SerializationStructureTest, LeafNextSkippingAcrossParentsRejected) {
+    auto s = split(write_multilevel_grove());
+    skip_past_parent_boundary(s);
     expect_rejected(s);
 }
 
@@ -1164,6 +1186,20 @@ TEST(GroveViewCorruptTest, LeafNextSkippingRightSiblingRejected) {
     EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
 }
 
+TEST(GroveViewCorruptTest, LeafNextSkippingAcrossParentsRejected) {
+    auto s = split(write_multilevel_grove());
+    skip_past_parent_boundary(s);
+    EXPECT_THROW(open_and_query(join(s)), std::runtime_error);
+}
+
+TEST(GroveViewCorruptTest, TwoIndicesSharingARootRejected) {
+    auto s = split(write_multilevel_grove(/*two_indices=*/true));
+    ASSERT_EQ(s.root_id_at.size(), 2u);
+    set_pod(s.dir, s.root_id_at[1], get_pod<std::uint32_t>(s.dir, s.root_id_at[0]));
+    view_file f(join(s));
+    EXPECT_THROW((void)view_ii::open(f.path.string()), std::runtime_error);
+}
+
 TEST(GroveViewCorruptTest, ChildSharedByTwoParentsRejected) {
     auto s = split(write_multilevel_grove());
     const auto parents = leaf_parent_blocks(s);
@@ -1177,7 +1213,7 @@ TEST(GroveViewCorruptTest, ChildSharedByTwoParentsRejected) {
     auto v = view_ii::open(f.path.string());
     // Query from the right so the last parent claims the leaf before the first reaches for it.
     std::string what;
-    for (std::size_t k = 40; k-- > 0 && what.empty();) {
+    for (std::size_t k = multilevel_keys; k-- > 0 && what.empty();) {
         try {
             (void)v.intersect(gdt::interval{k * 10, k * 10 + 5}, "chr1");
         } catch (const std::runtime_error& e) {
