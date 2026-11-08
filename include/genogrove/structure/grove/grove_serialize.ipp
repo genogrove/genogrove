@@ -669,6 +669,29 @@ private:
         root_map_t local_rightmost;
     };
 
+    // Each leaf's next must be the following leaf in tree order, none for the
+    // last; anything else makes a range scan skip leaves or leave the tree.
+    static void check_leaf_chain(node<key_type, data_type>* root) {
+        std::vector<node<key_type, data_type>*> leaves;
+        std::vector<node<key_type, data_type>*> stack{root};
+        while (!stack.empty()) {
+            auto* cur = stack.back();
+            stack.pop_back();
+            if (cur->get_is_leaf()) {
+                leaves.push_back(cur);
+                continue;
+            }
+            auto& kids = cur->get_children();
+            stack.insert(stack.end(), kids.rbegin(), kids.rend());
+        }
+        for (std::size_t i = 0; i < leaves.size(); ++i) {
+            if (leaves[i]->get_next() != (i + 1 < leaves.size() ? leaves[i + 1] : nullptr)) {
+                throw std::runtime_error(
+                    "Failed to deserialize grove: next block is not the leaf's right neighbour");
+            }
+        }
+    }
+
     // Links each internal node's children and each leaf's next-leaf pointer
     // from the block ids read_deserialize_blocks() recorded, then rebuilds
     // per-index roots and rightmost leaves.
@@ -743,6 +766,7 @@ private:
             // Routing maxima are derived state, so they are not serialized —
             // rebuild them now that children are linked. O(nodes).
             root->refresh_subtree_max_recursive();
+            check_leaf_chain(root);
 
             if (!linked.local_roots.emplace(name, root).second) {
                 throw std::runtime_error("Failed to deserialize grove: duplicate index name");
