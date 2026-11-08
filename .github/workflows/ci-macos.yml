@@ -6,25 +6,23 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.os }}-apple-clang-${{ matrix.clang_version }}-${{ matrix.build_type }}
+    name: ${{ matrix.os }}-${{ matrix.build_type }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-15]
+        os: [macos-15, macos-26]
         # PRs run Debug only for fast feedback; main runs both. Release-only
         # bugs are rare (no LTO here, NDEBUG only deletes asserts) and get
         # caught post-merge on the full main-branch matrix.
         build_type: ${{ github.event_name == 'pull_request' && fromJSON('["Debug"]') || fromJSON('["Debug", "Release"]') }}
-        include:
-          - os: macos-14
-            clang_version: "15"
-          - os: macos-15
-            clang_version: "16"
 
     steps:
       - name: checkout code
         uses: actions/checkout@v5
+
+      - name: show compiler version
+        run: /usr/bin/clang++ --version
 
       - name: install htslib
         run: brew install htslib
