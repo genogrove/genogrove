@@ -46,7 +46,6 @@ void expect_serialization_roundtrip(const KeyType& original) {
 
 } // namespace
 
-// Brace initialization: parentheses break inside gtest macros (most vexing parse).
 class KmerKeyTest : public ::testing::Test {
 protected:
     gdt::kmer acgt{"ACGT"};
@@ -71,7 +70,7 @@ TEST_F(KmerKeyTest, SetValueWithoutData) {
     EXPECT_EQ(ttta, key.get_value());
 }
 
-TEST_F(KmerKeyTest, ToStringDelegatesToKmer) {
+TEST_F(KmerKeyTest, ToStringWithoutData) {
     gdt::key<gdt::kmer> key(acgt);
 
     EXPECT_EQ("ACGT", key.to_string());

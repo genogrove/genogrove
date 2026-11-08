@@ -82,10 +82,14 @@ TEST(keyTest, serializeConsumesExactlyOneKey) {
     gdt::key<gdt::interval, int> second(gdt::interval{3, 4}, 20);
     std::stringstream ss;
     first.serialize(ss);
+    const auto first_end = ss.tellp();
     second.serialize(ss);
+    const auto second_end = ss.tellp();
 
     auto r1 = gdt::key<gdt::interval, int>::deserialize(ss);
+    EXPECT_EQ(ss.tellg(), first_end);
     auto r2 = gdt::key<gdt::interval, int>::deserialize(ss);
+    EXPECT_EQ(ss.tellg(), second_end);
     EXPECT_EQ(r1.get_value(), first.get_value());
     EXPECT_EQ(r1.get_data(), 10);
     EXPECT_EQ(r2.get_value(), second.get_value());
