@@ -8,6 +8,8 @@
 
 // Standard
 #include <concepts>
+#include <sstream>
+#include <string>
 
 // Genogrove
 #include <genogrove/data_type/interval.hpp>
@@ -51,4 +53,63 @@ TEST(keyTest, dataAccessorsConstrainedOnDataType) {
         "set_data must be callable on key<T, int>");
     static_assert(can_get_data<gdt::key<gdt::interval, int>>,
         "get_data must be callable on key<T, int>");
+}
+
+TEST(keyTest, serializeRoundTripWithoutData) {
+    gdt::key<gdt::interval> original(gdt::interval{10, 20});
+    std::stringstream ss;
+    original.serialize(ss);
+
+    auto restored = gdt::key<gdt::interval>::deserialize(ss);
+    EXPECT_EQ(restored.get_value(), original.get_value());
+    EXPECT_FALSE(restored.has_data());
+}
+
+TEST(keyTest, serializeRoundTripWithData) {
+    gdt::key<gdt::interval, std::string> original(gdt::interval{10, 20}, "payload");
+    std::stringstream ss;
+    original.serialize(ss);
+
+    auto restored = gdt::key<gdt::interval, std::string>::deserialize(ss);
+    EXPECT_EQ(restored.get_value(), original.get_value());
+    EXPECT_EQ(restored.get_data(), "payload");
+}
+
+TEST(keyTest, serializeConsumesExactlyOneKey) {
+    // Two keys written back to back must be read back in order: deserialize()
+    // may not read past the end of the key it was asked for.
+    gdt::key<gdt::interval, int> first(gdt::interval{1, 2}, 10);
+    gdt::key<gdt::interval, int> second(gdt::interval{3, 4}, 20);
+    std::stringstream ss;
+    first.serialize(ss);
+    second.serialize(ss);
+
+    auto r1 = gdt::key<gdt::interval, int>::deserialize(ss);
+    auto r2 = gdt::key<gdt::interval, int>::deserialize(ss);
+    EXPECT_EQ(r1.get_value(), first.get_value());
+    EXPECT_EQ(r1.get_data(), 10);
+    EXPECT_EQ(r2.get_value(), second.get_value());
+    EXPECT_EQ(r2.get_data(), 20);
+}
+
+TEST(keyTest, toStringDelegatesToValue) {
+    const gdt::interval iv{10, 20};
+    gdt::key<gdt::interval, int> k(iv, 7);
+    EXPECT_EQ(k.to_string(), iv.to_string());
+}
+
+TEST(keyTest, comparisonUsesValueOnly) {
+    // #332: data is decoration. Equal values compare equal whatever the data is.
+    gdt::key<gdt::interval, int> a(gdt::interval{10, 20}, 1);
+    gdt::key<gdt::interval, int> same_value(gdt::interval{10, 20}, 2);
+    gdt::key<gdt::interval, int> later(gdt::interval{30, 40}, 0);
+
+    EXPECT_TRUE(a == same_value);
+    EXPECT_FALSE(a < same_value);
+    EXPECT_FALSE(a > same_value);
+
+    EXPECT_FALSE(a == later);
+    EXPECT_TRUE(a < later);
+    EXPECT_TRUE(later > a);
+    EXPECT_FALSE(later < a);
 }
