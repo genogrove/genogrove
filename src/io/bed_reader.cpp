@@ -13,6 +13,7 @@
 #include <istream>
 #include <optional>
 #include <ostream>
+#include <utility>
 #include <vector>
 
 // genogrove
@@ -222,6 +223,16 @@ namespace genogrove::io {
             return false;
         }
 
+        // serialize() and deserialize() enforce the same limit, so a record
+        // above it is rejected here instead of failing later.
+        if (std::cmp_greater(block_count, block_info::max_blocks)) {
+            error_message = "Block count exceeds the supported maximum of ";
+            error_message += std::to_string(block_info::max_blocks);
+            error_message += " at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
         auto block_sizes_opt = parse_csv(block_sizes_str);
         if (!block_sizes_opt) {
             error_message = "Invalid block sizes format at line ";
@@ -255,14 +266,16 @@ namespace genogrove::io {
                 error_message += std::to_string(line_num);
                 return false;
             }
-            if (block_starts[i] + block_sizes[i] > interval_length) {
+            // block_starts[i] < interval_length was just checked, so this
+            // subtraction cannot wrap, unlike block_starts[i] + block_sizes[i].
+            if (block_sizes[i] > interval_length - block_starts[i]) {
                 error_message = "Block end position outside interval bounds at line ";
                 error_message += std::to_string(line_num);
                 return false;
             }
         }
 
-        entry.blocks = block_info(block_count, std::move(block_sizes), std::move(block_starts));
+        entry.blocks = block_info(block_count, std::move(*block_sizes_opt), std::move(*block_starts_opt));
         return true;
     }
 
@@ -464,19 +477,15 @@ namespace genogrove::io {
             }
         }
 
-        // A BED12 record has one entry per block (exon); a few thousand is already
-        // far beyond any real feature. Cap the file-controlled count so a corrupt
-        // stream can't allocate a vector for up to 4 billion size_t's and OOM the
-        // process (mirrors gff_reader's MAX_ATTRIBUTES_PER_RECORD guard). See #484.
-        static constexpr uint32_t MAX_BLOCKS_PER_RECORD = 4096;
-
+        // The file-controlled length is capped so a corrupt stream can't make us
+        // allocate a vector of billions of size_t's.
         std::vector<size_t> read_size_vector(std::istream& is) {
             uint32_t n = 0;
             ggu::read_le(is, n);
             if (!is) {
                 throw std::runtime_error("Failed to deserialize block_info: stream error reading vector length");
             }
-            if (n > MAX_BLOCKS_PER_RECORD) {
+            if (n > block_info::max_blocks) {
                 throw std::runtime_error(
                     "Failed to deserialize block_info: unreasonable block count");
             }
@@ -488,6 +497,12 @@ namespace genogrove::io {
                 throw std::runtime_error("Failed to deserialize block_info: stream error reading vector data");
             }
             return v;
+        }
+
+        bool block_info_consistent(const block_info& bi) {
+            return std::cmp_less_equal(bi.count, block_info::max_blocks) &&
+                   std::cmp_equal(bi.count, bi.sizes.size()) &&
+                   std::cmp_equal(bi.count, bi.starts.size());
         }
     } // namespace
 
@@ -510,6 +525,13 @@ namespace genogrove::io {
     }
 
     void block_info::serialize(std::ostream& os) const {
+        // Checked before anything is written, so a rejected record leaves no
+        // partial output behind.
+        if (!block_info_consistent(*this)) {
+            throw std::runtime_error(
+                "Failed to serialize block_info: count does not match the block vectors or "
+                "exceeds the supported maximum");
+        }
         ggu::write_le(os, count);
         write_size_vector(os, sizes);
         write_size_vector(os, starts);
@@ -526,6 +548,10 @@ namespace genogrove::io {
         }
         bi.sizes = read_size_vector(is);
         bi.starts = read_size_vector(is);
+        if (!block_info_consistent(bi)) {
+            throw std::runtime_error(
+                "Failed to deserialize block_info: count does not match the block vectors");
+        }
         return bi;
     }
 
