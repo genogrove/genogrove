@@ -16,41 +16,26 @@ namespace genogrove::io {
         : vcf_reader(path, vcf_reader_options::defaults()) {}
 
     vcf_reader::vcf_reader(const std::filesystem::path& path, const vcf_reader_options& options)
-        : vcf_file(nullptr)
-        , header(nullptr)
-        , record(nullptr)
-        , idx(nullptr)
-        , tbx(nullptr)
-        , region_itr(nullptr)
-        , options(options)
+        : options(options)
         , record_num(0)
-        , at_eof(false)
-        , int_buf(nullptr)
-        , n_int_buf(0)
-        , float_buf(nullptr)
-        , n_float_buf(0)
-        , str_buf(nullptr)
-        , n_str_buf(0)
-        , gt_buf(nullptr)
-        , n_gt_buf(0) {
+        , at_eof(false) {
+        // Every handle is an RAII member, so a throw anywhere below releases
+        // whatever was already opened; no manual cleanup is needed.
 
         // Open the file with htslib (auto-detects VCF/BCF and bgzip)
-        vcf_file = bcf_open(path.c_str(), "r");
+        vcf_file.reset(bcf_open(path.c_str(), "r"));
         if (!vcf_file) {
             throw std::runtime_error("Failed to open file: " + path.string());
         }
 
         // Read the header
-        header = bcf_hdr_read(vcf_file);
-        if (!header) {
-            hts_close(vcf_file);
-            vcf_file = nullptr;
+        header_ptr.reset(bcf_hdr_read(vcf_file.get()));
+        if (!header_ptr) {
             throw std::runtime_error("Failed to read header from: " + path.string());
         }
+        bcf_hdr_t* header = header_ptr.get();
 
-        // Wrap in try/catch: if std::string/vector operations throw (e.g. bad_alloc),
-        // the constructor hasn't completed so the destructor won't run — clean up manually.
-        try {
+        {
             // Cache header text
             kstring_t ks = {0, 0, nullptr};
             kstring_guard guard(ks);
@@ -77,7 +62,7 @@ namespace genogrove::io {
             }
 
             // Allocate reusable record structure
-            record = bcf_init();
+            record.reset(bcf_init());
             if (!record) {
                 throw std::runtime_error("Failed to allocate VCF record structure");
             }
@@ -90,20 +75,20 @@ namespace genogrove::io {
             // bcf_itr_next() decodes binary records and errors on text VCF.
             if (!this->options.region.empty()) {
                 if (vcf_file->format.format == bcf) {
-                    idx = bcf_index_load(path.c_str());
+                    idx.reset(bcf_index_load(path.c_str()));
                     if (!idx) {
                         throw std::runtime_error(
                             "Region access requires a CSI-indexed BCF: " + path.string());
                     }
-                    region_itr = bcf_itr_querys(idx, header, this->options.region.c_str());
+                    region_itr.reset(bcf_itr_querys(idx.get(), header, this->options.region.c_str()));
                 } else {
-                    tbx = tbx_index_load(path.c_str());
+                    tbx.reset(tbx_index_load(path.c_str()));
                     if (!tbx) {
                         throw std::runtime_error(
                             "Region access requires a bgzip-compressed, tabix-indexed (.tbi/.csi) VCF: " +
                             path.string());
                     }
-                    region_itr = tbx_itr_querys(tbx, this->options.region.c_str());
+                    region_itr.reset(tbx_itr_querys(tbx.get(), this->options.region.c_str()));
                 }
                 if (!region_itr) {
                     throw std::runtime_error(
@@ -111,124 +96,7 @@ namespace genogrove::io {
                         "' (or its sequence is not in the index) for " + path.string());
                 }
             }
-        } catch (...) {
-            cleanup();
-            throw;
         }
-    }
-
-    vcf_reader::~vcf_reader() {
-        cleanup();
-    }
-
-    void vcf_reader::cleanup() {
-        if (region_itr) {        // destroy the iterator before the index it references
-            hts_itr_destroy(region_itr);
-            region_itr = nullptr;
-        }
-        if (idx) {
-            hts_idx_destroy(idx);
-            idx = nullptr;
-        }
-        if (tbx) {
-            tbx_destroy(tbx);
-            tbx = nullptr;
-        }
-        free(region_ks.s);
-        region_ks = {0, 0, nullptr};
-        if (record) {
-            bcf_destroy(record);
-            record = nullptr;
-        }
-        if (header) {
-            bcf_hdr_destroy(header);
-            header = nullptr;
-        }
-        if (vcf_file) {
-            hts_close(vcf_file);
-            vcf_file = nullptr;
-        }
-        free(int_buf);   int_buf = nullptr;     n_int_buf = 0;
-        free(float_buf); float_buf = nullptr;   n_float_buf = 0;
-        free(str_buf);   str_buf = nullptr;     n_str_buf = 0;
-        free(gt_buf);    gt_buf = nullptr;      n_gt_buf = 0;
-    }
-
-    vcf_reader::vcf_reader(vcf_reader&& other) noexcept
-        : file_reader<vcf_entry>(std::move(other))
-        , vcf_file(other.vcf_file)
-        , header(other.header)
-        , record(other.record)
-        , idx(other.idx)
-        , tbx(other.tbx)
-        , region_itr(other.region_itr)
-        , region_ks(other.region_ks)
-        , options(other.options)
-        , header_text(std::move(other.header_text))
-        , sample_names(std::move(other.sample_names))
-        , contigs(std::move(other.contigs))
-        , record_num(other.record_num)
-        , error_message(std::move(other.error_message))
-        , at_eof(other.at_eof)
-        , int_buf(other.int_buf)
-        , n_int_buf(other.n_int_buf)
-        , float_buf(other.float_buf)
-        , n_float_buf(other.n_float_buf)
-        , str_buf(other.str_buf)
-        , n_str_buf(other.n_str_buf)
-        , gt_buf(other.gt_buf)
-        , n_gt_buf(other.n_gt_buf) {
-        // Null out source pointers so its destructor frees nothing
-        other.vcf_file = nullptr;
-        other.header = nullptr;
-        other.record = nullptr;
-        other.idx = nullptr;
-        other.tbx = nullptr;
-        other.region_itr = nullptr;
-        other.region_ks = {0, 0, nullptr};  // we took the buffer; don't double-free
-        other.int_buf = nullptr;   other.n_int_buf = 0;
-        other.float_buf = nullptr; other.n_float_buf = 0;
-        other.str_buf = nullptr;   other.n_str_buf = 0;
-        other.gt_buf = nullptr;    other.n_gt_buf = 0;
-    }
-
-    vcf_reader& vcf_reader::operator=(vcf_reader&& other) noexcept {
-        if (this != &other) {
-            file_reader<vcf_entry>::operator=(std::move(other));
-            cleanup();
-
-            vcf_file = other.vcf_file;
-            header = other.header;
-            record = other.record;
-            idx = other.idx;
-            tbx = other.tbx;
-            region_itr = other.region_itr;
-            region_ks = other.region_ks;
-            options = other.options;
-            header_text = std::move(other.header_text);
-            sample_names = std::move(other.sample_names);
-            contigs = std::move(other.contigs);
-            record_num = other.record_num;
-            error_message = std::move(other.error_message);
-            at_eof = other.at_eof;
-            int_buf = other.int_buf;     n_int_buf = other.n_int_buf;
-            float_buf = other.float_buf; n_float_buf = other.n_float_buf;
-            str_buf = other.str_buf;     n_str_buf = other.n_str_buf;
-            gt_buf = other.gt_buf;       n_gt_buf = other.n_gt_buf;
-
-            other.vcf_file = nullptr;
-            other.header = nullptr;
-            other.record = nullptr;
-            other.idx = nullptr;
-            other.tbx = nullptr;
-            other.region_itr = nullptr;
-            other.region_ks = {0, 0, nullptr};  // we took the buffer; don't double-free
-            other.int_buf = nullptr;   other.n_int_buf = 0;
-            other.float_buf = nullptr; other.n_float_buf = 0;
-            other.str_buf = nullptr;   other.n_str_buf = 0;
-            other.gt_buf = nullptr;    other.n_gt_buf = 0;
-        }
-        return *this;
     }
 
     bool vcf_reader::is_filtered(bcf1_t* rec) const {
@@ -237,7 +105,7 @@ namespace genogrove::io {
             return false;
         }
         if (rec->d.n_flt == 1) {
-            const char* name = bcf_hdr_int2id(header, BCF_DT_ID, rec->d.flt[0]);
+            const char* name = bcf_hdr_int2id(header_ptr.get(), BCF_DT_ID, rec->d.flt[0]);
             if (name && std::string(name) == "PASS") {
                 return false;
             }
@@ -262,14 +130,14 @@ namespace genogrove::io {
         //   - neither     -> streaming: bcf_read()
         auto read_raw = [&]() -> int {
             if (tbx) {
-                int r = tbx_itr_next(vcf_file, tbx, region_itr, &region_ks);
-                if (r >= 0 && vcf_parse(&region_ks, header, record) < 0) {
+                int r = tbx_itr_next(vcf_file.get(), tbx.get(), region_itr.get(), &region_ks.ks);
+                if (r >= 0 && vcf_parse(&region_ks.ks, header_ptr.get(), record.get()) < 0) {
                     return -2;  // malformed line -> surface as a critical error
                 }
                 return r;
             }
-            if (region_itr) return bcf_itr_next(vcf_file, region_itr, record);
-            return bcf_read(vcf_file, header, record);
+            if (region_itr) return bcf_itr_next(vcf_file.get(), region_itr.get(), record.get());
+            return bcf_read(vcf_file.get(), header_ptr.get(), record.get());
         };
 
         int ret;
@@ -277,13 +145,13 @@ namespace genogrove::io {
             record_num++;
 
             // Need FILTER before deciding to skip; unpack up to FILTER.
-            bcf_unpack(record, BCF_UN_FLT);
+            bcf_unpack(record.get(), BCF_UN_FLT);
 
-            if (options.skip_filtered && is_filtered(record)) {
+            if (options.skip_filtered && is_filtered(record.get())) {
                 continue;
             }
 
-            parse_record(record, entry);
+            parse_record(record.get(), entry);
             return true;
         }
 
@@ -301,6 +169,7 @@ namespace genogrove::io {
         // Unpack shared fields (ID, REF/ALT, FILTER, INFO). FORMAT is unpacked
         // lazily inside parse_samples_fields via the bcf_get_* helpers.
         bcf_unpack(rec, BCF_UN_SHR);
+        bcf_hdr_t* header = header_ptr.get();
 
         // CHROM
         const char* chrom = bcf_hdr_id2name(header, rec->rid);
@@ -361,6 +230,7 @@ namespace genogrove::io {
     }
 
     void vcf_reader::parse_info_fields(bcf1_t* rec, vcf_entry& entry) {
+        bcf_hdr_t* header = header_ptr.get();
         for (int i = 0; i < rec->n_info; ++i) {
             const bcf_info_t& z = rec->d.info[i];
             const char* tag = bcf_hdr_int2id(header, BCF_DT_ID, z.key);
@@ -373,25 +243,25 @@ namespace genogrove::io {
                     break;
 
                 case BCF_HT_INT: {
-                    int n = bcf_get_info_int32(header, rec, tag, &int_buf, &n_int_buf);
+                    int n = bcf_get_info_int32(header, rec, tag, &int_buf.data, &int_buf.size);
                     if (n > 0) {
-                        entry.info[tag] = std::vector<int32_t>(int_buf, int_buf + n);
+                        entry.info[tag] = std::vector<int32_t>(int_buf.data, int_buf.data + n);
                     }
                     break;
                 }
 
                 case BCF_HT_REAL: {
-                    int n = bcf_get_info_float(header, rec, tag, &float_buf, &n_float_buf);
+                    int n = bcf_get_info_float(header, rec, tag, &float_buf.data, &float_buf.size);
                     if (n > 0) {
-                        entry.info[tag] = std::vector<float>(float_buf, float_buf + n);
+                        entry.info[tag] = std::vector<float>(float_buf.data, float_buf.data + n);
                     }
                     break;
                 }
 
                 case BCF_HT_STR: {
-                    int n = bcf_get_info_string(header, rec, tag, &str_buf, &n_str_buf);
+                    int n = bcf_get_info_string(header, rec, tag, &str_buf.data, &str_buf.size);
                     if (n > 0) {
-                        entry.info[tag] = std::string(str_buf, static_cast<size_t>(n));
+                        entry.info[tag] = std::string(str_buf.data, static_cast<size_t>(n));
                     }
                     break;
                 }
@@ -404,6 +274,7 @@ namespace genogrove::io {
 
     void vcf_reader::parse_samples_fields(bcf1_t* rec, vcf_entry& entry) {
         bcf_unpack(rec, BCF_UN_ALL);
+        bcf_hdr_t* header = header_ptr.get();
         const int n_samples = bcf_hdr_nsamples(header);
 
         // FORMAT keys in column order (the first is conventionally GT).
@@ -419,11 +290,11 @@ namespace genogrove::io {
 
         // GT: bcf_get_genotypes returns n_samples * max_ploidy encoded ints,
         // padded per sample with bcf_int32_vector_end.
-        int ngt = bcf_get_genotypes(header, rec, &gt_buf, &n_gt_buf);
+        int ngt = bcf_get_genotypes(header, rec, &gt_buf.data, &gt_buf.size);
         if (ngt > 0) {
             const int max_ploidy = ngt / n_samples;
             for (int s = 0; s < n_samples; ++s) {
-                const int32_t* ptr = gt_buf + s * max_ploidy;
+                const int32_t* ptr = gt_buf.data + s * max_ploidy;
                 sample_genotype& sg = entry.samples[s];
                 for (int p = 0; p < max_ploidy; ++p) {
                     if (ptr[p] == bcf_int32_vector_end) {
@@ -452,14 +323,14 @@ namespace genogrove::io {
             int htype = bcf_hdr_id2type(header, BCF_HL_FMT, fmt_id);
             switch (htype) {
                 case BCF_HT_INT: {
-                    int n = bcf_get_format_int32(header, rec, key, &int_buf, &n_int_buf);
+                    int n = bcf_get_format_int32(header, rec, key, &int_buf.data, &int_buf.size);
                     if (n <= 0) break;
                     // htslib returns a flat n_samples * max_width buffer, right-
                     // padding samples that carry fewer values with the sentinel
                     // bcf_int32_vector_end. Keep only each sample's real values.
                     const int per = n / n_samples;
                     for (int s = 0; s < n_samples; ++s) {
-                        const int32_t* p = int_buf + s * per;
+                        const int32_t* p = int_buf.data + s * per;
                         std::vector<int32_t> vals;
                         vals.reserve(per);
                         for (int j = 0; j < per; ++j) {
@@ -472,11 +343,11 @@ namespace genogrove::io {
                 }
 
                 case BCF_HT_REAL: {
-                    int n = bcf_get_format_float(header, rec, key, &float_buf, &n_float_buf);
+                    int n = bcf_get_format_float(header, rec, key, &float_buf.data, &float_buf.size);
                     if (n <= 0) break;
                     const int per = n / n_samples;
                     for (int s = 0; s < n_samples; ++s) {
-                        const float* p = float_buf + s * per;
+                        const float* p = float_buf.data + s * per;
                         std::vector<float> vals;
                         vals.reserve(per);
                         for (int j = 0; j < per; ++j) {
@@ -513,7 +384,7 @@ namespace genogrove::io {
     }
 
     bool vcf_reader::has_next() {
-        return !at_eof && vcf_file != nullptr;
+        return !at_eof && vcf_file;
     }
 
     std::string vcf_reader::get_error_message() const {

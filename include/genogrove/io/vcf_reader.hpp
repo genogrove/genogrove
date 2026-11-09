@@ -20,6 +20,7 @@
 #include <genogrove/data_type/genomic_coordinate.hpp>
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/file_reader.hpp>
+#include <genogrove/io/htslib_raii.hpp>
 
 // htslib
 #include <htslib/vcf.h>
@@ -265,29 +266,30 @@ namespace genogrove::io {
         /// Contig names declared in the header.
         [[nodiscard]] const std::vector<std::string>& get_contigs() const;
 
-        /// Move constructor
-        vcf_reader(vcf_reader&& other) noexcept;
-        /// Move assignment operator
-        vcf_reader& operator=(vcf_reader&& other) noexcept;
+        /// Movable; the htslib handles are owned by RAII members.
+        vcf_reader(vcf_reader&&) noexcept = default;
+        vcf_reader& operator=(vcf_reader&&) noexcept = default;
 
         // Disable copy
         vcf_reader(const vcf_reader&) = delete;
         vcf_reader& operator=(const vcf_reader&) = delete;
 
-        ~vcf_reader() override;
+        ~vcf_reader() override = default;
 
     private:
-        htsFile* vcf_file;                  ///< htslib file handle
-        bcf_hdr_t* header;                  ///< VCF/BCF header
-        bcf1_t* record;                     ///< Reusable record
+        // Members are destroyed in reverse order, so each handle is released
+        // before the one it depends on (the region iterator first, the file last).
+        hts_ptr<htsFile, hts_close> vcf_file;              ///< htslib file handle
+        hts_ptr<bcf_hdr_t, bcf_hdr_destroy> header_ptr;    ///< VCF/BCF header
+        hts_ptr<bcf1_t, bcf_destroy> record;               ///< Reusable record
         // Region mode (#458): set only when options.region is non-empty. Binary
         // BCF uses the bcf_itr path (idx + region_itr); text bgzip VCF uses the
         // tbx path (tbx + region_itr), reading lines into region_ks for
         // vcf_parse() — bcf_itr_next() decodes binary and fails on text VCF.
-        hts_idx_t* idx;                     ///< BCF (.csi) region index; null otherwise
-        tbx_t* tbx;                         ///< VCF-text (.tbi/.csi) region index; null otherwise
-        hts_itr_t* region_itr;              ///< Region iterator (bcf or tbx); null in streaming mode
-        kstring_t region_ks = {0, 0, nullptr};  ///< Reusable text-line buffer for the tbx path
+        hts_ptr<hts_idx_t, hts_idx_destroy> idx;           ///< BCF (.csi) region index; null otherwise
+        hts_ptr<tbx_t, tbx_destroy> tbx;                   ///< VCF-text (.tbi/.csi) region index; null otherwise
+        hts_ptr<hts_itr_t, hts_itr_destroy> region_itr;    ///< Region iterator (bcf or tbx); null in streaming mode
+        hts_kstring region_ks;              ///< Reusable text-line buffer for the tbx path
         vcf_reader_options options;         ///< Reader options
         std::string header_text;            ///< Cached header text
         std::vector<std::string> sample_names; ///< Sample names from the header
@@ -298,14 +300,10 @@ namespace genogrove::io {
 
         // Reusable scratch buffers for htslib's bcf_get_* extraction helpers.
         // Held as members so repeated reads reuse one allocation per type.
-        int32_t* int_buf;
-        int n_int_buf;
-        float* float_buf;
-        int n_float_buf;
-        char* str_buf;
-        int n_str_buf;
-        int32_t* gt_buf;
-        int n_gt_buf;
+        hts_scratch<int32_t> int_buf;
+        hts_scratch<float> float_buf;
+        hts_scratch<char> str_buf;
+        hts_scratch<int32_t> gt_buf;
 
         /// True if the record's FILTER is not PASS/"." (used by skip_filtered).
         bool is_filtered(bcf1_t* rec) const;
@@ -318,9 +316,6 @@ namespace genogrove::io {
 
         /// Parse FORMAT / per-sample columns (including GT) into entry.samples.
         void parse_samples_fields(bcf1_t* rec, vcf_entry& entry);
-
-        /// Release htslib resources and scratch buffers.
-        void cleanup();
     };
 
 } // namespace genogrove::io
