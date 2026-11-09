@@ -17,6 +17,7 @@
 #include <htslib/bgzf.h>
 
 #include <genogrove/io/bgzf_utils.hpp>
+#include <genogrove/io/htslib_raii.hpp>
 
 namespace genogrove::io {
 
@@ -55,11 +56,7 @@ namespace genogrove::io {
         [[nodiscard]] size_t line_num() const { return line_num_; }
 
     private:
-        struct bgzf_closer {
-            void operator()(BGZF* file) const { if (file) bgzf_close(file); }
-        };
-
-        std::unique_ptr<BGZF, bgzf_closer> bgzf_file_;
+        hts_ptr<BGZF, bgzf_close> bgzf_file_;
         // Non-null only in region mode. See #456.
         std::unique_ptr<tabix_reader> region_reader_;
         // First data line read for validation, and the physical line it was on.
