@@ -43,7 +43,8 @@ namespace genogrove::io {
         if (prefetched) {
             prefetched = false;
             // Also covers a file with no data lines: the prefetch consumed every
-            // physical line, and get_current_line() must still report them.
+            // physical line, and current_line() (so the readers'
+            // get_current_line()) must still report them.
             line_num = pending_line_num;
             if (pending) return std::exchange(pending, std::nullopt);
         }

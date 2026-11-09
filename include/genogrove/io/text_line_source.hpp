@@ -45,7 +45,7 @@ namespace genogrove::io {
         text_line_source(const std::filesystem::path& fpath, const std::string& region,
                          const first_line_validator& validate_first);
 
-        /// Next data line, advancing the current line (physical lines consumed,
+        /// Next data line, advancing current_line() (physical lines consumed,
         /// comments and blanks included). nullopt at EOF / end of region.
         /// Throws std::runtime_error on an I/O error.
         [[nodiscard]] std::optional<std::string> next_line();
@@ -53,7 +53,7 @@ namespace genogrove::io {
         /// True iff a following next_line() will return a line.
         [[nodiscard]] bool has_next();
 
-        /// Physical line number consumed so far (0 before the first next_line()).
+        /// Number of physical lines consumed so far (0 before the first next_line()).
         [[nodiscard]] size_t current_line() const { return line_num; }
 
     private:
