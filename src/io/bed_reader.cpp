@@ -13,6 +13,7 @@
 #include <istream>
 #include <optional>
 #include <ostream>
+#include <utility>
 #include <vector>
 
 // genogrove
@@ -222,8 +223,9 @@ namespace genogrove::io {
             return false;
         }
 
-        // A record above the limit could be written but never read back.
-        if (static_cast<uint32_t>(block_count) > block_info::max_blocks) {
+        // serialize() and deserialize() enforce the same limit, so a record
+        // above it is rejected here instead of failing later.
+        if (std::cmp_greater(block_count, block_info::max_blocks)) {
             error_message = "Block count exceeds the supported maximum of ";
             error_message += std::to_string(block_info::max_blocks);
             error_message += " at line ";
@@ -273,7 +275,7 @@ namespace genogrove::io {
             }
         }
 
-        entry.blocks = block_info(block_count, std::move(block_sizes), std::move(block_starts));
+        entry.blocks = block_info(block_count, std::move(*block_sizes_opt), std::move(*block_starts_opt));
         return true;
     }
 
@@ -476,7 +478,7 @@ namespace genogrove::io {
         }
 
         // The file-controlled length is capped so a corrupt stream can't make us
-        // allocate a vector of billions of size_t's (see #484).
+        // allocate a vector of billions of size_t's.
         std::vector<size_t> read_size_vector(std::istream& is) {
             uint32_t n = 0;
             ggu::read_le(is, n);
@@ -496,6 +498,12 @@ namespace genogrove::io {
             }
             return v;
         }
+
+        bool block_info_consistent(const block_info& bi) {
+            return std::cmp_less_equal(bi.count, block_info::max_blocks) &&
+                   std::cmp_equal(bi.count, bi.sizes.size()) &&
+                   std::cmp_equal(bi.count, bi.starts.size());
+        }
     } // namespace
 
     void thick_info::serialize(std::ostream& os) const {
@@ -514,13 +522,6 @@ namespace genogrove::io {
             throw std::runtime_error("Failed to deserialize thick_info: stream error");
         }
         return ti;
-    }
-
-    // True iff count matches both vectors and is within the supported limit.
-    static bool block_info_consistent(const block_info& bi) {
-        return bi.count >= 0 && static_cast<uint32_t>(bi.count) <= block_info::max_blocks &&
-               static_cast<size_t>(bi.count) == bi.sizes.size() &&
-               static_cast<size_t>(bi.count) == bi.starts.size();
     }
 
     void block_info::serialize(std::ostream& os) const {

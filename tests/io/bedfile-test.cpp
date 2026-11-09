@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <stdexcept>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <vector>
 
@@ -982,11 +983,11 @@ namespace {
     }
 }  // namespace
 
-TEST_F(bedfileTest, bed12BlockSizeThatWrapsAroundIsRejected) {
-    // blockStart 1 + blockSize 2^64-1 wraps to 0 in unsigned arithmetic, which
-    // used to pass the "ends inside the interval" check. See #624.
+TEST_F(bedfileTest, bed12BlockSizeWrapAroundThrows) {
+    // blockStart 1 + blockSize SIZE_MAX wraps to 0 in unsigned arithmetic, which
+    // used to pass the "ends inside the interval" check.
     fs::path path = write_bed12_blocks(test_data_dir, "temp_block_wrap.bed", "1",
-                                       "18446744073709551615", "1");
+                                       std::to_string(std::numeric_limits<size_t>::max()), "1");
     gio::bed_reader reader(path);
     gio::bed_entry entry;
 
@@ -998,8 +999,8 @@ TEST_F(bedfileTest, bed12BlockSizeThatWrapsAroundIsRejected) {
     fs::remove(path);
 }
 
-TEST_F(bedfileTest, bed12BlockEndingExactlyAtIntervalEndIsAccepted) {
-    // start 1 + size 99 ends at 100, the last base of a [0, 100) interval.
+TEST_F(bedfileTest, bed12BlockEndAtIntervalEndAccepted) {
+    // start 1 + size 99 ends at 100, exactly the exclusive end of [0, 100).
     fs::path path = write_bed12_blocks(test_data_dir, "temp_block_exact_end.bed", "1", "99", "1");
     gio::bed_reader reader(path);
     gio::bed_entry entry;
@@ -1012,7 +1013,7 @@ TEST_F(bedfileTest, bed12BlockEndingExactlyAtIntervalEndIsAccepted) {
     fs::remove(path);
 }
 
-TEST_F(bedfileTest, bed12BlockOneBaseBeyondIntervalEndIsRejected) {
+TEST_F(bedfileTest, bed12BlockEndPastIntervalThrows) {
     // start 1 + size 100 ends at 101, one past the end of [0, 100).
     fs::path path = write_bed12_blocks(test_data_dir, "temp_block_past_end.bed", "1", "100", "1");
     gio::bed_reader reader(path);
@@ -1023,39 +1024,42 @@ TEST_F(bedfileTest, bed12BlockOneBaseBeyondIntervalEndIsRejected) {
     fs::remove(path);
 }
 
-TEST_F(bedfileTest, bed12BlockCountAtLimitIsAcceptedAndAboveItIsRejected) {
+TEST_F(bedfileTest, bed12BlockCountAtLimitAccepted) {
     // The reader accepts exactly gio::block_info::max_blocks blocks, because
     // that is the most the serializer writes and the deserializer reads back.
+    // Block i is one base at offset i, so the last one ends at the interval end.
     const size_t limit = gio::block_info::max_blocks;
     std::string sizes, starts;
     for (size_t i = 0; i < limit; ++i) {
-        sizes += (i ? ",1" : "1");
+        sizes += i ? ",1" : "1";
         starts += (i ? "," : "") + std::to_string(i);
     }
+    fs::path path = write_bed12_blocks(test_data_dir, "temp_blocks_at_limit.bed",
+                                       std::to_string(limit), sizes, starts, limit);
+    gio::bed_reader reader(path);
+    gio::bed_entry entry;
 
-    fs::path ok = write_bed12_blocks(test_data_dir, "temp_blocks_at_limit.bed",
-                                     std::to_string(limit), sizes, starts, limit + 10);
-    {
-        gio::bed_reader reader(ok);
-        gio::bed_entry entry;
-        ASSERT_TRUE(reader.read_next(entry));
-        ASSERT_TRUE(entry.blocks.has_value());
-        EXPECT_EQ(entry.blocks->sizes.size(), limit);
-    }
-    fs::remove(ok);
+    ASSERT_TRUE(reader.read_next(entry));
+    ASSERT_TRUE(entry.blocks.has_value());
+    EXPECT_EQ(entry.blocks->sizes.size(), limit);
 
-    // One more block than the limit: rejected by count, before the vectors matter.
-    fs::path over = write_bed12_blocks(test_data_dir, "temp_blocks_over_limit.bed",
-                                       std::to_string(limit + 1), "1", "0", limit + 10);
-    {
-        gio::bed_reader reader(over);
-        gio::bed_entry entry;
-        EXPECT_THROW(reader.read_next(entry), std::runtime_error);
-        EXPECT_NE(reader.get_error_message().find("exceeds the supported maximum"),
-                  std::string::npos)
-            << reader.get_error_message();
-    }
-    fs::remove(over);
+    fs::remove(path);
+}
+
+TEST_F(bedfileTest, bed12BlockCountAboveLimitThrows) {
+    // One more block than the limit is rejected by count alone, before the
+    // block vectors are compared with it.
+    const size_t over = gio::block_info::max_blocks + 1;
+    fs::path path = write_bed12_blocks(test_data_dir, "temp_blocks_over_limit.bed",
+                                       std::to_string(over), "1", "0", over);
+    gio::bed_reader reader(path);
+    gio::bed_entry entry;
+
+    EXPECT_THROW(reader.read_next(entry), std::runtime_error);
+    EXPECT_NE(reader.get_error_message().find("exceeds the supported maximum"), std::string::npos)
+        << reader.get_error_message();
+
+    fs::remove(path);
 }
 
 // ==========================================
@@ -1377,13 +1381,13 @@ TEST(bedEntrySerialization, blockInfoAtLimitRoundTrips) {
     EXPECT_EQ(out.starts.back(), gio::block_info::max_blocks - 1);
 }
 
-TEST(bedEntrySerialization, blockInfoAboveLimitIsRejectedBeforeWriting) {
+TEST(bedEntrySerialization, blockInfoAboveLimitSerializeThrows) {
     std::ostringstream os(std::ios::binary);
     EXPECT_THROW(make_blocks(gio::block_info::max_blocks + 1).serialize(os), std::runtime_error);
     EXPECT_TRUE(os.str().empty()) << "a rejected record must leave no partial output";
 }
 
-TEST(bedEntrySerialization, blockInfoWithInconsistentCountIsRejectedOnSerialize) {
+TEST(bedEntrySerialization, blockInfoInconsistentCountSerializeThrows) {
     std::ostringstream os(std::ios::binary);
     EXPECT_THROW(gio::block_info(2, {3}, {4}).serialize(os), std::runtime_error);       // count > vectors
     EXPECT_THROW(gio::block_info(1, {3, 5}, {4}).serialize(os), std::runtime_error);    // sizes too long
@@ -1392,7 +1396,7 @@ TEST(bedEntrySerialization, blockInfoWithInconsistentCountIsRejectedOnSerialize)
     EXPECT_TRUE(os.str().empty());
 }
 
-TEST(bedEntrySerialization, blockInfoWithInconsistentCountIsRejectedOnDeserialize) {
+TEST(bedEntrySerialization, blockInfoInconsistentCountDeserializeThrows) {
     // count 2, but one size and one start: the stream is well-formed yet inconsistent.
     std::istringstream is(std::string("\x02\0\0\0"
                                       "\x01\0\0\0\x03\0\0\0\0\0\0\0"
@@ -1401,7 +1405,7 @@ TEST(bedEntrySerialization, blockInfoWithInconsistentCountIsRejectedOnDeserializ
     EXPECT_THROW((void)gio::block_info::deserialize(is), std::runtime_error);
 }
 
-TEST(bedEntrySerialization, truncatedBlockInfoIsRejectedAtEveryLength) {
+TEST(bedEntrySerialization, truncatedBlockInfoThrowsAtEveryLength) {
     std::ostringstream os(std::ios::binary);
     gio::block_info(1, {3}, {4}).serialize(os);
     const std::string full = os.str();
