@@ -43,5 +43,3 @@ IncludeBlocks: Regroup
 IndentCaseLabels: true
 KeepEmptyLinesAtTheStartOfBlocks: false
 MaxEmptyLinesToKeep: 1
-# Every file ends with a single newline (needs clang-format 16 or newer).
-InsertNewlineAtEOF: true

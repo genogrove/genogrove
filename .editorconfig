@@ -9,3 +9,8 @@ insert_final_newline = true
 [*.{cpp,hpp,ipp,h}]
 indent_style = space
 indent_size = 4
+
+# Test fixtures and benchmark data are compared byte for byte (and some have
+# an index), so an editor must not rewrite their endings.
+[**/data/**]
+insert_final_newline = unset
