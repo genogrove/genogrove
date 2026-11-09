@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Both readers reject forged leaf links; `grove_view` also rejects shared and over-deep subtrees**: a leaf `next` that skips a right sibling or leaves its tree now throws in `grove::deserialize` and `grove_view`, where a range scan used to miss leaves silently. `grove_view` also throws when a block has two parents or the tree is deeper than 128 levels, checked as queries reach each block. ([#604](https://github.com/genogrove/genogrove/issues/604), [#612](https://github.com/genogrove/genogrove/pull/612))
 - **Internal nodes with no keys rejected when loading a `.gg`**: `grove::deserialize` and `grove_view` throw `std::runtime_error` for an internal block with zero keys. A query on such a crafted file read `keys[0]` of an empty vector. Valid trees never have one. ([#611](https://github.com/genogrove/genogrove/issues/611), [#613](https://github.com/genogrove/genogrove/pull/613))
 
+### Refactored
+- **`bed_reader` and `gff_reader` share one line source**: the new `text_line_source` owns the BGZF handle or tabix region iterator, the first-line check, `next_line()` and `has_next()`, so a fix to that plumbing lands in one place. The first data line is read once instead of being re-read after a rewind. ([#560](https://github.com/genogrove/genogrove/issues/560), [#617](https://github.com/genogrove/genogrove/pull/617))
+
 ### Changed
 - **macOS CI runs on `macos-15` and `macos-26`**: GitHub retired the `macos-14` runner, so the Apple Clang 15 job is gone and Apple Clang 21 (macOS 26) is added; Apple Clang 15 is no longer tested. The README compiler table lists the versions printed by the CI jobs. ([#609](https://github.com/genogrove/genogrove/pull/609))
 
