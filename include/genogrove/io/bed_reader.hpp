@@ -44,6 +44,9 @@ namespace genogrove::io {
     };
 
     struct block_info {
+        // Parser, serialize() and deserialize() all enforce this limit (see #484).
+        static constexpr uint32_t max_blocks = 4096;
+
         int count;
         std::vector<size_t> sizes;
         std::vector<size_t> starts;

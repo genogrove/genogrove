@@ -222,6 +222,15 @@ namespace genogrove::io {
             return false;
         }
 
+        // A record above the limit could be written but never read back.
+        if (static_cast<uint32_t>(block_count) > block_info::max_blocks) {
+            error_message = "Block count exceeds the supported maximum of ";
+            error_message += std::to_string(block_info::max_blocks);
+            error_message += " at line ";
+            error_message += std::to_string(line_num);
+            return false;
+        }
+
         auto block_sizes_opt = parse_csv(block_sizes_str);
         if (!block_sizes_opt) {
             error_message = "Invalid block sizes format at line ";
@@ -255,7 +264,9 @@ namespace genogrove::io {
                 error_message += std::to_string(line_num);
                 return false;
             }
-            if (block_starts[i] + block_sizes[i] > interval_length) {
+            // block_starts[i] < interval_length was just checked, so this
+            // subtraction cannot wrap, unlike block_starts[i] + block_sizes[i].
+            if (block_sizes[i] > interval_length - block_starts[i]) {
                 error_message = "Block end position outside interval bounds at line ";
                 error_message += std::to_string(line_num);
                 return false;
@@ -464,19 +475,15 @@ namespace genogrove::io {
             }
         }
 
-        // A BED12 record has one entry per block (exon); a few thousand is already
-        // far beyond any real feature. Cap the file-controlled count so a corrupt
-        // stream can't allocate a vector for up to 4 billion size_t's and OOM the
-        // process (mirrors gff_reader's MAX_ATTRIBUTES_PER_RECORD guard). See #484.
-        static constexpr uint32_t MAX_BLOCKS_PER_RECORD = 4096;
-
+        // The file-controlled length is capped so a corrupt stream can't make us
+        // allocate a vector of billions of size_t's (see #484).
         std::vector<size_t> read_size_vector(std::istream& is) {
             uint32_t n = 0;
             ggu::read_le(is, n);
             if (!is) {
                 throw std::runtime_error("Failed to deserialize block_info: stream error reading vector length");
             }
-            if (n > MAX_BLOCKS_PER_RECORD) {
+            if (n > block_info::max_blocks) {
                 throw std::runtime_error(
                     "Failed to deserialize block_info: unreasonable block count");
             }
@@ -509,7 +516,21 @@ namespace genogrove::io {
         return ti;
     }
 
+    // True iff count matches both vectors and is within the supported limit.
+    static bool block_info_consistent(const block_info& bi) {
+        return bi.count >= 0 && static_cast<uint32_t>(bi.count) <= block_info::max_blocks &&
+               static_cast<size_t>(bi.count) == bi.sizes.size() &&
+               static_cast<size_t>(bi.count) == bi.starts.size();
+    }
+
     void block_info::serialize(std::ostream& os) const {
+        // Checked before anything is written, so a rejected record leaves no
+        // partial output behind.
+        if (!block_info_consistent(*this)) {
+            throw std::runtime_error(
+                "Failed to serialize block_info: count does not match the block vectors or "
+                "exceeds the supported maximum");
+        }
         ggu::write_le(os, count);
         write_size_vector(os, sizes);
         write_size_vector(os, starts);
@@ -526,6 +547,10 @@ namespace genogrove::io {
         }
         bi.sizes = read_size_vector(is);
         bi.starts = read_size_vector(is);
+        if (!block_info_consistent(bi)) {
+            throw std::runtime_error(
+                "Failed to deserialize block_info: count does not match the block vectors");
+        }
         return bi;
     }
 
