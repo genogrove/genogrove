@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Unit tests for the `kmer` key wrapper, `flanking_query_result`, `key<>` and `node`**: `kmer_key_test.cpp` covers construction, copy/move and serialization of `key<kmer, D>` and joins the shared comparison suite. `flanking_query_result_test.cpp` covers the null default and set/get. `key_test.cpp` gains serialize/deserialize, `to_string` and value-only comparison tests. `node_test.cpp` covers key insertion, aggregates, the cached subtree max, move semantics and the block round-trip with its rejection paths, without going through grove. ([#562](https://github.com/genogrove/genogrove/issues/562), [#614](https://github.com/genogrove/genogrove/pull/614), [#615](https://github.com/genogrove/genogrove/pull/615))
+- **Tests for truncated BAM auxiliary tags**: `bam_aux_truncation_test.cpp` writes one-record BAM files whose aux block is cut short in every way `parse_tags` checks, and asserts `read_next()` throws `Truncated auxiliary data` naming the tag being parsed. Exactly-sized payloads must still parse, which guards the bounds checks against off-by-one changes. ([#561](https://github.com/genogrove/genogrove/issues/561), [#616](https://github.com/genogrove/genogrove/pull/616))
 
 ## [0.27.0] - 2026-10-29
 
