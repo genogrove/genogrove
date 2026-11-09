@@ -489,6 +489,58 @@ TEST_F(VcfReaderTest, MoveAssignment) {
     std::vector<gio::vcf_entry> entries(target.begin(), target.end());
     EXPECT_EQ(entries.size(), 3u);
 }
+
+TEST_F(VcfReaderTest, MoveConstructorKeepsTextRegionIterator) {
+    // A text VCF region reader owns a tabix index, a region iterator and a line
+    // buffer; all three must follow the move and keep serving the region.
+    fs::path region_gz = test_data_dir / "test_region.vcf.gz";
+    gio::vcf_reader reader(region_gz, {.region = "chr1:90-160"});
+    gio::vcf_entry entry;
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.start, 99u);
+
+    gio::vcf_reader moved(std::move(reader));
+    ASSERT_TRUE(moved.read_next(entry));
+    EXPECT_EQ(entry.start, 149u);
+    EXPECT_FALSE(moved.read_next(entry));
+    EXPECT_TRUE(moved.get_error_message().empty()) << moved.get_error_message();
+}
+
+TEST_F(VcfReaderTest, MoveConstructorKeepsBcfRegionIterator) {
+    // A BCF region reader owns a CSI index and a region iterator instead.
+    fs::path bcf = test_data_dir / "test_region.bcf";
+    gio::vcf_reader reader(bcf, {.region = "chr1:90-160"});
+    gio::vcf_entry entry;
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.start, 99u);
+
+    gio::vcf_reader moved(std::move(reader));
+    ASSERT_TRUE(moved.read_next(entry));
+    EXPECT_EQ(entry.start, 149u);
+    EXPECT_FALSE(moved.read_next(entry));
+    EXPECT_TRUE(moved.get_error_message().empty()) << moved.get_error_message();
+}
+
+TEST_F(VcfReaderTest, MoveAssignmentReplacesLiveRegionReader) {
+    // The target is a BCF region reader that has already read a record, so it
+    // holds a live index, iterator and buffer; assigning a text region reader
+    // over it must release those and serve the source's region.
+    fs::path bcf = test_data_dir / "test_region.bcf";
+    fs::path region_gz = test_data_dir / "test_region.vcf.gz";
+    gio::vcf_reader target(bcf, {.region = "chr1:90-160"});
+    gio::vcf_entry entry;
+    ASSERT_TRUE(target.read_next(entry));
+
+    gio::vcf_reader source(region_gz, {.region = "chr2"});
+    target = std::move(source);
+
+    std::vector<gio::vcf_entry> entries(target.begin(), target.end());
+    EXPECT_TRUE(target.get_error_message().empty()) << target.get_error_message();
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0].chrom, "chr2");
+    EXPECT_EQ(entries[1].chrom, "chr2");
+}
+
 // ==========================================
 // Region access — #458
 // Text bgzip VCF goes through the tbx + vcf_parse path; binary BCF goes

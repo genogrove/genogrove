@@ -14,13 +14,15 @@
 
 namespace genogrove::io {
 
-    /// Stateless deleter that calls `destroy(ptr)` for a non-null pointer, so a
-    /// handle type can be named without carrying a function pointer around.
+    /// Stateless deleter that calls `destroy(ptr)`, so a handle type can be named
+    /// without carrying a function pointer around. unique_ptr never calls it with
+    /// null. The return value is ignored, so a failed `hts_close` goes unreported:
+    /// fine for read handles, not for files opened for writing.
     template <auto destroy>
     struct hts_deleter {
         template <typename T>
         void operator()(T* ptr) const {
-            if (ptr) destroy(ptr);
+            destroy(ptr);
         }
     };
 

@@ -4,7 +4,6 @@
  */
 
 #include <genogrove/io/vcf_reader.hpp>
-#include <genogrove/io/kstring_guard.hpp>
 
 // standard
 #include <cstdlib>
@@ -35,66 +34,63 @@ namespace genogrove::io {
         }
         bcf_hdr_t* header = header_ptr.get();
 
-        {
-            // Cache header text
-            kstring_t ks = {0, 0, nullptr};
-            kstring_guard guard(ks);
-            if (bcf_hdr_format(header, 0, &ks) == 0 && ks.s) {
-                header_text = std::string(ks.s, ks.l);
-            }
+        // Cache header text
+        hts_kstring text;
+        if (bcf_hdr_format(header, 0, &text.ks) == 0 && text.ks.s) {
+            header_text = std::string(text.ks.s, text.ks.l);
+        }
 
-            // Cache sample names
-            int n_samples = bcf_hdr_nsamples(header);
-            sample_names.reserve(n_samples);
-            for (int i = 0; i < n_samples; ++i) {
-                sample_names.emplace_back(header->samples[i]);
-            }
+        // Cache sample names
+        int n_samples = bcf_hdr_nsamples(header);
+        sample_names.reserve(n_samples);
+        for (int i = 0; i < n_samples; ++i) {
+            sample_names.emplace_back(header->samples[i]);
+        }
 
-            // Cache contig names
-            int n_contigs = 0;
-            const char** seqs = bcf_hdr_seqnames(header, &n_contigs);
-            if (seqs) {
-                contigs.reserve(n_contigs);
-                for (int i = 0; i < n_contigs; ++i) {
-                    contigs.emplace_back(seqs[i]);
-                }
-                free(seqs);  // bcf_hdr_seqnames allocates the array (not the strings)
+        // Cache contig names
+        int n_contigs = 0;
+        const char** seqs = bcf_hdr_seqnames(header, &n_contigs);
+        if (seqs) {
+            contigs.reserve(n_contigs);
+            for (int i = 0; i < n_contigs; ++i) {
+                contigs.emplace_back(seqs[i]);
             }
+            free(seqs);  // bcf_hdr_seqnames allocates the array (not the strings)
+        }
 
-            // Allocate reusable record structure
-            record.reset(bcf_init());
-            if (!record) {
-                throw std::runtime_error("Failed to allocate VCF record structure");
-            }
+        // Allocate reusable record structure
+        record.reset(bcf_init());
+        if (!record) {
+            throw std::runtime_error("Failed to allocate VCF record structure");
+        }
 
-            // Region mode: seek to the requested locus via the index. read_next()
-            // then pulls only overlapping records. Streaming mode (empty region)
-            // leaves the index/iterator null. The path differs by format: binary
-            // BCF is read with bcf_itr_next() over a CSI index; text bgzip VCF is
-            // read with tbx_itr_next() + vcf_parse() over a tabix index, because
-            // bcf_itr_next() decodes binary records and errors on text VCF.
-            if (!this->options.region.empty()) {
-                if (vcf_file->format.format == bcf) {
-                    idx.reset(bcf_index_load(path.c_str()));
-                    if (!idx) {
-                        throw std::runtime_error(
-                            "Region access requires a CSI-indexed BCF: " + path.string());
-                    }
-                    region_itr.reset(bcf_itr_querys(idx.get(), header, this->options.region.c_str()));
-                } else {
-                    tbx.reset(tbx_index_load(path.c_str()));
-                    if (!tbx) {
-                        throw std::runtime_error(
-                            "Region access requires a bgzip-compressed, tabix-indexed (.tbi/.csi) VCF: " +
-                            path.string());
-                    }
-                    region_itr.reset(tbx_itr_querys(tbx.get(), this->options.region.c_str()));
-                }
-                if (!region_itr) {
+        // Region mode: seek to the requested locus via the index. read_next()
+        // then pulls only overlapping records. Streaming mode (empty region)
+        // leaves the index/iterator null. The path differs by format: binary
+        // BCF is read with bcf_itr_next() over a CSI index; text bgzip VCF is
+        // read with tbx_itr_next() + vcf_parse() over a tabix index, because
+        // bcf_itr_next() decodes binary records and errors on text VCF.
+        if (!this->options.region.empty()) {
+            if (vcf_file->format.format == bcf) {
+                idx.reset(bcf_index_load(path.c_str()));
+                if (!idx) {
                     throw std::runtime_error(
-                        "Invalid region '" + this->options.region +
-                        "' (or its sequence is not in the index) for " + path.string());
+                        "Region access requires a CSI-indexed BCF: " + path.string());
                 }
+                region_itr.reset(bcf_itr_querys(idx.get(), header, this->options.region.c_str()));
+            } else {
+                tbx.reset(tbx_index_load(path.c_str()));
+                if (!tbx) {
+                    throw std::runtime_error(
+                        "Region access requires a bgzip-compressed, tabix-indexed (.tbi/.csi) VCF: " +
+                        path.string());
+                }
+                region_itr.reset(tbx_itr_querys(tbx.get(), this->options.region.c_str()));
+            }
+            if (!region_itr) {
+                throw std::runtime_error(
+                    "Invalid region '" + this->options.region +
+                    "' (or its sequence is not in the index) for " + path.string());
             }
         }
     }

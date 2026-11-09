@@ -277,8 +277,11 @@ namespace genogrove::io {
         ~vcf_reader() override = default;
 
     private:
-        // Members are destroyed in reverse order, so each handle is released
-        // before the one it depends on (the region iterator first, the file last).
+        // Members are destroyed in reverse order, so the destructor releases the
+        // region iterator first and the file last. A defaulted move assignment
+        // replaces members in declaration order instead (old index before old
+        // iterator); that is safe because hts_itr_destroy frees only the
+        // iterator's own arrays and never touches the index or the file.
         hts_ptr<htsFile, hts_close> vcf_file;              ///< htslib file handle
         hts_ptr<bcf_hdr_t, bcf_hdr_destroy> header_ptr;    ///< VCF/BCF header
         hts_ptr<bcf1_t, bcf_destroy> record;               ///< Reusable record
