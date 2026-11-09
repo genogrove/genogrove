@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Refactored
 - **`bed_reader` and `gff_reader` share one line source**: the new `text_line_source` owns the BGZF handle or tabix region iterator, the first-line check, `next_line()` and `has_next()`, so a fix to that plumbing lands in one place. The first data line is read once instead of being re-read after a rewind, so the now-unused `bgzf_rewind_to_start` helper is removed. ([#560](https://github.com/genogrove/genogrove/issues/560), [#617](https://github.com/genogrove/genogrove/pull/617))
+- **`vcf_reader` owns its htslib handles with RAII members**: the file, header, record, index and region iterator are `hts_ptr` members and the scratch buffers are `hts_scratch` / `hts_kstring` (new `htslib_raii.hpp`), so the hand-written move operations, destructor and `cleanup()` are gone. ([#618](https://github.com/genogrove/genogrove/issues/618), [#627](https://github.com/genogrove/genogrove/pull/627))
 
 ### Changed
 - **macOS CI runs on `macos-15` and `macos-26`**: GitHub retired the `macos-14` runner, so the Apple Clang 15 job is gone and Apple Clang 21 (macOS 26) is added; Apple Clang 15 is no longer tested. The README compiler table lists the versions printed by the CI jobs. ([#609](https://github.com/genogrove/genogrove/pull/609))
