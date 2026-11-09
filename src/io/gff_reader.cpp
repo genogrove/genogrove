@@ -119,91 +119,54 @@ namespace genogrove::io {
     gff_reader::gff_reader(const std::filesystem::path& fpath)
         : gff_reader(fpath, gff_reader_options::defaults()) {}
 
+    // Constructor-time check of the first data line (streaming mode only).
+    static void validate_first_gff_line(std::string_view line_sv,
+                                        const std::filesystem::path& fpath) {
+        size_t fpos = 0;
+        auto seqid_f = ggu::next_field(line_sv, fpos);
+        auto source_f = ggu::next_field(line_sv, fpos);
+        auto type_f = ggu::next_field(line_sv, fpos);
+        auto start_f = ggu::next_field(line_sv, fpos);
+        auto end_f = ggu::next_field(line_sv, fpos);
+        auto score_f = ggu::next_field(line_sv, fpos);
+        auto strand_f = ggu::next_field(line_sv, fpos);
+        auto phase_f = ggu::next_field(line_sv, fpos);
+
+        if (!seqid_f || !source_f || !type_f || !start_f || !end_f ||
+            !score_f || !strand_f || !phase_f) {
+            throw std::runtime_error("Invalid GFF header/format in " + fpath.string());
+        }
+
+        if (start_f->empty() || end_f->empty() ||
+            !std::ranges::all_of(*start_f, ggu::is_digit) ||
+            !std::ranges::all_of(*end_f, ggu::is_digit)) {
+            throw std::runtime_error("Invalid GFF coordinates (non-integer) in " + fpath.string());
+        }
+
+        size_t start_num = 0;
+        size_t end_num = 0;
+        auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
+        auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
+        if (ec1 != std::errc{} || ec2 != std::errc{}) {
+            throw std::runtime_error("Invalid GFF coordinates (out of range) in " + fpath.string());
+        }
+        if (start_num < 1) {
+            throw std::runtime_error("Invalid GFF coordinates (start must be >= 1, GFF is 1-based) in " + fpath.string());
+        }
+        if (start_num > end_num) {
+            throw std::runtime_error("Invalid GFF coordinates (start > end) in " + fpath.string());
+        }
+    }
+
     gff_reader::gff_reader(const std::filesystem::path& fpath, const gff_reader_options& options)
-        : bgzf_file(nullptr), line_num(0), options(options) {
-        // Region mode: read only the records overlapping the requested locus via
-        // a tabix index. No streaming handle and no first-line validation —
-        // tabix_reader validates the index/region and throws on failure.
-        if (!this->options.region.empty()) {
-            region_reader = std::make_unique<tabix_reader>(fpath, this->options.region);
-            return;
-        }
-
-        // note this handles both raw and gzipped files
-        bgzf_file = bgzf_open(fpath.c_str(), "r");
-        if(!bgzf_file) {
-            throw std::runtime_error("Failed to open file: " + fpath.string());
-        }
-
-        // Validate first data line
-        size_t temp_line_num = 0;
-
-        try {
-            auto first_line = bgzf_next_data_line(bgzf_file, temp_line_num);
-            if (!first_line) {
-                // Structurally valid file with zero data records (empty file,
-                // comments-only file, or all blank lines). Treat as non-error:
-                // rewind so the iterator reports end() immediately. Consumers
-                // can detect zero records via reader.begin() == reader.end().
-                bgzf_rewind_to_start(bgzf_file, fpath);
-                return;
-            }
-
-            // With skip_invalid_lines the caller opts into tolerating malformed
-            // records — including the first. Defer all validation to
-            // read_next()/parse_line() so construction never throws on a bad
-            // record; the iterator will skip it like any other.
-            if (!this->options.skip_invalid_lines) {
-                std::string_view line_sv(*first_line);
-                size_t fpos = 0;
-                auto seqid_f = ggu::next_field(line_sv, fpos);
-                auto source_f = ggu::next_field(line_sv, fpos);
-                auto type_f = ggu::next_field(line_sv, fpos);
-                auto start_f = ggu::next_field(line_sv, fpos);
-                auto end_f = ggu::next_field(line_sv, fpos);
-                auto score_f = ggu::next_field(line_sv, fpos);
-                auto strand_f = ggu::next_field(line_sv, fpos);
-                auto phase_f = ggu::next_field(line_sv, fpos);
-
-                if (!seqid_f || !source_f || !type_f || !start_f || !end_f ||
-                    !score_f || !strand_f || !phase_f) {
-                    throw std::runtime_error("Invalid GFF header/format in " + fpath.string());
-                }
-
-                if (start_f->empty() || end_f->empty() ||
-                    !std::ranges::all_of(*start_f, ggu::is_digit) ||
-                    !std::ranges::all_of(*end_f, ggu::is_digit)) {
-                    throw std::runtime_error("Invalid GFF coordinates (non-integer) in " + fpath.string());
-                }
-
-                size_t start_num = 0;
-                size_t end_num = 0;
-                auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
-                auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
-                if (ec1 != std::errc{} || ec2 != std::errc{}) {
-                    throw std::runtime_error("Invalid GFF coordinates (out of range) in " + fpath.string());
-                }
-                if (start_num < 1) {
-                    throw std::runtime_error("Invalid GFF coordinates (start must be >= 1, GFF is 1-based) in " + fpath.string());
-                }
-                if (start_num > end_num) {
-                    throw std::runtime_error("Invalid GFF coordinates (start > end) in " + fpath.string());
-                }
-            }
-
-            bgzf_rewind_to_start(bgzf_file, fpath);
-        } catch (...) {
-            bgzf_close(bgzf_file);
-            bgzf_file = nullptr;
-            throw;
-        }
-    }
-
-    gff_reader::~gff_reader() {
-        if(bgzf_file) {
-            bgzf_close(bgzf_file);
-        }
-    }
+        // With skip_invalid_lines the caller opts into tolerating malformed
+        // records — including the first. Pass no validator so construction never
+        // throws on a bad record; read_next()/parse_line() skips it like any other.
+        : source(fpath, options.region,
+                 options.skip_invalid_lines
+                     ? text_line_source::first_line_validator{}
+                     : [&fpath](std::string_view line) { validate_first_gff_line(line, fpath); }),
+          line_num(0), options(options) {}
 
     gff_format gff_reader::parse_attributes(std::string_view attr_string,
         std::map<std::string, std::vector<std::string>, std::less<>>& attributes) {
@@ -365,12 +328,12 @@ namespace genogrove::io {
             // exception and calls get_error_message() sees it (matching bam/vcf).
             std::optional<std::string> line_opt;
             try {
-                line_opt = region_reader ? region_reader->next_line(line_num)
-                                         : bgzf_next_data_line(bgzf_file, line_num);
+                line_opt = source.next_line();
             } catch (const std::exception& e) {
                 error_message = e.what();
                 throw;
             }
+            line_num = source.line_num();
             if (!line_opt) return false;  // EOF / end of region
 
             if (parse_line(*line_opt, entry)) return true;
@@ -474,8 +437,7 @@ namespace genogrove::io {
     }
 
     bool gff_reader::has_next() {
-        if (region_reader) return region_reader->has_next();
-        return bgzf_has_next(bgzf_file);
+        return source.has_next();
     }
 
     std::string gff_reader::get_error_message() const {
