@@ -77,6 +77,17 @@ protected:
         auto options = isec.build_options();
         return options.parse(argc, argv.data());
     }
+
+    // The message validate() throws for these arguments, or "" if it accepts them.
+    std::string validate_error(const cxxopts::ParseResult& args) {
+        subcalls::intersect isec;
+        try {
+            isec.validate(args);
+        } catch(const std::runtime_error& e) {
+            return e.what();
+        }
+        return {};
+    }
 };
 
 // ==========================================
@@ -253,6 +264,70 @@ TEST_F(CLIIntersectTest, ValidateInPlaceWithoutIndexThrows) {
     });
     subcalls::intersect isec;
     EXPECT_THROW(isec.validate(args), std::runtime_error);
+}
+
+// ==========================================
+// Output must not alias an input
+// ==========================================
+// Opening the output truncates it, so an output that is the query, target or
+// index (by path, symlink or hard link) would destroy the input before it is read.
+
+TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsTheQuery) {
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-t", target_path.string(),
+        "-o", query_path.string()
+    });
+    EXPECT_NE(validate_error(args).find("same file as the query file"), std::string::npos);
+}
+
+TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsTheTarget) {
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-t", target_path.string(),
+        "-o", target_path.string()
+    });
+    EXPECT_NE(validate_error(args).find("same file as the target file"), std::string::npos);
+}
+
+TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsTheIndex) {
+    // validate() only checks that the index exists, so any existing file stands in.
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-i", target_path.string(),
+        "-o", target_path.string()
+    });
+    EXPECT_NE(validate_error(args).find("same file as the index file"), std::string::npos);
+}
+
+TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsASymlinkToTheQuery) {
+    fs::create_symlink(query_path, tmp_output);
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-t", target_path.string(),
+        "-o", tmp_output.string()
+    });
+    EXPECT_NE(validate_error(args).find("same file as the query file"), std::string::npos);
+}
+
+TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsAHardLinkToTheQuery) {
+    // A hard link needs the same filesystem, so link a copy that lives next to it.
+    const fs::path query_copy = fs::temp_directory_path() / "genogrove_cli_test_query_copy.bed";
+    fs::copy_file(query_path, query_copy, fs::copy_options::overwrite_existing);
+    fs::create_hard_link(query_copy, tmp_output);
+
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_copy.string(), "-t", target_path.string(),
+        "-o", tmp_output.string()
+    });
+    const std::string error = validate_error(args);
+    fs::remove(query_copy);
+
+    EXPECT_NE(error.find("same file as the query file"), std::string::npos) << error;
+}
+
+TEST_F(CLIIntersectTest, ValidateAcceptsADistinctOutput) {
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-t", target_path.string(),
+        "-o", tmp_output.string()
+    });
+    EXPECT_EQ(validate_error(args), "");
 }
 
 // ==========================================

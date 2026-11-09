@@ -4,6 +4,7 @@
  */
 
 #include <subcalls/index.hpp>
+#include <output_file.hpp>
 #include <handlers/bed.hpp>
 #include <handlers/gff.hpp>
 #include <handlers/links.hpp>
@@ -27,23 +28,18 @@ namespace gio = genogrove::io;
 
 namespace {
 
-// Open outputfile, write the format header for `payload_type`, then serialise
-// the grove. The grove is built before this call, so a parse error never
-// reaches here and an existing .gg at outputfile is never truncated (see
-// execute()). Shared by the BED and GFF branches so the open/header/serialize/
-// post-write-check sequence is written once.
+// Write the format header for `payload_type`, then serialise the grove, into a
+// temporary file that replaces outputfile only once it is complete. A parse
+// error never reaches here (the grove is built first), and a failure while
+// writing leaves an existing .gg at outputfile untouched. Shared by the BED and
+// GFF branches so the open/header/serialize/commit sequence is written once.
 template<typename grove_t>
 void write_index(grove_t& grove, const std::string& outputfile,
                  gio::gg_payload_type payload_type) {
-    std::ofstream output(outputfile, std::ios::binary);
-    if(!output) {
-        throw std::runtime_error("Error: could not open output file: " + outputfile);
-    }
-    gio::gg_header::current(payload_type).write(output);
-    grove.serialize(output);
-    if(!output) {
-        throw std::runtime_error("Error: failed to write index to: " + outputfile);
-    }
+    atomic_output_file output(outputfile, std::ios::binary);
+    gio::gg_header::current(payload_type).write(output.stream());
+    grove.serialize(output.stream());
+    output.commit();
 }
 
 } // namespace
@@ -95,6 +91,13 @@ void index::validate(const cxxopts::ParseResult& args) {
         auto parent = outputfile_path.parent_path();
         if(!parent.empty() && !std::filesystem::exists(parent)) {
             throw std::runtime_error("Error: parent directory does not exist: " + parent.string());
+        }
+
+        // Writing the output would truncate an input before it is read.
+        const auto outputfile = args["outputfile"].as<std::string>();
+        reject_output_alias(outputfile, inputfile, "input file");
+        if(args.count("links")) {
+            reject_output_alias(outputfile, args["links"].as<std::string>(), "links file");
         }
     }
 

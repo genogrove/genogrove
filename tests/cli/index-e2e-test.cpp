@@ -155,6 +155,56 @@ TEST_F(CLIIndexE2ETest, IndexProducesDeserializableGrove) {
 }
 
 // ==========================================
+// The output file never destroys an input
+// ==========================================
+
+namespace {
+std::string read_all(const fs::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+}  // namespace
+
+TEST_F(CLIIndexE2ETest, OutputThatIsTheInputIsRejectedAndTheInputIsKept) {
+    const fs::path dir = fs::temp_directory_path() / "genogrove_idx_alias";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    const fs::path input = dir / "target.bed";
+    fs::copy_file(target_path, input);
+    const std::string before = read_all(input);
+
+    auto result = run_command(cli(
+        "idx \"" + input.string() + "\" -o \"" + input.string() + "\""
+    ));
+
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("same file as the input file"), std::string::npos)
+        << result.output;
+    EXPECT_EQ(read_all(input), before);
+    fs::remove_all(dir);
+}
+
+TEST_F(CLIIndexE2ETest, OutputThatIsTheLinksFileIsRejectedAndTheLinksFileIsKept) {
+    const fs::path dir = fs::temp_directory_path() / "genogrove_idx_links_alias";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    const fs::path links = dir / "links.tsv";
+    fs::copy_file(links_path, links);
+    const std::string before = read_all(links);
+
+    auto result = run_command(cli(
+        "idx \"" + links_target_path.string() + "\" --links \"" + links.string() +
+        "\" -o \"" + links.string() + "\""
+    ));
+
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("same file as the links file"), std::string::npos)
+        << result.output;
+    EXPECT_EQ(read_all(links), before);
+    fs::remove_all(dir);
+}
+
+// ==========================================
 // idx without -o defaults the output to <input>.gg
 // ==========================================
 
