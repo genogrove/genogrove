@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`text_line_source` and `tabix_reader` use bare member names**: the trailing underscores are dropped to match the rest of the codebase, and `text_line_source::line_num()` becomes `current_line()` so it does not clash with the `line_num` member. ([#630](https://github.com/genogrove/genogrove/issues/630), [#631](https://github.com/genogrove/genogrove/pull/631))
 
 ### Changed
+- **`.editorconfig` added and `.clang-format` targets C++20**: editors now apply UTF-8, LF line endings, a final newline (except under `data/` fixture directories) and 4-space C++ indentation, and `.clang-format` sets `Standard: c++20`. ([#632](https://github.com/genogrove/genogrove/pull/632))
 - **macOS CI runs on `macos-15` and `macos-26`**: GitHub retired the `macos-14` runner, so the Apple Clang 15 job is gone and Apple Clang 21 (macOS 26) is added; Apple Clang 15 is no longer tested. The README compiler table lists the versions printed by the CI jobs. ([#609](https://github.com/genogrove/genogrove/pull/609))
 
 ### Added
