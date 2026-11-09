@@ -235,6 +235,57 @@ TEST_F(bedfileTest, lineCounter) {
     EXPECT_EQ(reader.get_current_line(), 3);
 }
 
+TEST_F(bedfileTest, lineCounterCountsLeadingCommentsAndBlanks) {
+    // The constructor reads the first data line ahead of time; the line number
+    // of that record must still include the comment and blank lines before it.
+    fs::path temp_file = test_data_dir / "temp_line_counter_leading.bed";
+    {
+        std::ofstream out(temp_file);
+        out << "# Comment\n";
+        out << "\n";
+        out << "chr1\t10\t20\n";
+        out << "# Comment between records\n";
+        out << "chr1\t30\t40\n";
+    }
+
+    gio::bed_reader reader(temp_file);
+    gio::bed_entry entry;
+    EXPECT_EQ(reader.get_current_line(), 0);
+
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.start, 10u);
+    EXPECT_EQ(reader.get_current_line(), 3);
+
+    ASSERT_TRUE(reader.read_next(entry));
+    EXPECT_EQ(entry.start, 30u);
+    EXPECT_EQ(reader.get_current_line(), 5);
+
+    EXPECT_FALSE(reader.read_next(entry));
+    fs::remove(temp_file);
+}
+
+TEST_F(bedfileTest, lineCounterOnlyComments) {
+    // A file without data lines still consumed its physical lines, so the
+    // first read_next() reports EOF with the number of lines read.
+    fs::path temp_file = test_data_dir / "temp_line_counter_only_comments.bed";
+    {
+        std::ofstream out(temp_file);
+        out << "# Comment 1\n";
+        out << "\n";
+        out << "# Comment 2\n";
+    }
+
+    gio::bed_reader reader(temp_file);
+    gio::bed_entry entry;
+    EXPECT_EQ(reader.get_current_line(), 0);
+
+    EXPECT_FALSE(reader.read_next(entry));
+    EXPECT_EQ(reader.get_current_line(), 3);
+    EXPECT_TRUE(reader.get_error_message().empty());
+
+    fs::remove(temp_file);
+}
+
 // ==========================================
 // Error Handling Tests
 // ==========================================

@@ -12,14 +12,13 @@
 #include <filesystem>
 #include <optional>
 #include <map>
-#include <memory>
 #include <vector>
 
 // genogrove
 #include <genogrove/data_type/genomic_coordinate.hpp>
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/file_reader.hpp>
-#include <genogrove/io/bgzf_utils.hpp>
+#include <genogrove/io/text_line_source.hpp>
 
 namespace genogrove::io {
 
@@ -127,47 +126,23 @@ namespace genogrove::io {
         explicit gff_reader(const std::filesystem::path& path);
         gff_reader(const std::filesystem::path& path, const gff_reader_options& options);
 
-        // Non-copyable (owns raw BGZF* resource)
+        // Non-copyable, movable (the line source owns the file handle)
         gff_reader(const gff_reader&) = delete;
         gff_reader& operator=(const gff_reader&) = delete;
-
-        // Movable
-        gff_reader(gff_reader&& other) noexcept
-            : file_reader<gff_entry>(std::move(other)),
-              bgzf_file(other.bgzf_file), line_num(other.line_num),
-              error_message(std::move(other.error_message)),
-              options(std::move(other.options)),
-              region_reader(std::move(other.region_reader)) {
-            other.bgzf_file = nullptr;
-        }
-        gff_reader& operator=(gff_reader&& other) noexcept {
-            if (this != &other) {
-                file_reader<gff_entry>::operator=(std::move(other));
-                if (bgzf_file) bgzf_close(bgzf_file);
-                bgzf_file = other.bgzf_file;
-                line_num = other.line_num;
-                error_message = std::move(other.error_message);
-                options = std::move(other.options);
-                region_reader = std::move(other.region_reader);
-                other.bgzf_file = nullptr;
-            }
-            return *this;
-        }
+        gff_reader(gff_reader&&) noexcept = default;
+        gff_reader& operator=(gff_reader&&) noexcept = default;
 
         bool read_next(gff_entry& entry) override;
         [[nodiscard]] bool has_next() override;
         [[nodiscard]] std::string get_error_message() const override;
         [[nodiscard]] size_t get_current_line() const override;
-        ~gff_reader() override;
+        ~gff_reader() override = default;
 
     private:
-        BGZF* bgzf_file;
+        text_line_source line_source;
         size_t line_num;
         std::string error_message;
         gff_reader_options options;
-        // Non-null only when options.region is set: lines come from this tabix
-        // region iterator instead of the streaming bgzf_file. See #456.
-        std::unique_ptr<tabix_reader> region_reader;
 
         // Helper to parse attributes (handles both GFF3 and GTF formats)
         // Returns the detected format
@@ -184,7 +159,6 @@ namespace genogrove::io {
 
         // Parse a single data line into an entry. Returns false and sets
         // error_message on an invalid line (the caller decides skip vs throw).
-        // Shared by every line source (streaming, and the region path in #456).
         bool parse_line(const std::string& line, gff_entry& entry);
     };
 

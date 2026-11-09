@@ -232,6 +232,28 @@ TEST_F(gfffileTest, lineCounter) {
     EXPECT_EQ(reader.get_current_line(), 4);
 }
 
+TEST_F(gfffileTest, lineCounterOnlyComments) {
+    // A file without data lines still consumed its physical lines, so the
+    // first read_next() reports EOF with the number of lines read.
+    fs::path temp_file = test_data_dir / "temp_line_counter_only_comments.gff";
+    {
+        std::ofstream out(temp_file);
+        out << "##gff-version 3\n";
+        out << "\n";
+        out << "# Comment\n";
+    }
+
+    gio::gff_reader reader(temp_file);
+    gio::gff_entry entry;
+    EXPECT_EQ(reader.get_current_line(), 0);
+
+    EXPECT_FALSE(reader.read_next(entry));
+    EXPECT_EQ(reader.get_current_line(), 3);
+    EXPECT_TRUE(reader.get_error_message().empty());
+
+    fs::remove(temp_file);
+}
+
 // ==========================================
 // Error Handling Tests
 // ==========================================
@@ -1089,6 +1111,20 @@ TEST_F(gfffileTest, hasNextOnPlainGzipFile) {
     }
     // After reading all 4 records, has_next should return false.
     EXPECT_FALSE(reader.has_next());
+}
+
+TEST_F(gfffileTest, lineCounterOnPlainGzipFile) {
+    // The constructor reads the first record ahead of time and plain gzip cannot
+    // seek back, so this pins that the first record still reports line 1.
+    fs::path plain_gz = test_data_dir / "test_plain_gzip.gtf.gz";
+    gio::gff_reader reader(plain_gz);
+    gio::gff_entry entry;
+
+    EXPECT_EQ(reader.get_current_line(), 0);
+    for (size_t line = 1; line <= 4; ++line) {
+        ASSERT_TRUE(reader.read_next(entry));
+        EXPECT_EQ(reader.get_current_line(), line);
+    }
 }
 
 // ==========================================

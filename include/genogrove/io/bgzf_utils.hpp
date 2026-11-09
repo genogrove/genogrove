@@ -28,14 +28,6 @@ namespace genogrove::io {
     /// Check whether more data is available in a BGZF stream (peek-based).
     bool bgzf_has_next(BGZF* file);
 
-    /// Rewind a BGZF stream to the start of the file.
-    /// Tries `bgzf_seek` first (works for BGZF). On failure, falls back to
-    /// close + reopen, which works for plain gzip and raw files (which lack
-    /// a block index and cannot be seeked). The handle is replaced on
-    /// reopen, hence the by-reference parameter.
-    /// Throws std::runtime_error if reopen fails.
-    void bgzf_rewind_to_start(BGZF*& file, const std::filesystem::path& fpath);
-
     /// RAII wrapper for tabix region iteration over a bgzip-compressed,
     /// tabix-indexed (`.tbi`/`.csi`) file. Construction opens the file, loads
     /// the index, and seeks to `region` (an htslib region string such as
