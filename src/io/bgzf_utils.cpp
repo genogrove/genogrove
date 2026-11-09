@@ -88,7 +88,7 @@ namespace genogrove::io {
             if (ret < -1) {
                 throw std::runtime_error("I/O error reading tabix region");
             }
-            exhausted_ = true;
+            exhausted = true;
             return std::nullopt;  // end of region
         }
 
@@ -101,16 +101,16 @@ namespace genogrove::io {
     std::optional<std::string> tabix_reader::next_line(size_t& line_num) {
         // Serve a prefetched line (from has_next()) before pulling a new one.
         std::optional<std::string> line =
-            lookahead_ ? std::exchange(lookahead_, std::nullopt) : fetch_raw();
+            lookahead ? std::exchange(lookahead, std::nullopt) : fetch_raw();
         if (line) line_num++;
         return line;
     }
 
     bool tabix_reader::has_next() {
-        if (lookahead_) return true;
-        if (exhausted_) return false;
-        lookahead_ = fetch_raw();  // may set exhausted_
-        return lookahead_.has_value();
+        if (lookahead) return true;
+        if (exhausted) return false;
+        lookahead = fetch_raw();  // may set exhausted
+        return lookahead.has_value();
     }
 
 }

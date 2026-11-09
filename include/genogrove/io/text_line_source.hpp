@@ -45,7 +45,7 @@ namespace genogrove::io {
         text_line_source(const std::filesystem::path& fpath, const std::string& region,
                          const first_line_validator& validate_first);
 
-        /// Next data line, advancing line_num (physical lines consumed,
+        /// Next data line, advancing current_line() (physical lines consumed,
         /// comments and blanks included). nullopt at EOF / end of region.
         /// Throws std::runtime_error on an I/O error.
         [[nodiscard]] std::optional<std::string> next_line();
@@ -53,18 +53,19 @@ namespace genogrove::io {
         /// True iff a following next_line() will return a line.
         [[nodiscard]] bool has_next();
 
-        [[nodiscard]] size_t line_num() const { return line_num_; }
+        /// Number of physical lines consumed so far (0 before the first next_line()).
+        [[nodiscard]] size_t current_line() const { return line_num; }
 
     private:
-        hts_ptr<BGZF, bgzf_close> bgzf_file_;
+        hts_ptr<BGZF, bgzf_close> bgzf_file;
         // Non-null only in region mode. See #456.
-        std::unique_ptr<tabix_reader> region_reader_;
+        std::unique_ptr<tabix_reader> region_reader;
         // First data line read for validation, and the physical line it was on.
-        // Streaming mode only; never set together with region_reader_.
-        std::optional<std::string> pending_;
-        size_t pending_line_num_ = 0;
-        bool prefetched_ = false;  // the constructor's read has not been consumed yet
-        size_t line_num_ = 0;
+        // Streaming mode only; never set together with region_reader.
+        std::optional<std::string> pending;
+        size_t pending_line_num = 0;
+        bool prefetched = false;  // the constructor's read has not been consumed yet
+        size_t line_num = 0;
     };
 
 }  // namespace genogrove::io

@@ -331,10 +331,10 @@ namespace genogrove::io {
                 line_opt = line_source.next_line();
             } catch (const std::exception& e) {
                 error_message = e.what();
-                line_num = line_source.line_num();
+                line_num = line_source.current_line();
                 throw;
             }
-            line_num = line_source.line_num();
+            line_num = line_source.current_line();
             if (!line_opt) return false;  // EOF / end of region
 
             if (parse_line(*line_opt, entry)) return true;
