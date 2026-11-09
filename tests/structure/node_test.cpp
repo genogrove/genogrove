@@ -4,20 +4,22 @@
  */
 
 // Direct unit tests for gst::node, independent of grove's insert/remove
-// machinery. Construction preconditions and the Rule-of-Five type traits live in
-// precondition_test.cpp; this file covers behaviour.
+// machinery. Preconditions (constructor order, insert_key_ptr, add_child,
+// get_child), the const-navigation asserts and the Rule-of-Five type traits live
+// in precondition_test.cpp; this file covers behaviour.
 
 // Google Test
 #include <gtest/gtest.h>
 
 // Standard
-#include <cstdint>
 #include <deque>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -33,7 +35,6 @@ namespace gdt = genogrove::data_type;
 
 using node_t = gst::node<gdt::interval, int>;
 using ikey = gdt::key<gdt::interval, int>;
-using block_map = std::unordered_map<const node_t*, gst::detail::block_id>;
 
 namespace {
 
@@ -47,22 +48,40 @@ void expect_runtime_error(const std::function<void()>& fn, const std::string& wh
     }
 }
 
-// Parses one block back into a node; the keys land in `storage`.
+// Heap leaf holding `keys`. Ownership passes to the internal node it is added to.
+node_t* new_leaf(std::initializer_list<ikey*> keys) {
+    auto* leaf = new node_t(4);
+    leaf->set_is_leaf(true);
+    for (auto* k : keys) {
+        leaf->insert_key_ptr(k);
+    }
+    return leaf;
+}
+
+// Parses one block back into a node; the keys land in `storage`. Works for any
+// node instantiation: the key object type is read off the node's key pointers.
+template <typename node_type>
 struct parsed_block {
-    std::deque<ikey> storage;
+    using key_object = std::remove_pointer_t<
+        typename std::remove_reference_t<decltype(std::declval<node_type&>().get_keys())>::value_type>;
+
+    std::deque<key_object> storage;
     std::vector<gst::detail::block_id> child_ids;
     gst::detail::block_id next_id = 0;
-    std::unique_ptr<node_t> node;
+    std::unique_ptr<node_type> node;
 };
 
-parsed_block parse_block(const std::string& bytes, int order) {
-    parsed_block p;
+template <typename node_type>
+parsed_block<node_type> parse_block(const std::string& bytes, int order) {
+    parsed_block<node_type> p;
     std::istringstream is(bytes);
-    p.node.reset(node_t::deserialize_block(is, order, p.storage, p.child_ids, p.next_id));
+    p.node.reset(node_type::deserialize_block(is, order, p.storage, p.child_ids, p.next_id));
     return p;
 }
 
-std::string write_block(const node_t& n, const block_map& ids) {
+template <typename node_type>
+std::string write_block(const node_type& n,
+                        const std::unordered_map<const node_type*, gst::detail::block_id>& ids) {
     std::ostringstream os;
     n.serialize_block(os, ids);
     return os.str();
@@ -149,6 +168,44 @@ TEST(nodeTest, insertKeyPtrAtIndexPlacesKeyWithoutSorting) {
     EXPECT_EQ(n.get_keys()[2], &low);
 }
 
+TEST(nodeTest, printKeysJoinsKeyStringsWithSeparator) {
+    node_t n(4);
+    ikey a(gdt::interval{10, 20}, 1);
+    ikey b(gdt::interval{30, 40}, 2);
+    n.insert_key_ptr(&a);
+    n.insert_key_ptr(&b);
+
+    std::ostringstream custom;
+    n.print_keys(custom, "|");
+    EXPECT_EQ(custom.str(), a.to_string() + "|" + b.to_string());
+
+    std::ostringstream tabbed;  // the default separator is a tab
+    n.print_keys(tabbed);
+    EXPECT_EQ(tabbed.str(), a.to_string() + "\t" + b.to_string());
+
+    std::ostringstream empty;
+    node_t no_keys(4);
+    no_keys.print_keys(empty);
+    EXPECT_TRUE(empty.str().empty());
+}
+
+// =============================================================================
+// Child operations
+// =============================================================================
+
+TEST(nodeTest, addChildAtIndexZeroShiftsExistingChildren) {
+    node_t parent(4);
+    auto* first = new node_t(4);
+    auto* second = new node_t(4);
+
+    parent.add_child(first, 0);
+    parent.add_child(second, 0);  // goes in front, pushing `first` right
+
+    ASSERT_EQ(parent.get_children().size(), 2u);
+    EXPECT_EQ(parent.get_child(0), second);
+    EXPECT_EQ(parent.get_child(1), first);
+}
+
 // =============================================================================
 // Aggregates
 // =============================================================================
@@ -201,22 +258,12 @@ TEST(nodeTest, calcSubtreeRangeReachesLastChild) {
     node_t root(4);
     root.insert_key_ptr(&sep_root);
 
-    auto* leaf_a = new node_t(4);
-    leaf_a->set_is_leaf(true);
-    leaf_a->insert_key_ptr(&in_a);
-
     auto* mid = new node_t(4);
     mid->insert_key_ptr(&sep_mid);
-    auto* leaf_b = new node_t(4);
-    leaf_b->set_is_leaf(true);
-    leaf_b->insert_key_ptr(&in_b);
-    auto* leaf_c = new node_t(4);
-    leaf_c->set_is_leaf(true);
-    leaf_c->insert_key_ptr(&in_c);
-    mid->add_child(leaf_b, 0);
-    mid->add_child(leaf_c, 1);
+    mid->add_child(new_leaf({&in_b}), 0);
+    mid->add_child(new_leaf({&in_c}), 1);
 
-    root.add_child(leaf_a, 0);
+    root.add_child(new_leaf({&in_a}), 0);
     root.add_child(mid, 1);  // root owns everything below it
 
     EXPECT_EQ(root.calc_keys_aggregate(), (gdt::interval{10, 12}));
@@ -264,13 +311,8 @@ TEST(nodeTest, refreshSubtreeMaxOfInternalReadsLastChildsCachedMax) {
 
     node_t root(4);
     root.insert_key_ptr(&sep);
-    auto* leaf_a = new node_t(4);
-    leaf_a->set_is_leaf(true);
-    leaf_a->insert_key_ptr(&in_a);
-    auto* leaf_b = new node_t(4);
-    leaf_b->set_is_leaf(true);
-    leaf_b->insert_key_ptr(&in_b);
-    root.add_child(leaf_a, 0);
+    auto* leaf_b = new_leaf({&in_b});
+    root.add_child(new_leaf({&in_a}), 0);
     root.add_child(leaf_b, 1);
 
     // Bottom-up contract: the parent reads the child's cache, so a parent
@@ -290,12 +332,8 @@ TEST(nodeTest, refreshSubtreeMaxRecursiveFillsEveryLevel) {
 
     node_t root(4);
     root.insert_key_ptr(&sep);
-    auto* leaf_a = new node_t(4);
-    leaf_a->set_is_leaf(true);
-    leaf_a->insert_key_ptr(&in_a);
-    auto* leaf_b = new node_t(4);
-    leaf_b->set_is_leaf(true);
-    leaf_b->insert_key_ptr(&in_b);
+    auto* leaf_a = new_leaf({&in_a});
+    auto* leaf_b = new_leaf({&in_b});
     root.add_child(leaf_a, 0);
     root.add_child(leaf_b, 1);
 
@@ -330,7 +368,8 @@ TEST(nodeTest, moveConstructorTransfersStateAndEmptiesSource) {
     EXPECT_EQ(moved.get_keys()[0], &k);
     EXPECT_EQ(moved.get_parent(), &parent);
     EXPECT_EQ(moved.get_next(), &next);
-    // The cached max must travel with the keys it describes (#517).
+    // The cached max must travel with the keys it describes: a node that kept
+    // the keys but lost it would report "no bound" and routing would misread that.
     EXPECT_EQ(moved.get_subtree_max(), &k);
 
     EXPECT_TRUE(source.get_keys().empty());
@@ -362,7 +401,9 @@ TEST(nodeTest, moveAssignmentTransfersStateAndReleasesOldChildren) {
     source.refresh_subtree_max();
 
     node_t target(4);
-    target.add_child(new node_t(4), 0);  // freed by the assignment (visible under ASan)
+    // Freed by the assignment. node has no hook to observe the delete, so a leak
+    // here only shows up under LeakSanitizer.
+    target.add_child(new node_t(4), 0);
 
     target = std::move(source);
 
@@ -404,7 +445,7 @@ TEST(nodeBlockTest, leafRoundTripKeepsKeysDataAndNextId) {
     node_t successor(4);
     leaf.set_next(&successor);
 
-    auto p = parse_block(write_block(leaf, {{&leaf, 0}, {&successor, 7}}), 4);
+    auto p = parse_block<node_t>(write_block(leaf, {{&leaf, 0}, {&successor, 7}}), 4);
 
     EXPECT_TRUE(p.node->get_is_leaf());
     ASSERT_EQ(p.node->get_keys().size(), 2u);
@@ -425,7 +466,7 @@ TEST(nodeBlockTest, lastLeafWritesNoBlockAsNextId) {
     ikey a(gdt::interval{10, 20}, 1);
     leaf.insert_key_ptr(&a);
 
-    auto p = parse_block(write_block(leaf, {{&leaf, 0}}), 4);
+    auto p = parse_block<node_t>(write_block(leaf, {{&leaf, 0}}), 4);
 
     EXPECT_EQ(p.next_id, gst::detail::no_block);
 }
@@ -439,7 +480,7 @@ TEST(nodeBlockTest, internalRoundTripKeepsKeysAndChildIds) {
     internal.add_child(c0, 0);
     internal.add_child(c1, 1);
 
-    auto p = parse_block(write_block(internal, {{c0, 3}, {c1, 4}}), 4);
+    auto p = parse_block<node_t>(write_block(internal, {{c0, 3}, {c1, 4}}), 4);
 
     EXPECT_FALSE(p.node->get_is_leaf());
     ASSERT_EQ(p.node->get_keys().size(), 1u);
@@ -457,18 +498,11 @@ TEST(nodeBlockTest, datalessLeafRoundTrips) {
     gdt::key<gdt::interval> k(gdt::interval{10, 20});
     leaf.insert_key_ptr(&k);
 
-    std::ostringstream os;
-    leaf.serialize_block(os, {{&leaf, 0}});
+    auto p = parse_block<plain_node>(write_block(leaf, {{&leaf, 0}}), 4);
 
-    std::deque<gdt::key<gdt::interval>> storage;
-    std::vector<gst::detail::block_id> child_ids;
-    gst::detail::block_id next_id = 0;
-    std::istringstream is(os.str());
-    std::unique_ptr<plain_node> restored(plain_node::deserialize_block(is, 4, storage, child_ids, next_id));
-
-    ASSERT_EQ(restored->get_keys().size(), 1u);
-    EXPECT_EQ(restored->get_keys()[0]->get_value(), (gdt::interval{10, 20}));
-    EXPECT_EQ(next_id, gst::detail::no_block);
+    ASSERT_EQ(p.node->get_keys().size(), 1u);
+    EXPECT_EQ(p.node->get_keys()[0]->get_value(), (gdt::interval{10, 20}));
+    EXPECT_EQ(p.next_id, gst::detail::no_block);
 }
 
 TEST(nodeBlockTest, serializeRejectsNodeMissingFromBlockMap) {
@@ -497,8 +531,8 @@ TEST(nodeBlockTest, deserializeRejectsKeyCountAtOrAboveOrder) {
     leaf.insert_key_ptr(&c);
     const auto bytes = write_block(leaf, {{&leaf, 0}});
 
-    EXPECT_NO_THROW((void)parse_block(bytes, 4));
-    expect_runtime_error([&] { (void)parse_block(bytes, 3); }, "num_keys exceeds order");
+    EXPECT_NO_THROW((void)parse_block<node_t>(bytes, 4));
+    expect_runtime_error([&] { (void)parse_block<node_t>(bytes, 3); }, "num_keys exceeds order");
 }
 
 TEST(nodeBlockTest, deserializeRejectsChildCountThatDoesNotMatchKeyCount) {
@@ -514,9 +548,20 @@ TEST(nodeBlockTest, deserializeRejectsChildCountThatDoesNotMatchKeyCount) {
     internal.add_child(c2, 2);
     const auto bytes = write_block(internal, {{c0, 1}, {c1, 2}, {c2, 3}});
 
-    expect_runtime_error([&] { (void)parse_block(bytes, 4); }, "child count does not match key count");
+    expect_runtime_error([&] { (void)parse_block<node_t>(bytes, 4); }, "child count does not match key count");
     // At order 2 the same block fails the earlier "more children than order" check.
-    expect_runtime_error([&] { (void)parse_block(bytes, 2); }, "num_children exceeds order");
+    expect_runtime_error([&] { (void)parse_block<node_t>(bytes, 2); }, "num_children exceeds order");
+}
+
+TEST(nodeBlockTest, deserializeRejectsInternalNodeWithoutKeys) {
+    // search_overlaps reads keys[0] on every internal node. One child and no key
+    // passes the child-count check (0 + 1), so only the no-keys guard rejects it.
+    node_t internal(4);
+    auto* child = new node_t(4);
+    internal.add_child(child, 0);
+    const auto bytes = write_block(internal, {{child, 1}});
+
+    expect_runtime_error([&] { (void)parse_block<node_t>(bytes, 4); }, "internal node has no keys");
 }
 
 TEST(nodeBlockTest, deserializeRejectsTruncatedBlock) {
@@ -526,7 +571,23 @@ TEST(nodeBlockTest, deserializeRejectsTruncatedBlock) {
     leaf.insert_key_ptr(&a);
     const auto bytes = write_block(leaf, {{&leaf, 0}});
 
-    expect_runtime_error([&] { (void)parse_block("", 4); }, "stream error");
+    expect_runtime_error([&] { (void)parse_block<node_t>("", 4); }, "stream error");
     // Cut before the trailing next id.
-    expect_runtime_error([&] { (void)parse_block(bytes.substr(0, bytes.size() - 1), 4); }, "stream error");
+    expect_runtime_error([&] { (void)parse_block<node_t>(bytes.substr(0, bytes.size() - 1), 4); },
+                         "stream error reading next id");
+
+    // Same for an internal block: cut inside its last child id.
+    node_t internal(4);
+    ikey sep(gdt::interval{10, 20}, 1);
+    internal.insert_key_ptr(&sep);
+    auto* c0 = new node_t(4);
+    auto* c1 = new node_t(4);
+    internal.add_child(c0, 0);
+    internal.add_child(c1, 1);
+    const auto internal_bytes = write_block(internal, {{c0, 1}, {c1, 2}});
+
+    EXPECT_NO_THROW((void)parse_block<node_t>(internal_bytes, 4));
+    expect_runtime_error(
+        [&] { (void)parse_block<node_t>(internal_bytes.substr(0, internal_bytes.size() - 1), 4); },
+        "stream error reading child id");
 }
