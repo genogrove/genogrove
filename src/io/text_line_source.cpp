@@ -31,15 +31,21 @@ namespace genogrove::io {
         // lines) is structurally valid: nothing is pending, so the first
         // next_line() reports EOF and has_next() is false.
         pending_ = bgzf_next_data_line(bgzf_file_.get(), pending_line_num_);
+        prefetched_ = true;
         if (pending_ && validate_first) {
             validate_first(*pending_);
         }
     }
 
     std::optional<std::string> text_line_source::next_line() {
-        if (pending_) {
+        // Only set in streaming mode, so the region branch below never competes
+        // with a buffered line.
+        if (prefetched_) {
+            prefetched_ = false;
+            // Also covers a file with no data lines: the prefetch consumed every
+            // physical line, and get_current_line() must still report them.
             line_num_ = pending_line_num_;
-            return std::exchange(pending_, std::nullopt);
+            if (pending_) return std::exchange(pending_, std::nullopt);
         }
         return region_reader_ ? region_reader_->next_line(line_num_)
                               : bgzf_next_data_line(bgzf_file_.get(), line_num_);

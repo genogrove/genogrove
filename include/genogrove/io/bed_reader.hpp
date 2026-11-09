@@ -13,7 +13,6 @@
 #include <iosfwd>
 #include <optional>
 #include <vector>
-#include <memory>
 #include <stdexcept>
 
 // genogrove
@@ -139,11 +138,9 @@ namespace genogrove::io {
         explicit bed_reader(const std::filesystem::path& path);
         bed_reader(const std::filesystem::path& path, const bed_reader_options& options);
 
-        // Non-copyable (owns raw BGZF* resource)
+        // Non-copyable, movable (the line source owns the file handle)
         bed_reader(const bed_reader&) = delete;
         bed_reader& operator=(const bed_reader&) = delete;
-
-        // Movable (the line source owns the file handle)
         bed_reader(bed_reader&&) noexcept = default;
         bed_reader& operator=(bed_reader&&) noexcept = default;
 
@@ -154,7 +151,7 @@ namespace genogrove::io {
         ~bed_reader() override = default;
 
     private:
-        text_line_source source;
+        text_line_source line_source;
         size_t line_num;
         std::string error_message;
         bed_reader_options options;
@@ -175,7 +172,6 @@ namespace genogrove::io {
 
         // Parse a single data line into an entry. Returns false and sets
         // error_message on an invalid line (the caller decides skip vs throw).
-        // Shared by every line source (streaming, and the region path in #456).
         bool parse_line(const std::string& line, bed_entry& entry);
     };
 

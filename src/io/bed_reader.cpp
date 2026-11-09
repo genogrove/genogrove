@@ -4,7 +4,6 @@
  */
 
 #include <genogrove/io/bed_reader.hpp>
-#include <genogrove/io/bgzf_utils.hpp>
 
 // standard
 #include <algorithm>
@@ -80,9 +79,9 @@ namespace genogrove::io {
 
         size_t start_num = 0;
         size_t end_num = 0;
-        auto [p1, ec1] = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
-        auto [p2, ec2] = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
-        if (ec1 != std::errc{} || ec2 != std::errc{}) {
+        const auto start_res = std::from_chars(start_f->data(), start_f->data() + start_f->size(), start_num);
+        const auto end_res = std::from_chars(end_f->data(), end_f->data() + end_f->size(), end_num);
+        if (start_res.ec != std::errc{} || end_res.ec != std::errc{}) {
             throw std::runtime_error("Invalid BED coordinates (out of range) in " + fpath.string());
         }
         if (start_num >= end_num) {
@@ -90,11 +89,11 @@ namespace genogrove::io {
         }
     }
 
+    // With skip_invalid_lines the caller opts into tolerating malformed records,
+    // including the first. No validator is passed then, so construction never
+    // throws on a bad record; read_next()/parse_line() skips it like any other.
     bed_reader::bed_reader(const std::filesystem::path& fpath, const bed_reader_options& options)
-        // With skip_invalid_lines the caller opts into tolerating malformed
-        // records — including the first. Pass no validator so construction never
-        // throws on a bad record; read_next()/parse_line() skips it like any other.
-        : source(fpath, options.region,
+        : line_source(fpath, options.region,
                  options.skip_invalid_lines
                      ? text_line_source::first_line_validator{}
                      : [&fpath](std::string_view line) { validate_first_bed_line(line, fpath); }),
@@ -322,18 +321,20 @@ namespace genogrove::io {
     bool bed_reader::read_next(bed_entry& entry) {
         while (true) {
             error_message.clear();
-
             // A BGZF/tabix I/O error throws from the fetch; record it in
             // error_message before it propagates so a caller that catches the
             // exception and calls get_error_message() sees it (matching bam/vcf).
+            // line_num is synced on that path too, so it reports the lines
+            // consumed before the error.
             std::optional<std::string> line_opt;
             try {
-                line_opt = source.next_line();
+                line_opt = line_source.next_line();
             } catch (const std::exception& e) {
                 error_message = e.what();
+                line_num = line_source.line_num();
                 throw;
             }
-            line_num = source.line_num();
+            line_num = line_source.line_num();
             if (!line_opt) return false;  // EOF / end of region
 
             if (parse_line(*line_opt, entry)) return true;
@@ -407,7 +408,7 @@ namespace genogrove::io {
     }
 
     bool bed_reader::has_next() {
-        return source.has_next();
+        return line_source.has_next();
     }
 
     std::string bed_reader::get_error_message() const {

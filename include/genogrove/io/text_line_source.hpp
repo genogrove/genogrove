@@ -63,8 +63,10 @@ namespace genogrove::io {
         // Non-null only in region mode. See #456.
         std::unique_ptr<tabix_reader> region_reader_;
         // First data line read for validation, and the physical line it was on.
+        // Streaming mode only; never set together with region_reader_.
         std::optional<std::string> pending_;
         size_t pending_line_num_ = 0;
+        bool prefetched_ = false;  // the constructor's read has not been consumed yet
         size_t line_num_ = 0;
     };
 

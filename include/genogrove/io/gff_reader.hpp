@@ -12,7 +12,6 @@
 #include <filesystem>
 #include <optional>
 #include <map>
-#include <memory>
 #include <vector>
 
 // genogrove
@@ -127,11 +126,9 @@ namespace genogrove::io {
         explicit gff_reader(const std::filesystem::path& path);
         gff_reader(const std::filesystem::path& path, const gff_reader_options& options);
 
-        // Non-copyable (owns raw BGZF* resource)
+        // Non-copyable, movable (the line source owns the file handle)
         gff_reader(const gff_reader&) = delete;
         gff_reader& operator=(const gff_reader&) = delete;
-
-        // Movable (the line source owns the file handle)
         gff_reader(gff_reader&&) noexcept = default;
         gff_reader& operator=(gff_reader&&) noexcept = default;
 
@@ -142,7 +139,7 @@ namespace genogrove::io {
         ~gff_reader() override = default;
 
     private:
-        text_line_source source;
+        text_line_source line_source;
         size_t line_num;
         std::string error_message;
         gff_reader_options options;
@@ -162,7 +159,6 @@ namespace genogrove::io {
 
         // Parse a single data line into an entry. Returns false and sets
         // error_message on an invalid line (the caller decides skip vs throw).
-        // Shared by every line source (streaming, and the region path in #456).
         bool parse_line(const std::string& line, gff_entry& entry);
     };
 
