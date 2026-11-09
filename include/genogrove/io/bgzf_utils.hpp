@@ -59,15 +59,15 @@ namespace genogrove::io {
 
     private:
         /// Pull the next region line straight from the iterator (no lookahead),
-        /// setting exhausted_ at end-of-region. Throws std::runtime_error on I/O error.
+        /// setting `exhausted` at end-of-region. Throws std::runtime_error on I/O error.
         std::optional<std::string> fetch_raw();
 
         htsFile* fp = nullptr;
         tbx_t* tbx = nullptr;
         hts_itr_t* itr = nullptr;
         kstring_t buf = {0, 0, nullptr};
-        bool exhausted_ = false;
-        std::optional<std::string> lookahead_;  // one-record prefetch for has_next()
+        bool exhausted = false;
+        std::optional<std::string> lookahead;  // one-record prefetch for has_next()
     };
 
 }
