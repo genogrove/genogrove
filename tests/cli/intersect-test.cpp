@@ -269,8 +269,8 @@ TEST_F(CLIIntersectTest, ValidateInPlaceWithoutIndexThrows) {
 // ==========================================
 // Output must not alias an input
 // ==========================================
-// Opening the output truncates it, so an output that is the query, target or
-// index (by path, symlink or hard link) would destroy the input before it is read.
+// validate() rejects an output that is the query, target or index. The path,
+// symlink and hard-link cases are covered by the helper tests in output-file-test.cpp.
 
 TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsTheQuery) {
     auto args = parse_intersect_args({
@@ -295,31 +295,6 @@ TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsTheIndex) {
         "-o", target_path.string()
     });
     EXPECT_NE(validate_error(args).find("same file as the index file"), std::string::npos);
-}
-
-TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsASymlinkToTheQuery) {
-    fs::create_symlink(query_path, tmp_output);
-    auto args = parse_intersect_args({
-        "intersect", "-q", query_path.string(), "-t", target_path.string(),
-        "-o", tmp_output.string()
-    });
-    EXPECT_NE(validate_error(args).find("same file as the query file"), std::string::npos);
-}
-
-TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsAHardLinkToTheQuery) {
-    // A hard link needs the same filesystem, so link a copy that lives next to it.
-    const fs::path query_copy = fs::temp_directory_path() / "genogrove_cli_test_query_copy.bed";
-    fs::copy_file(query_path, query_copy, fs::copy_options::overwrite_existing);
-    fs::create_hard_link(query_copy, tmp_output);
-
-    auto args = parse_intersect_args({
-        "intersect", "-q", query_copy.string(), "-t", target_path.string(),
-        "-o", tmp_output.string()
-    });
-    const std::string error = validate_error(args);
-    fs::remove(query_copy);
-
-    EXPECT_NE(error.find("same file as the query file"), std::string::npos) << error;
 }
 
 TEST_F(CLIIntersectTest, ValidateAcceptsADistinctOutput) {

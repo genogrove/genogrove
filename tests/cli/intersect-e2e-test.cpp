@@ -205,8 +205,6 @@ bool has_temporary_file(const fs::path& dir) {
 }  // namespace
 
 TEST_F(CLIIntersectE2ETest, OutputThatIsTheQueryIsRejectedAndTheQueryIsKept) {
-    // The output used to be opened, and so truncated, before the query was read:
-    // the command exited successfully and left the query file empty.
     const fs::path dir = fresh_dir("genogrove_e2e_alias");
     const fs::path query = dir / "query.bed";
     const fs::path target = dir / "target.bed";
@@ -259,6 +257,16 @@ TEST_F(CLIIntersectE2ETest, SuccessfulRunLeavesOnlyTheOutputFile) {
     EXPECT_NE(read_all(output).find("chr1\t100\t500"), std::string::npos);
     EXPECT_FALSE(has_temporary_file(dir));
     fs::remove_all(dir);
+}
+
+TEST_F(CLIIntersectE2ETest, OutputToDevNullSucceedsAndLeavesTheDeviceAlone) {
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -t \"" + target_path.string() +
+        "\" -o /dev/null"
+    ));
+
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_TRUE(fs::is_character_file("/dev/null"));
 }
 
 // ==========================================

@@ -15,7 +15,6 @@
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -40,6 +39,12 @@ void write_index(grove_t& grove, const std::string& outputfile,
     gio::gg_header::current(payload_type).write(output.stream());
     grove.serialize(output.stream());
     output.commit();
+}
+
+// The output file: -o, or <inputfile>.gg next to the source file.
+std::string output_path(const cxxopts::ParseResult& args) {
+    return args.count("outputfile") ? args["outputfile"].as<std::string>()
+                                    : args["inputfile"].as<std::string>() + ".gg";
 }
 
 } // namespace
@@ -92,13 +97,6 @@ void index::validate(const cxxopts::ParseResult& args) {
         if(!parent.empty() && !std::filesystem::exists(parent)) {
             throw std::runtime_error("Error: parent directory does not exist: " + parent.string());
         }
-
-        // Writing the output would truncate an input before it is read.
-        const auto outputfile = args["outputfile"].as<std::string>();
-        reject_output_alias(outputfile, inputfile, "input file");
-        if(args.count("links")) {
-            reject_output_alias(outputfile, args["links"].as<std::string>(), "links file");
-        }
     }
 
     if(args.count("links")) {
@@ -106,6 +104,14 @@ void index::validate(const cxxopts::ParseResult& args) {
         if(!std::filesystem::exists(links_path)) {
             throw std::runtime_error("Error: links file does not exist: " + links_path);
         }
+    }
+
+    // Committing the output would replace an input with the result. This covers
+    // the default output too.
+    const std::string outputfile = output_path(args);
+    reject_output_alias(outputfile, inputfile, "input file");
+    if(args.count("links")) {
+        reject_output_alias(outputfile, args["links"].as<std::string>(), "links file");
     }
 }
 
@@ -115,10 +121,7 @@ void index::execute(const cxxopts::ParseResult& args) {
     const bool sorted = args["sorted"].as<bool>();
     const bool timed = args["timed"].as<bool>();
 
-    // Default the output path to <inputfile>.gg next to the source file.
-    const std::string outputfile = args.count("outputfile")
-        ? args["outputfile"].as<std::string>()
-        : inputfile + ".gg";
+    const std::string outputfile = output_path(args);
 
     // Dispatch on input file type — BED and GFF/GTF are supported. Validate
     // the type before any output side-effect so an unsupported input never

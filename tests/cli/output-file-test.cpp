@@ -20,12 +20,12 @@
 namespace fs = std::filesystem;
 
 namespace {
-std::string slurp(const fs::path& path) {
+std::string read_all(const fs::path& path) {
     std::ifstream in(path, std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
-void spit(const fs::path& path, const std::string& content) {
+void write_all(const fs::path& path, const std::string& content) {
     std::ofstream out(path, std::ios::binary);
     out << content;
 }
@@ -56,17 +56,17 @@ protected:
 
 TEST_F(CLIOutputFileTest, CommitReplacesExistingFile) {
     const fs::path target = dir / "out.txt";
-    spit(target, "old");
+    write_all(target, "old");
 
     {
         subcalls::atomic_output_file file(target.string());
         file.stream() << "new";
         // The destination keeps its old contents until commit().
-        EXPECT_EQ(slurp(target), "old");
+        EXPECT_EQ(read_all(target), "old");
         file.commit();
     }
 
-    EXPECT_EQ(slurp(target), "new");
+    EXPECT_EQ(read_all(target), "new");
     EXPECT_EQ(entries_in(dir), 1u) << "no temporary file may be left behind";
 }
 
@@ -80,26 +80,26 @@ TEST_F(CLIOutputFileTest, CommitCreatesMissingFile) {
         file.commit();
     }
 
-    EXPECT_EQ(slurp(target), "content");
+    EXPECT_EQ(read_all(target), "content");
     EXPECT_EQ(entries_in(dir), 1u);
 }
 
 TEST_F(CLIOutputFileTest, DroppingWithoutCommitKeepsExistingFileAndRemovesTemp) {
     const fs::path target = dir / "out.txt";
-    spit(target, "old");
+    write_all(target, "old");
 
     {
         subcalls::atomic_output_file file(target.string());
         file.stream() << "half written";
     }  // no commit()
 
-    EXPECT_EQ(slurp(target), "old");
+    EXPECT_EQ(read_all(target), "old");
     EXPECT_EQ(entries_in(dir), 1u);
 }
 
 TEST_F(CLIOutputFileTest, ExceptionBeforeCommitKeepsExistingFile) {
     const fs::path target = dir / "out.txt";
-    spit(target, "old");
+    write_all(target, "old");
 
     EXPECT_THROW(
         {
@@ -109,13 +109,13 @@ TEST_F(CLIOutputFileTest, ExceptionBeforeCommitKeepsExistingFile) {
         },
         std::runtime_error);
 
-    EXPECT_EQ(slurp(target), "old");
+    EXPECT_EQ(read_all(target), "old");
     EXPECT_EQ(entries_in(dir), 1u);
 }
 
 TEST_F(CLIOutputFileTest, CommitThrowsWhenTheStreamFailedAndKeepsExistingFile) {
     const fs::path target = dir / "out.txt";
-    spit(target, "old");
+    write_all(target, "old");
 
     {
         subcalls::atomic_output_file file(target.string());
@@ -124,13 +124,62 @@ TEST_F(CLIOutputFileTest, CommitThrowsWhenTheStreamFailedAndKeepsExistingFile) {
         EXPECT_THROW(file.commit(), std::runtime_error);
     }
 
-    EXPECT_EQ(slurp(target), "old");
+    EXPECT_EQ(read_all(target), "old");
     EXPECT_EQ(entries_in(dir), 1u);
 }
 
-TEST_F(CLIOutputFileTest, OpeningInAMissingDirectoryThrows) {
-    EXPECT_THROW(subcalls::atomic_output_file((dir / "missing" / "out.txt").string()),
-                 std::runtime_error);
+TEST_F(CLIOutputFileTest, OpeningInAMissingDirectoryThrowsWithTheReason) {
+    try {
+        subcalls::atomic_output_file file((dir / "missing" / "out.txt").string());
+        FAIL() << "expected std::runtime_error";
+    } catch(const std::runtime_error& e) {
+        const std::string message = e.what();
+        EXPECT_NE(message.find("could not open output file"), std::string::npos) << message;
+        EXPECT_NE(message.find("No such file or directory"), std::string::npos) << message;
+    }
+}
+
+TEST_F(CLIOutputFileTest, DevNullIsWrittenInPlaceAndStaysADevice) {
+    // A device cannot be replaced by a rename, so it is written directly.
+    {
+        subcalls::atomic_output_file file("/dev/null");
+        file.stream() << "discarded";
+        file.commit();
+    }
+    EXPECT_TRUE(fs::is_character_file("/dev/null"));
+}
+
+TEST_F(CLIOutputFileTest, SymlinkIsWrittenThroughAndKept) {
+    const fs::path real = dir / "real.txt";
+    const fs::path link = dir / "link.txt";
+    write_all(real, "old");
+    fs::create_symlink(real, link);
+
+    {
+        subcalls::atomic_output_file file(link.string());
+        file.stream() << "new";
+        file.commit();
+    }
+
+    EXPECT_TRUE(fs::is_symlink(link));
+    EXPECT_EQ(read_all(real), "new");
+    EXPECT_EQ(entries_in(dir), 2u) << "only the file and its link remain";
+}
+
+TEST_F(CLIOutputFileTest, ReplacingAFileKeepsItsPermissionBits) {
+    const fs::path target = dir / "out.txt";
+    write_all(target, "old");
+    const auto perms = fs::perms::owner_read | fs::perms::owner_write | fs::perms::group_read;
+    fs::permissions(target, perms);
+
+    {
+        subcalls::atomic_output_file file(target.string());
+        file.stream() << "new";
+        file.commit();
+    }
+
+    EXPECT_EQ(read_all(target), "new");
+    EXPECT_EQ(fs::status(target).permissions(), perms);
 }
 
 TEST_F(CLIOutputFileTest, BinaryModeKeepsEveryByte) {
@@ -143,7 +192,7 @@ TEST_F(CLIOutputFileTest, BinaryModeKeepsEveryByte) {
         file.commit();
     }
 
-    EXPECT_EQ(slurp(target), bytes);
+    EXPECT_EQ(read_all(target), bytes);
 }
 
 // ==========================================
@@ -152,7 +201,7 @@ TEST_F(CLIOutputFileTest, BinaryModeKeepsEveryByte) {
 
 TEST_F(CLIOutputFileTest, AliasRejectsTheSamePathSpelledDifferently) {
     const fs::path input = dir / "in.bed";
-    spit(input, "x");
+    write_all(input, "x");
     const fs::path other_spelling = dir / "." / "in.bed";
 
     EXPECT_THROW(subcalls::reject_output_alias(other_spelling.string(), input.string(), "query file"),
@@ -162,7 +211,7 @@ TEST_F(CLIOutputFileTest, AliasRejectsTheSamePathSpelledDifferently) {
 TEST_F(CLIOutputFileTest, AliasRejectsASymlinkToTheInput) {
     const fs::path input = dir / "in.bed";
     const fs::path link = dir / "link.bed";
-    spit(input, "x");
+    write_all(input, "x");
     fs::create_symlink(input, link);
 
     EXPECT_THROW(subcalls::reject_output_alias(link.string(), input.string(), "target file"),
@@ -172,7 +221,7 @@ TEST_F(CLIOutputFileTest, AliasRejectsASymlinkToTheInput) {
 TEST_F(CLIOutputFileTest, AliasRejectsAHardLinkToTheInput) {
     const fs::path input = dir / "in.bed";
     const fs::path link = dir / "hardlink.bed";
-    spit(input, "x");
+    write_all(input, "x");
     fs::create_hard_link(input, link);
 
     EXPECT_THROW(subcalls::reject_output_alias(link.string(), input.string(), "index file"),
@@ -181,7 +230,7 @@ TEST_F(CLIOutputFileTest, AliasRejectsAHardLinkToTheInput) {
 
 TEST_F(CLIOutputFileTest, AliasNamesTheInputInTheMessage) {
     const fs::path input = dir / "in.bed";
-    spit(input, "x");
+    write_all(input, "x");
 
     try {
         subcalls::reject_output_alias(input.string(), input.string(), "query file");
@@ -196,15 +245,15 @@ TEST_F(CLIOutputFileTest, AliasNamesTheInputInTheMessage) {
 TEST_F(CLIOutputFileTest, AliasAcceptsADifferentFile) {
     const fs::path input = dir / "in.bed";
     const fs::path output = dir / "out.bed";
-    spit(input, "x");
-    spit(output, "y");
+    write_all(input, "x");
+    write_all(output, "y");
 
     EXPECT_NO_THROW(subcalls::reject_output_alias(output.string(), input.string(), "query file"));
 }
 
 TEST_F(CLIOutputFileTest, AliasAcceptsAnOutputThatDoesNotExistYet) {
     const fs::path input = dir / "in.bed";
-    spit(input, "x");
+    write_all(input, "x");
 
     EXPECT_NO_THROW(subcalls::reject_output_alias((dir / "new.bed").string(), input.string(),
                                                   "query file"));

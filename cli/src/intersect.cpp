@@ -288,7 +288,7 @@ void intersect::validate(const cxxopts::ParseResult& args) {
                 throw std::runtime_error("Error: parent directory does not exist: " + parent.string());
             }
 
-            // Writing the output would truncate an input before it is read.
+            // Committing the output would replace an input with the result.
             reject_output_alias(outputfile, queryfile, "query file");
             if(has_target) {
                 reject_output_alias(outputfile, args["targetfile"].as<std::string>(),

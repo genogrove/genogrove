@@ -204,6 +204,28 @@ TEST_F(CLIIndexE2ETest, OutputThatIsTheLinksFileIsRejectedAndTheLinksFileIsKept)
     fs::remove_all(dir);
 }
 
+TEST_F(CLIIndexE2ETest, DefaultOutputThatIsTheLinksFileIsRejectedAndTheLinksFileIsKept) {
+    // Without -o the index goes to <input>.gg, which here is also the links file.
+    const fs::path dir = fs::temp_directory_path() / "genogrove_idx_default_alias";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    const fs::path input = dir / "t.bed";
+    const fs::path links = dir / "t.bed.gg";
+    fs::copy_file(links_target_path, input);
+    fs::copy_file(links_path, links);
+    const std::string before = read_all(links);
+
+    auto result = run_command(cli(
+        "idx \"" + input.string() + "\" --links \"" + links.string() + "\""
+    ));
+
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("same file as the links file"), std::string::npos)
+        << result.output;
+    EXPECT_EQ(read_all(links), before);
+    fs::remove_all(dir);
+}
+
 // ==========================================
 // idx without -o defaults the output to <input>.gg
 // ==========================================
