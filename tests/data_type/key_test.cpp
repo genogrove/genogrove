@@ -124,10 +124,7 @@ TEST(keyTest, comparisonUsesValueOnly) {
 namespace {
 // A payload whose moves throw (copies are fine).
 struct throwing_payload {
-    int value = 0;
-
     throwing_payload() = default;
-    explicit throwing_payload(int v) : value(v) {}
     throwing_payload(const throwing_payload&) = default;
     throwing_payload& operator=(const throwing_payload&) = default;
     throwing_payload(throwing_payload&&) { throw std::runtime_error("move failed"); }
@@ -146,11 +143,11 @@ TEST(keyTest, moveIsNoexceptOnlyWhenThePayloadMoveIs) {
 
 TEST(keyTest, throwingPayloadMovePropagatesInsteadOfTerminating) {
     // A defaulted move that was declared noexcept would call std::terminate here.
-    throwing_payload payload(1);
-    throwing_key a(gdt::interval{0, 5}, payload);  // copies the payload
-    EXPECT_THROW(throwing_key moved(std::move(a)), std::runtime_error);
+    throwing_payload payload;
+    throwing_key src(gdt::interval{0, 5}, payload);  // copies the payload
+    EXPECT_THROW(throwing_key moved(std::move(src)), std::runtime_error);
 
-    throwing_key c(gdt::interval{0, 5}, payload);
-    throwing_key d(gdt::interval{1, 2}, payload);
-    EXPECT_THROW(d = std::move(c), std::runtime_error);
+    throwing_key assign_src(gdt::interval{0, 5}, payload);
+    throwing_key dst(gdt::interval{1, 2}, payload);
+    EXPECT_THROW(dst = std::move(assign_src), std::runtime_error);
 }
