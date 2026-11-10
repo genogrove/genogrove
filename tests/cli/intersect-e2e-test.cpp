@@ -176,6 +176,100 @@ TEST_F(CLIIntersectE2ETest, IntersectOutputToFile) {
 }
 
 // ==========================================
+// The output file never destroys an input or an earlier result
+// ==========================================
+
+namespace {
+std::string read_all(const fs::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+// A fresh scratch directory for one test.
+fs::path fresh_dir(const std::string& name) {
+    const fs::path dir = fs::temp_directory_path() / name;
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    return dir;
+}
+
+// True if any entry in `dir` looks like a leftover temporary output file.
+bool has_temporary_file(const fs::path& dir) {
+    for(const auto& entry : fs::directory_iterator(dir)) {
+        if(entry.path().filename().string().find(".tmp-") != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+}  // namespace
+
+TEST_F(CLIIntersectE2ETest, OutputThatIsTheQueryIsRejectedAndTheQueryIsKept) {
+    const fs::path dir = fresh_dir("genogrove_e2e_alias");
+    const fs::path query = dir / "query.bed";
+    const fs::path target = dir / "target.bed";
+    fs::copy_file(query_path, query);
+    fs::copy_file(target_path, target);
+    const std::string before = read_all(query);
+
+    auto result = run_command(cli(
+        "isec -q \"" + query.string() + "\" -t \"" + target.string() +
+        "\" -o \"" + query.string() + "\""
+    ));
+
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("same file as the query file"), std::string::npos)
+        << result.output;
+    EXPECT_EQ(read_all(query), before);
+    fs::remove_all(dir);
+}
+
+TEST_F(CLIIntersectE2ETest, FailedRunKeepsTheExistingOutputAndLeavesNoTemporaryFile) {
+    const fs::path dir = fresh_dir("genogrove_e2e_failed_run");
+    const fs::path bad_target = dir / "bad_target.bed";
+    const fs::path output = dir / "out.bed";
+    {
+        std::ofstream(bad_target) << "chr1\tabc\tdef\n";  // coordinates are not integers
+        std::ofstream(output) << "KEEP\n";
+    }
+
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -t \"" + bad_target.string() +
+        "\" -o \"" + output.string() + "\""
+    ));
+
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_EQ(read_all(output), "KEEP\n");
+    EXPECT_FALSE(has_temporary_file(dir));
+    fs::remove_all(dir);
+}
+
+TEST_F(CLIIntersectE2ETest, SuccessfulRunLeavesOnlyTheOutputFile) {
+    const fs::path dir = fresh_dir("genogrove_e2e_success");
+    const fs::path output = dir / "out.bed";
+
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -t \"" + target_path.string() +
+        "\" -o \"" + output.string() + "\""
+    ));
+
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_NE(read_all(output).find("chr1\t100\t500"), std::string::npos);
+    EXPECT_FALSE(has_temporary_file(dir));
+    fs::remove_all(dir);
+}
+
+TEST_F(CLIIntersectE2ETest, OutputToDevNullSucceedsAndLeavesTheDeviceAlone) {
+    auto result = run_command(cli(
+        "isec -q \"" + query_path.string() + "\" -t \"" + target_path.string() +
+        "\" -o /dev/null"
+    ));
+
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_TRUE(fs::is_character_file("/dev/null"));
+}
+
+// ==========================================
 // Validation errors
 // ==========================================
 

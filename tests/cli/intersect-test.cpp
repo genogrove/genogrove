@@ -77,6 +77,17 @@ protected:
         auto options = isec.build_options();
         return options.parse(argc, argv.data());
     }
+
+    // The message validate() throws for these arguments, or "" if it accepts them.
+    std::string validate_error(const cxxopts::ParseResult& args) {
+        subcalls::intersect isec;
+        try {
+            isec.validate(args);
+        } catch(const std::runtime_error& e) {
+            return e.what();
+        }
+        return {};
+    }
 };
 
 // ==========================================
@@ -253,6 +264,45 @@ TEST_F(CLIIntersectTest, ValidateInPlaceWithoutIndexThrows) {
     });
     subcalls::intersect isec;
     EXPECT_THROW(isec.validate(args), std::runtime_error);
+}
+
+// ==========================================
+// Output must not alias an input
+// ==========================================
+// validate() rejects an output that is the query, target or index. The path,
+// symlink and hard-link cases are covered by the helper tests in output-file-test.cpp.
+
+TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsTheQuery) {
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-t", target_path.string(),
+        "-o", query_path.string()
+    });
+    EXPECT_NE(validate_error(args).find("same file as the query file"), std::string::npos);
+}
+
+TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsTheTarget) {
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-t", target_path.string(),
+        "-o", target_path.string()
+    });
+    EXPECT_NE(validate_error(args).find("same file as the target file"), std::string::npos);
+}
+
+TEST_F(CLIIntersectTest, ValidateRejectsOutputThatIsTheIndex) {
+    // validate() only checks that the index exists, so any existing file stands in.
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-i", target_path.string(),
+        "-o", target_path.string()
+    });
+    EXPECT_NE(validate_error(args).find("same file as the index file"), std::string::npos);
+}
+
+TEST_F(CLIIntersectTest, ValidateAcceptsADistinctOutput) {
+    auto args = parse_intersect_args({
+        "intersect", "-q", query_path.string(), "-t", target_path.string(),
+        "-o", tmp_output.string()
+    });
+    EXPECT_EQ(validate_error(args), "");
 }
 
 // ==========================================

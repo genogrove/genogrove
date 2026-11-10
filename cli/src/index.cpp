@@ -4,6 +4,7 @@
  */
 
 #include <subcalls/index.hpp>
+#include <output_file.hpp>
 #include <handlers/bed.hpp>
 #include <handlers/gff.hpp>
 #include <handlers/links.hpp>
@@ -14,7 +15,6 @@
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -27,23 +27,24 @@ namespace gio = genogrove::io;
 
 namespace {
 
-// Open outputfile, write the format header for `payload_type`, then serialise
-// the grove. The grove is built before this call, so a parse error never
-// reaches here and an existing .gg at outputfile is never truncated (see
-// execute()). Shared by the BED and GFF branches so the open/header/serialize/
-// post-write-check sequence is written once.
+// Write the format header for `payload_type`, then serialise the grove, into a
+// temporary file that replaces outputfile only once it is complete. A parse
+// error never reaches here (the grove is built first), and a failure while
+// writing leaves an existing .gg at outputfile untouched. Shared by the BED and
+// GFF branches so the open/header/serialize/commit sequence is written once.
 template<typename grove_t>
 void write_index(grove_t& grove, const std::string& outputfile,
                  gio::gg_payload_type payload_type) {
-    std::ofstream output(outputfile, std::ios::binary);
-    if(!output) {
-        throw std::runtime_error("Error: could not open output file: " + outputfile);
-    }
-    gio::gg_header::current(payload_type).write(output);
-    grove.serialize(output);
-    if(!output) {
-        throw std::runtime_error("Error: failed to write index to: " + outputfile);
-    }
+    atomic_output_file output(outputfile, std::ios::binary);
+    gio::gg_header::current(payload_type).write(output.stream());
+    grove.serialize(output.stream());
+    output.commit();
+}
+
+// The output file: -o, or <inputfile>.gg next to the source file.
+std::string output_path(const cxxopts::ParseResult& args) {
+    return args.count("outputfile") ? args["outputfile"].as<std::string>()
+                                    : args["inputfile"].as<std::string>() + ".gg";
 }
 
 } // namespace
@@ -104,6 +105,14 @@ void index::validate(const cxxopts::ParseResult& args) {
             throw std::runtime_error("Error: links file does not exist: " + links_path);
         }
     }
+
+    // Committing the output would replace an input with the result. This covers
+    // the default output too.
+    const std::string outputfile = output_path(args);
+    reject_output_alias(outputfile, inputfile, "input file");
+    if(args.count("links")) {
+        reject_output_alias(outputfile, args["links"].as<std::string>(), "links file");
+    }
 }
 
 void index::execute(const cxxopts::ParseResult& args) {
@@ -112,10 +121,7 @@ void index::execute(const cxxopts::ParseResult& args) {
     const bool sorted = args["sorted"].as<bool>();
     const bool timed = args["timed"].as<bool>();
 
-    // Default the output path to <inputfile>.gg next to the source file.
-    const std::string outputfile = args.count("outputfile")
-        ? args["outputfile"].as<std::string>()
-        : inputfile + ".gg";
+    const std::string outputfile = output_path(args);
 
     // Dispatch on input file type — BED and GFF/GTF are supported. Validate
     // the type before any output side-effect so an unsupported input never

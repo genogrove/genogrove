@@ -4,6 +4,7 @@
  */
 
 #include <subcalls/intersect.hpp>
+#include <output_file.hpp>
 #include <handlers/bed.hpp>
 #include <handlers/gff.hpp>
 #include <handlers/vcf.hpp>
@@ -286,6 +287,17 @@ void intersect::validate(const cxxopts::ParseResult& args) {
             if(!parent.empty() && !std::filesystem::exists(parent)) {
                 throw std::runtime_error("Error: parent directory does not exist: " + parent.string());
             }
+
+            // Committing the output would replace an input with the result.
+            reject_output_alias(outputfile, queryfile, "query file");
+            if(has_target) {
+                reject_output_alias(outputfile, args["targetfile"].as<std::string>(),
+                                    "target file");
+            }
+            if(has_index) {
+                reject_output_alias(outputfile, args["indexfile"].as<std::string>(),
+                                    "index file");
+            }
         }
     }
 
@@ -314,17 +326,16 @@ void intersect::execute(const cxxopts::ParseResult& args) {
     const std::string queryfile = args["queryfile"].as<std::string>();
     const int k = args["k"].as<int>();
 
-    // Output stream: either stdout (default) or a user-specified file.
-    std::unique_ptr<std::ofstream> output_file;
+    // Output stream: either stdout (default) or a user-specified file. A file is
+    // written beside its destination and only moved over it by commit() at the
+    // end, so a failure never leaves a truncated or half-written output.
+    std::unique_ptr<atomic_output_file> output_file;
     std::ostream* outputStream = &std::cout;
     if(args.count("outputfile")) {
         const std::string outputfile = args["outputfile"].as<std::string>();
         if(outputfile != "stdout") {
-            output_file = std::make_unique<std::ofstream>(outputfile);
-            if(!output_file->is_open()) {
-                throw std::runtime_error("Error: could not open output file: " + outputfile);
-            }
-            outputStream = output_file.get();
+            output_file = std::make_unique<atomic_output_file>(outputfile);
+            outputStream = &output_file->stream();
         }
     }
 
@@ -383,6 +394,10 @@ void intersect::execute(const cxxopts::ParseResult& args) {
             throw std::runtime_error(
                 "Error: unsupported target format (only BED, GFF, and GTF are supported)");
         }
+    }
+
+    if(output_file) {
+        output_file->commit();
     }
 }
 
