@@ -9,7 +9,10 @@
 // Standard
 #include <concepts>
 #include <sstream>
+#include <stdexcept>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 // Genogrove
 #include <genogrove/data_type/interval.hpp>
@@ -116,4 +119,38 @@ TEST(keyTest, comparisonUsesValueOnly) {
     EXPECT_TRUE(a < later);
     EXPECT_TRUE(later > a);
     EXPECT_FALSE(later < a);
+}
+
+namespace {
+// A payload whose moves throw (copies are fine).
+struct throwing_payload {
+    int value = 0;
+
+    throwing_payload() = default;
+    explicit throwing_payload(int v) : value(v) {}
+    throwing_payload(const throwing_payload&) = default;
+    throwing_payload& operator=(const throwing_payload&) = default;
+    throwing_payload(throwing_payload&&) { throw std::runtime_error("move failed"); }
+    throwing_payload& operator=(throwing_payload&&) { throw std::runtime_error("move failed"); }
+};
+
+using throwing_key = gdt::key<gdt::interval, throwing_payload>;
+}  // namespace
+
+TEST(keyTest, moveIsNoexceptOnlyWhenThePayloadMoveIs) {
+    static_assert(std::is_nothrow_move_constructible_v<gdt::key<gdt::interval, int>>);
+    static_assert(std::is_nothrow_move_assignable_v<gdt::key<gdt::interval, std::string>>);
+    static_assert(!std::is_nothrow_move_constructible_v<throwing_key>);
+    static_assert(!std::is_nothrow_move_assignable_v<throwing_key>);
+}
+
+TEST(keyTest, throwingPayloadMovePropagatesInsteadOfTerminating) {
+    // A defaulted move that was declared noexcept would call std::terminate here.
+    throwing_payload payload(1);
+    throwing_key a(gdt::interval{0, 5}, payload);  // copies the payload
+    EXPECT_THROW(throwing_key moved(std::move(a)), std::runtime_error);
+
+    throwing_key c(gdt::interval{0, 5}, payload);
+    throwing_key d(gdt::interval{1, 2}, payload);
+    EXPECT_THROW(d = std::move(c), std::runtime_error);
 }

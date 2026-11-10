@@ -70,6 +70,13 @@ class graph_overlay {
      */
     graph_overlay() = default;
 
+    // Not copyable: `incident` holds iterators into `edges_`, so a copy would
+    // point into the original's list. Moving a std::list keeps its iterators valid.
+    graph_overlay(const graph_overlay&) = delete;
+    graph_overlay& operator=(const graph_overlay&) = delete;
+    graph_overlay(graph_overlay&&) = default;
+    graph_overlay& operator=(graph_overlay&&) = default;
+
     /**
      * @brief Add edge without metadata
      * @param source Pointer to source key

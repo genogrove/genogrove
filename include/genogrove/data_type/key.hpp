@@ -138,9 +138,10 @@ namespace genogrove::data_type {
             key(const key&) = default;
 
             /**
-             * @brief Move constructor (defaulted, noexcept).
+             * @brief Move constructor (defaulted; noexcept only if the key value
+             * and the data are, so a throwing payload move propagates).
              */
-            key(key&&) noexcept = default;
+            key(key&&) = default;
 
             /**
              * @brief Copy assignment operator (defaulted).
@@ -150,11 +151,12 @@ namespace genogrove::data_type {
             key& operator=(const key&) = default;
 
             /**
-             * @brief Move assignment operator (defaulted, noexcept).
+             * @brief Move assignment operator (defaulted; noexcept only if the key
+             * value and the data are).
              *
              * @return Reference to this key
              */
-            key& operator=(key&&) noexcept = default;
+            key& operator=(key&&) = default;
 
             /**
              * @brief Destructor (defaulted).

@@ -183,7 +183,26 @@ class grove {
 
     // Movable: container moves leave source empty, so source destructor deletes nothing
     grove(grove&&) noexcept = default;
-    grove& operator=(grove&&) noexcept = default;
+
+    // Defaulted assignment would drop this grove's root pointers without deleting
+    // the trees behind them, so free them first.
+    grove& operator=(grove&& other) noexcept {
+        if(this != &other) {
+            for(auto& [index, root] : root_nodes) {
+                delete root;
+            }
+            order = other.order;
+            root_nodes = std::move(other.root_nodes);
+            other.root_nodes.clear();
+            rightmost_nodes = std::move(other.rightmost_nodes);
+            other.rightmost_nodes.clear();
+            key_storage = std::move(other.key_storage);
+            external_key_storage = std::move(other.external_key_storage);
+            leaf_key_count = std::exchange(other.leaf_key_count, 0);
+            graph_data = std::move(other.graph_data);
+        }
+        return *this;
+    }
 
     // =========================================================================
     // Graph overlay forwarding methods
