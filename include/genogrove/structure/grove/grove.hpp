@@ -171,19 +171,38 @@ class grove {
      * @note Recursively deletes all root nodes and their children; keys in deque are automatically freed
      */
     ~grove() {
-        // Delete all root nodes (which will recursively delete their children)
-        for(auto& [key, root] : root_nodes) {
-            delete root;
-        }
+        free_trees();
     }
 
     // Non-copyable: root_nodes are owned raw pointers, shallow copy causes double-free
     grove(const grove&) = delete;
     grove& operator=(const grove&) = delete;
 
-    // Movable: container moves leave source empty, so source destructor deletes nothing
-    grove(grove&&) noexcept = default;
-    grove& operator=(grove&&) noexcept = default;
+    // The move operations list every member by hand: keep them in step with the
+    // data members. The source is left empty, so its destructor deletes nothing.
+    grove(grove&& other) noexcept
+        : order(other.order),
+          root_nodes(std::exchange(other.root_nodes, {})),
+          rightmost_nodes(std::exchange(other.rightmost_nodes, {})),
+          key_storage(std::move(other.key_storage)),
+          external_key_storage(std::move(other.external_key_storage)),
+          leaf_key_count(std::exchange(other.leaf_key_count, 0)),
+          graph_data(std::move(other.graph_data)) {}
+
+    // Free our trees first; a defaulted move would leak them.
+    grove& operator=(grove&& other) noexcept {
+        if(this != &other) {
+            free_trees();
+            order = other.order;
+            root_nodes = std::exchange(other.root_nodes, {});
+            rightmost_nodes = std::exchange(other.rightmost_nodes, {});
+            key_storage = std::move(other.key_storage);
+            external_key_storage = std::move(other.external_key_storage);
+            leaf_key_count = std::exchange(other.leaf_key_count, 0);
+            graph_data = std::move(other.graph_data);
+        }
+        return *this;
+    }
 
     // =========================================================================
     // Graph overlay forwarding methods
@@ -222,6 +241,13 @@ class grove {
     }
 
   private:
+    // Delete every root node, which recursively deletes its children.
+    void free_trees() noexcept {
+        for(auto& [index, root] : root_nodes) {
+            delete root;
+        }
+    }
+
     // =========================================================================
     // Private tree management helpers
     // =========================================================================

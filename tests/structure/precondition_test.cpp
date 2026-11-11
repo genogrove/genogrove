@@ -169,6 +169,101 @@ TEST(ruleOfFiveTest, groveMoveTransfersOwnership) {
 
     // g1 should be empty (moved-from)
     EXPECT_EQ(g1.get_root_nodes().size(), 0);
+    EXPECT_EQ(g1.indexed_vertex_count(), 0u);
+    EXPECT_EQ(g2.indexed_vertex_count(), 1u);
+}
+
+TEST(ruleOfFiveTest, groveMoveAssignmentReplacesAPopulatedDestination) {
+    // The destination's old trees must be freed and replaced, not dropped. Ten
+    // inserts at order 3 give chr1 internal nodes, so there is more than a root to free.
+    gst::grove<gdt::interval, int> dest(3);
+    for (size_t i = 0; i < 10; ++i) {
+        dest.insert_data("chr1", gdt::interval{i * 10, i * 10 + 5}, static_cast<int>(i));
+    }
+    auto* old_a = dest.insert_data("chr3", gdt::interval{0, 5}, 7);
+    auto* old_b = dest.insert_data("chr3", gdt::interval{10, 15}, 8);
+    dest.add_edge(old_a, old_b);
+
+    gst::grove<gdt::interval, int> src(3);
+    auto* a = src.insert_data("chr2", gdt::interval{100, 120}, 99);
+    auto* b = src.insert_data("chr2", gdt::interval{300, 320}, 100);
+    src.add_edge(a, b);
+
+    dest = std::move(src);
+
+    // The destination holds exactly the source's content: one index, its keys and its edge.
+    EXPECT_EQ(dest.get_root_nodes().size(), 1u);
+    auto hits = dest.intersect(gdt::interval{0, 1000}, "chr2");
+    ASSERT_EQ(hits.get_keys().size(), 2u);
+    // Keys keep their addresses, so pointers taken before the move stay valid.
+    EXPECT_EQ(hits.get_keys()[0], a);
+    EXPECT_EQ(hits.get_keys()[1], b);
+    auto neighbors = dest.get_neighbors(a);
+    ASSERT_EQ(neighbors.size(), 1u);
+    EXPECT_EQ(neighbors[0], b);
+
+    // The source is left empty, and the destination is usable afterwards.
+    EXPECT_EQ(src.get_root_nodes().size(), 0u);
+    EXPECT_EQ(src.indexed_vertex_count(), 0u);
+    EXPECT_EQ(dest.indexed_vertex_count(), 2u);
+    dest.insert_data("chr1", gdt::interval{0, 5}, 1);
+    EXPECT_EQ(dest.intersect(gdt::interval{0, 5}, "chr1").get_keys().size(), 1u);
+}
+
+TEST(ruleOfFiveTest, graphOverlayIsNotCopyable) {
+    using graph = gst::graph_overlay<gdt::interval, int, int>;
+    static_assert(!std::is_copy_constructible_v<graph>);
+    static_assert(!std::is_copy_assignable_v<graph>);
+}
+
+TEST(ruleOfFiveTest, graphOverlayIsMoveConstructible) {
+    static_assert(std::is_nothrow_move_constructible_v<gst::graph_overlay<gdt::interval, int, int>>);
+}
+
+TEST(ruleOfFiveTest, graphOverlayIsMoveAssignable) {
+    static_assert(std::is_nothrow_move_assignable_v<gst::graph_overlay<gdt::interval, int, int>>);
+}
+
+TEST(ruleOfFiveTest, graphOverlayMoveKeepsEdgesAndMetadata) {
+    // The incidence index holds iterators into the edge list; after a move they
+    // must still find the edges.
+    using graph = gst::graph_overlay<gdt::interval, int, int>;
+    gdt::key<gdt::interval, int> a(gdt::interval{0, 5}, 1);
+    gdt::key<gdt::interval, int> b(gdt::interval{10, 15}, 2);
+    gdt::key<gdt::interval, int> c(gdt::interval{20, 25}, 3);
+
+    graph source;
+    source.add_edge(&a, &b, 7);
+    source.add_edge(&b, &c, 8);
+
+    graph moved(std::move(source));
+
+    EXPECT_EQ(moved.edge_count(), 2u);
+    auto from_a = moved.get_edge_list(&a);
+    ASSERT_EQ(from_a.size(), 1u);
+    EXPECT_EQ(from_a[0].target, &b);
+    EXPECT_EQ(from_a[0].metadata, 7);
+    EXPECT_EQ(moved.get_in_edge_list(&c).size(), 1u);
+}
+
+TEST(ruleOfFiveTest, graphOverlayMoveAssignmentReplacesTheDestinationsEdges) {
+    using graph = gst::graph_overlay<gdt::interval, int, int>;
+    gdt::key<gdt::interval, int> a(gdt::interval{0, 5}, 1);
+    gdt::key<gdt::interval, int> b(gdt::interval{10, 15}, 2);
+    gdt::key<gdt::interval, int> c(gdt::interval{20, 25}, 3);
+
+    graph dest;
+    dest.add_edge(&a, &b, 1);
+    graph source;
+    source.add_edge(&b, &c, 2);
+
+    dest = std::move(source);
+
+    EXPECT_EQ(dest.edge_count(), 1u);
+    EXPECT_TRUE(dest.get_edge_list(&a).empty());
+    auto from_b = dest.get_edge_list(&b);
+    ASSERT_EQ(from_b.size(), 1u);
+    EXPECT_EQ(from_b[0].metadata, 2);
 }
 
 TEST(ruleOfFiveTest, zlibBlockCodecsAreNonCopyableNonMovable) {
