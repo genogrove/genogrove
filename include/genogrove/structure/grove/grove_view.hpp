@@ -417,7 +417,7 @@ class grove_view {
     detail::block_id num_blocks = 0;
     detail::block_id ext_block_begin = 0;
     std::vector<std::uint64_t> block_offsets;  // block_id -> offset of [clen][bytes]
-    std::uint64_t stream_size = 0;  // file end; bounds each block's clen without a seek (#513)
+    std::uint64_t stream_size = 0;  // end of the last block; bounds each block's clen without a seek (#513)
     std::unordered_map<std::string, detail::block_id> index_roots;
 
     std::deque<key_t> key_storage;  // stable addresses for loaded keys
@@ -521,9 +521,9 @@ class grove_view {
 
         // The file's real end, measured once. Seeking past the end succeeds on a file
         // stream, so the position after skipping a forged length is not a file size.
-        const std::streamoff remaining = detail::remaining_bytes(is);
         const std::streampos scan_start = is.tellg();
-        if (remaining < 0 || scan_start == std::streampos(-1)) {
+        const std::streamoff remaining = detail::remaining_bytes(is);
+        if (remaining < 0) {
             throw std::runtime_error("grove_view: source is not seekable");
         }
         const std::uint64_t file_end =

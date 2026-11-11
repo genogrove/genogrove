@@ -344,9 +344,9 @@ class registry {
             throw std::runtime_error("Failed to deserialize registry: stream error reading count");
         }
 
-        // Reject counts that would exceed the id_type capacity or trigger a
-        // pathological reserve() on attacker-crafted / malformed streams.
-        // Matches the bound `intern()` enforces (storage.size() < null_id).
+        // Reject counts that would exceed the id_type capacity, matching the bound
+        // `intern()` enforces (storage.size() < null_id). The reserve below is
+        // capped separately.
         if (count > static_cast<uint64_t>(null_id)) {
             throw std::runtime_error(
                 "Failed to deserialize registry: entry count exceeds id_type capacity");
