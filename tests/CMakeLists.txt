@@ -125,9 +125,12 @@ gtest_discover_tests(genogrove_io_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY
 # INSTALLED PACKAGE SMOKE TEST
 # ----------------------------
 # Installs the built project into a temporary prefix and builds a separate
-# consumer against it with find_package(genogrove). Only for a top-level build:
-# `cmake --install` installs the whole build tree, and it needs CMake 3.15.
-if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.15 AND PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+# consumer against it with find_package(genogrove). Only for a top-level build
+# (`cmake --install` installs the whole build tree, and needs CMake 3.15) and a
+# single-config generator, since the script does not select a configuration.
+get_property(multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.15 AND PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR
+   AND NOT multi_config)
     add_test(
         NAME installed_package_smoke_test
         COMMAND ${CMAKE_COMMAND}
