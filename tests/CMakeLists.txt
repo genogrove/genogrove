@@ -15,6 +15,8 @@ FetchContent_Declare(
 )
 # Disable gmock build to avoid compatibility issues with LLVM 20
 set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+# Keep googletest out of `cmake --install`: the installed package must not carry test dependencies.
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 # Force fetched googletest headers to be used before system headers
@@ -118,6 +120,32 @@ set_target_properties(genogrove_io_tests PROPERTIES
     INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
 )
 gtest_discover_tests(genogrove_io_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ----------------------------
+# INSTALLED PACKAGE SMOKE TEST
+# ----------------------------
+# Installs the built project into a temporary prefix and builds a separate
+# consumer against it with find_package(genogrove). Only for a top-level build
+# (`cmake --install` installs the whole build tree, and needs CMake 3.15) and a
+# single-config generator, since the script does not select a configuration.
+get_property(multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.15 AND PROJECT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR
+   AND NOT multi_config)
+    add_test(
+        NAME installed_package_smoke_test
+        COMMAND ${CMAKE_COMMAND}
+            -DBUILD_DIR=${CMAKE_BINARY_DIR}
+            -DCONSUMER_DIR=${CMAKE_CURRENT_SOURCE_DIR}/install/consumer
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/install_test
+            -DCONFIG=$<CONFIG>
+            "-DGENERATOR=${CMAKE_GENERATOR}"
+            "-DCXX_COMPILER=${CMAKE_CXX_COMPILER}"
+            "-DTOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE}"
+            "-DCXX_FLAGS=${CMAKE_CXX_FLAGS}"
+            "-DLINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS}"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/install/run_install_test.cmake
+    )
+endif()
 
 # ----------------------------
 # CLI TESTS

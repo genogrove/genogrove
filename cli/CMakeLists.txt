@@ -21,6 +21,7 @@ CPMAddPackage(
         OPTIONS
         "CXXOPTS_BUILD_EXAMPLES OFF"
         "CXXOPTS_BUILD_TESTS OFF"
+        "CXXOPTS_ENABLE_INSTALL OFF"
 )
 ## add the actual genogrove
 #CPMAddPackage(

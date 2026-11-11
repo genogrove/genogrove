@@ -3,7 +3,7 @@ project(genogrove VERSION 0.27.0)
 
 find_package(PkgConfig REQUIRED)
 find_package(ZLIB REQUIRED)
-pkg_check_modules(HTSLIB REQUIRED htslib)
+pkg_check_modules(HTSLIB REQUIRED IMPORTED_TARGET GLOBAL htslib)
 
 # export compile commands for IDEs
 # check if debug mode then export compile commands
@@ -42,10 +42,11 @@ target_include_directories(genogrove
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
-        ${HTSLIB_INCLUDE_DIRS}
 )
-target_link_libraries(genogrove PUBLIC ${HTSLIB_LIBRARIES} ZLIB::ZLIB)
-target_link_directories(genogrove PUBLIC ${HTSLIB_LIBRARY_DIRS})
+# htslib as a target keeps host paths out of the installed package; the package config finds it again.
+target_link_libraries(genogrove PUBLIC PkgConfig::HTSLIB ZLIB::ZLIB)
+# Consumers get the C++ standard from the target.
+target_compile_features(genogrove PUBLIC cxx_std_20)
 
 # Set RPATH for runtime library discovery
 set_target_properties(genogrove PROPERTIES
@@ -93,12 +94,15 @@ install(
         LIBRARY DESTINATION lib
         ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin
-        INCLUDES DESTINATION include
 )
 
 install(DIRECTORY include/genogrove
-        DESTINATION include/genogrove
-        FILES_MATCHING PATTERN "*.hpp"
+        DESTINATION include
+        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.ipp"
+)
+# The generated version header lives in the build tree.
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/genogrove/config/version.hpp"
+        DESTINATION include/genogrove/config
 )
 # uncomment when install on windows
 #install(FILES ${CMAKE_CURRENT_BINARY_DIR}/genogrove_export.h DESTINATION include/genogrove)
@@ -113,22 +117,23 @@ install(EXPORT genogrove_targets
         DESTINATION lib/cmake/genogrove
 ) # allows "find_package(genogrove)"
 
+# find_package(genogrove CONFIG) expects these file names.
 write_basic_package_version_file(
-        "${CMAKE_CURRENT_BINARY_DIR}/genogrove_config_version.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/genogrove-config-version.cmake"
         VERSION ${PROJECT_VERSION}
         COMPATIBILITY SameMajorVersion
 )
 
-# create Config.cmake file
+# create the package config file
 configure_package_config_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake/genogrove_config.cmake.in"
-        "${CMAKE_CURRENT_BINARY_DIR}/genogrove_config.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/genogrove-config.cmake"
         INSTALL_DESTINATION lib/cmake/genogrove
 )
 
 install(FILES
-        "${CMAKE_CURRENT_BINARY_DIR}/genogrove_config.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/genogrove_config_version.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/genogrove-config.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/genogrove-config-version.cmake"
         DESTINATION lib/cmake/genogrove
 )
 

@@ -1,4 +1,12 @@
 @PACKAGE_INIT@
 
+# Dependencies of the exported target: it links ZLIB::ZLIB and PkgConfig::HTSLIB.
+include(CMakeFindDependencyMacro)
+find_dependency(ZLIB)
+find_dependency(PkgConfig)
+if(NOT TARGET PkgConfig::HTSLIB)
+    pkg_check_modules(HTSLIB REQUIRED IMPORTED_TARGET GLOBAL htslib)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/genogrove_targets.cmake")
 check_required_components(genogrove)
