@@ -15,6 +15,8 @@ FetchContent_Declare(
 )
 # Disable gmock build to avoid compatibility issues with LLVM 20
 set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+# Keep googletest out of `cmake --install`: the installed package must not carry test dependencies.
+set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 # Force fetched googletest headers to be used before system headers
@@ -118,6 +120,23 @@ set_target_properties(genogrove_io_tests PROPERTIES
     INSTALL_RPATH "${HTSLIB_LIBRARY_DIRS}"
 )
 gtest_discover_tests(genogrove_io_tests WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# ----------------------------
+# INSTALLED PACKAGE SMOKE TEST
+# ----------------------------
+# Installs the built project into a temporary prefix and builds a separate
+# consumer against it with find_package(genogrove). `cmake --install` needs CMake 3.15.
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.15)
+    add_test(
+        NAME installed_package_smoke_test
+        COMMAND ${CMAKE_COMMAND}
+            -DBUILD_DIR=${PROJECT_BINARY_DIR}
+            -DCONSUMER_DIR=${CMAKE_CURRENT_SOURCE_DIR}/install/consumer
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/install_test
+            -DCONFIG=$<CONFIG>
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/install/run_install_test.cmake
+    )
+endif()
 
 # ----------------------------
 # CLI TESTS
