@@ -3,7 +3,7 @@ project(genogrove VERSION 0.27.0)
 
 find_package(PkgConfig REQUIRED)
 find_package(ZLIB REQUIRED)
-pkg_check_modules(HTSLIB REQUIRED IMPORTED_TARGET htslib)
+pkg_check_modules(HTSLIB REQUIRED IMPORTED_TARGET GLOBAL htslib)
 
 # export compile commands for IDEs
 # check if debug mode then export compile commands
@@ -43,10 +43,9 @@ target_include_directories(genogrove
         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
-# htslib comes in as an imported target, so its include and library paths are not
-# baked into the installed package; the package config looks it up again.
+# htslib as a target keeps host paths out of the installed package; the package config finds it again.
 target_link_libraries(genogrove PUBLIC PkgConfig::HTSLIB ZLIB::ZLIB)
-# Consumers get the C++ standard from the target, not from their own settings.
+# Consumers get the C++ standard from the target.
 target_compile_features(genogrove PUBLIC cxx_std_20)
 
 # Set RPATH for runtime library discovery
@@ -118,8 +117,7 @@ install(EXPORT genogrove_targets
         DESTINATION lib/cmake/genogrove
 ) # allows "find_package(genogrove)"
 
-# find_package(genogrove CONFIG) looks for genogrove-config.cmake (or
-# genogrove-config-version.cmake for the version check), so use those names.
+# find_package(genogrove CONFIG) expects these file names.
 write_basic_package_version_file(
         "${CMAKE_CURRENT_BINARY_DIR}/genogrove-config-version.cmake"
         VERSION ${PROJECT_VERSION}

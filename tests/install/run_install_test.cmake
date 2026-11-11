@@ -1,13 +1,7 @@
-# Installed-package smoke test, run by CTest in script mode:
-#   cmake -DBUILD_DIR=... -DCONSUMER_DIR=... -DWORK_DIR=... -DCONFIG=... -P run_install_test.cmake
-# Installs the already built project into a temporary prefix, builds a separate
-# consumer against that prefix with find_package(genogrove), and runs it.
-
-foreach(var BUILD_DIR CONSUMER_DIR WORK_DIR)
-    if(NOT DEFINED ${var})
-        message(FATAL_ERROR "${var} must be set")
-    endif()
-endforeach()
+# Installed-package smoke test, run by CTest in script mode (see tests/CMakeLists.txt).
+# Like the CLI end-to-end tests, it targets the Linux/macOS CI matrix.
+# Installs the built project into a temporary prefix, builds a separate consumer
+# against it with find_package(genogrove), and runs it.
 
 set(prefix "${WORK_DIR}/prefix")
 set(consumer_build "${WORK_DIR}/consumer-build")
@@ -26,30 +20,39 @@ function(run_step description)
     endif()
 endfunction()
 
-set(config_args "")
-if(DEFINED CONFIG AND NOT CONFIG STREQUAL "")
-    set(config_args --config "${CONFIG}")
+# Install what is built now, not an older build.
+run_step("build library" ${CMAKE_COMMAND} --build "${BUILD_DIR}" --target genogrove)
+run_step("install" ${CMAKE_COMMAND} --install "${BUILD_DIR}" --prefix "${prefix}")
+
+# Only the library, its headers and its package files may be installed.
+file(GLOB_RECURSE installed RELATIVE "${prefix}" "${prefix}/*")
+list(FILTER installed EXCLUDE REGEX "^(include/genogrove/|lib/cmake/genogrove/|lib/libgenogrove\\.)")
+if(installed)
+    message(FATAL_ERROR "unexpected files installed with the package:\n${installed}")
 endif()
 
-run_step("install" ${CMAKE_COMMAND} --install "${BUILD_DIR}" --prefix "${prefix}" ${config_args})
-
-# The package must not carry test dependencies.
-file(GLOB_RECURSE leaked "${prefix}/*gtest*" "${prefix}/*gmock*")
-if(leaked)
-    message(FATAL_ERROR "test dependencies were installed with the package:\n${leaked}")
+# The consumer builds with the project's compiler, generator and flags (a
+# sanitizer build needs its flags to link). The only genogrove setting it gets
+# is the prefix: no standard, include or library paths.
+set(consumer_args "-DCMAKE_PREFIX_PATH=${prefix}" "-DCMAKE_BUILD_TYPE=${CONFIG}")
+if(GENERATOR)
+    list(APPEND consumer_args -G "${GENERATOR}")
+endif()
+if(CXX_COMPILER)
+    list(APPEND consumer_args "-DCMAKE_CXX_COMPILER=${CXX_COMPILER}")
+endif()
+if(TOOLCHAIN_FILE)
+    list(APPEND consumer_args "-DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE}")
+endif()
+if(CXX_FLAGS)
+    list(APPEND consumer_args "-DCMAKE_CXX_FLAGS=${CXX_FLAGS}")
+endif()
+if(LINKER_FLAGS)
+    list(APPEND consumer_args "-DCMAKE_EXE_LINKER_FLAGS=${LINKER_FLAGS}")
 endif()
 
-# Only the package prefix is given: no standard, include or library paths.
 run_step("configure consumer" ${CMAKE_COMMAND} -S "${CONSUMER_DIR}" -B "${consumer_build}"
-    "-DCMAKE_PREFIX_PATH=${prefix}" "-DCMAKE_BUILD_TYPE=${CONFIG}")
-run_step("build consumer" ${CMAKE_COMMAND} --build "${consumer_build}" ${config_args})
-
-if(CMAKE_HOST_WIN32)
-    set(exe "${consumer_build}/consumer.exe")
-else()
-    set(exe "${consumer_build}/consumer")
-endif()
-if(NOT EXISTS "${exe}" AND DEFINED CONFIG)
-    set(exe "${consumer_build}/${CONFIG}/consumer")
-endif()
-run_step("run consumer" "${exe}")
+    ${consumer_args})
+run_step("build consumer" ${CMAKE_COMMAND} --build "${consumer_build}")
+# Run inside WORK_DIR: the consumer writes its scratch file to the working directory.
+run_step("run consumer" ${CMAKE_COMMAND} -E chdir "${WORK_DIR}" "${consumer_build}/consumer")
