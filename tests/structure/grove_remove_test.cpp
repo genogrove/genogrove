@@ -888,7 +888,7 @@ TEST(GroveCompactTest, GraphEdgesSurviveCompact) {
         EXPECT_EQ(neighbors[0], tgt.get_keys()[0]);
 
         // Reverse lookup must also resolve to the post-compact pointers —
-        // pins that remap_keys() rebuilds the incidence index, not just
+        // pins that compact() rebuilds the incidence index, not just
         // rewrites the forward edge.
         auto in_neighbors = grove.graph().get_in_neighbors(tgt.get_keys()[0]);
         ASSERT_EQ(in_neighbors.size(), 1u);

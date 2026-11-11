@@ -84,3 +84,66 @@ TEST(rootPromotionExceptionTest, failedPromotionLeavesOldRootPublished) {
     auto result = grove.intersect(throwing_interval(90, 100), "chr1");
     EXPECT_EQ(result.get_keys().size(), 1u);
 }
+
+TEST(rootPromotionExceptionTest, failedLeafSplitKeepsEveryKeyAndEdge) {
+    grove_t grove(4);
+    auto* first = grove.insert_data("chr1", throwing_interval(10, 20), 0);
+    auto* second = grove.insert_data("chr1", throwing_interval(30, 40), 0);
+    grove.insert_data("chr1", throwing_interval(50, 60), 0);
+    grove.add_edge(first, second);
+
+    throwing_interval::armed = true;
+    EXPECT_THROW(grove.insert_data("chr1", throwing_interval(70, 80), 0), std::runtime_error);
+    throwing_interval::armed = false;
+
+    // Nothing is lost or dangling: all four keys are reachable and counted.
+    auto all = grove.intersect(throwing_interval(0, 1000), "chr1");
+    EXPECT_EQ(all.get_keys().size(), 4u);
+    EXPECT_EQ(grove.indexed_vertex_count(), 4u);
+    EXPECT_EQ(grove.edge_count(), 1u);
+    EXPECT_TRUE(grove.has_edge(first, second));
+}
+
+namespace {
+
+// A payload whose copy constructor throws on the Nth copy while armed.
+struct fragile_payload {
+    static inline int copies_left = -1;
+    int value = 0;
+
+    fragile_payload() = default;
+    explicit fragile_payload(int v) : value(v) {}
+    fragile_payload(const fragile_payload& o) : value(o.value) {
+        if(copies_left >= 0 && copies_left-- == 0) {
+            throw std::runtime_error("copy armed to throw");
+        }
+    }
+    fragile_payload& operator=(const fragile_payload&) = default;
+};
+
+} // namespace
+
+TEST(compactExceptionTest, failedCopyLeavesGroveUsable) {
+    gst::grove<gdt::interval, fragile_payload> grove(4);
+    auto* first = grove.insert_data("chr1", gdt::interval(10, 20), fragile_payload(1));
+    auto* second = grove.insert_data("chr1", gdt::interval(30, 40), fragile_payload(2));
+    grove.add_edge(first, second);
+
+    // The first copy succeeds, the second throws.
+    fragile_payload::copies_left = 1;
+    EXPECT_THROW(grove.compact(), std::runtime_error);
+    fragile_payload::copies_left = -1;
+
+    // Nodes still point at the original storage, so queries and edges work.
+    auto all = grove.intersect(gdt::interval(0, 100), "chr1");
+    ASSERT_EQ(all.get_keys().size(), 2u);
+    EXPECT_EQ(all.get_keys()[0], first);
+    EXPECT_EQ(all.get_keys()[1], second);
+    EXPECT_EQ(grove.indexed_vertex_count(), 2u);
+    EXPECT_EQ(grove.edge_count(), 1u);
+    EXPECT_TRUE(grove.has_edge(first, second));
+
+    // And a later compact succeeds.
+    EXPECT_NO_THROW(grove.compact());
+    EXPECT_EQ(grove.intersect(gdt::interval(0, 100), "chr1").get_keys().size(), 2u);
+}

@@ -463,29 +463,46 @@ class graph_overlay {
         return count;
     }
 
+    using key_remap = std::unordered_map<const gdt::key<key_type, data_type>*,
+                                         gdt::key<key_type, data_type>*>;
+    using incidence_map =
+        std::unordered_map<const gdt::key<key_type, data_type>*,
+                           std::vector<typename std::list<edge>::iterator>>;
+
     /**
-     * @brief Rewrite every source/target pointer using an old → new remap
+     * @brief Build the incidence index the edges will have after `remap`
      * @param remap Map from old key pointer to new key pointer
      *
-     * Rewrites `edge.source`/`edge.target` for every edge that appears in `remap`,
-     * then rebuilds the incidence index from scratch against the rewritten edge
-     * list. Keys absent from the remap (e.g. external keys, which were not
-     * migrated) are preserved unchanged. Intended for grove::compact() to migrate
-     * the graph after rebuilding the indexed key storage.
+     * Step one of a two-step remap: modifies nothing and may throw. Keys absent
+     * from the remap (e.g. external keys) keep their pointer.
      */
-    void remap_keys(
-        const std::unordered_map<const gdt::key<key_type, data_type>*,
-                                 gdt::key<key_type, data_type>*>& remap) {
-        if (remap.empty()) return;
+    [[nodiscard]] incidence_map prepare_remap(const key_remap& remap) {
+        auto mapped = [&](const gdt::key<key_type, data_type>* k) {
+            auto it = remap.find(k);
+            return it != remap.end() ? static_cast<const gdt::key<key_type, data_type>*>(it->second)
+                                     : k;
+        };
+        incidence_map result;
+        result.reserve(edges_.size() * 2); // each edge touches up to 2 distinct keys
+        for (auto it = edges_.begin(); it != edges_.end(); ++it) {
+            auto src = mapped(it->source);
+            auto tgt = mapped(it->target);
+            result[src].push_back(it);
+            if (tgt != src) result[tgt].push_back(it);
+        }
+        return result;
+    }
+
+    /**
+     * @brief Rewrite every source/target pointer using `remap` and install the
+     *        incidence index from prepare_remap(); cannot throw.
+     */
+    void commit_remap(const key_remap& remap, incidence_map&& new_incidence) noexcept {
         for (auto& e : edges_) {
             if (auto it = remap.find(e.source); it != remap.end()) e.source = it->second;
             if (auto it = remap.find(e.target); it != remap.end()) e.target = it->second;
         }
-        incident.clear();
-        incident.reserve(edges_.size() * 2); // each edge touches up to 2 distinct keys
-        for (auto it = edges_.begin(); it != edges_.end(); ++it) {
-            register_edge(it);
-        }
+        incident = std::move(new_incidence);
     }
 
   public:
