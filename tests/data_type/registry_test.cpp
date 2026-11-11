@@ -8,6 +8,7 @@
 
 // Standard
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <limits>
 #include <set>
@@ -520,6 +521,46 @@ TEST_F(RegistryTest, DeserializeProvidesStrongExceptionGuaranteeOnTruncatedStrea
     EXPECT_EQ(reg.intern("alpha"), id_alpha);
     EXPECT_EQ(reg.intern("beta"),  id_beta);
     EXPECT_EQ(reg.intern("gamma"), id_gamma);
+}
+
+TEST_F(RegistryTest, DeserializeRejectsHugeCountThatTheStreamCannotBack) {
+    // The largest count that still fits id_type, with no entries after it. The
+    // reader must fail on the missing data, not size a table from the count first.
+    auto& reg = gdt::registry<std::string>::instance();
+    auto id = reg.intern("kept");
+
+    const uint64_t count = static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()) - 1;
+    std::stringstream ss(std::string(reinterpret_cast<const char*>(&count), sizeof(count)),
+                         std::ios::in | std::ios::binary);
+
+    // Sizing a table from the count used to allocate and zero tens of GB first
+    // (seconds, or an OOM kill); failing on the missing data takes milliseconds.
+    const auto start = std::chrono::steady_clock::now();
+    EXPECT_THROW(std::ignore = gdt::registry<std::string>::deserialize(ss), std::runtime_error);
+    EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds(2));
+    EXPECT_EQ(reg.size(), 1u);
+    EXPECT_EQ(reg.get(id), "kept");
+}
+
+TEST_F(RegistryTest, DeserializeLoadsMoreEntriesThanItPreallocates) {
+    // The table grows as entries are read, so a registry larger than the
+    // preallocation bound still round-trips with every id intact.
+    auto& reg = gdt::registry<int>::instance();
+    constexpr int entries = 70000;
+    for (int i = 0; i < entries; ++i) {
+        std::ignore = reg.intern(i);
+    }
+    std::stringstream ss;
+    reg.serialize(ss);
+    reg.clear();
+
+    ss.seekg(0);
+    std::ignore = gdt::registry<int>::deserialize(ss);
+
+    ASSERT_EQ(reg.size(), static_cast<std::size_t>(entries));
+    EXPECT_EQ(reg.get(0), 0);
+    EXPECT_EQ(reg.get(entries - 1), entries - 1);
+    EXPECT_EQ(reg.intern(entries / 2), static_cast<uint32_t>(entries / 2));
 }
 
 TEST_F(RegistryTest, DeserializeRejectsCountExceedingIdCapacity) {

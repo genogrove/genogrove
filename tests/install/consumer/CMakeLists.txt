@@ -6,4 +6,5 @@ project(genogrove_consumer CXX)
 find_package(genogrove CONFIG REQUIRED)
 
 add_executable(consumer main.cpp)
+
 target_link_libraries(consumer PRIVATE genogrove::genogrove)

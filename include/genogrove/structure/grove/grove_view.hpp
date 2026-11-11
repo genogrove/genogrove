@@ -494,7 +494,9 @@ class grove_view {
             if (!seen_roots.insert(root_id).second) {
                 throw std::runtime_error("grove_view: two indices share a root block");
             }
-            index_roots.emplace(std::move(name), root_id);
+            if (!index_roots.emplace(std::move(name), root_id).second) {
+                throw std::runtime_error("grove_view: duplicate index name");
+            }
         }
 
         // leaf/external key counts are validation aids the eager reader uses;
@@ -517,6 +519,16 @@ class grove_view {
         // block_offsets (a corrupt header could otherwise force a huge alloc).
         detail::require_backing_bytes(is, num_blocks, sizeof(std::uint64_t), "block");
 
+        // The file's real end, measured once. Seeking past the end succeeds on a file
+        // stream, so the position after skipping a forged length is not a file size.
+        const std::streamoff remaining = detail::remaining_bytes(is);
+        const std::streampos scan_start = is.tellg();
+        if (remaining < 0 || scan_start == std::streampos(-1)) {
+            throw std::runtime_error("grove_view: source is not seekable");
+        }
+        const std::uint64_t file_end =
+            static_cast<std::uint64_t>(scan_start) + static_cast<std::uint64_t>(remaining);
+
         block_offsets.resize(num_blocks);
         for (detail::block_id b = 0; b < num_blocks; ++b) {
             std::streampos pos = is.tellg();
@@ -528,6 +540,10 @@ class grove_view {
             detail::read_pod(is, clen);
             if (!is) {
                 throw std::runtime_error("grove_view: stream error scanning block length");
+            }
+            // The length prefix was read, so its data starts at or before file_end.
+            if (clen > file_end - (block_offsets[b] + sizeof(clen))) {
+                throw std::runtime_error("grove_view: block length exceeds file");
             }
             is.seekg(static_cast<std::streamoff>(clen), std::ios::cur);
             if (!is) {

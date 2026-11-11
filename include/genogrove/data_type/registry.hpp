@@ -6,6 +6,7 @@
 #ifndef GENOGROVE_REGISTRY_HPP
 #define GENOGROVE_REGISTRY_HPP
 
+#include <algorithm>
 #include <concepts>
 #include <cstdint>
 #include <deque>
@@ -357,7 +358,10 @@ class registry {
         // the read loop from blocking concurrent readers.
         std::deque<Payload> new_storage;
         std::unordered_map<Key, id_type> new_lookup;
-        new_lookup.reserve(static_cast<std::size_t>(count));
+        // The count is file-controlled: reserve a bounded amount and let the map
+        // grow as entries are read, so a tiny stream cannot force a huge table.
+        constexpr uint64_t max_reserve = 1u << 16;
+        new_lookup.reserve(static_cast<std::size_t>(std::min(count, max_reserve)));
 
         for (uint64_t i = 0; i < count; ++i) {
             // Reject duplicate keys: emplace silently no-ops on the second
