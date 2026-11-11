@@ -1091,6 +1091,52 @@ TEST(GroveViewCorruptTest, OversizedBlockLengthRejected) {
     EXPECT_THROW(open_and_query(bytes), std::runtime_error);
 }
 
+TEST(GroveViewCorruptTest, SingleBlockLengthPastEndRejected) {
+    // With one block there is no later length prefix to trip over: seeking past
+    // the end succeeds, so only a check against the real file size catches this.
+    // ~0 as a seek offset is -1, so an unchecked skip would move back one byte.
+    const auto valid = write_interval_int_grove();
+    const auto dir_len = split(valid).dir.size();
+    ASSERT_EQ(split(valid).num_blocks, 1u) << "layout assumption: one block";
+    for (const std::uint64_t forged : {std::uint64_t{1} << 40, ~std::uint64_t{0}}) {
+        auto bytes = valid;
+        set_pod(bytes, dir_len, forged);
+        view_file f(bytes);
+        EXPECT_THROW((void)view_ii::open(f.path.string()), std::runtime_error)
+            << "block length " << forged;
+    }
+}
+
+TEST(GroveViewCorruptTest, EveryTruncationOfTheBlockRegionRejected) {
+    // Cutting the file anywhere after the directory leaves a block short; open()
+    // must notice, including when the cut falls inside the last block's data.
+    const auto bytes = write_multilevel_grove();
+    const auto dir_len = split(bytes).dir.size();
+    for (std::size_t len = dir_len; len < bytes.size(); ++len) {
+        view_file f(bytes.substr(0, len));
+        EXPECT_THROW((void)view_ii::open(f.path.string()), std::runtime_error)
+            << "prefix length " << len;
+    }
+}
+
+TEST(GroveViewCorruptTest, DuplicateIndexNameRejected) {
+    // The eager reader rejects this; the view must not silently keep one index.
+    auto s = split(write_multilevel_grove(/*two_indices=*/true));
+    ASSERT_EQ(s.root_id_at.size(), 2u);
+    // Entries are [length][name][root id], and both names are name_len bytes long:
+    // copy the first name over the second.
+    constexpr std::size_t name_len = 4;
+    const auto first_name_at = s.root_id_at[0] - name_len;
+    const auto second_name_at =
+        s.root_id_at[0] + sizeof(gst::detail::block_id) + sizeof(std::uint32_t);
+    ASSERT_NE(s.dir.substr(first_name_at, name_len), s.dir.substr(second_name_at, name_len));
+    s.dir.replace(second_name_at, name_len, s.dir.substr(first_name_at, name_len));
+
+    view_file f(join(s));
+    EXPECT_THROW((void)view_ii::open(f.path.string()), std::runtime_error);
+    expect_rejected(s);
+}
+
 TEST(GroveViewCorruptTest, CorruptBlockPayloadRejected) {
     auto bytes = write_multilevel_grove();
     const auto dir_len = split(bytes).dir.size();
