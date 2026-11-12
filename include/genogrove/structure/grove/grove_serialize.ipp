@@ -69,8 +69,8 @@ public:
      * @brief Serialize the grove to a block-structured binary output stream
      * @param os Output stream to write to
      *
-     * Format 0.4 (block-structured, random-access-capable):
-     *   [magic "GGB\x04"]
+     * Block-structured, random-access-capable format:
+     *   [id "GGB"][version byte]
      *   [type tag]: key kind, data / edge-data presence; checked on read
      *   [directory, plain]: order; per-index (name, root block_id); block count;
      *       external-block-begin; leaf-key count; external-key count

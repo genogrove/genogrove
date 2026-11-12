@@ -1344,25 +1344,20 @@ std::string view_error(const std::string& bytes) {
 
 }  // namespace
 
-TEST(ReaderParityTest, BadMagicRejected) {
-    auto bytes = write_multilevel_grove();
-    bytes[0] ^= 0x7F;
-    expect_both_reject(bytes);
-}
-
 TEST(ReaderParityTest, WrongStreamIdReportedAsNotAGroveStream) {
     auto bytes = write_multilevel_grove();
     bytes[0] ^= 0x7F;
-    EXPECT_NE(eager_error(bytes).find("not a grove stream"), std::string::npos);
-    EXPECT_NE(view_error(bytes).find("not a grove stream"), std::string::npos);
+    for (const auto& what : {eager_error(bytes), view_error(bytes)}) {
+        EXPECT_NE(what.find("not a grove stream"), std::string::npos) << what;
+    }
 }
 
 TEST(ReaderParityTest, WrongVersionByteReportedWithBothVersions) {
     auto bytes = write_multilevel_grove();
     const auto current = gst::detail::grove_stream_version;
     bytes[gst::detail::grove_stream_id.size()] = static_cast<char>(current - 1);
-    const auto stale = "format version " + std::to_string(current - 1);
-    const auto supported = "supports " + std::to_string(current);
+    const auto stale = "format version 0." + std::to_string(current - 1);
+    const auto supported = "supports 0." + std::to_string(current);
     for (const auto& what : {eager_error(bytes), view_error(bytes)}) {
         EXPECT_NE(what.find(stale), std::string::npos) << what;
         EXPECT_NE(what.find(supported), std::string::npos) << what;
