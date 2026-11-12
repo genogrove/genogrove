@@ -69,24 +69,31 @@ public:
      * node and every graph edge to point at the new locations. The deque
      * shrinks to exactly the number of live keys.
      *
+     * @note If copying a key throws, the grove is left unchanged.
      * @warning Invalidates every key pointer previously returned by
      *          `insert_data()` or held externally for indexed keys. After
      *          calling `compact()`, callers must rediscover keys via queries.
      * @note External keys (`add_external_key`) are unaffected; their pointers
      *       remain valid and any graph edges referring to them stay intact.
-     * @note O(N + E) — single tree traversal to migrate keys + a single pass
+     * @note O(N + E) — two tree traversals (copy, then repoint) + two passes
      *       over graph adjacency to remap pointers.
      */
     void compact() {
         std::deque<gdt::key<key_type, data_type>> new_storage;
-        std::unordered_map<const gdt::key<key_type, data_type>*,
-                           gdt::key<key_type, data_type>*> remap;
+        key_remap remap;
         remap.reserve(this->key_storage.size());
 
+        // Phase 1 may throw but changes nothing that is already live.
         for (auto& [_, root] : this->root_nodes) {
-            migrate_keys(root, new_storage, remap);
+            copy_keys(root, new_storage, remap);
         }
-        this->graph_data.remap_keys(remap);
+        auto new_incidence = this->graph_data.prepare_remap(remap);
+
+        // Phase 2 cannot throw: node pointers, edges and storage switch together.
+        for (auto& [_, root] : this->root_nodes) {
+            repoint_keys(root, remap);
+        }
+        this->graph_data.commit_remap(remap, std::move(new_incidence));
         this->key_storage = std::move(new_storage);
 
         // Cached routing maxima point into the old storage, which has just
@@ -98,6 +105,10 @@ public:
     }
 
 private:
+    // Same type as graph_overlay's key_remap, which prepare_remap() takes.
+    using key_remap = std::unordered_map<const gdt::key<key_type, data_type>*,
+                                         gdt::key<key_type, data_type>*>;
+
     /// Minimum number of keys a non-root node of the same type as `n` must have
     int min_keys_for(node<key_type, data_type>* n) const noexcept {
         return n->get_is_leaf() ? leaf_min_keys() : internal_min_keys();
@@ -383,24 +394,34 @@ private:
     }
 
     /**
-     * @brief Copy every key in the subtree into new_storage and rewrite the
-     *        node's key pointers to the new addresses in one pass. Each key
-     *        lives in exactly one node, so a single pre-order walk suffices.
+     * @brief Copy every key in the subtree into new_storage and record old → new
+     *        in remap. Read-only on the tree, so a throwing copy leaves it intact.
      */
-    void migrate_keys(node<key_type, data_type>* n,
-                      std::deque<gdt::key<key_type, data_type>>& new_storage,
-                      std::unordered_map<const gdt::key<key_type, data_type>*,
-                                         gdt::key<key_type, data_type>*>& remap) {
+    void copy_keys(node<key_type, data_type>* n,
+                   std::deque<gdt::key<key_type, data_type>>& new_storage,
+                   key_remap& remap) {
         if (n == nullptr) return;
-        for (auto*& k : n->get_keys()) {
+        for (auto* k : n->get_keys()) {
             new_storage.push_back(*k);
-            auto* new_k = &new_storage.back();
-            remap.emplace(k, new_k);
-            k = new_k;
+            remap.emplace(k, &new_storage.back());
         }
         if (!n->get_is_leaf()) {
             for (auto* child : n->get_children()) {
-                migrate_keys(child, new_storage, remap);
+                copy_keys(child, new_storage, remap);
+            }
+        }
+    }
+
+    /// Point every key pointer in the subtree at its copy from copy_keys(). Cannot throw.
+    void repoint_keys(node<key_type, data_type>* n, const key_remap& remap) noexcept {
+        if (n == nullptr) return;
+        for (auto*& k : n->get_keys()) {
+            // Every node key was recorded by copy_keys(), so find() cannot miss.
+            k = remap.find(k)->second;
+        }
+        if (!n->get_is_leaf()) {
+            for (auto* child : n->get_children()) {
+                repoint_keys(child, remap);
             }
         }
     }

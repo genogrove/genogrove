@@ -463,29 +463,53 @@ class graph_overlay {
         return count;
     }
 
+  private:
+    // Same type as the key_remap that grove builds for compact().
+    using key_remap = std::unordered_map<const gdt::key<key_type, data_type>*,
+                                         gdt::key<key_type, data_type>*>;
+    using incidence_map =
+        std::unordered_map<const gdt::key<key_type, data_type>*,
+                           std::vector<typename std::list<edge>::iterator>>;
+
+  public:
+
     /**
-     * @brief Rewrite every source/target pointer using an old → new remap
+     * @brief Build the incidence index the edges will have after `remap`
      * @param remap Map from old key pointer to new key pointer
      *
-     * Rewrites `edge.source`/`edge.target` for every edge that appears in `remap`,
-     * then rebuilds the incidence index from scratch against the rewritten edge
-     * list. Keys absent from the remap (e.g. external keys, which were not
-     * migrated) are preserved unchanged. Intended for grove::compact() to migrate
-     * the graph after rebuilding the indexed key storage.
+     * Step one of a two-step remap: modifies nothing and may throw. Keys absent
+     * from the remap (e.g. external keys) keep their pointer. An empty remap
+     * returns an empty index, and commit_remap() then leaves the current one
+     * alone so its incoming-edge order survives.
      */
-    void remap_keys(
-        const std::unordered_map<const gdt::key<key_type, data_type>*,
-                                 gdt::key<key_type, data_type>*>& remap) {
+    [[nodiscard]] incidence_map prepare_remap(const key_remap& remap) {
+        if (remap.empty()) return {};
+        auto mapped = [&](const gdt::key<key_type, data_type>* k) -> const gdt::key<key_type, data_type>* {
+            auto it = remap.find(k);
+            return it != remap.end() ? it->second : k;
+        };
+        incidence_map result;
+        result.reserve(edges_.size() * 2); // each edge touches up to 2 distinct keys
+        for (auto it = edges_.begin(); it != edges_.end(); ++it) {
+            auto src = mapped(it->source);
+            auto tgt = mapped(it->target);
+            result[src].push_back(it);
+            if (tgt != src) result[tgt].push_back(it);
+        }
+        return result;
+    }
+
+    /**
+     * @brief Rewrite every source/target pointer using `remap` and install the
+     *        incidence index from prepare_remap(); cannot throw.
+     */
+    void commit_remap(const key_remap& remap, incidence_map&& new_incidence) noexcept {
         if (remap.empty()) return;
         for (auto& e : edges_) {
             if (auto it = remap.find(e.source); it != remap.end()) e.source = it->second;
             if (auto it = remap.find(e.target); it != remap.end()) e.target = it->second;
         }
-        incident.clear();
-        incident.reserve(edges_.size() * 2); // each edge touches up to 2 distinct keys
-        for (auto it = edges_.begin(); it != edges_.end(); ++it) {
-            register_edge(it);
-        }
+        incident = std::move(new_incidence);
     }
 
   public:
@@ -674,7 +698,7 @@ class graph_overlay {
     // its target (see register_edge); forward vs. reverse queries filter the
     // same bucket by comparing edge_it->source / edge_it->target against the
     // queried key.
-    std::unordered_map<const gdt::key<key_type, data_type>*, std::vector<edge_iterator>> incident;
+    incidence_map incident;
 };
 
 } // namespace genogrove::structure

@@ -84,3 +84,22 @@ TEST(rootPromotionExceptionTest, failedPromotionLeavesOldRootPublished) {
     auto result = grove.intersect(throwing_interval(90, 100), "chr1");
     EXPECT_EQ(result.get_keys().size(), 1u);
 }
+
+TEST(rootPromotionExceptionTest, failedLeafSplitKeepsEveryKeyAndEdge) {
+    grove_t grove(4);
+    auto* first = grove.insert_data("chr1", throwing_interval(10, 20), 0);
+    auto* second = grove.insert_data("chr1", throwing_interval(30, 40), 0);
+    grove.insert_data("chr1", throwing_interval(50, 60), 0);
+    grove.add_edge(first, second);
+
+    throwing_interval::armed = true;
+    EXPECT_THROW(grove.insert_data("chr1", throwing_interval(70, 80), 0), std::runtime_error);
+    throwing_interval::armed = false;
+
+    // Nothing is lost or dangling: all four keys are reachable and counted.
+    auto all = grove.intersect(throwing_interval(0, 1000), "chr1");
+    EXPECT_EQ(all.get_keys().size(), 4u);
+    EXPECT_EQ(grove.indexed_vertex_count(), 4u);
+    EXPECT_EQ(grove.edge_count(), 1u);
+    EXPECT_TRUE(grove.has_edge(first, second));
+}

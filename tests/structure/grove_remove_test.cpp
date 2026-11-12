@@ -888,7 +888,7 @@ TEST(GroveCompactTest, GraphEdgesSurviveCompact) {
         EXPECT_EQ(neighbors[0], tgt.get_keys()[0]);
 
         // Reverse lookup must also resolve to the post-compact pointers —
-        // pins that remap_keys() rebuilds the incidence index, not just
+        // pins that compact() rebuilds the incidence index, not just
         // rewrites the forward edge.
         auto in_neighbors = grove.graph().get_in_neighbors(tgt.get_keys()[0]);
         ASSERT_EQ(in_neighbors.size(), 1u);
@@ -1034,4 +1034,48 @@ TEST(GroveRemoveTest, RandomizedRemovalFromUnsortedTree) {
             << "the index should be dropped once its last key is removed";
         EXPECT_EQ(grove.indexed_vertex_count(), 0u);
     }
+}
+
+namespace {
+
+// A payload whose copy constructor throws once `copies_left` copies have succeeded.
+struct fragile_payload {
+    static inline int copies_left = -1;
+    int value = 0;
+
+    fragile_payload() = default;
+    explicit fragile_payload(int v) : value(v) {}
+    fragile_payload(const fragile_payload& o) : value(o.value) {
+        if (copies_left >= 0 && copies_left-- == 0) {
+            throw std::runtime_error("copy armed to throw");
+        }
+    }
+    fragile_payload& operator=(const fragile_payload&) = default;
+};
+
+} // namespace
+
+TEST(GroveCompactTest, FailedCopyLeavesGroveUsable) {
+    gst::grove<gdt::interval, fragile_payload> grove(4);
+    auto* first = grove.insert_data("chr1", gdt::interval(10, 20), fragile_payload(1));
+    auto* second = grove.insert_data("chr1", gdt::interval(30, 40), fragile_payload(2));
+    grove.add_edge(first, second);
+
+    // The first copy succeeds, the second throws.
+    fragile_payload::copies_left = 1;
+    EXPECT_THROW(grove.compact(), std::runtime_error);
+    fragile_payload::copies_left = -1;
+
+    // Nodes still point at the original storage, so queries and edges work.
+    auto all = grove.intersect(gdt::interval(0, 100), "chr1");
+    ASSERT_EQ(all.get_keys().size(), 2u);
+    EXPECT_EQ(all.get_keys()[0], first);
+    EXPECT_EQ(all.get_keys()[1], second);
+    EXPECT_EQ(grove.indexed_vertex_count(), 2u);
+    EXPECT_EQ(grove.edge_count(), 1u);
+    EXPECT_TRUE(grove.has_edge(first, second));
+
+    // And a later compact succeeds.
+    EXPECT_NO_THROW(grove.compact());
+    EXPECT_EQ(grove.intersect(gdt::interval(0, 100), "chr1").get_keys().size(), 2u);
 }

@@ -334,26 +334,38 @@ private:
     void split_leaf_node(node<key_type, data_type>* parent, node<key_type, data_type>* child,
                          std::unique_ptr<node<key_type, data_type>> new_child,
                          int index, std::string_view index_name, int mid) {
+        // Everything that can throw happens before `child` is shrunk, so a
+        // failure leaves the tree exactly as it was.
         new_child->get_keys().assign(child->get_keys().begin() + mid, child->get_keys().end());
-        child->get_keys().resize(mid);
-        child->refresh_subtree_max();
         new_child->refresh_subtree_max();
 
-        // Parent separator = aggregate of left leaf's keys
-        gdt::key<key_type, data_type> parent_key{child->calc_keys_aggregate()};
-        auto* parent_key_ptr = allocate_key(parent_key);
+        // Parent separator = aggregate of left leaf's keys [0, mid)
+        key_type left_range = child->get_keys()[0]->get_value();
+        for (int i = 1; i < mid; ++i) {
+            left_range = key_type::aggregate(left_range, child->get_keys()[i]->get_value());
+        }
+
+        // The separator that described the pre-split leaf shifts to index+1,
+        // where it stands for the right half only; its value must follow.
+        // (The split child may have been the last child, which has no
+        // separator; then there is nothing to refresh.)
+        std::optional<key_type> right_range;
+        if (index < static_cast<int>(parent->get_keys().size())) {
+            right_range = new_child->calc_keys_aggregate();
+        }
+
+        parent->get_keys().reserve(parent->get_keys().size() + 1);
+        parent->get_children().reserve(parent->get_children().size() + 1);
+        auto* parent_key_ptr = allocate_key(gdt::key<key_type, data_type>{std::move(left_range)});
+
+        // Only no-throw operations remain (assuming key_type assignment does not throw).
+        child->get_keys().resize(mid);
+        child->refresh_subtree_max();
         parent->get_keys().insert(parent->get_keys().begin() + index, parent_key_ptr);
         parent->get_children().insert(parent->get_children().begin() + index + 1, new_child.get());
         auto* released = new_child.release();
-
-        // The separator that described the pre-split leaf has just shifted to
-        // index+1, where it now stands for the right half only — but it still
-        // carries the whole leaf's range, so its start is the LEFT half's
-        // minimum. Left stale, it makes the parent's separators non-monotonic
-        // and loosens query pruning. (The split child may have been the last
-        // child, which has no separator; then there is nothing to refresh.)
-        if (index + 1 < static_cast<int>(parent->get_keys().size())) {
-            parent->get_keys()[index + 1]->set_value(released->calc_keys_aggregate());
+        if (right_range) {
+            parent->get_keys()[index + 1]->set_value(std::move(*right_range));
         }
 
         // Link leaf chain
