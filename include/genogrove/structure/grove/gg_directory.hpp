@@ -6,6 +6,7 @@
 #ifndef GENOGROVE_STRUCTURE_GROVE_GG_DIRECTORY_HPP
 #define GENOGROVE_STRUCTURE_GROVE_GG_DIRECTORY_HPP
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <istream>
@@ -34,8 +35,9 @@ struct gg_directory {
 /// Reads and validates the directory from the current position. `who` prefixes
 /// the errors ("Failed to deserialize grove" / "grove_view"), except the
 /// implausible-count ones, which carry the fixed prefix of require_backing_bytes().
-/// Rejects a bad magic or type tag, an order below 3, duplicate index names,
-/// indices sharing a root block, and counts the stream cannot back.
+/// Rejects an unknown stream id or version, a bad type tag, an order below 3,
+/// duplicate index names, indices sharing a root block, and counts the stream
+/// cannot back.
 template <typename key_type, typename data_type, typename edge_data_type>
 [[nodiscard]] gg_directory read_gg_directory(std::istream& is, std::string_view who) {
     auto fail = [&](std::string_view what) {
@@ -45,8 +47,15 @@ template <typename key_type, typename data_type, typename edge_data_type>
     std::array<char, 4> magic{};
     is.read(magic.data(), static_cast<std::streamsize>(magic.size()));
     if (is.gcount() != static_cast<std::streamsize>(magic.size()) ||
-        magic != grove_stream_magic) {
-        fail("bad magic (not a format 0.4 grove stream)");
+        !std::equal(grove_stream_id.begin(), grove_stream_id.end(), magic.begin())) {
+        fail("not a grove stream (magic mismatch)");
+    }
+    // Worded like gg_header::read; the format major stays 0 while the format evolves.
+    const auto version = static_cast<std::uint8_t>(magic.back());
+    if (version != grove_stream_version) {
+        fail("unsupported grove stream format version 0." + std::to_string(version) +
+             " (this build supports 0." + std::to_string(grove_stream_version) +
+             "); please re-create the index");
     }
     stream_type_tag written;
     read_pod(is, written);

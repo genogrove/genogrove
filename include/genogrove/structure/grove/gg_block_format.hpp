@@ -43,14 +43,18 @@ inline constexpr std::uint32_t max_external_keys_per_block = 512;
 /// chain could overflow the stack.
 inline constexpr std::uint32_t max_tree_depth = 128;
 
-/// Magic + version at the very start of a grove serialization stream (distinct
-/// from the CLI-level io::gg_header that wraps a .gg file). Lets grove::deserialize
-/// reject a foreign / older-layout stream with a clear error before parsing. The
-/// trailing byte is the grove-stream format version; bump it on any layout change,
-/// kept numerically equal to io::gg_header::CURRENT_FORMAT_MINOR (both track the
-/// same on-disk layout — no technical link between the two constants, just a
-/// convention to avoid two version numbers drifting apart for one format).
-inline constexpr std::array<char, 4> grove_stream_magic = {'G', 'G', 'B', '\x04'};
+/// Identifier at the very start of a grove serialization stream (distinct from
+/// the CLI-level io::gg_header that wraps a .gg file). One version byte follows.
+inline constexpr std::array<char, 3> grove_stream_id = {'G', 'G', 'B'};
+
+/// Grove-stream format version; bump it on any layout change. It must equal
+/// io::gg_header::CURRENT_FORMAT_MINOR, which a test enforces.
+inline constexpr std::uint8_t grove_stream_version = 4;
+
+/// The four bytes written at the start of a stream: the id, then the version.
+inline constexpr std::array<char, 4> grove_stream_magic = {
+    grove_stream_id[0], grove_stream_id[1], grove_stream_id[2],
+    static_cast<char>(grove_stream_version)};
 
 /// Built-in key types a grove stream can be tagged with. Any other key type is
 /// written as `custom`, which cannot tell two custom types apart.

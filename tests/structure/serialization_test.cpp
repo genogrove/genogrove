@@ -1322,12 +1322,46 @@ void expect_both_reject(const std::string& bytes, const std::string& what = "") 
     EXPECT_THROW(open_and_query_every_key(bytes), std::runtime_error) << "grove_view " << what;
 }
 
+// The message each reader throws for `bytes`, or "" if it does not throw.
+std::string eager_error(const std::string& bytes) {
+    std::stringstream ss(bytes);
+    try {
+        (void)grove_ii::deserialize(ss);
+    } catch (const std::runtime_error& e) {
+        return e.what();
+    }
+    return "";
+}
+
+std::string view_error(const std::string& bytes) {
+    try {
+        open_and_query_every_key(bytes);
+    } catch (const std::runtime_error& e) {
+        return e.what();
+    }
+    return "";
+}
+
 }  // namespace
 
-TEST(ReaderParityTest, BadMagicRejected) {
+TEST(ReaderParityTest, WrongStreamIdReportedAsNotAGroveStream) {
     auto bytes = write_multilevel_grove();
     bytes[0] ^= 0x7F;
-    expect_both_reject(bytes);
+    for (const auto& what : {eager_error(bytes), view_error(bytes)}) {
+        EXPECT_NE(what.find("not a grove stream"), std::string::npos) << what;
+    }
+}
+
+TEST(ReaderParityTest, WrongVersionByteReportedWithBothVersions) {
+    auto bytes = write_multilevel_grove();
+    const auto current = gst::detail::grove_stream_version;
+    bytes[gst::detail::grove_stream_id.size()] = static_cast<char>(current - 1);
+    const auto stale = "format version 0." + std::to_string(current - 1);
+    const auto supported = "supports 0." + std::to_string(current);
+    for (const auto& what : {eager_error(bytes), view_error(bytes)}) {
+        EXPECT_NE(what.find(stale), std::string::npos) << what;
+        EXPECT_NE(what.find(supported), std::string::npos) << what;
+    }
 }
 
 TEST(ReaderParityTest, EveryTruncationOfTheDirectoryRejected) {
