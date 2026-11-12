@@ -557,25 +557,13 @@ class grove_view {
         std::unique_ptr<node_t> owner(
             node_t::deserialize_block(zis, order, key_storage, child_ids, next_id));
         node_t* n = owner.get();
-        // The writer numbers blocks in DFS pre-order. Any other id order is a
-        // cycle that would recurse or loop without bound.
         if (n->get_is_leaf()) {
-            // a leaf's successor is its right sibling, numbered later
-            if (next_id != detail::no_block && next_id <= b) {
-                throw std::runtime_error("grove_view: next block does not follow its leaf");
-            }
+            detail::check_next_follows(b, next_id, "grove_view");
             for (auto* k : n->get_keys()) {
                 read_key_edges(zis, k);
             }
         } else {
-            // children ascend past the parent; a repeat would multiply the work of a descent
-            detail::block_id prev_child = b;
-            for (detail::block_id cid : child_ids) {
-                if (cid <= prev_child) {
-                    throw std::runtime_error("grove_view: child block repeats or precedes its parent");
-                }
-                prev_child = cid;
-            }
+            detail::check_child_ids_follow(b, child_ids, "grove_view");
         }
         node_block[n] = b;
         auto [ins, _] = node_cache.emplace(
@@ -584,8 +572,7 @@ class grove_view {
     }
 
     // Records that `owner` lists `b` as a child (no_block for an index root). A
-    // block with two owners is a shared subtree, and a tree deeper than
-    // max_tree_depth would overflow the stack in a query; a valid file has neither.
+    // block with two owners is a shared subtree; a valid file has none.
     void claim(detail::block_id b, detail::block_id owner) {
         std::uint32_t depth = 0;
         if (owner != detail::no_block) {
@@ -595,9 +582,7 @@ class grove_view {
             }
             depth = o->second.depth + 1;
         }
-        if (depth > detail::max_tree_depth) {
-            throw std::runtime_error("grove_view: tree is too deep");
-        }
+        detail::check_depth(depth, "grove_view");
         auto [it, inserted] = claims.try_emplace(b, claim_info{owner, depth});
         if (!inserted && it->second.owner != owner) {
             throw std::runtime_error("grove_view: block is claimed by two parents");
