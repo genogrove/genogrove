@@ -1303,6 +1303,139 @@ TEST(GroveViewCorruptTest, UntamperedStreamStillQueries) {
     EXPECT_EQ(v.intersect(gdt::interval{0, 1000}, "chr1").get_keys().size(), 40u);
 }
 
+// ---- eager reader and grove_view must reject the same corrupt streams -------
+
+namespace {
+
+// open() plus a query on every key: a bad path only fails when it is walked.
+void open_and_query_every_key(const std::string& bytes) {
+    view_file f(bytes);
+    auto v = view_ii::open(f.path.string());
+    for (std::size_t k = 0; k < multilevel_keys; ++k) {
+        (void)v.intersect(gdt::interval{k * 10, k * 10 + 5}, "chr1");
+    }
+}
+
+void expect_both_reject(const std::string& bytes, const std::string& what = "") {
+    std::stringstream ss(bytes);
+    EXPECT_THROW((void)grove_ii::deserialize(ss), std::runtime_error) << "eager reader " << what;
+    EXPECT_THROW(open_and_query_every_key(bytes), std::runtime_error) << "grove_view " << what;
+}
+
+}  // namespace
+
+TEST(ReaderParityTest, BadMagicRejected) {
+    auto bytes = write_multilevel_grove();
+    bytes[0] ^= 0x7F;
+    expect_both_reject(bytes);
+}
+
+TEST(ReaderParityTest, EveryTruncationOfTheDirectoryRejected) {
+    const auto bytes = write_multilevel_grove();
+    const auto dir_len = split(bytes).dir.size();
+    for (std::size_t len = 0; len < dir_len; ++len) {
+        expect_both_reject(bytes.substr(0, len), "prefix length " + std::to_string(len));
+    }
+}
+
+TEST(ReaderParityTest, EveryTruncationOfTheBlockRegionRejected) {
+    const auto bytes = write_multilevel_grove();
+    const auto dir_len = split(bytes).dir.size();
+    for (std::size_t len = dir_len; len < bytes.size(); ++len) {
+        expect_both_reject(bytes.substr(0, len), "prefix length " + std::to_string(len));
+    }
+}
+
+TEST(ReaderParityTest, ExternalBlockBeginPastBlockCountRejected) {
+    auto bytes = write_multilevel_grove();
+    const auto dir_len = split(bytes).dir.size();
+    // directory tail: num_blocks, ext_block_begin, leaf count (8), external count (8)
+    set_pod(bytes, dir_len - 2 * sizeof(std::uint64_t) - sizeof(std::uint32_t),
+            std::uint32_t{0xFFFFFFFFu});
+    expect_both_reject(bytes);
+}
+
+TEST(ReaderParityTest, SingleBlockLengthPastEndRejected) {
+    // With one block there is no later length prefix to trip over, so only a check
+    // against the real file size catches this.
+    const auto valid = write_interval_int_grove();
+    const auto dir_len = split(valid).dir.size();
+    ASSERT_EQ(split(valid).num_blocks, 1u) << "layout assumption: one block";
+    for (const std::uint64_t forged : {std::uint64_t{1} << 40, ~std::uint64_t{0}}) {
+        auto bytes = valid;
+        set_pod(bytes, dir_len, forged);
+        expect_both_reject(bytes, "block length " + std::to_string(forged));
+    }
+}
+
+TEST(ReaderParityTest, CorruptBlockPayloadRejected) {
+    auto bytes = write_multilevel_grove();
+    const auto dir_len = split(bytes).dir.size();
+    const auto first_block = dir_len + sizeof(std::uint64_t);
+    for (std::size_t i = first_block; i < first_block + 8; ++i) {
+        bytes[i] ^= 0x5A;  // damage the first block's zlib stream
+    }
+    expect_both_reject(bytes);
+}
+
+TEST(ReaderParityTest, DescendingChildBlocksRejected) {
+    auto s = split(write_multilevel_grove());
+    auto& blk = s.blocks[find_internal(s)];
+    const auto first = get_pod<std::uint32_t>(blk, child_id_at(blk, 0));
+    const auto second = get_pod<std::uint32_t>(blk, child_id_at(blk, 1));
+    set_pod(blk, child_id_at(blk, 0), second);
+    set_pod(blk, child_id_at(blk, 1), first);
+    expect_both_reject(join(s));
+}
+
+TEST(ReaderParityTest, FirstChildPrecedingNonRootParentRejected) {
+    auto s = split(write_multilevel_grove());
+    std::uint32_t parent = 0;
+    for (std::uint32_t b = 0; b < s.ext_block_begin; ++b) {
+        if (!is_leaf_block(s.blocks[b])) {
+            parent = b;
+        }
+    }
+    ASSERT_GE(parent, 2u);
+    set_pod(s.blocks[parent], child_id_at(s.blocks[parent], 0), std::uint32_t{1});
+    expect_both_reject(join(s));
+}
+
+TEST(ReaderParityTest, ChildSharedByTwoParentsRejected) {
+    auto s = split(write_multilevel_grove());
+    const auto parents = leaf_parent_blocks(s);
+    ASSERT_GE(parents.size(), 2u);
+    auto& first = s.blocks[parents.front()];
+    const auto& last = s.blocks[parents.back()];
+    set_pod(first, child_id_at(first, child_count(first) - 1),
+            get_pod<std::uint32_t>(last, child_id_at(last, 0)));
+    expect_both_reject(join(s));
+}
+
+TEST(ReaderParityTest, RootInsideAnotherTreeRejected) {
+    auto s = split(write_multilevel_grove());
+    const auto root_child = get_pod<std::uint32_t>(s.blocks[0], child_id_at(s.blocks[0], 0));
+    set_pod(s.dir, s.root_id_at[0], root_child);
+    expect_both_reject(join(s));
+}
+
+// Without these, a reader that rejected everything would pass every test above.
+TEST(ReaderParityTest, UntamperedStreamAcceptedByBoth) {
+    const auto bytes = write_multilevel_grove();
+    std::stringstream ss(bytes);
+    EXPECT_NO_THROW((void)grove_ii::deserialize(ss));
+    EXPECT_NO_THROW(open_and_query_every_key(bytes));
+}
+
+TEST(ReaderParityTest, TreeAtDepthLimitAcceptedByBoth) {
+    const auto bytes = join(write_deep_grove(gst::detail::max_tree_depth));
+    std::stringstream ss(bytes);
+    EXPECT_NO_THROW((void)grove_ii::deserialize(ss));
+    view_file f(bytes);
+    auto v = view_ii::open(f.path.string());
+    EXPECT_NO_THROW((void)v.intersect(gdt::interval{100, 105}, "chr1"));
+}
+
 // ---- fixed-width little-endian layout --------------------------------------
 
 TEST(SerializationLayoutTest, HeaderFieldsAreLittleEndian) {
