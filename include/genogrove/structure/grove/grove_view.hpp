@@ -29,7 +29,6 @@
 #include "genogrove/data_type/query_result.hpp"
 #include "genogrove/data_type/serialization_traits.hpp"
 #include "genogrove/structure/grove/gg_block_format.hpp"
-#include "genogrove/structure/grove/gg_block_rules.hpp"
 #include "genogrove/structure/grove/gg_directory.hpp"
 #include "genogrove/structure/grove/node.hpp"
 #include "genogrove/structure/grove/pod_io.hpp"

@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 #include "genogrove/data_type/genomic_coordinate.hpp"
 #include "genogrove/data_type/interval.hpp"
@@ -119,6 +120,36 @@ inline void check_stream_type_tag(const stream_type_tag& written, const stream_t
     if (written != expected) {
         throw std::runtime_error(std::string(who) + ": grove stream was written with " +
                                  describe(written) + ", reader expects " + describe(expected));
+    }
+}
+
+// Node-block rules shared by grove::deserialize and grove_view. The writer numbers
+// blocks in DFS pre-order, so any other id order is a cycle or a shared subtree.
+
+/// A leaf's successor is its right sibling, which is numbered later.
+inline void check_next_follows(block_id leaf, block_id next_id, std::string_view who) {
+    if (next_id != no_block && next_id <= leaf) {
+        throw std::runtime_error(std::string(who) + ": next block does not follow its leaf");
+    }
+}
+
+/// Child ids ascend and all follow the parent; a repeat would multiply the work of a descent.
+inline void check_child_ids_follow(block_id parent, const std::vector<block_id>& child_ids,
+                                   std::string_view who) {
+    block_id prev = parent;
+    for (const block_id cid : child_ids) {
+        if (cid <= prev) {
+            throw std::runtime_error(std::string(who) +
+                                     ": child block repeats or precedes its parent");
+        }
+        prev = cid;
+    }
+}
+
+/// A tree deeper than max_tree_depth would overflow the stack in a walk.
+inline void check_depth(std::uint32_t depth, std::string_view who) {
+    if (depth > max_tree_depth) {
+        throw std::runtime_error(std::string(who) + ": tree is too deep");
     }
 }
 

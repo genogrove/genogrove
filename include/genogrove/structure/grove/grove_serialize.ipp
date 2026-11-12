@@ -622,8 +622,7 @@ private:
     //
     // Nodes delete their children, so every node block needs exactly one owner
     // (a parent or an index root); a shared or cyclic id from a bad file would
-    // double-free. The writer numbers blocks in DFS pre-order, so a child id
-    // must exceed its parent's, which also rules out cycles.
+    // double-free. The id order rules are in detail::check_child_ids_follow.
     [[nodiscard]] static deserialize_linked link_deserialize_structure(
         const deserialize_header& header, deserialize_blocks_result& blocks) {
         std::vector<bool> owned(header.ext_block_begin, false);
@@ -635,10 +634,10 @@ private:
                 throw std::runtime_error("Failed to deserialize grove: missing node block");
             }
             if (!n->get_is_leaf()) {
-                auto& kids = n->get_children();
-                kids.reserve(blocks.child_ids[b].size());
                 detail::check_child_ids_follow(b, blocks.child_ids[b],
                                                "Failed to deserialize grove");
+                auto& kids = n->get_children();
+                kids.reserve(blocks.child_ids[b].size());
                 for (detail::block_id cid : blocks.child_ids[b]) {
                     if (cid >= header.ext_block_begin || blocks.block_node[cid] == nullptr) {
                         throw std::runtime_error("Failed to deserialize grove: invalid child block id");
