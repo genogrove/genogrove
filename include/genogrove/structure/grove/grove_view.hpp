@@ -21,7 +21,6 @@
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
-#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -30,6 +29,7 @@
 #include "genogrove/data_type/query_result.hpp"
 #include "genogrove/data_type/serialization_traits.hpp"
 #include "genogrove/structure/grove/gg_block_format.hpp"
+#include "genogrove/structure/grove/gg_directory.hpp"
 #include "genogrove/structure/grove/node.hpp"
 #include "genogrove/structure/grove/pod_io.hpp"
 #include "genogrove/structure/grove/query_engine.hpp"
@@ -445,79 +445,15 @@ class grove_view {
         if (!is) {
             throw std::runtime_error("grove_view: seek to grove stream start failed");
         }
-        std::array<char, 4> magic{};
-        is.read(magic.data(), static_cast<std::streamsize>(magic.size()));
-        if (is.gcount() != static_cast<std::streamsize>(magic.size()) ||
-            magic != detail::grove_stream_magic) {
-            throw std::runtime_error("grove_view: bad magic (not a format 0.4 grove stream)");
+        // The leaf and external key counts are validation aids for the eager
+        // reader; the view parses on demand and ignores them.
+        auto dir = detail::read_gg_directory<key_type, data_type, edge_data_type>(is, "grove_view");
+        order = dir.order;
+        num_blocks = dir.num_blocks;
+        ext_block_begin = dir.ext_block_begin;
+        for (auto& [name, root_id] : dir.index_roots) {
+            index_roots.emplace(std::move(name), root_id);  // names are unique (directory parser)
         }
-        detail::stream_type_tag written;
-        detail::read_pod(is, written);
-        if (!is) {
-            throw std::runtime_error("grove_view: stream error reading type tag");
-        }
-        detail::check_stream_type_tag(
-            written, detail::make_stream_type_tag<key_type, data_type, edge_data_type>(),
-            "grove_view");
-
-        detail::read_pod(is, order);
-        if (!is) {
-            throw std::runtime_error("grove_view: stream error reading order");
-        }
-        if (order < 3) {
-            throw std::runtime_error("grove_view: order must be >= 3");
-        }
-
-        std::uint32_t num_indices;
-        detail::read_pod(is, num_indices);
-        if (!is) {
-            throw std::runtime_error("grove_view: stream error reading index count");
-        }
-        std::unordered_set<detail::block_id> seen_roots;
-        for (std::uint32_t i = 0; i < num_indices; ++i) {
-            std::uint32_t name_len;
-            detail::read_pod(is, name_len);
-            if (!is) {
-                throw std::runtime_error("grove_view: stream error reading index name length");
-            }
-            detail::require_backing_bytes(is, name_len, 1, "index name");
-            std::string name(name_len, '\0');
-            is.read(name.data(), static_cast<std::streamsize>(name_len));
-            if (!is) {
-                throw std::runtime_error("grove_view: stream error reading index name");
-            }
-            detail::block_id root_id;
-            detail::read_pod(is, root_id);
-            if (!is) {
-                throw std::runtime_error("grove_view: stream error reading root block id");
-            }
-            if (!seen_roots.insert(root_id).second) {
-                throw std::runtime_error("grove_view: two indices share a root block");
-            }
-            if (!index_roots.emplace(std::move(name), root_id).second) {
-                throw std::runtime_error("grove_view: duplicate index name");
-            }
-        }
-
-        // leaf/external key counts are validation aids the eager reader uses;
-        // the view reader parses on demand and ignores them.
-        std::uint64_t leaf_count, ext_count;
-        detail::read_pod(is, num_blocks);
-        detail::read_pod(is, ext_block_begin);
-        detail::read_pod(is, leaf_count);
-        detail::read_pod(is, ext_count);
-        (void)leaf_count;
-        (void)ext_count;
-        if (!is) {
-            throw std::runtime_error("grove_view: stream error reading directory");
-        }
-        if (ext_block_begin > num_blocks) {
-            throw std::runtime_error("grove_view: external-block-begin exceeds block count");
-        }
-        // num_blocks is file-controlled; each block is at least an 8-byte length
-        // prefix on disk, so reject a count the file can't back before resizing
-        // block_offsets (a corrupt header could otherwise force a huge alloc).
-        detail::require_backing_bytes(is, num_blocks, sizeof(std::uint64_t), "block");
 
         // The file's real end, measured once. Seeking past the end succeeds on a file
         // stream, so the position after skipping a forged length is not a file size.
