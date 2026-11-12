@@ -6,6 +6,7 @@
 #ifndef GENOGROVE_STRUCTURE_GROVE_GG_DIRECTORY_HPP
 #define GENOGROVE_STRUCTURE_GROVE_GG_DIRECTORY_HPP
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <istream>
@@ -45,8 +46,14 @@ template <typename key_type, typename data_type, typename edge_data_type>
     std::array<char, 4> magic{};
     is.read(magic.data(), static_cast<std::streamsize>(magic.size()));
     if (is.gcount() != static_cast<std::streamsize>(magic.size()) ||
-        magic != grove_stream_magic) {
-        fail("bad magic (not a format 0.4 grove stream)");
+        !std::equal(grove_stream_id.begin(), grove_stream_id.end(), magic.begin())) {
+        fail("not a grove stream (bad magic)");
+    }
+    const auto version = static_cast<std::uint8_t>(magic[grove_stream_id.size()]);
+    if (version != grove_stream_version) {
+        fail("unsupported grove stream format version " + std::to_string(version) +
+             " (this build supports " + std::to_string(grove_stream_version) +
+             "); please re-create the file");
     }
     stream_type_tag written;
     read_pod(is, written);

@@ -102,7 +102,7 @@ public:
 
     /**
      * @brief Deserialize a grove from a block-structured binary input stream
-     * @param is Input stream produced by serialize() (format 0.4)
+     * @param is Input stream produced by serialize()
      * @return Deserialized grove object
      *
      * Eager reader: reads the directory, then reads every length-prefixed block

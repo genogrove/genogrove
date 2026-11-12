@@ -15,6 +15,7 @@
 // genogrove
 #include <genogrove/config/version.hpp>
 #include <genogrove/io/gg_format.hpp>
+#include <genogrove/structure/grove/gg_block_format.hpp>
 
 namespace gio = genogrove::io;
 
@@ -48,6 +49,12 @@ TEST(GgHeader, currentStampsLibVersion) {
     EXPECT_EQ(h.format_major, gio::gg_header::CURRENT_FORMAT_MAJOR);
     EXPECT_EQ(h.format_minor, gio::gg_header::CURRENT_FORMAT_MINOR);
     EXPECT_EQ(h.payload_type, gio::gg_payload_type::BED);
+}
+
+TEST(GgHeader, groveStreamVersionMatchesFormatMinor) {
+    // Both describe one on-disk layout, so bumping one without the other must fail here.
+    EXPECT_EQ(genogrove::structure::detail::grove_stream_version,
+              gio::gg_header::CURRENT_FORMAT_MINOR);
 }
 
 // ==========================================

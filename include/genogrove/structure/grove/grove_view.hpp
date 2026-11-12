@@ -38,7 +38,7 @@
 namespace genogrove::structure {
 
 /**
- * @brief Read-only, partial reader over a serialized (format 0.4) grove.
+ * @brief Read-only, partial reader over a serialized grove.
  *
  * Where grove::deserialize eagerly loads every block, grove_view loads only the
  * blocks a query walks. It reads the directory and builds a block_id -> file
@@ -62,7 +62,7 @@ class grove_view {
   public:
     /**
      * @brief Open a serialized grove for partial reading.
-     * @param path Path to a file containing a `.gg` grove stream (format 0.4).
+     * @param path Path to a file containing a `.gg` grove stream.
      * @param data_offset Byte offset where the grove stream starts. Defaults to
      *        0 (a bare grove stream); pass the size of any leading wrapper (e.g.
      *        the CLI's `gg_header`) when the grove is embedded after a header.
