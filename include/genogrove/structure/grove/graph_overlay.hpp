@@ -474,13 +474,15 @@ class graph_overlay {
      * @param remap Map from old key pointer to new key pointer
      *
      * Step one of a two-step remap: modifies nothing and may throw. Keys absent
-     * from the remap (e.g. external keys) keep their pointer.
+     * from the remap (e.g. external keys) keep their pointer. An empty remap
+     * returns an empty index, and commit_remap() then leaves the current one
+     * alone so its incoming-edge order survives.
      */
     [[nodiscard]] incidence_map prepare_remap(const key_remap& remap) {
-        auto mapped = [&](const gdt::key<key_type, data_type>* k) {
+        if (remap.empty()) return {};
+        auto mapped = [&](const gdt::key<key_type, data_type>* k) -> const gdt::key<key_type, data_type>* {
             auto it = remap.find(k);
-            return it != remap.end() ? static_cast<const gdt::key<key_type, data_type>*>(it->second)
-                                     : k;
+            return it != remap.end() ? it->second : k;
         };
         incidence_map result;
         result.reserve(edges_.size() * 2); // each edge touches up to 2 distinct keys
@@ -498,6 +500,7 @@ class graph_overlay {
      *        incidence index from prepare_remap(); cannot throw.
      */
     void commit_remap(const key_remap& remap, incidence_map&& new_incidence) noexcept {
+        if (remap.empty()) return;
         for (auto& e : edges_) {
             if (auto it = remap.find(e.source); it != remap.end()) e.source = it->second;
             if (auto it = remap.find(e.target); it != remap.end()) e.target = it->second;
@@ -691,7 +694,7 @@ class graph_overlay {
     // its target (see register_edge); forward vs. reverse queries filter the
     // same bucket by comparing edge_it->source / edge_it->target against the
     // queried key.
-    std::unordered_map<const gdt::key<key_type, data_type>*, std::vector<edge_iterator>> incident;
+    incidence_map incident;
 };
 
 } // namespace genogrove::structure

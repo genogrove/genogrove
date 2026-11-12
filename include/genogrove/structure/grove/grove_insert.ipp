@@ -356,7 +356,7 @@ private:
 
         parent->get_keys().reserve(parent->get_keys().size() + 1);
         parent->get_children().reserve(parent->get_children().size() + 1);
-        auto* parent_key_ptr = allocate_key(gdt::key<key_type, data_type>{left_range});
+        auto* parent_key_ptr = allocate_key(gdt::key<key_type, data_type>{std::move(left_range)});
 
         // Only no-throw operations remain (assuming key_type assignment does not throw).
         child->get_keys().resize(mid);
