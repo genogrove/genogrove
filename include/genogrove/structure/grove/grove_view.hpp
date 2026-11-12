@@ -452,7 +452,7 @@ class grove_view {
         num_blocks = dir.num_blocks;
         ext_block_begin = dir.ext_block_begin;
         for (auto& [name, root_id] : dir.index_roots) {
-            index_roots.emplace(std::move(name), root_id);
+            index_roots.emplace(std::move(name), root_id);  // names are unique (directory parser)
         }
 
         // The file's real end, measured once. Seeking past the end succeeds on a file

@@ -358,7 +358,7 @@ private:
     using root_map_t = std::unordered_map<std::string, node<key_type, data_type>*,
                                           string_hash, std::equal_to<>>;
 
-    // Plain (uncompressed) magic + order + index directory + block/key counts.
+    // The plain directory, parsed by the same code as grove_view's.
     using deserialize_header = detail::gg_directory;
 
     [[nodiscard]] static deserialize_header read_deserialize_header(std::istream& is) {

@@ -32,9 +32,10 @@ struct gg_directory {
 };
 
 /// Reads and validates the directory from the current position. `who` prefixes
-/// every error ("Failed to deserialize grove" / "grove_view"). Rejects a bad
-/// magic or type tag, an order below 3, duplicate index names, indices sharing a
-/// root block, and counts the stream cannot back.
+/// the errors ("Failed to deserialize grove" / "grove_view"), except the
+/// implausible-count ones, which carry the fixed prefix of require_backing_bytes().
+/// Rejects a bad magic or type tag, an order below 3, duplicate index names,
+/// indices sharing a root block, and counts the stream cannot back.
 template <typename key_type, typename data_type, typename edge_data_type>
 [[nodiscard]] gg_directory read_gg_directory(std::istream& is, std::string_view who) {
     auto fail = [&](std::string_view what) {
