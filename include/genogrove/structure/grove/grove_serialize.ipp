@@ -359,91 +359,11 @@ private:
                                           string_hash, std::equal_to<>>;
 
     // Plain (uncompressed) magic + order + index directory + block/key counts.
-    struct deserialize_header {
-        int order = 0;
-        std::vector<std::pair<std::string, detail::block_id>> index_roots;
-        detail::block_id num_blocks = 0;
-        detail::block_id ext_block_begin = 0;
-        uint64_t leaf_count_field = 0;
-        uint64_t external_count_field = 0;
-    };
+    using deserialize_header = detail::gg_directory;
 
     [[nodiscard]] static deserialize_header read_deserialize_header(std::istream& is) {
-        std::array<char, 4> magic{};
-        is.read(magic.data(), static_cast<std::streamsize>(magic.size()));
-        if (is.gcount() != static_cast<std::streamsize>(magic.size()) ||
-            magic != detail::grove_stream_magic) {
-            throw std::runtime_error(
-                "Failed to deserialize grove: bad magic (not a format 0.4 grove stream)");
-        }
-        detail::stream_type_tag written;
-        detail::read_pod(is, written);
-        if (!is) {
-            throw std::runtime_error("Failed to deserialize grove: stream error reading type tag");
-        }
-        detail::check_stream_type_tag(
-            written, detail::make_stream_type_tag<key_type, data_type, edge_data_type>(),
-            "Failed to deserialize grove");
-
-        deserialize_header h;
-        detail::read_pod(is, h.order);
-        if (!is) {
-            throw std::runtime_error("Failed to deserialize grove: stream error reading order");
-        }
-        // Validate here (as std::runtime_error, like every other malformed-stream
-        // path) rather than letting grove(order) throw std::invalid_argument.
-        if (h.order < 3) {
-            throw std::runtime_error("Failed to deserialize grove: order must be >= 3");
-        }
-
-        uint32_t num_indices;
-        detail::read_pod(is, num_indices);
-        if (!is) {
-            throw std::runtime_error("Failed to deserialize grove: stream error reading index count");
-        }
-        // num_indices is file-controlled: reject a count the stream can't back
-        // before reserving (each index entry is >= a name-length field + a root
-        // block id on disk). Guards the reserve against a malicious OOM.
-        detail::require_backing_bytes(is, num_indices,
-                                      sizeof(uint32_t) + sizeof(detail::block_id), "index");
-        h.index_roots.reserve(num_indices);
-        for (uint32_t i = 0; i < num_indices; ++i) {
-            uint32_t name_len;
-            detail::read_pod(is, name_len);
-            if (!is) {
-                throw std::runtime_error("Failed to deserialize grove: stream error reading index name length");
-            }
-            detail::require_backing_bytes(is, name_len, 1, "index name");
-            std::string name(name_len, '\0');
-            is.read(name.data(), static_cast<std::streamsize>(name_len));
-            if (!is) {
-                throw std::runtime_error("Failed to deserialize grove: stream error reading index name");
-            }
-            detail::block_id root_id;
-            detail::read_pod(is, root_id);
-            if (!is) {
-                throw std::runtime_error("Failed to deserialize grove: stream error reading root block id");
-            }
-            h.index_roots.emplace_back(std::move(name), root_id);
-        }
-
-        detail::read_pod(is, h.num_blocks);
-        detail::read_pod(is, h.ext_block_begin);
-        detail::read_pod(is, h.leaf_count_field);
-        detail::read_pod(is, h.external_count_field);
-        if (!is) {
-            throw std::runtime_error("Failed to deserialize grove: stream error reading directory");
-        }
-        if (h.ext_block_begin > h.num_blocks) {
-            throw std::runtime_error("Failed to deserialize grove: external-block-begin exceeds block count");
-        }
-        // num_blocks is file-controlled and sizes the per-block index vectors
-        // below (all <= num_blocks entries). Each block is at least an 8-byte
-        // length prefix on disk, so reject a count the stream can't back before
-        // allocating — otherwise a tiny corrupt header forces a multi-GB resize.
-        detail::require_backing_bytes(is, h.num_blocks, sizeof(uint64_t), "block");
-
-        return h;
+        return detail::read_gg_directory<key_type, data_type, edge_data_type>(
+            is, "Failed to deserialize grove");
     }
 
     // Pending edge to resolve after every block is parsed (targets may live in
@@ -772,9 +692,7 @@ private:
             root->refresh_subtree_max_recursive();
             check_leaf_chain(root);
 
-            if (!linked.local_roots.emplace(name, root).second) {
-                throw std::runtime_error("Failed to deserialize grove: duplicate index name");
-            }
+            linked.local_roots.emplace(name, root);  // read_gg_directory made names unique
             node<key_type, data_type>* cur = root;
             while (!cur->get_is_leaf() && !cur->get_children().empty()) {
                 cur = cur->get_children().back();
