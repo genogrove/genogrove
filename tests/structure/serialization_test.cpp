@@ -1330,7 +1330,7 @@ TEST(ReaderParityTest, BadMagicRejected) {
     expect_both_reject(bytes);
 }
 
-TEST(ReaderParityTest, EveryDirectoryTruncationRejected) {
+TEST(ReaderParityTest, EveryTruncationOfTheDirectoryRejected) {
     const auto bytes = write_multilevel_grove();
     const auto dir_len = split(bytes).dir.size();
     for (std::size_t len = 0; len < dir_len; ++len) {
@@ -1338,7 +1338,7 @@ TEST(ReaderParityTest, EveryDirectoryTruncationRejected) {
     }
 }
 
-TEST(ReaderParityTest, EveryBlockRegionTruncationRejected) {
+TEST(ReaderParityTest, EveryTruncationOfTheBlockRegionRejected) {
     const auto bytes = write_multilevel_grove();
     const auto dir_len = split(bytes).dir.size();
     for (std::size_t len = dir_len; len < bytes.size(); ++len) {
@@ -1349,13 +1349,18 @@ TEST(ReaderParityTest, EveryBlockRegionTruncationRejected) {
 TEST(ReaderParityTest, ExternalBlockBeginPastBlockCountRejected) {
     auto bytes = write_multilevel_grove();
     const auto dir_len = split(bytes).dir.size();
-    set_pod(bytes, dir_len - 2 * sizeof(std::uint64_t) - sizeof(std::uint32_t), std::uint32_t{0xFFFFFFFFu});
+    // directory tail: num_blocks, ext_block_begin, leaf count (8), external count (8)
+    set_pod(bytes, dir_len - 2 * sizeof(std::uint64_t) - sizeof(std::uint32_t),
+            std::uint32_t{0xFFFFFFFFu});
     expect_both_reject(bytes);
 }
 
-TEST(ReaderParityTest, BlockLengthPastEndRejected) {
+TEST(ReaderParityTest, SingleBlockLengthPastEndRejected) {
+    // With one block there is no later length prefix to trip over, so only a check
+    // against the real file size catches this.
     const auto valid = write_interval_int_grove();
     const auto dir_len = split(valid).dir.size();
+    ASSERT_EQ(split(valid).num_blocks, 1u) << "layout assumption: one block";
     for (const std::uint64_t forged : {std::uint64_t{1} << 40, ~std::uint64_t{0}}) {
         auto bytes = valid;
         set_pod(bytes, dir_len, forged);
@@ -1366,8 +1371,9 @@ TEST(ReaderParityTest, BlockLengthPastEndRejected) {
 TEST(ReaderParityTest, CorruptBlockPayloadRejected) {
     auto bytes = write_multilevel_grove();
     const auto dir_len = split(bytes).dir.size();
-    for (std::size_t i = dir_len + sizeof(std::uint64_t); i < dir_len + sizeof(std::uint64_t) + 8; ++i) {
-        bytes[i] ^= 0x5A;
+    const auto first_block = dir_len + sizeof(std::uint64_t);
+    for (std::size_t i = first_block; i < first_block + 8; ++i) {
+        bytes[i] ^= 0x5A;  // damage the first block's zlib stream
     }
     expect_both_reject(bytes);
 }
@@ -1401,7 +1407,8 @@ TEST(ReaderParityTest, ChildSharedByTwoParentsRejected) {
     ASSERT_GE(parents.size(), 2u);
     auto& first = s.blocks[parents.front()];
     const auto& last = s.blocks[parents.back()];
-    set_pod(first, child_id_at(first, child_count(first) - 1), get_pod<std::uint32_t>(last, child_id_at(last, 0)));
+    set_pod(first, child_id_at(first, child_count(first) - 1),
+            get_pod<std::uint32_t>(last, child_id_at(last, 0)));
     expect_both_reject(join(s));
 }
 
@@ -1410,6 +1417,23 @@ TEST(ReaderParityTest, RootInsideAnotherTreeRejected) {
     const auto root_child = get_pod<std::uint32_t>(s.blocks[0], child_id_at(s.blocks[0], 0));
     set_pod(s.dir, s.root_id_at[0], root_child);
     expect_both_reject(join(s));
+}
+
+// Without these, a reader that rejected everything would pass every test above.
+TEST(ReaderParityTest, UntamperedStreamAcceptedByBoth) {
+    const auto bytes = write_multilevel_grove();
+    std::stringstream ss(bytes);
+    EXPECT_NO_THROW((void)grove_ii::deserialize(ss));
+    EXPECT_NO_THROW(open_and_query_every_key(bytes));
+}
+
+TEST(ReaderParityTest, TreeAtDepthLimitAcceptedByBoth) {
+    const auto bytes = join(write_deep_grove(gst::detail::max_tree_depth));
+    std::stringstream ss(bytes);
+    EXPECT_NO_THROW((void)grove_ii::deserialize(ss));
+    view_file f(bytes);
+    auto v = view_ii::open(f.path.string());
+    EXPECT_NO_THROW((void)v.intersect(gdt::interval{100, 105}, "chr1"));
 }
 
 // ---- fixed-width little-endian layout --------------------------------------
