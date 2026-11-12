@@ -105,7 +105,9 @@ public:
     }
 
 private:
-    using key_remap = typename graph_overlay<key_type, data_type, edge_data_type>::key_remap;
+    // Same type as graph_overlay's key_remap, which prepare_remap() takes.
+    using key_remap = std::unordered_map<const gdt::key<key_type, data_type>*,
+                                         gdt::key<key_type, data_type>*>;
 
     /// Minimum number of keys a non-root node of the same type as `n` must have
     int min_keys_for(node<key_type, data_type>* n) const noexcept {

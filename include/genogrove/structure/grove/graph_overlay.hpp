@@ -463,11 +463,15 @@ class graph_overlay {
         return count;
     }
 
+  private:
+    // Same type as the key_remap that grove builds for compact().
     using key_remap = std::unordered_map<const gdt::key<key_type, data_type>*,
                                          gdt::key<key_type, data_type>*>;
     using incidence_map =
         std::unordered_map<const gdt::key<key_type, data_type>*,
                            std::vector<typename std::list<edge>::iterator>>;
+
+  public:
 
     /**
      * @brief Build the incidence index the edges will have after `remap`
