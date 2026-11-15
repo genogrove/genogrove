@@ -229,13 +229,12 @@ public:
      * @brief Check whether a key pointer is a live key of this grove
      * @param k Key pointer to test (may be null, foreign, or dangling)
      * @return true if `k` is an indexed key currently linked in a tree, or an
-     *         external key from `add_external_key()`. false for null, for keys
-     *         of another grove, for keys unlinked by `remove_key()`, and for
-     *         internal separator keys.
-     * @note Compares addresses only and never dereferences `k`, so a pointer
-     *       invalidated by `compact()` or by a destroyed grove is safe to pass.
-     *       Such a pointer can still compare equal to a live key if its address
-     *       was reused, so do not keep key pointers across `compact()`.
+     *         external key. false for null, for keys of another grove, for keys
+     *         unlinked by `remove_key()`, and for internal separator keys.
+     * @note Compares addresses only: a pointer invalidated by `compact()` or by
+     *       a destroyed grove is not read through. Such a pointer can still
+     *       compare equal to a live key if its address was reused, so do not
+     *       keep key pointers across `compact()`.
      * @note O(N): scans every leaf and the external keys. This keeps the grove
      *       free of per-key bookkeeping for callers that never ask. If per-edge
      *       checks on large groves become a bottleneck, replace the scan with a

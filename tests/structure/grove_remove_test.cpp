@@ -1127,3 +1127,31 @@ TEST(GroveOwnsTest, RemovedKeyIsNotOwned) {
     ASSERT_EQ(result.get_keys().size(), 19u);
     for (const auto* k : result.get_keys()) { EXPECT_TRUE(grove.owns(k)); }
 }
+
+TEST(GroveOwnsTest, FollowsMergesUntilTheIndexIsEmpty) {
+    gst::grove<gdt::interval, int> grove(4);
+    auto keys = insert_intervals(grove, "chr1", 20);
+    auto* ext = grove.add_external_key(gdt::interval{1, 2}, 99);
+
+    // Removing every key drives leaf merges and root collapses, the paths
+    // that rewire the leaf chain owns() walks. Check both sides at each step.
+    for (size_t i = 0; i < keys.size(); ++i) {
+        ASSERT_TRUE(grove.remove_key("chr1", keys[i]));
+        for (size_t j = 0; j < keys.size(); ++j) {
+            EXPECT_EQ(grove.owns(keys[j]), j > i) << "removed up to " << i << ", key " << j;
+        }
+    }
+
+    // The root is erased with its last key; external keys are unaffected,
+    // also by a compact() that has no tree left to walk.
+    EXPECT_EQ(grove.get_root_nodes().count("chr1"), 0u);
+    EXPECT_TRUE(grove.owns(ext));
+    grove.compact();
+    EXPECT_TRUE(grove.owns(ext));
+}
+
+TEST(GroveOwnsTest, EmptyGroveOwnsNothing) {
+    gst::grove<gdt::interval, int> grove(4);
+    gdt::key<gdt::interval, int> local(gdt::interval{1, 2}, 0);
+    EXPECT_FALSE(grove.owns(&local));
+}

@@ -66,3 +66,14 @@ TEST(DatalessGroveTest, ExternalKeyAndEdge) {
     g.add_edge(indexed, external);
     EXPECT_TRUE(g.has_edge(indexed, external));
 }
+
+TEST(DatalessGroveTest, OwnsIndexedAndExternalKeys) {
+    gst::grove<gdt::interval> g(3);
+    gdt::key<gdt::interval> k(gdt::interval{1000, 1200});
+    auto* indexed = g.insert("chr1", k);
+    auto* external = g.add_external_key(gdt::interval{5000, 5500});
+
+    EXPECT_TRUE(g.owns(indexed));
+    EXPECT_TRUE(g.owns(external));
+    EXPECT_FALSE(g.owns(&k));
+}
