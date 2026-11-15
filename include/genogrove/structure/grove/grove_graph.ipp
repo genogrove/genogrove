@@ -305,6 +305,8 @@ public:
      * @brief Remove all outgoing edges from a source key (convenience forwarding to graph)
      * @param source Pointer to source key
      * @return Number of edges removed
+     * @note At least quadratic in the out-degree of `source`; see
+     *       graph_overlay::remove_edges_from() for the exact cost.
      */
     size_t remove_edges_from(gdt::key<key_type, data_type>* source) {
         return graph_data.remove_edges_from(source);
@@ -314,7 +316,8 @@ public:
      * @brief Remove all incoming edges to a target key (convenience forwarding to graph)
      * @param target Pointer to target key
      * @return Number of edges removed
-     * @note O(in-degree) — only touches edges incident to target
+     * @note At least quadratic in the in-degree of `target`; see
+     *       graph_overlay::remove_edges_to() for the exact cost.
      */
     size_t remove_edges_to(gdt::key<key_type, data_type>* target) {
         return graph_data.remove_edges_to(target);

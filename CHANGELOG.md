@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **`grove::owns()` ownership query**: `owns(const key*)` returns true only for a live key of the grove — an indexed key linked in a tree, or an external key. Bindings can use it to reject foreign or removed keys before `add_edge` / `link_if`. It compares addresses only and costs O(N) per call; graph calls themselves are unchanged. ([#648](https://github.com/genogrove/genogrove/issues/648), [#651](https://github.com/genogrove/genogrove/pull/651))
 
+### Changed
+- **Corrected complexity notes on `graph_overlay` edge removal**: `remove_edges_to` was documented as O(in-degree). It costs about in-degree × degree of the key, so removing the edges of a high-degree key is quadratic; `remove_edges_from` is the mirror case. Documentation only. ([#625](https://github.com/genogrove/genogrove/issues/625), [#654](https://github.com/genogrove/genogrove/pull/654))
+
 ## [0.27.1] - 2026-11-12
 
 ### Fixed
