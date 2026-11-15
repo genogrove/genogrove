@@ -1079,3 +1079,51 @@ TEST(GroveCompactTest, FailedCopyLeavesGroveUsable) {
     EXPECT_NO_THROW(grove.compact());
     EXPECT_EQ(grove.intersect(gdt::interval(0, 100), "chr1").get_keys().size(), 2u);
 }
+
+// =============================================================================
+// Ownership query
+// =============================================================================
+
+TEST(GroveOwnsTest, LiveIndexedAndExternalKeysAreOwned) {
+    gst::grove<gdt::interval, int> grove(4);
+    auto chr1 = insert_intervals(grove, "chr1", 20);
+    auto chr2 = insert_intervals(grove, "chr2", 5);
+    auto* ext = grove.add_external_key(gdt::interval{1, 2}, 99);
+
+    for (auto* k : chr1) { EXPECT_TRUE(grove.owns(k)); }
+    for (auto* k : chr2) { EXPECT_TRUE(grove.owns(k)); }
+    EXPECT_TRUE(grove.owns(ext));
+}
+
+TEST(GroveOwnsTest, RejectsNullForeignAndSeparatorKeys) {
+    gst::grove<gdt::interval, int> grove(4);
+    gst::grove<gdt::interval, int> other(4);
+    insert_intervals(grove, "chr1", 20);
+    auto foreign = insert_intervals(other, "chr1", 20);
+    auto* foreign_ext = other.add_external_key(gdt::interval{1, 2}, 99);
+
+    EXPECT_FALSE(grove.owns(nullptr));
+    EXPECT_FALSE(grove.owns(foreign.front()));
+    EXPECT_FALSE(grove.owns(foreign_ext));
+
+    // 20 keys at order 4 give an internal root; its keys are separators that
+    // live in the same storage as the data keys but are not graph vertices.
+    auto* root = grove.get_root_nodes().at("chr1");
+    ASSERT_FALSE(root->get_is_leaf());
+    for (auto* separator : root->get_keys()) { EXPECT_FALSE(grove.owns(separator)); }
+}
+
+TEST(GroveOwnsTest, RemovedKeyIsNotOwned) {
+    gst::grove<gdt::interval, int> grove(4);
+    auto keys = insert_intervals(grove, "chr1", 20);
+
+    ASSERT_TRUE(grove.remove_key("chr1", keys[7]));
+    EXPECT_FALSE(grove.owns(keys[7]));
+    EXPECT_TRUE(grove.owns(keys[6]));
+
+    // compact() moves the live keys; the relocated ones are owned.
+    grove.compact();
+    auto result = grove.intersect(gdt::interval(0, 1000), "chr1");
+    ASSERT_EQ(result.get_keys().size(), 19u);
+    for (const auto* k : result.get_keys()) { EXPECT_TRUE(grove.owns(k)); }
+}
