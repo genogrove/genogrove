@@ -513,7 +513,7 @@ TEST(GroveRemoveTest, RemoveEdgesTo) {
     EXPECT_TRUE(grove.has_edge(keys[1], keys[3]));
 
     // remove_edges_to must clear the reverse index too, not just the
-    // forward one — this exercises the O(in-degree) path in graph_overlay.
+    // forward one — this exercises the incoming-edge path in graph_overlay.
     EXPECT_EQ(grove.graph().in_degree(keys[2]), 0);
     EXPECT_TRUE(grove.graph().get_in_neighbors(keys[2]).empty());
 }

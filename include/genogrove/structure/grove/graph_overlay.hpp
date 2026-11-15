@@ -393,10 +393,10 @@ class graph_overlay {
      * @brief Remove all outgoing edges from a source key
      * @param source Pointer to source key
      * @return Number of edges removed
-     * @note O(out-degree × degree(source) + sum of the targets' degrees). Each
-     *       removed edge is erased from the bucket of `source`, which holds
-     *       its incoming edges too, with an order-preserving shift. For a key
-     *       with only outgoing edges this is quadratic in its out-degree.
+     * @note With k removed edges: O(degree(source) × (k + 1) + the degree of
+     *       each removed edge's target, summed over the removed edges), where
+     *       degree counts incoming plus outgoing edges. This is at least
+     *       quadratic in the out-degree of `source`.
      */
     size_t remove_edges_from(gdt::key<key_type, data_type>* source) {
         auto it = incident.find(source);
@@ -417,11 +417,10 @@ class graph_overlay {
      * @brief Remove all incoming edges to a target key
      * @param target Pointer to target key
      * @return Number of edges removed
-     * @note O(in-degree × degree(target) + sum of the sources' degrees). Each
-     *       removed edge is erased from the bucket of `target`, which holds
-     *       its outgoing edges too, with an order-preserving shift. For a key
-     *       with only incoming edges this is quadratic in its in-degree. Only
-     *       edges incident to `target` and to its sources are touched.
+     * @note With k removed edges: O(degree(target) × (k + 1) + the degree of
+     *       each removed edge's source, summed over the removed edges), where
+     *       degree counts incoming plus outgoing edges. This is at least
+     *       quadratic in the in-degree of `target`.
      */
     size_t remove_edges_to(gdt::key<key_type, data_type>* target) {
         auto it = incident.find(target);
@@ -442,6 +441,8 @@ class graph_overlay {
      * @brief Remove all edges (both incoming and outgoing) involving a key
      * @param key Pointer to the key
      * @return Total number of edges removed
+     * @note Costs remove_edges_from() plus remove_edges_to(), so it is at
+     *       least quadratic in the degree of `key`.
      */
     size_t remove_all_edges(gdt::key<key_type, data_type>* key) {
         size_t count = remove_edges_from(key);
@@ -453,6 +454,9 @@ class graph_overlay {
      * @brief Remove all edges matching a predicate
      * @param predicate Callable taking const edge& and returning bool
      * @return Number of edges removed
+     * @note O(E + the degrees of both endpoints of each removed edge, summed
+     *       over the removed edges), where degree counts incoming plus
+     *       outgoing edges.
      */
     template<typename Predicate>
     size_t remove_edges_if(Predicate predicate)
@@ -664,9 +668,10 @@ class graph_overlay {
         }
     }
 
-    // Order-preserving erase: the O(bucket-size) cost is already paid by the
-    // find() above, so shifting (rather than swap-and-pop) costs nothing
-    // extra while keeping accessor results in insertion order after removal.
+    // Order-preserving erase: find() plus the shift cost O(bucket size) per
+    // call. Swap-and-pop would have the same worst-case bound, because the
+    // find() is linear either way, and shifting keeps accessor results in
+    // insertion order after removal.
     static void erase_iter_from(std::vector<edge_iterator>& v, edge_iterator it) {
         auto pos = std::ranges::find(v, it);
         if (pos != v.end()) {
