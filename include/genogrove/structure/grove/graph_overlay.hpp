@@ -393,6 +393,10 @@ class graph_overlay {
      * @brief Remove all outgoing edges from a source key
      * @param source Pointer to source key
      * @return Number of edges removed
+     * @note O(out-degree × degree(source) + sum of the targets' degrees). Each
+     *       removed edge is erased from the bucket of `source`, which holds
+     *       its incoming edges too, with an order-preserving shift. For a key
+     *       with only outgoing edges this is quadratic in its out-degree.
      */
     size_t remove_edges_from(gdt::key<key_type, data_type>* source) {
         auto it = incident.find(source);
@@ -413,7 +417,11 @@ class graph_overlay {
      * @brief Remove all incoming edges to a target key
      * @param target Pointer to target key
      * @return Number of edges removed
-     * @note O(in-degree) — only touches edges incident to target
+     * @note O(in-degree × degree(target) + sum of the sources' degrees). Each
+     *       removed edge is erased from the bucket of `target`, which holds
+     *       its outgoing edges too, with an order-preserving shift. For a key
+     *       with only incoming edges this is quadratic in its in-degree. Only
+     *       edges incident to `target` and to its sources are touched.
      */
     size_t remove_edges_to(gdt::key<key_type, data_type>* target) {
         auto it = incident.find(target);
