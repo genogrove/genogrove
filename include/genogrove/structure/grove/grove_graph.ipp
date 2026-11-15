@@ -226,6 +226,33 @@ public:
     }
 
     /**
+     * @brief Check whether a key pointer is a live key of this grove
+     * @param k Key pointer to test (may be null, foreign, or dangling)
+     * @return true if `k` is an indexed key currently linked in a tree, or an
+     *         external key. false for null, for keys of another grove, for keys
+     *         unlinked by `remove_key()`, and for internal separator keys.
+     * @note Compares addresses only: a pointer invalidated by `compact()` or by
+     *       a destroyed grove is not read through. Such a pointer can still
+     *       compare equal to a live key if its address was reused, so do not
+     *       keep key pointers across `compact()`.
+     * @note O(N): scans every leaf and the external keys. This keeps the grove
+     *       free of per-key bookkeeping for callers that never ask. If per-edge
+     *       checks on large groves become a bottleneck, replace the scan with a
+     *       maintained pointer set behind the same signature.
+     */
+    [[nodiscard]] bool owns(const gdt::key<key_type, data_type>* k) const noexcept {
+        if (k == nullptr) return false;
+        for (const auto& [_, root] : root_nodes) {
+            const node<key_type, data_type>* leaf = root;
+            while (!leaf->get_is_leaf()) { leaf = leaf->get_children().front(); }
+            for (; leaf != nullptr; leaf = leaf->get_next()) {
+                if (std::ranges::find(leaf->get_keys(), k) != leaf->get_keys().end()) return true;
+            }
+        }
+        return std::ranges::any_of(external_key_storage, [k](const auto& ext) { return &ext == k; });
+    }
+
+    /**
      * @brief Add an external (graph-only) key with associated data
      * @param key_value The key value (e.g., interval)
      * @param data_value The data associated with the key
