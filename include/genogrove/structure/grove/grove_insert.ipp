@@ -64,8 +64,7 @@ public:
      *          existing maximum silently corrupts B+ tree ordering, so later
      *          intersect() calls may return wrong results. It does not throw or
      *          segfault — the structure stays valid, only the ordering is wrong.
-     * @warning Not exception-safe, see insert(). A batch that fails can stay
-     *          partly inserted.
+     * @warning Not exception-safe, see insert(). A failed batch can stay partly inserted.
      * @see build_tree_bottom_up() for bottom-up construction
      * @see insert_sorted() for single-key rightmost insertion behavior
      */
@@ -151,8 +150,7 @@ public:
      *          the existing maximum, B+ tree ordering is silently corrupted and later
      *          intersect() calls may return wrong results. It does not throw or
      *          segfault — the structure stays valid, only the ordering is wrong.
-     * @warning Not exception-safe, see insert(). A batch that fails can stay
-     *          partly inserted.
+     * @warning Not exception-safe, see insert(). A failed batch can stay partly inserted.
      *
      * Example usage:
      * @code
@@ -182,14 +180,11 @@ public:
      * @param index The index name (e.g., chromosome name) where the key should be inserted
      * @param key The key object to insert
      * @return Pointer to the inserted key in the tree
-     * @throws std::bad_alloc, or anything that the key type's copy, comparison
-     *         or `aggregate` throws
+     * @throws std::bad_alloc, or what the key type's copy, comparison or `aggregate` throws
      * @note Creates a new root if index doesn't exist; handles node splits automatically
-     * @warning Not exception-safe. If an insert throws, the grove can be left
-     *          with an over-full node, a stale separator, or a key count that
-     *          is too high. The grove has no call that repairs or drops one
-     *          index, so discard the grove and build a new one. This applies
-     *          to all insert_data() overloads.
+     * @warning Not exception-safe: after a throw the grove can hold an over-full
+     *          node, a stale separator or a too-high key count, and no call
+     *          repairs it. Discard the grove. Applies to all insert_data() overloads.
      */
     gdt::key<key_type, data_type>* insert(std::string_view index, const gdt::key<key_type, data_type>& key) {
         // get the root node for the given chromosome (or create a new one if it doesn't exist)
@@ -420,9 +415,8 @@ private:
                 child->get_keys()[i]->get_value());
         }
 
-        // Grow the parent before any node changes. If the growth threw after
-        // the children had moved to `new_child`, its destructor would free
-        // that whole subtree.
+        // Reserve before any node changes: a failed growth after the children
+        // moved to `new_child` would free that subtree with it.
         parent->get_keys().reserve(parent->get_keys().size() + 1);
         parent->get_children().reserve(parent->get_children().size() + 1);
 
