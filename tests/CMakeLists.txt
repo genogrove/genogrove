@@ -27,6 +27,10 @@ include_directories(BEFORE SYSTEM
 
 include(GoogleTest)
 
+# Applies to every test target defined below. It must come after googletest is
+# added, so that googletest itself is not built with these flags.
+add_compile_options(${GENOGROVE_WARNING_OPTIONS})
+
 # ----------------------------
 # CONFIG TESTS
 # ----------------------------

@@ -48,6 +48,16 @@ target_link_libraries(genogrove PUBLIC PkgConfig::HTSLIB ZLIB::ZLIB)
 # Consumers get the C++ standard from the target.
 target_compile_features(genogrove PUBLIC cxx_std_20)
 
+# Warnings as errors for genogrove's own targets (library, CLI, tests). Off by
+# default so that a new compiler version cannot break a user's build; CI turns
+# it on, which keeps the public headers usable under -Wall -Wextra -Werror.
+option(GENOGROVE_STRICT_WARNINGS "Build genogrove targets with -Wall -Wextra -Werror" OFF)
+set(GENOGROVE_WARNING_OPTIONS "")
+if(GENOGROVE_STRICT_WARNINGS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(GENOGROVE_WARNING_OPTIONS -Wall -Wextra -Werror)
+endif()
+target_compile_options(genogrove PRIVATE ${GENOGROVE_WARNING_OPTIONS})
+
 # Set RPATH for runtime library discovery
 set_target_properties(genogrove PROPERTIES
     BUILD_RPATH "${HTSLIB_LIBRARY_DIRS}"

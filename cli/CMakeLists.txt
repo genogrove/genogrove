@@ -40,6 +40,7 @@ target_include_directories(genogrove-cli PUBLIC include) # include genogrove_cli
 
 # Link to genogrove library (brings in htslib transitively)
 target_link_libraries(genogrove-cli genogrove cxxopts)
+target_compile_options(genogrove-cli PRIVATE ${GENOGROVE_WARNING_OPTIONS})
 
 # set the output directory for the executable
 set_target_properties(genogrove-cli PROPERTIES
