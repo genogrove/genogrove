@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **A failed internal split could free a subtree**: if an allocation failed while a split added the new sibling to its parent, the moved subtree was freed and the leaf chain kept a pointer into it. The parent now reserves the space before any node changes. The insert functions also document that they are not exception-safe: after an insert that throws, discard the grove. ([#641](https://github.com/genogrove/genogrove/issues/641), [#659](https://github.com/genogrove/genogrove/pull/659))
+- **Key count stays correct when an insert throws**: the single-key insert paths counted a key before it was in its leaf, and the bulk build counted each key before the build was complete, so `indexed_vertex_count()` and `vertex_count()` could be too high after an exception. Both now count after the step that can throw. ([#641](https://github.com/genogrove/genogrove/issues/641), [#660](https://github.com/genogrove/genogrove/pull/660))
 
 ## [0.27.1] - 2026-11-12
 

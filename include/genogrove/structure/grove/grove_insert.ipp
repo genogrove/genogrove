@@ -98,6 +98,8 @@ public:
             if (new_root != nullptr) {
                 this->root_nodes[index_key] = new_root;
             }
+            // Counted here and not per key, so a build that throws counts nothing.
+            this->leaf_key_count += keys.size();
             return keys;
         }
 
@@ -183,8 +185,8 @@ public:
      * @throws std::bad_alloc, or what the key type's copy, comparison or `aggregate` throws
      * @note Creates a new root if index doesn't exist; handles node splits automatically
      * @warning Not exception-safe: after a throw the grove can hold an over-full
-     *          node, a stale separator or a too-high key count, and no call
-     *          repairs it. Discard the grove. Applies to all insert_data() overloads.
+     *          node or a stale separator, and no call repairs it. Discard the
+     *          grove. Applies to all insert_data() overloads.
      */
     gdt::key<key_type, data_type>* insert(std::string_view index, const gdt::key<key_type, data_type>& key) {
         // get the root node for the given chromosome (or create a new one if it doesn't exist)
@@ -614,7 +616,6 @@ private:
             for (size_t i = 0; i < keys_in_this_leaf; ++i) {
                 gdt::key<key_type, data_type> key(it->first, it->second);
                 auto* key_ptr = allocate_key(key);
-                ++this->leaf_key_count;
                 leaf->get_keys().push_back(key_ptr);
                 inserted_keys.push_back(key_ptr);
                 ++it;

@@ -10,6 +10,8 @@
 #include <cstddef>
 #include <stdexcept>
 #include <string>
+#include <utility>
+#include <vector>
 
 // genogrove
 #include <genogrove/data_type/interval.hpp>
@@ -102,4 +104,18 @@ TEST(rootPromotionExceptionTest, failedLeafSplitKeepsEveryKeyAndEdge) {
     EXPECT_EQ(grove.indexed_vertex_count(), 4u);
     EXPECT_EQ(grove.edge_count(), 1u);
     EXPECT_TRUE(grove.has_edge(first, second));
+}
+
+TEST(rootPromotionExceptionTest, failedBulkBuildCountsNoKeys) {
+    grove_t grove(4);
+    const std::vector<std::pair<throwing_interval, int>> data{
+        {throwing_interval(10, 20), 0}, {throwing_interval(30, 40), 0}, {throwing_interval(50, 60), 0}};
+
+    // The build aggregates the keys of the one leaf after it has allocated all
+    // three, so the throw comes when every key is already in key storage.
+    throwing_interval::armed = true;
+    EXPECT_THROW(grove.insert_data("chr1", data, gst::sorted, gst::bulk), std::runtime_error);
+    throwing_interval::armed = false;
+
+    EXPECT_EQ(grove.indexed_vertex_count(), 0u);
 }
