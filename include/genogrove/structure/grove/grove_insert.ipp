@@ -14,6 +14,7 @@ public:
      * @param data_value The data associated with the key
      * @note The trailing sorted_t tag dispatches to the sorted insertion path
      * @note This assumes key_value is greater than all existing keys in the specified index
+     * @warning Not exception-safe, see insert().
      * @return Pointer to the inserted key in the tree
      */
     template <typename D = data_type>
@@ -32,6 +33,7 @@ public:
      * @param data_value The data associated with the key
      * @return Pointer to the inserted key in the tree
      * @note Uses standard tree traversal (O(log n)). For sorted data, use sorted tag for better performance.
+     * @warning Not exception-safe, see insert().
      */
     template <typename D = data_type>
     gdt::key<key_type, data_type>* insert_data(
@@ -62,6 +64,7 @@ public:
      *          existing maximum silently corrupts B+ tree ordering, so later
      *          intersect() calls may return wrong results. It does not throw or
      *          segfault — the structure stays valid, only the ordering is wrong.
+     * @warning Not exception-safe, see insert(). A failed batch can stay partly inserted.
      * @see build_tree_bottom_up() for bottom-up construction
      * @see insert_sorted() for single-key rightmost insertion behavior
      */
@@ -147,6 +150,7 @@ public:
      *          the existing maximum, B+ tree ordering is silently corrupted and later
      *          intersect() calls may return wrong results. It does not throw or
      *          segfault — the structure stays valid, only the ordering is wrong.
+     * @warning Not exception-safe, see insert(). A failed batch can stay partly inserted.
      *
      * Example usage:
      * @code
@@ -176,8 +180,11 @@ public:
      * @param index The index name (e.g., chromosome name) where the key should be inserted
      * @param key The key object to insert
      * @return Pointer to the inserted key in the tree
-     * @throws std::runtime_error if insertion fails
+     * @throws std::bad_alloc, or what the key type's copy, comparison or `aggregate` throws
      * @note Creates a new root if index doesn't exist; handles node splits automatically
+     * @warning Not exception-safe: after a throw the grove can hold an over-full
+     *          node, a stale separator or a too-high key count, and no call
+     *          repairs it. Discard the grove. Applies to all insert_data() overloads.
      */
     gdt::key<key_type, data_type>* insert(std::string_view index, const gdt::key<key_type, data_type>& key) {
         // get the root node for the given chromosome (or create a new one if it doesn't exist)
@@ -407,6 +414,12 @@ private:
             parent_separator = key_type::aggregate(parent_separator,
                 child->get_keys()[i]->get_value());
         }
+
+        // Reserve before any node changes: a failed growth after the children
+        // moved to `new_child` would free that subtree with it.
+        parent->get_keys().reserve(parent->get_keys().size() + 1);
+        parent->get_children().reserve(parent->get_children().size() + 1);
+
         // Promote key[mid] as the separator: reuse its existing key_storage
         // slot, overwriting only its value with the aggregate range. Allocating
         // a fresh key here would orphan key[mid]'s slot when resize(mid) drops

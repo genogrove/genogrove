@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Public headers compile without warnings under `-Wall -Wextra`**: the headers raised `-Wsign-compare`, `-Wreorder` and (GCC) `-Wmissing-field-initializers`, which broke users who build with `-Werror`. The `region` field of the BED, GFF and VCF reader options now has a default member initializer, so `{.skip_invalid_lines = true}` no longer warns. No behaviour change. ([#656](https://github.com/genogrove/genogrove/pull/656))
 - **New CMake option `GENOGROVE_STRICT_WARNINGS`**: when `ON`, the library, the CLI and the tests are built with `-Wall -Wextra -Werror` (GCC and Clang). It is `OFF` by default, so user builds are unchanged; CI turns it on, so a new warning fails CI. ([#657](https://github.com/genogrove/genogrove/issues/657), [#658](https://github.com/genogrove/genogrove/pull/658))
 
+### Fixed
+- **A failed internal split could free a subtree**: if an allocation failed while a split added the new sibling to its parent, the moved subtree was freed and the leaf chain kept a pointer into it. The parent now reserves the space before any node changes. The insert functions also document that they are not exception-safe: after an insert that throws, discard the grove. ([#641](https://github.com/genogrove/genogrove/issues/641), [#659](https://github.com/genogrove/genogrove/pull/659))
+
 ## [0.27.1] - 2026-11-12
 
 ### Fixed
