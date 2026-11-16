@@ -27,6 +27,10 @@ include_directories(BEFORE SYSTEM
 
 include(GoogleTest)
 
+# Applies to every test target defined below. It must come after googletest is
+# added, so that googletest itself is not built with these flags.
+add_compile_options(${GENOGROVE_WARNING_OPTIONS})
+
 # ----------------------------
 # CONFIG TESTS
 # ----------------------------
@@ -166,8 +170,9 @@ if(BUILD_CLI)
             PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/../include
             ${CMAKE_CURRENT_SOURCE_DIR}/../cli/include
-            ${cxxopts_SOURCE_DIR}/include
     )
+    # SYSTEM keeps third-party warnings out of -Werror.
+    target_include_directories(genogrove_cli_tests SYSTEM PUBLIC ${cxxopts_SOURCE_DIR}/include)
     target_compile_definitions(
             genogrove_cli_tests
             PRIVATE
