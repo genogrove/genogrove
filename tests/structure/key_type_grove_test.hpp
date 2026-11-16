@@ -215,23 +215,6 @@ protected:
         const std::vector<std::pair<key_type, data_type>>& test_data) = 0;
 
     /**
-     * @brief Generate edge metadata for testing (only for EdgeDataType != void)
-     * @param source Source key
-     * @param target Target key
-     * @return Edge metadata appropriate for these keys
-     *
-     * @note Only needs implementation if EdgeDataType is not void
-     */
-    virtual edge_data_type create_edge_metadata(
-        const key_type& source,
-        const key_type& target) {
-        static_assert(std::is_void_v<edge_data_type>,
-            "create_edge_metadata must be implemented for non-void edge data");
-        // This should never be called for void EdgeDataType
-        throw std::runtime_error("create_edge_metadata called for void EdgeDataType");
-    }
-
-    /**
      * @brief Create test data for multiple indices (chromosomes)
      * @param index_count Number of different indices
      * @param keys_per_index Number of keys per index

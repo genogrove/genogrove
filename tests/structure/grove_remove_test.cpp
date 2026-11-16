@@ -116,7 +116,7 @@ TEST(GroveRemoveTest, RemoveSingleKeyFromRootLeaf) {
 
 TEST(GroveRemoveTest, RemoveNonExistentKey) {
     gst::grove<gdt::interval, int> grove(4);
-    auto* k1 = grove.insert_data("chr1", gdt::interval{10, 20}, 1, gst::sorted);
+    grove.insert_data("chr1", gdt::interval{10, 20}, 1, gst::sorted);
 
     // Create a key pointer not in the tree
     gdt::key<gdt::interval, int> fake_key(gdt::interval{99, 99}, 0);

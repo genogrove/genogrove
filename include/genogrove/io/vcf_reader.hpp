@@ -183,7 +183,7 @@ namespace genogrove::io {
         bool parse_info = true;       ///< Parse INFO fields into vcf_entry::info
         bool parse_samples = true;    ///< Parse FORMAT / per-sample genotype columns
         bool skip_filtered = false;   ///< Skip records whose FILTER is not PASS/"."
-        std::string region;           ///< htslib region string ("chr:start-end", 1-based inclusive); empty = read the whole file. Requires a CSI/TBI-indexed bgzip VCF or a BCF.
+        std::string region{};         ///< htslib region string ("chr:start-end", 1-based inclusive); empty = read the whole file. Requires a CSI/TBI-indexed bgzip VCF or a BCF.
 
         /// Factory method for default options.
         [[nodiscard]] static vcf_reader_options defaults() {

@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Corrected complexity notes on `graph_overlay` edge removal**: `remove_edges_to` was documented as O(in-degree). It costs about in-degree × degree of the key, so removing the edges of a high-degree key is quadratic; `remove_edges_from` is the mirror case. Documentation only. ([#625](https://github.com/genogrove/genogrove/issues/625), [#654](https://github.com/genogrove/genogrove/pull/654))
+- **Public headers compile without warnings under `-Wall -Wextra`**: the headers raised `-Wsign-compare`, `-Wreorder` and (GCC) `-Wmissing-field-initializers`, which broke users who build with `-Werror`. The `region` field of the BED, GFF and VCF reader options now has a default member initializer, so `{.skip_invalid_lines = true}` no longer warns. No behaviour change. ([#656](https://github.com/genogrove/genogrove/pull/656))
 
 ## [0.27.1] - 2026-11-12
 

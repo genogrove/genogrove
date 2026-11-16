@@ -113,7 +113,7 @@ public:
             // Handle overflow — cascade upward so a parent that overflows as a
             // result of the leaf split is itself split (a single-level split here
             // left an internal node growing unbounded across appends, see #490).
-            if (current_node->get_keys().size() == this->order) {
+            if (is_overflowing(current_node)) {
                 cascade_split_sorted_append(current_node, index);
                 current_node = this->get_rightmost_node(index);
             }
@@ -189,13 +189,19 @@ public:
         if(key_ptr == nullptr) {
             throw std::runtime_error("Failed to insert key into tree");
         }
-        if(root->get_keys().size() == this->order) {
+        if(is_overflowing(root)) {
             root = promote_new_root(root, index, /*sorted_append=*/false);
         }
         return key_ptr;
     }
 
 private:
+    /// A node holds at most order - 1 keys; one with `order` keys must be split.
+    /// The cast is safe because a node never holds more than `order` keys.
+    bool is_overflowing(const node<key_type, data_type>* n) const noexcept {
+        return static_cast<int>(n->get_keys().size()) == this->order;
+    }
+
     /**
      * @brief Allocate a key in the grove's deque storage and return a stable pointer to it
      * @param key The key object to allocate and store
@@ -256,7 +262,7 @@ private:
                 sep->set_value(key_type::aggregate(sep->get_value(), key.get_value()));
             }
 
-            if(node->get_child(child_index)->get_keys().size() == this->order) {
+            if(is_overflowing(node->get_child(child_index))) {
                 split_node(node, child_index, index, /*sorted_append=*/false);
             }
 
@@ -487,7 +493,7 @@ private:
      *       leave a parent overflowing after enough appends (see #490).
      */
     void cascade_split_sorted_append(node<key_type, data_type>* overflow_node, std::string_view index) {
-        while (overflow_node->get_keys().size() == this->order) {
+        while (is_overflowing(overflow_node)) {
             if (overflow_node->get_parent() == nullptr) {
                 // root overflow - grow the tree by one level
                 promote_new_root(overflow_node, index, /*sorted_append=*/true);
@@ -547,7 +553,7 @@ private:
             // actually moved it — that map lookup on every key was a
             // measurable share of this path's cost.
             node<key_type, data_type>* tail = rightmost_node;
-            if (rightmost_node->get_keys().size() == this->order) {
+            if (is_overflowing(rightmost_node)) {
                 cascade_split_sorted_append(rightmost_node, index);
                 tail = this->get_rightmost_node(index);
             }

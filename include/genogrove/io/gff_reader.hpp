@@ -45,7 +45,7 @@ namespace genogrove::io {
 
         gff_entry() : format(gff_format::UNKNOWN) {}
         gff_entry(std::string seqid, size_t start, size_t end, std::string type)
-            : seqid(std::move(seqid)), start(start), end(end), type(std::move(type)), format(gff_format::UNKNOWN) {}
+            : seqid(std::move(seqid)), type(std::move(type)), start(start), end(end), format(gff_format::UNKNOWN) {}
 
         // Returns the IDs listed in the GFF3 Parent attribute (comma-separated); empty when absent
         [[nodiscard]] std::vector<std::string> get_parent_ids() const;
@@ -116,7 +116,7 @@ namespace genogrove::io {
     struct gff_reader_options {
         bool skip_invalid_lines = false;    ///< Skip invalid lines instead of throwing
         bool validate_gtf = false;          ///< Validate mandatory GTF2 attributes (gene_id, transcript_id)
-        std::string region;                 ///< htslib/tabix region string ("chr:start-end"), in tabix query coordinates (1-based, inclusive). Empty = stream the whole file. Requires a bgzip+tabix-indexed input.
+        std::string region{};               ///< htslib/tabix region string ("chr:start-end"), in tabix query coordinates (1-based, inclusive). Empty = stream the whole file. Requires a bgzip+tabix-indexed input.
 
         [[nodiscard]] static gff_reader_options defaults() { return {}; }
     };

@@ -39,7 +39,6 @@ TEST(query_result_test, add_keys_with_data) {
     const gdt::interval intvl0(5,15);
     const gdt::interval intvl1(12,22);
     const gdt::interval intvl2(18,25);
-    const gdt::interval intvl3(30, 40);
 
     // create 'overlapping' keys (as query results)
     gdt::key<gdt::interval, int> key0(intvl0, 5);

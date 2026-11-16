@@ -76,7 +76,7 @@ TEST(GraphOverlayTest, EdgeAdditionWithMetadata) {
         gdt::interval{25, 35}, "exon2", gst::sorted);
     auto* k3 = grove.insert_data("chr1",
         gdt::interval{40, 50},"exon3", gst::sorted);
-    auto* k4 = grove.insert_data("chr1",
+    grove.insert_data("chr1",
         gdt::interval{55, 65}, "exon4", gst::sorted);
 
     TranscriptEdge edge1{"transcript_1", "canonical",
@@ -517,24 +517,25 @@ TEST(GraphOverlayTest, PointerStabilityAcrossSplits) {
         gdt::interval{25, 35},
         "exon2",
         gst::sorted);
-    auto* k3 = grove.insert_data(
+    grove.insert_data(
         "chr1",
         gdt::interval{40, 50},
         "exon3",
         gst::sorted);
-    auto* k4 = grove.insert_data(
+    grove.insert_data(
         "chr1",
         gdt::interval{55, 65},
         "exon4",
         gst::sorted);
 
-    // Store original pointer values
-    auto k1_addr = k1;
-    auto k2_addr = k2;
-
-    // Pointers should still be valid after splits
-    EXPECT_EQ(k1, k1_addr);
-    EXPECT_EQ(k2, k2_addr);
+    // After the splits the tree must still hand out the pointers that
+    // insert_data returned: a split moves pointers between nodes, never keys.
+    auto first = grove.intersect(gdt::interval{10, 20}, "chr1");
+    ASSERT_EQ(first.get_keys().size(), 1u);
+    EXPECT_EQ(first.get_keys()[0], k1);
+    auto second = grove.intersect(gdt::interval{25, 35}, "chr1");
+    ASSERT_EQ(second.get_keys().size(), 1u);
+    EXPECT_EQ(second.get_keys()[0], k2);
 
     // Data should still be accessible
     EXPECT_EQ(k1->get_value().get_start(), 10);
@@ -555,7 +556,7 @@ TEST(GraphOverlayTest, CrossChromosomeEdges) {
         gdt::interval{1500, 1700},
         "chr1_exon2",
         gst::sorted);
-    auto* chr1_exon3 = grove.insert_data(
+    grove.insert_data(
         "chr1",
         gdt::interval{2000, 2200},
         "chr1_exon3",
