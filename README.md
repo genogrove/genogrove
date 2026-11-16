@@ -22,7 +22,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-For testing, add `-DBUILD_TESTING=ON`. For the CLI, add `-DBUILD_CLI=ON`.
+For testing, add `-DBUILD_TESTING=ON`. For the CLI, add `-DBUILD_CLI=ON`. For development, `-DGENOGROVE_STRICT_WARNINGS=ON` builds the library, the CLI and the tests with `-Wall -Wextra -Werror` (GCC and Clang).
 
 ## Example
 

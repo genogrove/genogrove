@@ -13,7 +13,8 @@ jobs:
       matrix:
         # PRs run Debug only for fast feedback; main runs both. Release-only
         # bugs are rare (no LTO here, NDEBUG only deletes asserts) and get
-        # caught post-merge on the full main-branch matrix.
+        # caught post-merge on the full main-branch matrix. With strict warnings
+        # on, Release can also fail on a warning that only the optimizer raises.
         build_type: ${{ github.event_name == 'pull_request' && fromJSON('["Debug"]') || fromJSON('["Debug", "Release"]') }}
         c_compiler: [gcc-13, gcc-14, clang-16, clang-17, clang-18]
         include:

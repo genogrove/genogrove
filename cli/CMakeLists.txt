@@ -34,7 +34,7 @@ CPMAddPackage(
 file(GLOB_RECURSE CLI_SOURCES src/*.cpp)
 
 add_executable(genogrove-cli ${CLI_SOURCES})
-target_include_directories(genogrove-cli PUBLIC ${cxxopts_SOURCE_DIR}/include) # include cxxopts headers
+target_include_directories(genogrove-cli SYSTEM PUBLIC ${cxxopts_SOURCE_DIR}/include) # cxxopts headers; SYSTEM keeps third-party warnings out of -Werror
 target_include_directories(genogrove-cli PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../include/") # genogrove header files
 target_include_directories(genogrove-cli PUBLIC include) # include genogrove_cli headers
 

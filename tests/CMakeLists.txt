@@ -170,8 +170,9 @@ if(BUILD_CLI)
             PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/../include
             ${CMAKE_CURRENT_SOURCE_DIR}/../cli/include
-            ${cxxopts_SOURCE_DIR}/include
     )
+    # SYSTEM keeps third-party warnings out of -Werror.
+    target_include_directories(genogrove_cli_tests SYSTEM PUBLIC ${cxxopts_SOURCE_DIR}/include)
     target_compile_definitions(
             genogrove_cli_tests
             PRIVATE
