@@ -15,7 +15,7 @@ jobs:
         # bugs are rare (no LTO here, NDEBUG only deletes asserts) and get
         # caught post-merge on the full main-branch matrix. With strict warnings
         # on, Release can also fail on a warning that only the optimizer raises.
-        build_type: ${{ github.event_name == 'pull_request' && fromJSON('["Debug"]') || fromJSON('["Debug", "Release"]') }}
+        build_type: ${{ github.event_name == 'pull_request' && fromJSON('["Debug", "Release"]') || fromJSON('["Debug", "Release"]') }}
         c_compiler: [gcc-13, gcc-14, clang-16, clang-17, clang-18]
         include:
           - c_compiler: gcc-13
@@ -51,6 +51,7 @@ jobs:
             -DBUILD_TESTING=ON \
             -DBUILD_CLI=ON \
             -DGENOGROVE_STRICT_WARNINGS=ON \
+            -DCMAKE_VERBOSE_MAKEFILE=ON \
             -S ${{ github.workspace }}
 
       - name: build
