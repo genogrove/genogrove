@@ -16,7 +16,7 @@ jobs:
         # bugs are rare (no LTO here, NDEBUG only deletes asserts) and get
         # caught post-merge on the full main-branch matrix. With strict warnings
         # on, Release can also fail on a warning that only the optimizer raises.
-        build_type: ${{ github.event_name == 'pull_request' && fromJSON('["Debug", "Release"]') || fromJSON('["Debug", "Release"]') }}
+        build_type: ${{ github.event_name == 'pull_request' && fromJSON('["Debug"]') || fromJSON('["Debug", "Release"]') }}
 
     steps:
       - name: checkout code
