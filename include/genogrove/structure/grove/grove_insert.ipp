@@ -109,8 +109,8 @@ public:
         for (const auto& [key_value, data_value] : data) {
             gdt::key<key_type, data_type> key(key_value, data_value);
             auto* key_ptr = allocate_key(key);
-            ++this->leaf_key_count;
             current_node->insert_key_ptr(key_ptr);
+            ++this->leaf_key_count;
             inserted_keys.push_back(key_ptr);
 
             // Handle overflow — cascade upward so a parent that overflows as a
@@ -193,9 +193,6 @@ public:
             root = this->insert_root(index);
         }
         auto* key_ptr = insert_iter(root, key, index);
-        if(key_ptr == nullptr) {
-            throw std::runtime_error("Failed to insert key into tree");
-        }
         if(is_overflowing(root)) {
             root = promote_new_root(root, index, /*sorted_append=*/false);
         }
@@ -226,7 +223,7 @@ private:
      * @param node The node to start insertion from
      * @param key The key object to insert
      * @param index The index name, forwarded to split_node() for rightmost cache updates
-     * @return Pointer to the inserted key in the tree, or nullptr on failure
+     * @return Pointer to the inserted key in the tree
      * @note This is a helper function for insert(); handles recursive traversal and leaf insertion
      */
     gdt::key<key_type, data_type>* insert_iter(node<key_type, data_type>* node, const gdt::key<key_type, data_type>& key,
@@ -236,8 +233,8 @@ private:
         }
         if(node->get_is_leaf()) {
             auto* key_ptr = allocate_key(key);
-            ++this->leaf_key_count;
             node->insert_key_ptr(key_ptr);
+            ++this->leaf_key_count;
             node->refresh_subtree_max();
             return key_ptr;
         } else {
@@ -549,8 +546,8 @@ private:
             root = this->insert_root(index);
             // Allocate key from grove's deque storage
             auto* key_ptr = allocate_key(key);
-            ++this->leaf_key_count;
             root->insert_key_ptr(key_ptr);
+            ++this->leaf_key_count;
             root->refresh_subtree_max();
             return key_ptr;
         } else {
@@ -558,8 +555,8 @@ private:
             node<key_type, data_type>* rightmost_node = this->get_rightmost_node(index);
             // Allocate key from grove's deque storage
             auto* key_ptr = allocate_key(key);
-            ++this->leaf_key_count;
             rightmost_node->insert_key_ptr(key_ptr);
+            ++this->leaf_key_count;
 
             // Handle overflow, then refresh the spine the appended key just
             // raised. The rightmost leaf is only re-looked-up when a split
