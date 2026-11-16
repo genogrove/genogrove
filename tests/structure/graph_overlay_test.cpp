@@ -76,7 +76,7 @@ TEST(GraphOverlayTest, EdgeAdditionWithMetadata) {
         gdt::interval{25, 35}, "exon2", gst::sorted);
     auto* k3 = grove.insert_data("chr1",
         gdt::interval{40, 50},"exon3", gst::sorted);
-    auto* k4 = grove.insert_data("chr1",
+    grove.insert_data("chr1",
         gdt::interval{55, 65}, "exon4", gst::sorted);
 
     TranscriptEdge edge1{"transcript_1", "canonical",
@@ -517,12 +517,12 @@ TEST(GraphOverlayTest, PointerStabilityAcrossSplits) {
         gdt::interval{25, 35},
         "exon2",
         gst::sorted);
-    auto* k3 = grove.insert_data(
+    grove.insert_data(
         "chr1",
         gdt::interval{40, 50},
         "exon3",
         gst::sorted);
-    auto* k4 = grove.insert_data(
+    grove.insert_data(
         "chr1",
         gdt::interval{55, 65},
         "exon4",
@@ -555,7 +555,7 @@ TEST(GraphOverlayTest, CrossChromosomeEdges) {
         gdt::interval{1500, 1700},
         "chr1_exon2",
         gst::sorted);
-    auto* chr1_exon3 = grove.insert_data(
+    grove.insert_data(
         "chr1",
         gdt::interval{2000, 2200},
         "chr1_exon3",
