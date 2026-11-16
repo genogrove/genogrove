@@ -50,7 +50,6 @@ jobs:
             -DBUILD_TESTING=ON \
             -DBUILD_CLI=ON \
             -DGENOGROVE_STRICT_WARNINGS=ON \
-            -DCMAKE_VERBOSE_MAKEFILE=ON \
             -S ${{ github.workspace }}
 
       - name: build
