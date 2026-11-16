@@ -178,6 +178,10 @@ public:
      * @return Pointer to the inserted key in the tree
      * @throws std::runtime_error if insertion fails
      * @note Creates a new root if index doesn't exist; handles node splits automatically
+     * @warning If an insert throws (an allocation, or the key type's `aggregate`
+     *          or copy), the tree of that index can hold an over-full node or a
+     *          stale separator. Do not use that index again; build it again.
+     *          The same applies to the sorted and bulk insert paths.
      */
     gdt::key<key_type, data_type>* insert(std::string_view index, const gdt::key<key_type, data_type>& key) {
         // get the root node for the given chromosome (or create a new one if it doesn't exist)
