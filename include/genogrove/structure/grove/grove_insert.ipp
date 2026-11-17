@@ -214,6 +214,9 @@ private:
      * @note Deque storage provides better cache locality than individual heap allocations
      */
     gdt::key<key_type, data_type>* allocate_key(const gdt::key<key_type, data_type>& key) {
+        // Every insertion mode allocates its keys here, so this one call keeps
+        // the owns() cache from missing a new key.
+        drop_owned_cache();
         key_storage.push_back(key);
         return &key_storage.back();
     }
