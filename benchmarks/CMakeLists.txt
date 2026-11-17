@@ -15,6 +15,7 @@ FetchContent_MakeAvailable(benchmark)
 add_executable(genogrove_benchmarks
         control.cpp
         grove_creation.cpp
+        grove_owns.cpp
         grove_serialization.cpp
         grove_view_read.cpp)
 
