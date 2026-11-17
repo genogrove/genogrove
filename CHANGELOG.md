@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- **`grove::owns()` answers from a cached pointer set**: the first call after a mutation scans the live keys into a set, and later calls are one lookup until the next key insertion, removal, `compact()` or `add_external_key()`. A per-edge guard on a finished grove drops from O(E·N) to O(N + E). A caller that mutates between checks pays a full rebuild per check. ([#652](https://github.com/genogrove/genogrove/issues/652), [#662](https://github.com/genogrove/genogrove/pull/662))
+- **`grove::owns()` answers from a cached pointer set**: the first call scans the live keys into a set, and later calls are one lookup. Key insertion, `remove_key()` and `add_external_key()` update the set by one entry; only `compact()` makes the next call scan again. A per-edge guard drops from O(E·N) to O(N + E), and the set costs one entry per live key once `owns()` has been called. ([#652](https://github.com/genogrove/genogrove/issues/652), [#662](https://github.com/genogrove/genogrove/pull/662))
 
 ## [0.27.2] - 2026-11-16
 

@@ -235,12 +235,14 @@ public:
      *       a destroyed grove is not read through. Such a pointer can still
      *       compare equal to a live key if its address was reused, so do not
      *       keep key pointers across `compact()`.
-     * @note O(N) for the first call after a mutation (key insertion, removal,
-     *       `compact()`, `add_external_key()`): it scans every leaf and the
-     *       external keys into a pointer set. Later calls are O(1) until the
-     *       next mutation. For callers that never ask, the set stays empty.
-     * @note Not safe to call concurrently with itself: the first call after a
-     *       mutation writes the set.
+     * @note O(N) for the first call, and for the first call after `compact()`:
+     *       it scans every leaf and the external keys into a pointer set.
+     *       Every other call is O(1). Key insertion, `remove_key()` and
+     *       `add_external_key()` update a built set by one entry.
+     * @note The set costs one pointer-set entry per live key from the first
+     *       call on. For callers that never ask, it stays empty.
+     * @note Not safe to call concurrently with itself: the first call, and
+     *       the first call after `compact()`, write the set.
      */
     [[nodiscard]] bool owns(const gdt::key<key_type, data_type>* k) const noexcept {
         if (k == nullptr) return false;
@@ -283,8 +285,8 @@ public:
     template <typename D = data_type>
     gdt::key<key_type, data_type>* add_external_key(key_type key_value, D data_value)
         requires (!std::is_void_v<data_type>) {
-        drop_owned_cache();
         external_key_storage.emplace_back(std::move(key_value), std::move(data_value));
+        track_owned(&external_key_storage.back());
         return &external_key_storage.back();
     }
 
@@ -298,8 +300,8 @@ public:
      */
     gdt::key<key_type, data_type>* add_external_key(key_type key_value)
         requires (std::is_void_v<data_type>) {
-        drop_owned_cache();
         external_key_storage.emplace_back(std::move(key_value));
+        track_owned(&external_key_storage.back());
         return &external_key_storage.back();
     }
 

@@ -252,11 +252,16 @@ class grove {
         }
     }
 
-    // Called by every mutation of the live key set. The empty check is the
-    // point: clear() on an empty set that once held N keys can still zero all
-    // of its buckets, which would charge O(N) to each insert and remove.
-    void drop_owned_cache() noexcept {
-        if (!owned_cache.empty()) { owned_cache.clear(); }
+    // A key became live (linked in a leaf, or added as an external key): add
+    // it to the owns() set if that set is built. A failed allocation drops the
+    // set, so the next owns() call rebuilds it instead of missing this key.
+    void track_owned(const gdt::key<key_type, data_type>* k) noexcept {
+        if (owned_cache.empty()) return;
+        try {
+            owned_cache.insert(k);
+        } catch (...) {
+            owned_cache.clear();
+        }
     }
 
     // Visit every live key (leaf keys of every index, then external keys) until
@@ -394,8 +399,8 @@ class grove {
     /// Count of leaf keys — excludes internal separator keys in key_storage
     size_t leaf_key_count = 0;
 
-    /// Live keys (leaf + external), built by the first owns() call and cleared by
-    /// every mutation of that set. Empty means "not built".
+    /// Live keys (leaf + external), built by the first owns() call and kept
+    /// current by every later mutation of that set. Empty means "not built".
     mutable std::unordered_set<const gdt::key<key_type, data_type>*> owned_cache;
 
     /// Embedded graph overlay for managing directed edges and relationships between keys

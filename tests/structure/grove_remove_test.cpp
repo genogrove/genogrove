@@ -1158,7 +1158,7 @@ TEST(GroveOwnsTest, EmptyGroveOwnsNothing) {
 
 // owns() answers from a pointer set it builds on the first call. Each step
 // below calls owns() first so the set exists, then mutates: a mutation path
-// that does not drop the set gives a stale answer here.
+// that does not update the set gives a stale answer here.
 TEST(GroveOwnsTest, AnswerFollowsEveryMutationAfterAnEarlierCall) {
     gst::grove<gdt::interval, int> grove(4);
     auto keys = insert_intervals(grove, "chr1", 20);
@@ -1172,6 +1172,14 @@ TEST(GroveOwnsTest, AnswerFollowsEveryMutationAfterAnEarlierCall) {
     std::vector<std::pair<gdt::interval, int>> batch{{gdt::interval{2000, 2005}, 0}, {gdt::interval{2010, 2015}, 1}};
     for (auto* k : grove.insert_data("chr1", batch, gst::sorted, gst::bulk)) { EXPECT_TRUE(grove.owns(k)); }
     for (auto* k : grove.insert_data("chr2", batch, gst::sorted, gst::bulk)) { EXPECT_TRUE(grove.owns(k)); }
+    auto* first_in_index = grove.insert_data("chr3", gdt::interval{1, 2}, 0, gst::sorted);
+    EXPECT_TRUE(grove.owns(first_in_index));
+
+    // The inserts above split nodes while the set existed. The separators
+    // those splits made are not graph vertices and must stay out of the set.
+    auto* root = grove.get_root_nodes().at("chr1");
+    ASSERT_FALSE(root->get_is_leaf());
+    for (auto* separator : root->get_keys()) { EXPECT_FALSE(grove.owns(separator)); }
 
     auto* ext = grove.add_external_key(gdt::interval{1, 2}, 99);
     EXPECT_TRUE(grove.owns(ext));
