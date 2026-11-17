@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.2] - 2026-11-16
+
 ### Added
 - **`grove::owns()` ownership query**: `owns(const key*)` returns true only for a live key of the grove — an indexed key linked in a tree, or an external key. Bindings can use it to reject foreign or removed keys before `add_edge` / `link_if`. It compares addresses only and costs O(N) per call; graph calls themselves are unchanged. ([#648](https://github.com/genogrove/genogrove/issues/648), [#651](https://github.com/genogrove/genogrove/pull/651))
 
