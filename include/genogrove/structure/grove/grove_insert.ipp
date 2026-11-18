@@ -243,8 +243,8 @@ private:
             auto* key_ptr = allocate_key(key);
             node->insert_key_ptr(key_ptr);
             ++this->leaf_key_count;
-            this->track_owned(key_ptr);
             node->refresh_subtree_max();
+            this->track_owned(key_ptr);
             return key_ptr;
         } else {
             // Route on each child's subtree max — the B+ tree separator. The
