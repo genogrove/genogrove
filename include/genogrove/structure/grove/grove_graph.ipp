@@ -246,14 +246,14 @@ public:
      */
     [[nodiscard]] bool owns(const gdt::key<key_type, data_type>* k) const noexcept {
         if (k == nullptr) return false;
-        if (owned_cache.empty()) {
+        if(owned_cache.empty()) {
             try {
                 owned_cache.reserve(vertex_count());
                 any_live_key([this](const auto* live) {
                     owned_cache.insert(live);
                     return false;
                 });
-            } catch (...) {
+            } catch(...) {
                 // Out of memory: a partial set would answer false for live
                 // keys, so drop it and answer this call with the plain scan.
                 owned_cache.clear();

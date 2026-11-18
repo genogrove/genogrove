@@ -100,8 +100,10 @@ public:
             }
             // Tracked only now: a build that throws frees its leaves, and its
             // keys must not stay in the owns() set.
-            if (!this->owned_cache.empty()) {
-                for (const auto* k : keys) { this->track_owned(k); }
+            if(!this->owned_cache.empty()) {
+                for(const auto* k : keys) {
+                    this->track_owned(k);
+                }
             }
             return keys;
         }

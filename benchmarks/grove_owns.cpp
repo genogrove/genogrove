@@ -69,9 +69,10 @@ static void BM_owns_interleaved(benchmark::State& state) {
         grove_t grove(static_cast<int>(state.range(1)));
         key_ptr previous = grove.insert_data("chr1", gdt::interval(0, 5), 0, gst::sorted);
         size_t owned = 0;
-        for (int i = 1; i < num_keys; ++i) {
+        for(int i = 1; i < num_keys; ++i) {
             const auto start = static_cast<size_t>(i) * 10;
-            key_ptr current = grove.insert_data("chr1", gdt::interval(start, start + 5), i, gst::sorted);
+            key_ptr current =
+                grove.insert_data("chr1", gdt::interval(start, start + 5), i, gst::sorted);
             owned += static_cast<size_t>(grove.owns(previous) && grove.owns(current));
             previous = current;
         }

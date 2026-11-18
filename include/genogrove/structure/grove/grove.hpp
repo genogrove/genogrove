@@ -257,7 +257,9 @@ class grove {
     // here, so the insert paths of a grove that never calls owns() inline one
     // comparison and no exception handling.
     void track_owned(const gdt::key<key_type, data_type>* k) noexcept {
-        if (!owned_cache.empty()) { add_to_owned_cache(k); }
+        if(!owned_cache.empty()) {
+            add_to_owned_cache(k);
+        }
     }
 
     // A failed allocation drops the set, so the next owns() call rebuilds it
@@ -265,7 +267,7 @@ class grove {
     void add_to_owned_cache(const gdt::key<key_type, data_type>* k) noexcept {
         try {
             owned_cache.insert(k);
-        } catch (...) {
+        } catch(...) {
             owned_cache.clear();
         }
     }
@@ -274,16 +276,20 @@ class grove {
     // `pred` returns true. Compares and passes addresses only, never reads a key.
     template <typename pred_t>
     bool any_live_key(pred_t pred) const {
-        for (const auto& [_, root] : root_nodes) {
+        for(const auto& [_, root] : root_nodes) {
             const node<key_type, data_type>* leaf = root;
-            while (!leaf->get_is_leaf()) { leaf = leaf->get_children().front(); }
-            for (; leaf != nullptr; leaf = leaf->get_next()) {
-                for (const auto* live : leaf->get_keys()) {
-                    if (pred(live)) return true;
+            while(!leaf->get_is_leaf()) {
+                leaf = leaf->get_children().front();
+            }
+            for(; leaf != nullptr; leaf = leaf->get_next()) {
+                for(const auto* live : leaf->get_keys()) {
+                    if(pred(live))
+                        return true;
                 }
             }
         }
-        return std::ranges::any_of(external_key_storage, [&pred](const auto& ext) { return pred(&ext); });
+        return std::ranges::any_of(external_key_storage,
+                                   [&pred](const auto& ext) { return pred(&ext); });
     }
 
     // =========================================================================

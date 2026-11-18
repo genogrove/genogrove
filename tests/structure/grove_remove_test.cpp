@@ -1169,9 +1169,14 @@ TEST(GroveOwnsTest, AnswerFollowsEveryMutationAfterAnEarlierCall) {
     EXPECT_TRUE(grove.owns(sorted_key));
     auto* unsorted_key = grove.insert_data("chr1", gdt::interval{7, 8}, 0);
     EXPECT_TRUE(grove.owns(unsorted_key));
-    std::vector<std::pair<gdt::interval, int>> batch{{gdt::interval{2000, 2005}, 0}, {gdt::interval{2010, 2015}, 1}};
-    for (auto* k : grove.insert_data("chr1", batch, gst::sorted, gst::bulk)) { EXPECT_TRUE(grove.owns(k)); }
-    for (auto* k : grove.insert_data("chr2", batch, gst::sorted, gst::bulk)) { EXPECT_TRUE(grove.owns(k)); }
+    std::vector<std::pair<gdt::interval, int>> batch{{gdt::interval{2000, 2005}, 0},
+                                                     {gdt::interval{2010, 2015}, 1}};
+    for(auto* k : grove.insert_data("chr1", batch, gst::sorted, gst::bulk)) {
+        EXPECT_TRUE(grove.owns(k));
+    }
+    for(auto* k : grove.insert_data("chr2", batch, gst::sorted, gst::bulk)) {
+        EXPECT_TRUE(grove.owns(k));
+    }
     auto* first_in_index = grove.insert_data("chr3", gdt::interval{1, 2}, 0, gst::sorted);
     EXPECT_TRUE(grove.owns(first_in_index));
 
@@ -1179,7 +1184,9 @@ TEST(GroveOwnsTest, AnswerFollowsEveryMutationAfterAnEarlierCall) {
     // those splits made are not graph vertices and must stay out of the set.
     auto* root = grove.get_root_nodes().at("chr1");
     ASSERT_FALSE(root->get_is_leaf());
-    for (auto* separator : root->get_keys()) { EXPECT_FALSE(grove.owns(separator)); }
+    for(auto* separator : root->get_keys()) {
+        EXPECT_FALSE(grove.owns(separator));
+    }
 
     auto* ext = grove.add_external_key(gdt::interval{1, 2}, 99);
     EXPECT_TRUE(grove.owns(ext));
@@ -1195,12 +1202,15 @@ TEST(GroveOwnsTest, AnswerFollowsEveryMutationAfterAnEarlierCall) {
     EXPECT_FALSE(grove.owns(keys[4]));
     auto result = grove.intersect(gdt::interval(0, 5000), "chr1");
     ASSERT_FALSE(result.get_keys().empty());
-    for (const auto* k : result.get_keys()) { EXPECT_TRUE(grove.owns(k)); }
+    for(const auto* k : result.get_keys()) {
+        EXPECT_TRUE(grove.owns(k));
+    }
 
-    // A move takes the keys along: the source owns nothing afterwards.
+    // A move takes the keys along: the source owns nothing afterwards. The
+    // two reads of a moved-from grove below are the point of the check.
     gst::grove<gdt::interval, int> moved(std::move(grove));
     EXPECT_TRUE(moved.owns(ext));
-    EXPECT_FALSE(grove.owns(ext)); // NOLINT(bugprone-use-after-move): the moved-from state is the point
+    EXPECT_FALSE(grove.owns(ext)); // NOLINT(bugprone-use-after-move)
     gst::grove<gdt::interval, int> assigned(4);
     assigned = std::move(moved);
     EXPECT_TRUE(assigned.owns(ext));
