@@ -8,11 +8,10 @@
 // are lookups, and a mutation updates the set by one entry.
 //   - chain:       two owns() calls per edge on a finished grove, both keys
 //                  live, sampled on 1000 edges
-//   - foreign:     one owns() call on a key of another grove
 //   - interleaved: build the grove one key at a time, with the two guard calls
 //                  after each insert (the grove changes between checks)
-// items_per_second is edges per second (chain), calls per second (foreign) or
-// insert-and-check steps per second (interleaved).
+// items_per_second is edges per second (chain) or insert-and-check steps per
+// second (interleaved).
 
 // genogrove
 #include <genogrove/structure/grove/grove.hpp>
@@ -63,19 +62,6 @@ static void BM_owns_chain(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations() * 1000);
 }
 
-static void BM_owns_foreign(benchmark::State& state) {
-    grove_t grove(static_cast<int>(state.range(1)));
-    fill(grove, static_cast<int>(state.range(0)));
-    grove_t other(static_cast<int>(state.range(1)));
-    const key_ptr foreign = fill(other, 1).front();
-
-    for (auto _ : state) {
-        bool owned = grove.owns(foreign);
-        benchmark::DoNotOptimize(owned);
-    }
-    state.SetItemsProcessed(state.iterations());
-}
-
 static void BM_owns_interleaved(benchmark::State& state) {
     const auto num_keys = static_cast<int>(state.range(0));
 
@@ -98,9 +84,6 @@ static void BM_owns_interleaved(benchmark::State& state) {
 BENCHMARK(BM_owns_chain)
     ->ArgsProduct({{1000, 10000, 100000}, {3, 100}})
     ->Unit(benchmark::kMillisecond);
-BENCHMARK(BM_owns_foreign)
-    ->ArgsProduct({{1000, 10000, 100000}, {3, 100}})
-    ->Unit(benchmark::kMicrosecond);
 // No 100k case: with a scan per check it would take minutes per iteration.
 BENCHMARK(BM_owns_interleaved)
     ->ArgsProduct({{1000, 10000}, {3, 100}})
