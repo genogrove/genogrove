@@ -253,10 +253,16 @@ class grove {
     }
 
     // A key became live (linked in a leaf, or added as an external key): add
-    // it to the owns() set if that set is built. A failed allocation drops the
-    // set, so the next owns() call rebuilds it instead of missing this key.
+    // it to the owns() set if that set is built. Only the empty check lives
+    // here, so the insert paths of a grove that never calls owns() inline one
+    // comparison and no exception handling.
     void track_owned(const gdt::key<key_type, data_type>* k) noexcept {
-        if (owned_cache.empty()) return;
+        if (!owned_cache.empty()) { add_to_owned_cache(k); }
+    }
+
+    // A failed allocation drops the set, so the next owns() call rebuilds it
+    // instead of missing this key.
+    void add_to_owned_cache(const gdt::key<key_type, data_type>* k) noexcept {
         try {
             owned_cache.insert(k);
         } catch (...) {
