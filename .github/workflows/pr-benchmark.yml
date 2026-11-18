@@ -154,7 +154,7 @@ jobs:
           python3 benchmarks/compare_ab.py \
             --head build-head/benchmarks/result-head-*.json \
             --base build-base/benchmarks/result-base-*.json \
-            --threshold 1.20 \
+            --threshold 1.05 \
             --fail-over 1.25 \
             --head-sha "$HEAD_SHA" \
             --base-sha "$BASE_SHA" \
