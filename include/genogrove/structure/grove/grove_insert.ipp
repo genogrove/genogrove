@@ -98,6 +98,13 @@ public:
             if (new_root != nullptr) {
                 this->root_nodes[index_key] = new_root;
             }
+            // Tracked only now: a build that throws frees its leaves, and its
+            // keys must not stay in the owns() set.
+            if(!this->owned_cache.empty()) {
+                for(const auto* k : keys) {
+                    this->track_owned(k);
+                }
+            }
             return keys;
         }
 
@@ -111,6 +118,7 @@ public:
             auto* key_ptr = allocate_key(key);
             current_node->insert_key_ptr(key_ptr);
             ++this->leaf_key_count;
+            this->track_owned(key_ptr);
             inserted_keys.push_back(key_ptr);
 
             // Handle overflow — cascade upward so a parent that overflows as a
@@ -236,6 +244,7 @@ private:
             node->insert_key_ptr(key_ptr);
             ++this->leaf_key_count;
             node->refresh_subtree_max();
+            this->track_owned(key_ptr);
             return key_ptr;
         } else {
             // Route on each child's subtree max — the B+ tree separator. The
@@ -548,6 +557,7 @@ private:
             auto* key_ptr = allocate_key(key);
             root->insert_key_ptr(key_ptr);
             ++this->leaf_key_count;
+            this->track_owned(key_ptr);
             root->refresh_subtree_max();
             return key_ptr;
         } else {
@@ -557,6 +567,7 @@ private:
             auto* key_ptr = allocate_key(key);
             rightmost_node->insert_key_ptr(key_ptr);
             ++this->leaf_key_count;
+            this->track_owned(key_ptr);
 
             // Handle overflow, then refresh the spine the appended key just
             // raised. The rightmost leaf is only re-looked-up when a split

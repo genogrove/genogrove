@@ -1155,3 +1155,64 @@ TEST(GroveOwnsTest, EmptyGroveOwnsNothing) {
     gdt::key<gdt::interval, int> local(gdt::interval{1, 2}, 0);
     EXPECT_FALSE(grove.owns(&local));
 }
+
+// owns() answers from a pointer set it builds on the first call. Each step
+// below calls owns() first so the set exists, then mutates: a mutation path
+// that does not update the set gives a stale answer here.
+TEST(GroveOwnsTest, AnswerFollowsEveryMutationAfterAnEarlierCall) {
+    gst::grove<gdt::interval, int> grove(4);
+    auto keys = insert_intervals(grove, "chr1", 20);
+    ASSERT_TRUE(grove.owns(keys[0]));
+
+    // Insertion: sorted, unsorted, bulk append, bulk into a new index.
+    auto* sorted_key = grove.insert_data("chr1", gdt::interval{1000, 1005}, 0, gst::sorted);
+    EXPECT_TRUE(grove.owns(sorted_key));
+    auto* unsorted_key = grove.insert_data("chr1", gdt::interval{7, 8}, 0);
+    EXPECT_TRUE(grove.owns(unsorted_key));
+    std::vector<std::pair<gdt::interval, int>> batch{{gdt::interval{2000, 2005}, 0},
+                                                     {gdt::interval{2010, 2015}, 1}};
+    for(auto* k : grove.insert_data("chr1", batch, gst::sorted, gst::bulk)) {
+        EXPECT_TRUE(grove.owns(k));
+    }
+    for(auto* k : grove.insert_data("chr2", batch, gst::sorted, gst::bulk)) {
+        EXPECT_TRUE(grove.owns(k));
+    }
+    auto* first_in_index = grove.insert_data("chr3", gdt::interval{1, 2}, 0, gst::sorted);
+    EXPECT_TRUE(grove.owns(first_in_index));
+
+    // The inserts above split nodes while the set existed. The separators
+    // those splits made are not graph vertices and must stay out of the set.
+    auto* root = grove.get_root_nodes().at("chr1");
+    ASSERT_FALSE(root->get_is_leaf());
+    for(auto* separator : root->get_keys()) {
+        EXPECT_FALSE(grove.owns(separator));
+    }
+
+    auto* ext = grove.add_external_key(gdt::interval{1, 2}, 99);
+    EXPECT_TRUE(grove.owns(ext));
+
+    ASSERT_TRUE(grove.remove_key("chr1", keys[3]));
+    EXPECT_FALSE(grove.owns(keys[3]));
+
+    // compact() copies the indexed keys into new storage before it frees the
+    // old one, so no old address is live afterwards. The old address is asked
+    // first: that answer cannot come from a set rebuilt after compact().
+    ASSERT_TRUE(grove.owns(keys[4]));
+    grove.compact();
+    EXPECT_FALSE(grove.owns(keys[4]));
+    auto result = grove.intersect(gdt::interval(0, 5000), "chr1");
+    ASSERT_FALSE(result.get_keys().empty());
+    for(const auto* k : result.get_keys()) {
+        EXPECT_TRUE(grove.owns(k));
+    }
+
+    // A move takes the keys along: the source owns nothing afterwards. The
+    // two reads of a moved-from grove below are the point of the check.
+    gst::grove<gdt::interval, int> moved(std::move(grove));
+    EXPECT_TRUE(moved.owns(ext));
+    EXPECT_FALSE(grove.owns(ext)); // NOLINT(bugprone-use-after-move)
+    gst::grove<gdt::interval, int> assigned(4);
+    assigned = std::move(moved);
+    EXPECT_TRUE(assigned.owns(ext));
+    EXPECT_FALSE(moved.owns(ext)); // NOLINT(bugprone-use-after-move)
+}

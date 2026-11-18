@@ -9,6 +9,7 @@
 // standard
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <array>
 #include <cstdint>
 #include <deque>
@@ -188,6 +189,7 @@ class grove {
           key_storage(std::move(other.key_storage)),
           external_key_storage(std::move(other.external_key_storage)),
           leaf_key_count(std::exchange(other.leaf_key_count, 0)),
+          owned_cache(std::exchange(other.owned_cache, {})),
           graph_data(std::move(other.graph_data)) {}
 
     // Free our trees first; a defaulted move would leak them.
@@ -200,6 +202,7 @@ class grove {
             key_storage = std::move(other.key_storage);
             external_key_storage = std::move(other.external_key_storage);
             leaf_key_count = std::exchange(other.leaf_key_count, 0);
+            owned_cache = std::exchange(other.owned_cache, {});
             graph_data = std::move(other.graph_data);
         }
         return *this;
@@ -247,6 +250,46 @@ class grove {
         for(auto& [index, root] : root_nodes) {
             delete root;
         }
+    }
+
+    // A key became live (linked in a leaf, or added as an external key): add
+    // it to the owns() set if that set is built. Only the empty check lives
+    // here, so the insert paths of a grove that never calls owns() inline one
+    // comparison and no exception handling.
+    void track_owned(const gdt::key<key_type, data_type>* k) noexcept {
+        if(!owned_cache.empty()) {
+            add_to_owned_cache(k);
+        }
+    }
+
+    // A failed allocation drops the set, so the next owns() call rebuilds it
+    // instead of missing this key.
+    void add_to_owned_cache(const gdt::key<key_type, data_type>* k) noexcept {
+        try {
+            owned_cache.insert(k);
+        } catch(...) {
+            owned_cache.clear();
+        }
+    }
+
+    // Visit every live key (leaf keys of every index, then external keys) until
+    // `pred` returns true. Compares and passes addresses only, never reads a key.
+    template <typename pred_t>
+    bool any_live_key(pred_t pred) const {
+        for(const auto& [_, root] : root_nodes) {
+            const node<key_type, data_type>* leaf = root;
+            while(!leaf->get_is_leaf()) {
+                leaf = leaf->get_children().front();
+            }
+            for(; leaf != nullptr; leaf = leaf->get_next()) {
+                for(const auto* live : leaf->get_keys()) {
+                    if(pred(live))
+                        return true;
+                }
+            }
+        }
+        return std::ranges::any_of(external_key_storage,
+                                   [&pred](const auto& ext) { return pred(&ext); });
     }
 
     // =========================================================================
@@ -367,6 +410,10 @@ class grove {
 
     /// Count of leaf keys — excludes internal separator keys in key_storage
     size_t leaf_key_count = 0;
+
+    /// Live keys (leaf + external), built by the first owns() call and kept
+    /// current by every later mutation of that set. Empty means "not built".
+    mutable std::unordered_set<const gdt::key<key_type, data_type>*> owned_cache;
 
     /// Embedded graph overlay for managing directed edges and relationships between keys
     graph_overlay<key_type, data_type, edge_data_type> graph_data;

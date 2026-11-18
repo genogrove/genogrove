@@ -4,11 +4,14 @@
  */
 
 // Measures the cost a caller pays when it guards each edge with grove::owns().
-// owns() scans every leaf, so a guard on E edges over N keys is O(E * N).
-//   - chain:   two owns() calls per edge, both keys live (scan stops at the hit),
-//              sampled on 1000 edges
-//   - foreign: one owns() call on a key of another grove (always a full scan)
-// items_per_second is edges per second (chain) or calls per second (foreign).
+// The first owns() call scans the live keys into a pointer set; later calls
+// are lookups, and a mutation updates the set by one entry.
+//   - chain:       two owns() calls per edge on a finished grove, both keys
+//                  live, sampled on 1000 edges
+//   - interleaved: build the grove one key at a time, with the two guard calls
+//                  after each insert (the grove changes between checks)
+// items_per_second is edges per second (chain) or insert-and-check steps per
+// second (interleaved).
 
 // genogrove
 #include <genogrove/structure/grove/grove.hpp>
@@ -59,23 +62,30 @@ static void BM_owns_chain(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations() * 1000);
 }
 
-static void BM_owns_foreign(benchmark::State& state) {
-    grove_t grove(static_cast<int>(state.range(1)));
-    fill(grove, static_cast<int>(state.range(0)));
-    grove_t other(static_cast<int>(state.range(1)));
-    const key_ptr foreign = fill(other, 1).front();
+static void BM_owns_interleaved(benchmark::State& state) {
+    const auto num_keys = static_cast<int>(state.range(0));
 
     for (auto _ : state) {
-        bool owned = grove.owns(foreign);
+        grove_t grove(static_cast<int>(state.range(1)));
+        key_ptr previous = grove.insert_data("chr1", gdt::interval(0, 5), 0, gst::sorted);
+        size_t owned = 0;
+        for(int i = 1; i < num_keys; ++i) {
+            const auto start = static_cast<size_t>(i) * 10;
+            key_ptr current =
+                grove.insert_data("chr1", gdt::interval(start, start + 5), i, gst::sorted);
+            owned += static_cast<size_t>(grove.owns(previous) && grove.owns(current));
+            previous = current;
+        }
         benchmark::DoNotOptimize(owned);
     }
-    state.SetItemsProcessed(state.iterations());
+    state.SetItemsProcessed(state.iterations() * (num_keys - 1));
 }
 
-// {keys, order}. Order 3 is the CLI default; 100 shows the scan with dense leaves.
+// {keys, order}. Order 3 is the CLI default; 100 has dense leaves.
 BENCHMARK(BM_owns_chain)
     ->ArgsProduct({{1000, 10000, 100000}, {3, 100}})
     ->Unit(benchmark::kMillisecond);
-BENCHMARK(BM_owns_foreign)
-    ->ArgsProduct({{1000, 10000, 100000}, {3, 100}})
-    ->Unit(benchmark::kMicrosecond);
+// No 100k case: with a scan per check it would take minutes per iteration.
+BENCHMARK(BM_owns_interleaved)
+    ->ArgsProduct({{1000, 10000}, {3, 100}})
+    ->Unit(benchmark::kMillisecond);

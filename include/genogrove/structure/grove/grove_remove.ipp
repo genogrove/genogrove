@@ -34,6 +34,7 @@ public:
         auto it = std::ranges::find(keys, key_to_remove);
         if (it == keys.end()) return false;
         keys.erase(it);
+        this->owned_cache.erase(key_to_remove);
         --this->leaf_key_count;
         leaf->refresh_subtree_max();
 
@@ -95,6 +96,8 @@ public:
         }
         this->graph_data.commit_remap(remap, std::move(new_incidence));
         this->key_storage = std::move(new_storage);
+        // Every indexed key has a new address; the next owns() call rebuilds.
+        this->owned_cache.clear();
 
         // Cached routing maxima point into the old storage, which has just
         // been replaced — rebuild them rather than remapping, so compaction

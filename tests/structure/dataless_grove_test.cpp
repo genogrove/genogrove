@@ -71,6 +71,9 @@ TEST(DatalessGroveTest, OwnsIndexedAndExternalKeys) {
     gst::grove<gdt::interval> g(3);
     gdt::key<gdt::interval> k(gdt::interval{1000, 1200});
     auto* indexed = g.insert("chr1", k);
+    // Asked before the external key exists, so that key must be added to the
+    // set owns() has already built.
+    EXPECT_TRUE(g.owns(indexed));
     auto* external = g.add_external_key(gdt::interval{5000, 5500});
 
     EXPECT_TRUE(g.owns(indexed));

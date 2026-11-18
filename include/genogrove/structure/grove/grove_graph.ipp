@@ -235,21 +235,32 @@ public:
      *       a destroyed grove is not read through. Such a pointer can still
      *       compare equal to a live key if its address was reused, so do not
      *       keep key pointers across `compact()`.
-     * @note O(N): scans every leaf and the external keys. This keeps the grove
-     *       free of per-key bookkeeping for callers that never ask. If per-edge
-     *       checks on large groves become a bottleneck, replace the scan with a
-     *       maintained pointer set behind the same signature.
+     * @note O(N) for the first call, and for the first call after `compact()`:
+     *       it scans every leaf and the external keys into a pointer set.
+     *       Every other call is O(1). Key insertion, `remove_key()` and
+     *       `add_external_key()` update a built set by one entry.
+     * @note The set costs one pointer-set entry per live key from the first
+     *       call on. For callers that never ask, it stays empty.
+     * @note Not safe to call concurrently with itself: the first call, and
+     *       the first call after `compact()`, write the set.
      */
     [[nodiscard]] bool owns(const gdt::key<key_type, data_type>* k) const noexcept {
         if (k == nullptr) return false;
-        for (const auto& [_, root] : root_nodes) {
-            const node<key_type, data_type>* leaf = root;
-            while (!leaf->get_is_leaf()) { leaf = leaf->get_children().front(); }
-            for (; leaf != nullptr; leaf = leaf->get_next()) {
-                if (std::ranges::find(leaf->get_keys(), k) != leaf->get_keys().end()) return true;
+        if(owned_cache.empty()) {
+            try {
+                owned_cache.reserve(vertex_count());
+                any_live_key([this](const auto* live) {
+                    owned_cache.insert(live);
+                    return false;
+                });
+            } catch(...) {
+                // Out of memory: a partial set would answer false for live
+                // keys, so drop it and answer this call with the plain scan.
+                owned_cache.clear();
+                return any_live_key([k](const auto* live) { return live == k; });
             }
         }
-        return std::ranges::any_of(external_key_storage, [k](const auto& ext) { return &ext == k; });
+        return owned_cache.contains(k);
     }
 
     /**
@@ -275,6 +286,7 @@ public:
     gdt::key<key_type, data_type>* add_external_key(key_type key_value, D data_value)
         requires (!std::is_void_v<data_type>) {
         external_key_storage.emplace_back(std::move(key_value), std::move(data_value));
+        track_owned(&external_key_storage.back());
         return &external_key_storage.back();
     }
 
@@ -289,6 +301,7 @@ public:
     gdt::key<key_type, data_type>* add_external_key(key_type key_value)
         requires (std::is_void_v<data_type>) {
         external_key_storage.emplace_back(std::move(key_value));
+        track_owned(&external_key_storage.back());
         return &external_key_storage.back();
     }
 
