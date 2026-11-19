@@ -11,6 +11,7 @@
 #include <istream>
 #include <optional>
 #include <set>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -64,11 +65,14 @@ struct link_row {
 //   - parser errors (delegated to parse_links_tsv)
 //   - a name that is not present in name_map — the message names the
 //     missing name so the user can fix the input
+//   - metadata that starts with one of `reserved_metadata` — the words a
+//     caller uses for edges it adds itself (the GFF structure edges)
 template <typename payload_t>
 std::size_t apply_to_grove(
     ggs::grove<gdt::interval, payload_t, std::string>& grove,
     const std::string& links_path,
-    const handlers::name_to_key_map<payload_t>& name_map
+    const handlers::name_to_key_map<payload_t>& name_map,
+    std::span<const std::string_view> reserved_metadata = {}
 ) {
     std::ifstream in(links_path);
     if (!in) {
@@ -96,6 +100,15 @@ std::size_t apply_to_grove(
             throw std::runtime_error(
                 "Error: links file references name '" + row.target +
                 "' which is not present as an indexed record name");
+        }
+        if (row.metadata) {
+            for (const std::string_view word : reserved_metadata) {
+                if (row.metadata->starts_with(word)) {
+                    throw std::runtime_error(
+                        "Error: links file metadata '" + *row.metadata + "' starts with '" +
+                        std::string(word) + "', which marks an edge of the index structure");
+                }
+            }
         }
         if (seen.emplace(it_a->second, it_b->second, row.metadata).second) {
             if (row.metadata) {

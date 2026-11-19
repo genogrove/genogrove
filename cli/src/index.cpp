@@ -12,6 +12,7 @@
 #include <genogrove/io/filetype_detector.hpp>
 #include <genogrove/io/gg_format.hpp>
 
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
@@ -58,7 +59,8 @@ cxxopts::Options index::build_options() {
                     cxxopts::value<std::string>())
             ("k,order", "The order of the tree",
                     cxxopts::value<int>()->default_value(std::to_string(DEFAULT_TREE_ORDER)))
-            ("s,sorted", "Intervals in the input file are sorted",
+            ("s,sorted", "Intervals in the input file are sorted (BED input; GFF/GTF "
+                         "input is always sorted by idx itself)",
                     cxxopts::value<bool>()->default_value("false"))
             ("t,timed", "Measure the time taken for indexing",
                     cxxopts::value<bool>()->default_value("false"))
@@ -147,6 +149,7 @@ void index::execute(const cxxopts::ParseResult& args) {
 
     const auto start_time = std::chrono::steady_clock::now();
     std::size_t edges_added = 0;  // reported after the write when --links was used
+    handlers::gff::build_report gff_report;  // what the GFF builder made itself
 
     // Build the grove in memory first, then open the output file and write
     // the header + serialised payload. This way a parse error or malformed
@@ -176,12 +179,17 @@ void index::execute(const cxxopts::ParseResult& args) {
         const std::string name_tag = has_name_tag
             ? args["gff-name-tag"].as<std::string>()
             : std::string();
-        handlers::gff::grove_insert(
-            grove, inputfile, sorted, has_links ? &name_map : nullptr, name_tag);
+        // -s is not passed on: the builder sorts the indexed keys itself.
+        gff_report = handlers::gff::grove_insert(
+            grove, inputfile, has_links ? &name_map : nullptr, name_tag);
 
         if(has_links) {
+            // The structure edges carry fixed words; a user link must not look like one.
+            static constexpr std::array<std::string_view, 4> structure_words = {
+                handlers::gff::edge_transcript, handlers::gff::edge_first_exon,
+                handlers::gff::edge_next_exon_prefix, handlers::gff::edge_child};
             edges_added = handlers::links::apply_to_grove(
-                grove, args["links"].as<std::string>(), name_map);
+                grove, args["links"].as<std::string>(), name_map, structure_words);
         }
 
         write_index(grove, outputfile, gio::gg_payload_type::GFF);
@@ -193,6 +201,13 @@ void index::execute(const cxxopts::ParseResult& args) {
         std::cout << "Indexed in " << ms << " ms\n";
     }
     std::cout << "Index written to " << outputfile << "\n";
+    if(gff_report.genes_made != 0 || gff_report.transcripts_made != 0) {
+        std::cout << "Made " << gff_report.genes_made << " gene and "
+                  << gff_report.transcripts_made << " transcript records the file has no line for ("
+                  << gff_report.transcripts_made_without_exons
+                  << " transcripts without exon lines: their span covers the CDS, codon and UTR "
+                     "lines only)\n";
+    }
     if(has_links) {
         std::cout << "Added " << edges_added << " graph edges\n";
     }
