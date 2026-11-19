@@ -152,6 +152,22 @@ TEST_F(filetypeDetectorTest, compressedGffFile) {
     EXPECT_EQ(comp, gio::compression_type::GZIP);
 }
 
+TEST_F(filetypeDetectorTest, gff3Extension) {
+    // GENCODE and Ensembl name their GFF3 files *.gff3.
+    fs::path gff3 = fs::temp_directory_path() / "genogrove_detector_test.gff3";
+    {
+        std::ofstream out(gff3);
+        out << "##gff-version 3\nchr1\ttest\tgene\t1\t10\t.\t+\t.\tID=g1\n";
+    }
+
+    gio::filetype_detector detector;
+    auto [ftype, comp] = detector.detect_filetype(gff3);
+
+    EXPECT_EQ(ftype, gio::filetype::GFF);
+    EXPECT_EQ(comp, gio::compression_type::NONE);
+    fs::remove(gff3);
+}
+
 TEST_F(filetypeDetectorTest, compressedGtfFile) {
     fs::path gtf_gz = test_data_dir / "test.gtf.gz";
 
