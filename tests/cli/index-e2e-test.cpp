@@ -387,7 +387,7 @@ TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
         "chr1\t101\t200\texon\tchr1:101-200:+\t+\tT1\t1\n"
         "chr1\t101\t400\tgene\tG1\t+\n"
         "chr1\t101\t400\ttranscript\tT1\t+\tintron\n";
-    for (const std::string source : {"-i \"" + tmp_gff_output.string() + "\"",
+    for (const std::string& source : {"-i \"" + tmp_gff_output.string() + "\"",
                                      "-i \"" + tmp_gff_output.string() + "\" --in-place",
                                      "-t \"" + gtf_path.string() + "\""}) {
         auto hits = run_command(cli("isec -q \"" + query_path.string() + "\" " + source + " --exons"));
