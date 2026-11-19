@@ -58,7 +58,8 @@ cxxopts::Options index::build_options() {
                     cxxopts::value<std::string>())
             ("k,order", "The order of the tree",
                     cxxopts::value<int>()->default_value(std::to_string(DEFAULT_TREE_ORDER)))
-            ("s,sorted", "Intervals in the input file are sorted",
+            ("s,sorted", "Intervals in the input file are sorted (BED input; GFF/GTF "
+                         "input is always sorted by idx itself)",
                     cxxopts::value<bool>()->default_value("false"))
             ("t,timed", "Measure the time taken for indexing",
                     cxxopts::value<bool>()->default_value("false"))
@@ -176,12 +177,19 @@ void index::execute(const cxxopts::ParseResult& args) {
         const std::string name_tag = has_name_tag
             ? args["gff-name-tag"].as<std::string>()
             : std::string();
+        // -s is not passed on: the builder sorts the indexed keys itself.
+        if(sorted) {
+            std::cerr << "Note: -s/--sorted has no effect for GFF/GTF input; "
+                         "idx sorts the records itself\n";
+        }
         handlers::gff::grove_insert(
-            grove, inputfile, sorted, has_links ? &name_map : nullptr, name_tag);
+            grove, inputfile, has_links ? &name_map : nullptr, name_tag);
 
         if(has_links) {
+            // The structure edges carry fixed text; a user link must not look like one.
             edges_added = handlers::links::apply_to_grove(
-                grove, args["links"].as<std::string>(), name_map);
+                grove, args["links"].as<std::string>(), name_map,
+                handlers::gff::is_structure_edge);
         }
 
         write_index(grove, outputfile, gio::gg_payload_type::GFF);

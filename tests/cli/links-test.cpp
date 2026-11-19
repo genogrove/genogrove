@@ -5,7 +5,6 @@
 
 // gtest
 #include <gtest/gtest.h>
-
 // standard
 #include <filesystem>
 #include <fstream>
@@ -197,4 +196,26 @@ TEST(LinksApply, throwsOnNameNotInMap) {
     }
 
     fs::remove(tsv_path);
+}
+
+TEST(LinksApply, rejectsMetadataThatStartsWithAReservedWord) {
+    apply_grove g(4);
+    handlers::name_to_key_map<std::string> nm;
+    add_named(g, nm, "geneA", 10, 20);
+    add_named(g, nm, "geneB", 30, 40);
+    const auto reserved = +[](std::string_view text) { return text.starts_with("next_exon:"); };
+
+    // "next_exons" does not start with "next_exon:", so it is a normal user text.
+    fs::path allowed = write_tsv("gg_links_reserved_ok.tsv", "geneA\tgeneB\tnext_exons\n");
+    EXPECT_EQ(handlers::links::apply_to_grove(g, allowed.string(), nm, reserved), 1u);
+
+    fs::path refused = write_tsv("gg_links_reserved.tsv", "geneA\tgeneB\tnext_exon:T1\n");
+    EXPECT_THROW(handlers::links::apply_to_grove(g, refused.string(), nm, reserved),
+                 std::runtime_error);
+    EXPECT_EQ(g.edge_count(), 1u);  // the refused row added nothing
+    // With no check (a BED index) the same row is accepted.
+    EXPECT_EQ(handlers::links::apply_to_grove(g, refused.string(), nm), 1u);
+
+    fs::remove(allowed);
+    fs::remove(refused);
 }

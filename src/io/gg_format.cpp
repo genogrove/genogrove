@@ -94,6 +94,11 @@ namespace genogrove::io {
         }
 
         const uint8_t pt = static_cast<uint8_t>(buf[9]);
+        if(pt == 0x02) {
+            throw std::runtime_error(
+                "gg_header::read: this .gg file is a flat GFF index (payload type 2), "
+                "which is no longer supported; please re-create the index");
+        }
         if(pt != static_cast<uint8_t>(gg_payload_type::BED) &&
            pt != static_cast<uint8_t>(gg_payload_type::GFF)) {
             throw std::runtime_error(

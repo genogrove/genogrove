@@ -24,20 +24,29 @@ namespace gio = genogrove::io;
 // GFF/GTF links match on a chosen attribute value. See handlers/name_map.hpp.
 using name_to_key_map = handlers::name_to_key_map<gio::gff_entry>;
 
-// Insert GFF/GTF file entries into a grove. When sorted is true, entries are
-// inserted via the sorted-append fast path — the caller asserts the file is
-// already ordered.
+// Edge data of the structure edges.
+inline constexpr std::string_view edge_transcript = "transcript";        // gene -> transcript
+inline constexpr std::string_view edge_first_exon = "first_exon";        // transcript -> 5' exon
+inline constexpr std::string_view edge_next_exon_prefix = "next_exon:";  // exon -> exon, + "T1,T2"
+
+// True for the edge data of a structure edge. A user link must not carry it.
+[[nodiscard]] bool is_structure_edge(std::string_view text);
+
+// Build the linked model of a GFF/GTF file in an empty grove:
+//   - genes, transcripts and other feature types: indexed keys;
+//   - exons: external keys, one per distinct (seqid, start, end, strand);
+//   - CDS, UTR and codon lines: list entries on their transcript record;
+//   - edges gene -> transcript -> first exon -> next exon, 5' to 3'.
+// The file must have a line for every gene and every transcript, and one
+// transcript per exon, CDS, UTR or codon line (the layout of a GENCODE file).
+// Lines may come in any order.
 //
-// When name_map is non-null, each entry's `name_tag` attribute value is
-// recorded alongside the key pointer returned by `insert_data()`, for
-// `idx --links` resolution. Unlike BED's optional column-4 name, the attribute
-// is mandatory here: a record missing `name_tag` throws (the user picked that
-// tag as the identifier), as does a duplicate value across two records —
-// `--links` requires every name to resolve to exactly one interval.
+// Throws std::runtime_error for another layout and for records that contradict
+// each other. With a name_map, each key's `name_tag` value is recorded for
+// `idx --links`; an indexed record without the tag, or a repeated value, throws.
 void grove_insert(
     ggs::grove<gdt::interval, gio::gff_entry, std::string>& grove,
     const std::string& filepath,
-    bool sorted = false,
     name_to_key_map* name_map = nullptr,
     std::string_view name_tag = {}
 );

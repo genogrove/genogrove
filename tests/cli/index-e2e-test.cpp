@@ -314,6 +314,91 @@ TEST_F(CLIIndexE2ETest, IndexProducesDeserializableGffGrove) {
 }
 
 // ==========================================
+// idx builds the linked model from a GTF; isec queries it
+// ==========================================
+
+TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
+    fs::path gtf_path = fs::temp_directory_path() / "genogrove_idx_linked.gtf";
+    fs::path query_path = fs::temp_directory_path() / "genogrove_idx_linked_query.bed";
+    {
+        std::ofstream out(gtf_path);
+        out << "chr1\ttest\tgene\t101\t400\t.\t+\t.\tgene_id \"G1\";\n"
+            << "chr1\ttest\ttranscript\t101\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n"
+            << "chr1\ttest\texon\t101\t200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n"
+            << "chr1\ttest\texon\t301\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n";
+        std::ofstream query(query_path);
+        query << "chr1\t249\t251\n"     // in the intron: overlaps the transcript, no exon
+              << "chr1\t899\t901\n";    // outside the gene
+    }
+
+    auto result = run_command(cli(
+        "idx \"" + gtf_path.string() + "\" -o \"" + tmp_gff_output.string() + "\""
+    ));
+    ASSERT_EQ(result.exit_code, 0) << result.output;
+
+    {
+        std::ifstream in(tmp_gff_output, std::ios::binary);
+        ASSERT_TRUE(in.is_open());
+        EXPECT_EQ(gio::gg_header::read(in).payload_type, gio::gg_payload_type::GFF);
+        auto grove = ggs::grove<gdt::interval, gio::gff_entry, std::string>::deserialize(in);
+        EXPECT_EQ(grove.indexed_vertex_count(), 2u);   // gene + transcript
+        EXPECT_EQ(grove.external_vertex_count(), 2u);  // the two exons
+        EXPECT_EQ(grove.edge_count(), 3u);             // gene>transcript, transcript>exon, exon>exon
+
+        // The exon chain is still there after the write and the read: from
+        // the transcript to its first exon, then to the next one.
+        auto hits = grove.intersect(gdt::interval(250, 250), "chr1");
+        std::size_t transcripts_checked = 0;
+        for (auto* key : hits.get_keys()) {
+            if (key->get_data().type != "transcript") continue;
+            ++transcripts_checked;
+            const auto first = grove.get_neighbors(key);
+            ASSERT_EQ(first.size(), 1u);
+            EXPECT_EQ(first.front()->get_data().start, 101u);
+            const auto next = grove.get_neighbors(first.front());
+            ASSERT_EQ(next.size(), 1u);
+            EXPECT_EQ(next.front()->get_data().start, 301u);
+            EXPECT_EQ(grove.get_edges(first.front()).front(), "next_exon:T1");
+        }
+        EXPECT_EQ(transcripts_checked, 1u);
+    }
+
+    // The intron position finds the gene and the transcript (both 101-400),
+    // read eagerly and in place. Exons are not hit directly.
+    for (const std::string mode : {"", " --in-place"}) {
+        auto hits = run_command(cli(
+            "isec -q \"" + query_path.string() + "\" -i \"" + tmp_gff_output.string() + "\"" + mode
+        ));
+        EXPECT_EQ(hits.exit_code, 0) << hits.output;
+        EXPECT_EQ(hits.output, "chr1\t101\t400\nchr1\t101\t400\n") << "mode:" << mode;
+    }
+
+    fs::remove(gtf_path);
+    fs::remove(query_path);
+}
+
+TEST_F(CLIIndexE2ETest, IsecRejectsAFlatGffIndex) {
+    // A flat GFF index (payload type 2) has the same stream types as the linked
+    // model. isec must stop on the header instead of misreading it.
+    auto result = run_command(cli(
+        "idx \"" + gff_target_path.string() + "\" -o \"" + tmp_gff_output.string() + "\""
+    ));
+    ASSERT_EQ(result.exit_code, 0) << result.output;
+    {
+        std::fstream file(tmp_gff_output, std::ios::binary | std::ios::in | std::ios::out);
+        ASSERT_TRUE(file.is_open());
+        file.seekp(9);
+        file.put(static_cast<char>(0x02));
+    }
+
+    auto hits = run_command(cli(
+        "isec -q \"" + target_path.string() + "\" -i \"" + tmp_gff_output.string() + "\""
+    ));
+    EXPECT_NE(hits.exit_code, 0);
+    EXPECT_NE(hits.output.find("re-create the index"), std::string::npos) << hits.output;
+}
+
+// ==========================================
 // idx rejects formats other than BED / GFF / GTF
 // ==========================================
 
@@ -583,13 +668,14 @@ TEST_F(CLIIndexE2ETest, IndexGffLinksMissingTagAttributeFails) {
 }
 
 TEST_F(CLIIndexE2ETest, IndexGffLinksDuplicateTagValueFails) {
-    // Two records sharing ID=dup make the name ambiguous for link resolution.
+    // Two records sharing Name=dup make the name ambiguous for link resolution.
+    // (A repeated ID is rejected earlier, by the builder: an ID must be unique.)
     fs::path dup_gff = fs::temp_directory_path() / "genogrove_idx_gff_dup.gff";
     {
         std::ofstream out(dup_gff);
         out << "##gff-version 3\n"
-            << "chr1\tt\tgene\t101\t500\t.\t+\t.\tID=dup\n"
-            << "chr1\tt\tgene\t601\t900\t.\t-\t.\tID=dup\n";
+            << "chr1\tt\tgene\t101\t500\t.\t+\t.\tID=g1;Name=dup\n"
+            << "chr1\tt\tgene\t601\t900\t.\t-\t.\tID=g2;Name=dup\n";
     }
     fs::path some_links = fs::temp_directory_path() / "genogrove_idx_gff_dup_links.tsv";
     {
@@ -599,7 +685,7 @@ TEST_F(CLIIndexE2ETest, IndexGffLinksDuplicateTagValueFails) {
 
     auto result = run_command(cli(
         "idx \"" + dup_gff.string() + "\" --links \"" + some_links.string() +
-        "\" --gff-name-tag ID -o \"" + tmp_links_output.string() + "\""
+        "\" --gff-name-tag Name -o \"" + tmp_links_output.string() + "\""
     ));
     EXPECT_NE(result.exit_code, 0);
     EXPECT_NE(result.output.find("duplicate GFF/GTF name"), std::string::npos)
