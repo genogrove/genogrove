@@ -348,8 +348,10 @@ TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
         // The exon chain is still there after the write and the read: from
         // the transcript to its first exon, then to the next one.
         auto hits = grove.intersect(gdt::interval(250, 250), "chr1");
+        std::size_t transcripts_checked = 0;
         for (auto* key : hits.get_keys()) {
             if (key->get_data().type != "transcript") continue;
+            ++transcripts_checked;
             const auto first = grove.get_neighbors(key);
             ASSERT_EQ(first.size(), 1u);
             EXPECT_EQ(first.front()->get_data().start, 101u);
@@ -358,6 +360,7 @@ TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
             EXPECT_EQ(next.front()->get_data().start, 301u);
             EXPECT_EQ(grove.get_edges(first.front()).front(), "next_exon:T1");
         }
+        EXPECT_EQ(transcripts_checked, 1u);
     }
 
     // The intron position finds the gene and the transcript (both 101-400),

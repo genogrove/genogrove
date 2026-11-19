@@ -7,6 +7,7 @@
 #include <array>
 #include <cstddef>
 #include <handlers/gff.hpp>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <stdexcept>
@@ -56,9 +57,7 @@ std::string place(const gio::gff_entry& entry) {
     return entry.seqid + ":" + std::to_string(entry.start) + "-" + std::to_string(entry.end);
 }
 
-// The builder reads the layout of a GENCODE file: a line for every gene and
-// every transcript, and one transcript per exon, CDS, UTR or codon line. Any
-// other layout stops here, so that no record is guessed.
+// A layout the builder does not read stops here, so that no record is guessed.
 [[noreturn]] void unsupported(const std::string& what) {
     throw std::runtime_error("Error: " + what +
                              ". For now idx reads only GFF/GTF files with a line for every gene "
@@ -72,7 +71,7 @@ struct transcript_state {
     std::string seqid;
     std::optional<char> strand;
     std::optional<std::string> protein_id;                 // from the first CDS line that has one
-    std::vector<std::size_t> exons;                        // indexes into `exons`, each once
+    std::vector<std::size_t> exons;                        // indexes into `exon_keys`, each once
     std::map<std::string, std::vector<std::string>> parts; // column-3 type -> entries
 };
 
@@ -89,25 +88,33 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
     std::map<std::string, std::size_t, std::less<>> genes; // gene id -> index into `features`
     std::map<std::string, transcript_state, std::less<>> transcripts;
     // One external key per distinct exon (seqid, start, end, strand).
-    std::vector<key_ptr> exons;
+    std::vector<key_ptr> exon_keys;
     std::map<std::tuple<std::string, std::size_t, std::size_t, char>, std::size_t> exon_index;
     // The format of the file: that of its first line with attributes. A line
-    // with an empty column 9 has no format of its own and must not change it.
+    // with no attributes (column 9 empty or ".") has no format of its own; the
+    // reader reports GFF3 for a ".", so the attributes decide, not the line.
     bool gff3 = false;
     bool format_known = false;
-    // The one record a line belongs to: its only GFF3 Parent, or the GTF tag.
+    // The one record a line belongs to: its only GFF3 Parent, or the only
+    // value of the GTF tag. A line that names none, or two, has no owner. The
+    // gff_entry accessors are not used: they decide the format line by line.
     const auto owner_of = [&gff3](const gio::gff_entry& entry,
                                   std::string_view gtf_tag) -> std::optional<std::string> {
-        if(!gff3) {
-            return first_value(entry, gtf_tag);
+        std::vector<std::string> ids;
+        if(gff3) {
+            ids = entry.get_parent_ids();
+        } else if(const auto it = entry.attributes.find(gtf_tag); it != entry.attributes.end()) {
+            ids = it->second;
         }
-        auto parents = entry.get_parent_ids();
-        return parents.size() == 1 ? std::optional<std::string>(std::move(parents.front()))
-                                   : std::nullopt;
+        std::erase(ids, std::string()); // GTF 2.2 writes "" for "none"
+        if(ids.empty() || std::ranges::count(ids, ids.front()) != std::ssize(ids)) {
+            return std::nullopt;
+        }
+        return std::move(ids.front());
     };
 
     for(const auto& entry : reader) {
-        if(!format_known && (entry.is_gff3() || entry.is_gtf())) {
+        if(!format_known && !entry.attributes.empty()) {
             gff3 = entry.is_gff3();
             format_known = true;
         }
@@ -120,9 +127,12 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
             if(!is_gene && entry.type != "transcript") {
                 continue; // any other type: a plain indexed key
             }
-            const auto id = first_value(entry, gff3 ? "ID" : is_gene ? "gene_id" : "transcript_id");
+            const std::string_view id_tag = gff3 ? "ID" : (is_gene ? "gene_id" : "transcript_id");
+            const auto id = first_value(entry, id_tag);
             if(!id) {
-                continue; // nothing can name it: a plain indexed key
+                // Without an id no line can name it, so it would stay unlinked.
+                unsupported(entry.type + " line at " + place(entry) + " has no " +
+                            std::string(id_tag));
             }
             bool fresh = false;
             if(is_gene) {
@@ -164,23 +174,29 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
             stored.attributes.erase("transcript_id");
             stored.attributes.erase("Parent");
             const auto [it, fresh] = exon_index.try_emplace(
-                {entry.seqid, entry.start, entry.end, entry.strand.value_or('.')}, exons.size());
+                {entry.seqid, entry.start, entry.end, entry.strand.value_or('.')},
+                exon_keys.size());
             if(fresh) {
-                exons.push_back(grove.add_external_key(entry.to_interval(), std::move(stored)));
+                exon_keys.push_back(grove.add_external_key(entry.to_interval(), std::move(stored)));
             } else {
-                attribute_map& kept = exons[it->second]->get_data().attributes;
+                attribute_map& kept = exon_keys[it->second]->get_data().attributes;
                 // exon_id is the tag that addresses an exon, and annotations
                 // give one position several ids (the same exon in another
-                // reading frame or gene): the record keeps every one of them.
+                // reading frame or gene): the record keeps every one of them,
+                // sorted, so the record does not depend on the line order.
                 std::vector<std::string> exon_ids;
                 for(const attribute_map* from : {&kept, &stored.attributes}) {
                     const auto ids = from->find("exon_id");
-                    for(std::size_t i = 0; ids != from->end() && i < ids->second.size(); ++i) {
-                        if(std::ranges::find(exon_ids, ids->second[i]) == exon_ids.end()) {
-                            exon_ids.push_back(ids->second[i]);
+                    if(ids == from->end()) {
+                        continue;
+                    }
+                    for(const auto& id : ids->second) {
+                        if(std::ranges::find(exon_ids, id) == exon_ids.end()) {
+                            exon_ids.push_back(id);
                         }
                     }
                 }
+                std::ranges::sort(exon_ids);
                 std::erase_if(kept, [&stored](const auto& attribute) {
                     const auto other = stored.attributes.find(attribute.first);
                     return other == stored.attributes.end() || other->second != attribute.second;
@@ -247,6 +263,10 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
         if(gene == genes.end()) {
             unsupported("transcript '" + id + "' at " + place(record) + " has no gene line");
         }
+        if(features[gene->second].seqid != record.seqid) {
+            throw std::runtime_error("Error: transcript '" + id + "' at " + place(record) +
+                                     " is on another chromosome than its gene '" + *gene_id + "'");
+        }
         gene_edges.emplace_back(gene->second, *transcript.line);
     }
 
@@ -259,7 +279,7 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
         intervals.push_back(features[i].to_interval());
         by_seqid[features[i].seqid].push_back(i);
     }
-    std::vector<key_ptr> keys(features.size());
+    std::vector<key_ptr> feature_keys(features.size());
     for(auto& [seqid, members] : by_seqid) {
         // Stable, so records with equal intervals keep their file order.
         std::ranges::stable_sort(members, [&intervals](std::size_t a, std::size_t b) {
@@ -272,14 +292,14 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
         }
         const auto inserted = grove.insert_data(seqid, batch, ggs::sorted, ggs::bulk);
         for(std::size_t k = 0; k < members.size(); ++k) {
-            keys[members[k]] = inserted[k];
+            feature_keys[members[k]] = inserted[k];
         }
     }
 
     // ---- Edges: gene -> transcript -> first exon -> next exon (5' to 3') ----
 
     for(const auto& [gene, transcript] : gene_edges) {
-        grove.add_edge(keys[gene], keys[transcript], std::string(edge_transcript));
+        grove.add_edge(feature_keys[gene], feature_keys[transcript], std::string(edge_transcript));
     }
     // One edge per pair of consecutive exons, shared by the transcripts that use it.
     std::map<std::pair<std::size_t, std::size_t>, std::string> junctions;
@@ -287,13 +307,13 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
         if(transcript.exons.empty()) {
             continue;
         }
-        std::ranges::sort(transcript.exons, [&exons](std::size_t a, std::size_t b) {
-            return exons[a]->get_value() < exons[b]->get_value();
+        std::ranges::sort(transcript.exons, [&exon_keys](std::size_t a, std::size_t b) {
+            return exon_keys[a]->get_value() < exon_keys[b]->get_value();
         });
         if(transcript.strand == '-') {
             std::ranges::reverse(transcript.exons);
         }
-        grove.add_edge(keys[*transcript.line], exons[transcript.exons.front()],
+        grove.add_edge(feature_keys[*transcript.line], exon_keys[transcript.exons.front()],
                        std::string(edge_first_exon));
         for(std::size_t i = 0; i + 1 < transcript.exons.size(); ++i) {
             std::string& users = junctions[{transcript.exons[i], transcript.exons[i + 1]}];
@@ -302,16 +322,17 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
         }
     }
     for(const auto& [pair, users] : junctions) {
-        grove.add_edge(exons[pair.first], exons[pair.second], users);
+        grove.add_edge(exon_keys[pair.first], exon_keys[pair.second], users);
     }
 
-    // An exon with no exon_id in the file is named by its position, so every
-    // exon can be printed and linked by id.
-    for(const key_ptr exon : exons) {
+    // An exon with no exon_id in the file (or only an empty one) is named by
+    // its position, so every exon has an id to print.
+    for(const key_ptr exon : exon_keys) {
         gio::gff_entry& record = exon->get_data();
-        if(!record.attributes.contains("exon_id")) {
-            record.attributes["exon_id"] = {place(record) + ":" +
-                                            std::string(1, record.strand.value_or('.'))};
+        std::vector<std::string>& ids = record.attributes["exon_id"];
+        std::erase(ids, std::string());
+        if(ids.empty()) {
+            ids.push_back(place(record) + ':' + record.strand.value_or('.'));
         }
     }
 
@@ -339,10 +360,10 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
                                          "' (names must be unique to use --links)");
             }
         };
-        for(const key_ptr key : keys) {
+        for(const key_ptr key : feature_keys) {
             record_name(key, true);
         }
-        for(const key_ptr exon : exons) {
+        for(const key_ptr exon : exon_keys) {
             record_name(exon, false);
         }
     }

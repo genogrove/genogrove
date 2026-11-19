@@ -425,7 +425,7 @@ TEST_F(CLIGffHandlerTest, LinkedModelExonWithNoExonIdIsNamedByItsPosition) {
                gtf("gene", 101, 400, '+', ids("G1")) +
                gtf("transcript", 101, 400, '+', ids("G1", "T1")) +
                gtf("exon", 301, 400, '+', ids("G1", "T1")) +
-               gtf("exon", 101, 200, '+', ids("G1", "T1")));
+               gtf("exon", 101, 200, '+', ids("G1", "T1") + " exon_id \"\";"));  // empty = none
     gff_grove grove(3);
     handlers::gff::grove_insert(grove, tmp_gff.string());
 
@@ -433,6 +433,22 @@ TEST_F(CLIGffHandlerTest, LinkedModelExonWithNoExonIdIsNamedByItsPosition) {
     ASSERT_NE(t1, nullptr);
     EXPECT_EQ(walk_exons(grove, t1, "T1"),
               (std::vector<std::string>{"chr1:101-200:+", "chr1:301-400:+"}));
+}
+
+TEST_F(CLIGffHandlerTest, LinkedModelGtfThatStartsWithALineWithoutAttributes) {
+    // The reader reports GFF3 for a column 9 of ".". The file is still a GTF.
+    write_file(tmp_gff,
+               gtf("region", 1, 50, '+', ".") +
+               gtf("gene", 101, 200, '+', ids("G1")) +
+               gtf("transcript", 101, 200, '+', ids("G1", "T1")) +
+               gtf("exon", 101, 200, '+', ids("G1", "T1", "E1")));
+    gff_grove grove(3);
+    handlers::gff::grove_insert(grove, tmp_gff.string());
+
+    auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
+    ASSERT_NE(t1, nullptr);
+    EXPECT_EQ(walk_exons(grove, t1, "T1"), (std::vector<std::string>{"E1"}));
+    EXPECT_EQ(grove.indexed_vertex_count(), 3u);  // the region, the gene, the transcript
 }
 
 TEST_F(CLIGffHandlerTest, LinkedModelStoresCdsAndCodonLinesOnTheTranscript) {
@@ -530,6 +546,21 @@ TEST_F(CLIGffHandlerTest, LinkedModelRejectsBrokenInput) {
                  std::runtime_error);
     EXPECT_THROW(build(gene + exon), std::runtime_error);
     EXPECT_THROW(build(transcript + exon), std::runtime_error);
+    // An exon that names two transcripts.
+    EXPECT_THROW(build(gene + transcript + gtf("transcript", 101, 900, '+', ids("G1", "T2")) +
+                       gtf("exon", 101, 200, '+', ids("G1", "T1") + " transcript_id \"T2\";")),
+                 std::runtime_error);
+    // A gene or transcript line with no id: nothing could name it.
+    EXPECT_THROW(build(gene + gtf("transcript", 101, 900, '+', ids("G1"))), std::runtime_error);
+    EXPECT_THROW(build(gtf("gene", 101, 900, '+', "note \"x\";")), std::runtime_error);
+    EXPECT_THROW(build("##gff-version 3\n"
+                       "chr1\ttest\tgene\t101\t900\t.\t+\t.\tID=G1\n"
+                       "chr1\ttest\ttranscript\t101\t900\t.\t+\t.\tParent=G1\n"),
+                 std::runtime_error);
+    // A transcript on another chromosome than its gene.
+    EXPECT_THROW(build(gene + "chr2\ttest\ttranscript\t101\t900\t.\t+\t.\t" + ids("G1", "T1") +
+                       "\n"),
+                 std::runtime_error);
     // The same id on two gene lines, on two transcript lines.
     EXPECT_THROW(build(gene + gene), std::runtime_error);
     EXPECT_THROW(build(gene + transcript + transcript), std::runtime_error);

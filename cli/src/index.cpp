@@ -178,6 +178,10 @@ void index::execute(const cxxopts::ParseResult& args) {
             ? args["gff-name-tag"].as<std::string>()
             : std::string();
         // -s is not passed on: the builder sorts the indexed keys itself.
+        if(sorted) {
+            std::cerr << "Note: -s/--sorted has no effect for GFF/GTF input; "
+                         "idx sorts the records itself\n";
+        }
         handlers::gff::grove_insert(
             grove, inputfile, has_links ? &name_map : nullptr, name_tag);
 

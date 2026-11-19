@@ -48,13 +48,22 @@ inline constexpr std::string_view edge_next_exon_prefix = "next_exon:";  // exon
 // after the file is read. The file is GFF3 or GTF as a whole, by its first
 // line that has attributes.
 //
+// What a record holds:
+//   - a shared exon: the attributes all its lines agree on, never
+//     transcript_id / Parent, and every exon_id of its lines (sorted). Its
+//     source, score and phase are those of its first line in the file. An
+//     exon with no exon_id gets "seqid:start-end:strand";
+//   - a part list: one entry per line, in file order; a repeated line is a
+//     repeated entry.
+//
 // Throws std::runtime_error for:
 //   - a layout that is not supported: an exon, CDS, UTR or codon line that
-//     does not name exactly one transcript, a transcript with no transcript
-//     line, a transcript with no gene line;
+//     does not name exactly one transcript, a gene or transcript line with no
+//     id, a transcript with no transcript line, a transcript with no gene line;
 //   - the same id on two gene lines or on two transcript lines;
 //   - a transcript whose lines, its own included, are on different
-//     chromosomes or strands;
+//     chromosomes or strands, or a transcript on another chromosome than its
+//     gene;
 //   - a transcript id with a comma (it separates the ids on an exon edge);
 //   - a transcript line with an attribute named like one of its part lists.
 //
