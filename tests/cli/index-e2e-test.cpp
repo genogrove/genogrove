@@ -370,7 +370,44 @@ TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
             "isec -q \"" + query_path.string() + "\" -i \"" + tmp_gff_output.string() + "\"" + mode
         ));
         EXPECT_EQ(hits.exit_code, 0) << hits.output;
-        EXPECT_EQ(hits.output, "chr1\t101\t400\nchr1\t101\t400\n") << "mode:" << mode;
+        EXPECT_EQ(hits.output,
+                  "chr1\t101\t400\tgene\tG1\t+\nchr1\t101\t400\ttranscript\tT1\t+\n")
+            << "mode:" << mode;
+    }
+
+    // --exons: a query in the first exon, one in the intron, one in the second
+    // exon (reached over the exon-to-exon edge). The same rows from the index
+    // (eager and in place) and from the file as a target.
+    {
+        std::ofstream query(query_path);
+        query << "chr1\t149\t151\n" << "chr1\t249\t251\n" << "chr1\t349\t351\n";
+    }
+    const std::string expected =
+        "chr1\t101\t400\tgene\tG1\t+\n"
+        "chr1\t101\t400\ttranscript\tT1\t+\n"
+        "chr1\t101\t200\texon\tchr1:101-200:+\t+\tT1\t1\n"
+        "chr1\t101\t400\tgene\tG1\t+\n"
+        "chr1\t101\t400\ttranscript\tT1\t+\tintron\n"
+        "chr1\t101\t400\tgene\tG1\t+\n"
+        "chr1\t101\t400\ttranscript\tT1\t+\n"
+        "chr1\t301\t400\texon\tchr1:301-400:+\t+\tT1\t2\n";
+    for (const std::string& source : {"-i \"" + tmp_gff_output.string() + "\"",
+                                     "-i \"" + tmp_gff_output.string() + "\" --in-place",
+                                     "-t \"" + gtf_path.string() + "\""}) {
+        auto hits = run_command(cli("isec -q \"" + query_path.string() + "\" " + source + " --exons"));
+        EXPECT_EQ(hits.exit_code, 0) << hits.output;
+        EXPECT_EQ(hits.output, expected) << "source:" << source;
+    }
+
+    // A BED record has no exons: --exons on a BED target or a BED index is an error.
+    ASSERT_EQ(run_command(cli("idx \"" + target_path.string() + "\" -o \"" +
+                              tmp_output.string() + "\"")).exit_code, 0);
+    for (const std::string& source : {"-t \"" + target_path.string() + "\"",
+                                      "-i \"" + tmp_output.string() + "\""}) {
+        auto refused = run_command(cli("isec -q \"" + query_path.string() + "\" " + source + " --exons"));
+        EXPECT_NE(refused.exit_code, 0) << "source:" << source;
+        EXPECT_NE(refused.output.find("--exons needs a GFF/GTF"), std::string::npos)
+            << refused.output;
     }
 
     fs::remove(gtf_path);
