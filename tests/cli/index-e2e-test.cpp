@@ -318,12 +318,13 @@ TEST_F(CLIIndexE2ETest, IndexProducesDeserializableGffGrove) {
 // ==========================================
 
 TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
-    // Plain GTF 2.2: exon lines only, so idx makes the gene and the transcript.
     fs::path gtf_path = fs::temp_directory_path() / "genogrove_idx_linked.gtf";
     fs::path query_path = fs::temp_directory_path() / "genogrove_idx_linked_query.bed";
     {
         std::ofstream out(gtf_path);
-        out << "chr1\ttest\texon\t101\t200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n"
+        out << "chr1\ttest\tgene\t101\t400\t.\t+\t.\tgene_id \"G1\";\n"
+            << "chr1\ttest\ttranscript\t101\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n"
+            << "chr1\ttest\texon\t101\t200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n"
             << "chr1\ttest\texon\t301\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n";
         std::ofstream query(query_path);
         query << "chr1\t249\t251\n"     // in the intron: overlaps the transcript, no exon
@@ -334,16 +335,29 @@ TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
         "idx \"" + gtf_path.string() + "\" -o \"" + tmp_gff_output.string() + "\""
     ));
     ASSERT_EQ(result.exit_code, 0) << result.output;
-    EXPECT_NE(result.output.find("Made 1 gene and 1 transcript"), std::string::npos) << result.output;
 
     {
         std::ifstream in(tmp_gff_output, std::ios::binary);
         ASSERT_TRUE(in.is_open());
         EXPECT_EQ(gio::gg_header::read(in).payload_type, gio::gg_payload_type::GFF);
         auto grove = ggs::grove<gdt::interval, gio::gff_entry, std::string>::deserialize(in);
-        EXPECT_EQ(grove.indexed_vertex_count(), 2u);   // made gene + made transcript
+        EXPECT_EQ(grove.indexed_vertex_count(), 2u);   // gene + transcript
         EXPECT_EQ(grove.external_vertex_count(), 2u);  // the two exons
         EXPECT_EQ(grove.edge_count(), 3u);             // gene>transcript, transcript>exon, exon>exon
+
+        // The exon chain is still there after the write and the read: from
+        // the transcript to its first exon, then to the next one.
+        auto hits = grove.intersect(gdt::interval(250, 250), "chr1");
+        for (auto* key : hits.get_keys()) {
+            if (key->get_data().type != "transcript") continue;
+            const auto first = grove.get_neighbors(key);
+            ASSERT_EQ(first.size(), 1u);
+            EXPECT_EQ(first.front()->get_data().start, 101u);
+            const auto next = grove.get_neighbors(first.front());
+            ASSERT_EQ(next.size(), 1u);
+            EXPECT_EQ(next.front()->get_data().start, 301u);
+            EXPECT_EQ(grove.get_edges(first.front()).front(), "next_exon:T1");
+        }
     }
 
     // The intron position finds the gene and the transcript (both 101-400),

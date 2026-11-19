@@ -29,40 +29,40 @@ using name_to_key_map = handlers::name_to_key_map<gio::gff_entry>;
 inline constexpr std::string_view edge_transcript = "transcript";   // gene -> transcript
 inline constexpr std::string_view edge_first_exon = "first_exon";   // transcript -> its 5' exon
 inline constexpr std::string_view edge_next_exon_prefix = "next_exon:";  // exon -> next exon, then "T1,T2"
-inline constexpr std::string_view edge_child = "child";             // a parent -> a plain key that names it
 
-// Source (column 2) of a gene or transcript record the file has no line for.
-inline constexpr std::string_view made_source = "genogrove";
-
-// What grove_insert had to make itself, for the `idx` end report.
-struct build_report {
-    std::size_t genes_made = 0;
-    std::size_t transcripts_made = 0;
-    std::size_t transcripts_made_without_exons = 0;  // span is the CDS/codon/UTR lines only
-};
+// True for the edge data of a structure edge: one of the two words, or text
+// that starts with edge_next_exon_prefix. A user link must not carry such text.
+[[nodiscard]] bool is_structure_edge(std::string_view text);
 
 // Build the linked model of a GFF/GTF file in an empty grove:
-//   - genes, transcripts and every other feature type: indexed keys;
+//   - `gene` and `transcript` lines and every other feature type: indexed keys;
 //   - exons: external keys, one per distinct (seqid, start, end, strand);
 //   - CDS, UTR and codon lines: list entries on their transcript record
 //     ("start-end", CDS as "start-end:phase", file coordinates);
 //   - edges gene -> transcript -> first exon -> next exon in 5' to 3' order,
-//     with one exon -> exon edge per pair shared by its transcripts;
-//   - an edge parent -> key for every other indexed key that names a parent
-//     (GFF3 Parent; in a GTF its transcript, else its gene).
-// A gene or transcript that only child lines name is made from them (source =
-// made_source), one made gene per chromosome. A CDS, UTR or codon line with no
-// transcript is a plain indexed key. Lines may come in any order: the indexed
-// keys are collected, sorted and bulk-inserted after the file is read.
+//     with one exon -> exon edge per pair shared by its transcripts.
+// The file must have the layout of a GENCODE file: a line for every gene and
+// every transcript (types `gene` and `transcript`), and exactly one transcript
+// per exon, CDS, UTR or codon line (GTF transcript_id, GFF3 Parent). Lines may
+// come in any order: the indexed keys are collected, sorted and bulk-inserted
+// after the file is read. The file is GFF3 or GTF as a whole, by its first
+// line that has attributes.
 //
-// Throws std::runtime_error for a GTF exon with no transcript_id, a repeated
-// gene_id / transcript_id on the lines that define them, a repeated GFF3 ID,
-// and a transcript whose lines are on different chromosomes or strands.
+// Throws std::runtime_error for:
+//   - a layout that is not supported: an exon, CDS, UTR or codon line that
+//     does not name exactly one transcript, a transcript with no transcript
+//     line, a transcript with no gene line;
+//   - the same id on two gene lines or on two transcript lines;
+//   - a transcript whose lines, its own included, are on different
+//     chromosomes or strands;
+//   - a transcript id with a comma (it separates the ids on an exon edge);
+//   - a transcript line with an attribute named like one of its part lists.
 //
 // When name_map is non-null, every key's `name_tag` attribute value is
-// recorded with its key pointer for `idx --links` resolution. A key missing
-// `name_tag` throws, as does a value shared by two keys.
-build_report grove_insert(
+// recorded with its key pointer for `idx --links` resolution. An indexed
+// record without `name_tag` throws, as does a value shared by two keys. An
+// exon without the tag is left out of the map.
+void grove_insert(
     ggs::grove<gdt::interval, gio::gff_entry, std::string>& grove,
     const std::string& filepath,
     name_to_key_map* name_map = nullptr,

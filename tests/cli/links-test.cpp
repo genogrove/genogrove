@@ -6,7 +6,6 @@
 // gtest
 #include <gtest/gtest.h>
 // standard
-#include <array>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -204,7 +203,7 @@ TEST(LinksApply, rejectsMetadataThatStartsWithAReservedWord) {
     handlers::name_to_key_map<std::string> nm;
     add_named(g, nm, "geneA", 10, 20);
     add_named(g, nm, "geneB", 30, 40);
-    static constexpr std::array<std::string_view, 2> reserved = {"first_exon", "next_exon:"};
+    const auto reserved = +[](std::string_view text) { return text.starts_with("next_exon:"); };
 
     // "next_exons" does not start with "next_exon:", so it is a normal user text.
     fs::path allowed = write_tsv("gg_links_reserved_ok.tsv", "geneA\tgeneB\tnext_exons\n");
@@ -213,7 +212,8 @@ TEST(LinksApply, rejectsMetadataThatStartsWithAReservedWord) {
     fs::path refused = write_tsv("gg_links_reserved.tsv", "geneA\tgeneB\tnext_exon:T1\n");
     EXPECT_THROW(handlers::links::apply_to_grove(g, refused.string(), nm, reserved),
                  std::runtime_error);
-    // With no reserved words (a BED index) the same row is accepted.
+    EXPECT_EQ(g.edge_count(), 1u);  // the refused row added nothing
+    // With no check (a BED index) the same row is accepted.
     EXPECT_EQ(handlers::links::apply_to_grove(g, refused.string(), nm), 1u);
 
     fs::remove(allowed);
