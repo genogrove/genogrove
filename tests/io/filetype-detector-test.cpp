@@ -153,19 +153,24 @@ TEST_F(filetypeDetectorTest, compressedGffFile) {
 }
 
 TEST_F(filetypeDetectorTest, gff3Extension) {
-    // GENCODE and Ensembl name their GFF3 files *.gff3.
-    fs::path gff3 = fs::temp_directory_path() / "genogrove_detector_test.gff3";
-    {
-        std::ofstream out(gff3);
-        out << "##gff-version 3\nchr1\ttest\tgene\t1\t10\t.\t+\t.\tID=g1\n";
-    }
+    // GENCODE and Ensembl name their GFF3 files *.gff3 and *.gff3.gz.
+    fs::path gff3 = test_data_dir / "test_extension.gff3";
+    fs::path gff3_gz = test_data_dir / "test_extension.gff3.gz";
+    fs::copy_file(test_data_dir / "test_gff3.gff", gff3, fs::copy_options::overwrite_existing);
+    fs::copy_file(test_data_dir / "test_gff3.gff.gz", gff3_gz,
+                  fs::copy_options::overwrite_existing);
 
     gio::filetype_detector detector;
     auto [ftype, comp] = detector.detect_filetype(gff3);
-
     EXPECT_EQ(ftype, gio::filetype::GFF);
     EXPECT_EQ(comp, gio::compression_type::NONE);
+
+    auto [ftype_gz, comp_gz] = detector.detect_filetype(gff3_gz);
+    EXPECT_EQ(ftype_gz, gio::filetype::GFF);
+    EXPECT_EQ(comp_gz, gio::compression_type::GZIP);
+
     fs::remove(gff3);
+    fs::remove(gff3_gz);
 }
 
 TEST_F(filetypeDetectorTest, compressedGtfFile) {
