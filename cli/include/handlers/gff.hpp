@@ -68,9 +68,8 @@ void for_each_gff_query(const std::string& queryfile, F&& cb) {
     }
 }
 
-// The id a row shows, and the id the structure edges use for a transcript: the
-// exon ids of an exon (joined by ","), else the GFF3 ID, else gene_id for a
-// gene and transcript_id for any other type; "." when the record has none.
+// The id a row shows ("." for none); for a transcript, also the id that the
+// next_exon edges list.
 [[nodiscard]] std::string record_id(const gio::gff_entry& payload);
 
 // True when the text of a next_exon edge lists the transcript.
@@ -89,7 +88,6 @@ inline void print_gff_result(std::ostream& output, const gio::gff_entry& payload
 // one row per exon of its chain that overlaps the query:
 //   <exon row> <TAB> <transcript id> <TAB> <rank in the chain, 1 = 5' exon>
 // A transcript whose chain has no such exon gets "<TAB>intron" on its own row.
-// Works on the in-memory grove and on the in-place grove_view.
 template <typename grove_t>
 void print_gff_hit_with_exons(std::ostream& output, grove_t& grove,
                               const gdt::key<gdt::interval, gio::gff_entry>* hit,
@@ -98,15 +96,11 @@ void print_gff_hit_with_exons(std::ostream& output, grove_t& grove,
     const gio::gff_entry& record = hit->get_data();
     print_gff_result(output, record);
 
-    // The target of the out-edge of `source` whose text matches; null if none.
-    // get_neighbors and get_edges list the edges of a key in the same order.
-    const auto follow = [&grove](key_ptr source, auto&& matches) -> key_ptr {
-        const auto targets = grove.get_neighbors(source);
-        const auto texts = grove.get_edges(source);
-        for (std::size_t i = 0; i < targets.size(); ++i) {
-            if (matches(texts[i])) return targets[i];
-        }
-        return nullptr;
+    // get_neighbors_if tests the edge text first, so the in-place view loads
+    // only the block of the one target that matches.
+    const auto follow = [&grove](key_ptr source, auto matches) -> key_ptr {
+        const auto targets = grove.get_neighbors_if(source, matches);
+        return targets.empty() ? nullptr : targets.front();
     };
 
     key_ptr exon = nullptr;
@@ -119,9 +113,15 @@ void print_gff_hit_with_exons(std::ostream& output, grove_t& grove,
     }
 
     const std::string id = record_id(record);
+    const bool descending = record.strand == '-';  // the chain runs 5' to 3'
     std::vector<std::pair<key_ptr, std::size_t>> overlapping;
     for (std::size_t rank = 1; exon != nullptr; ++rank) {
-        if (gdt::interval::overlaps(exon->get_value(), query)) {
+        const gdt::interval& span = exon->get_value();
+        if (descending ? span.get_end() < query.get_start()
+                       : span.get_start() > query.get_end()) {
+            break;  // every later exon is further from the query
+        }
+        if (gdt::interval::overlaps(span, query)) {
             overlapping.emplace_back(exon, rank);
         }
         exon = follow(exon, [&id](const std::string& text) {

@@ -27,6 +27,7 @@
 #include <ostream>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_set>
 #include <vector>
 
@@ -140,8 +141,7 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         // once the temporary is destroyed at the end of the range expression.
         auto results = grove.intersect(iv, index);
         const auto& seeds = results.get_keys();
-        // The row of one overlap. With --exons a GFF transcript also gets the
-        // rows of its exons; no other payload type has an exon chain.
+        // Only a GFF payload has an exon chain to report with --exons.
         auto print_hit = [&](const auto* key) {
             if constexpr (std::is_same_v<std::remove_cvref_t<decltype(key->get_data())>,
                                          gio::gff_entry>) {
@@ -242,10 +242,8 @@ cxxopts::Options intersect::build_options() {
              cxxopts::value<std::string>()->default_value("0"))
             ("direction", "Which edges --hops follows: out, in, or both",
              cxxopts::value<std::string>()->default_value("both"))
-            ("exons", "For a GFF/GTF index or target: after each overlapping "
-                      "transcript, report its exons that overlap the query (with "
-                      "the transcript id and the exon's rank, 1 = 5' exon), or "
-                      "mark the transcript 'intron' when none does")
+            ("exons", "After each overlapping GFF/GTF transcript, list its exons "
+                      "that overlap the query, or mark it 'intron'")
             ("h,help", "Print the help")
             ;
     options.parse_positional({"queryfile", "targetfile"});

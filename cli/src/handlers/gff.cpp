@@ -6,11 +6,11 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <genogrove/utility/tokenizer.hpp>
 #include <handlers/gff.hpp>
 #include <iterator>
 #include <map>
 #include <optional>
-#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -101,6 +101,18 @@ std::optional<std::string> owner_of(bool gff3, const gio::gff_entry& entry,
     return std::move(ids.front());
 }
 
+// The attribute that holds the id of a record; empty when the record has none
+// of its own (a GTF line that is not a gene or a transcript).
+std::string_view id_tag(bool gff3, std::string_view type) {
+    if(gff3) {
+        return "ID";
+    }
+    if(type == "gene") {
+        return "gene_id";
+    }
+    return type == "transcript" ? "transcript_id" : std::string_view();
+}
+
 // A gene, a transcript or any type that is not an exon or a transcript part.
 void add_feature(gff_model& model, const gio::gff_entry& entry) {
     const std::size_t index = model.features.size();
@@ -109,10 +121,10 @@ void add_feature(gff_model& model, const gio::gff_entry& entry) {
     if(!is_gene && entry.type != "transcript") {
         return;
     }
-    const std::string_view id_tag = model.gff3 ? "ID" : (is_gene ? "gene_id" : "transcript_id");
-    const auto id = first_value(entry, id_tag);
+    const std::string_view tag = id_tag(model.gff3, entry.type);
+    const auto id = first_value(entry, tag);
     if(!id) {
-        unsupported(entry.type + " line at " + place(entry) + " has no " + std::string(id_tag));
+        unsupported(entry.type + " line at " + place(entry) + " has no " + std::string(tag));
     }
     bool fresh = false;
     if(is_gene) {
@@ -210,10 +222,17 @@ gff_model read_file(grove_t& grove, const std::string& filepath) {
     bool format_known = false;
     for(const auto& entry : reader) {
         // The reader reports GFF3 for a column 9 of ".", so only a line that
-        // has attributes can say what the file is.
-        if(!format_known && !entry.attributes.empty()) {
-            model.gff3 = entry.is_gff3();
-            format_known = true;
+        // has attributes can say what the file is. Every later line must have
+        // the same syntax: its ids are read by the rule of the file.
+        if(!entry.attributes.empty()) {
+            if(!format_known) {
+                model.gff3 = entry.is_gff3();
+                format_known = true;
+            } else if(entry.is_gff3() != model.gff3) {
+                throw std::runtime_error("Error: " + entry.type + " line at " + place(entry) +
+                                         " is not in the " + (model.gff3 ? "GFF3" : "GTF") +
+                                         " syntax of the lines before it");
+            }
         }
         if(entry.type == "exon" || is_transcript_part(entry.type)) {
             add_transcript_child(grove, model, entry);
@@ -404,22 +423,22 @@ std::string record_id(const gio::gff_entry& payload) {
         for(const auto& id : ids->second) {
             joined += (joined.empty() ? "" : ",") + id;
         }
-        return joined;
+        return joined.empty() ? "." : joined;
     }
-    // The builder names a gene and a transcript the same way (see add_feature).
-    const std::string_view tag =
-        payload.is_gff3() ? "ID" : (payload.type == "gene" ? "gene_id" : "transcript_id");
-    return first_value(payload, tag).value_or(".");
+    return first_value(payload, id_tag(payload.is_gff3(), payload.type)).value_or(".");
 }
 
 bool edge_names_transcript(std::string_view edge_text, std::string_view transcript_id) {
     if(!edge_text.starts_with(edge_next_exon_prefix)) {
         return false;
     }
-    edge_text.remove_prefix(edge_next_exon_prefix.size());
-    return std::ranges::any_of(std::views::split(edge_text, ','), [&](auto&& id) {
-        return std::string_view(id.begin(), id.end()) == transcript_id;
-    });
+    std::size_t pos = edge_next_exon_prefix.size();
+    while(const auto id = genogrove::utility::next_field(edge_text, pos, ',')) {
+        if(*id == transcript_id) {
+            return true;
+        }
+    }
+    return false;
 }
 
 } // namespace gff

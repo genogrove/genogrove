@@ -261,6 +261,31 @@ TEST_F(CLIGffHandlerTest, PrintGffResultWritesRawFieldsWithoutNewline) {
     EXPECT_EQ(bare_out.str(), "chr1\t1\t2\tregion\t.\t.");
 }
 
+TEST_F(CLIGffHandlerTest, RecordIdIsTheIdOfTheRecordItself) {
+    gio::gff_entry entry;
+    entry.format = gio::gff_format::GTF;
+    entry.attributes["gene_id"] = {"G1"};
+    entry.attributes["transcript_id"] = {"T1"};
+    entry.type = "gene";
+    EXPECT_EQ(handlers::gff::record_id(entry), "G1");
+    entry.type = "transcript";
+    EXPECT_EQ(handlers::gff::record_id(entry), "T1");
+    // A GTF line of another type carries the id of its transcript, not its own.
+    entry.type = "Selenocysteine";
+    EXPECT_EQ(handlers::gff::record_id(entry), ".");
+
+    // GFF3: the ID, whatever the type.
+    entry.format = gio::gff_format::GFF3;
+    entry.attributes["ID"] = {"sec1"};
+    EXPECT_EQ(handlers::gff::record_id(entry), "sec1");
+
+    entry.type = "exon";
+    entry.attributes["exon_id"] = {"E1", "E9"};
+    EXPECT_EQ(handlers::gff::record_id(entry), "E1,E9");
+    entry.attributes["exon_id"] = {};
+    EXPECT_EQ(handlers::gff::record_id(entry), ".");
+}
+
 // ==========================================
 // grove_insert: the linked model
 // ==========================================
@@ -563,6 +588,10 @@ TEST_F(CLIGffHandlerTest, LinkedModelRejectsBrokenInput) {
     // An exon that names two transcripts.
     EXPECT_THROW(build(gene + transcript + gtf("transcript", 101, 900, '+', ids("G1", "T2")) +
                        gtf("exon", 101, 200, '+', ids("G1", "T1") + " transcript_id \"T2\";")),
+                 std::runtime_error);
+    // One line in GFF3 syntax in a GTF file: its id would be read by the wrong rule.
+    EXPECT_THROW(build(gene + "chr1\ttest\ttranscript\t101\t900\t.\t+\t.\t"
+                              "transcript_id=T1;gene_id=G1\n" + exon),
                  std::runtime_error);
     // A gene or transcript line with no id: nothing could name it.
     EXPECT_THROW(build(gene + gtf("transcript", 101, 900, '+', ids("G1"))), std::runtime_error);
