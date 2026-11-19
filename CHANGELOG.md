@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`idx` builds a linked model from GFF/GTF input (breaking for GFF indexes)**: genes, transcripts and other feature types are indexed keys; each distinct exon is one external key shared by its transcripts; `CDS`, UTR and codon lines are list entries on their transcript. Structure edges (`transcript`, `first_exon`, `next_exon:T1,T2`, `child`) connect them, and a gene or transcript with no line is made from its child lines. The `.gg` payload tag for GFF changes from `0x02` to `0x03`; an old flat GFF index is rejected and must be re-created. ([#664](https://github.com/genogrove/genogrove/issues/664), [#665](https://github.com/genogrove/genogrove/pull/665))
+
 ## [0.27.3] - 2026-11-18
 
 ### Changed
