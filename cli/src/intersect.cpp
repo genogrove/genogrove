@@ -132,25 +132,37 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
 template <handlers::interval_queryable grove_t, typename print_fn>
 void run_intersect(grove_t& grove, const std::string& queryfile,
                    gio::filetype query_type, std::ostream& out, print_fn print,
-                   std::size_t max_hops = 0, direction dir = direction::both) {
+                   std::size_t max_hops = 0, direction dir = direction::both,
+                   bool exons = false) {
     auto handle = [&](gdt::interval iv, const std::string& index) {
         // Bind the query_result to a local: get_keys() returns a reference into
         // it, so iterating grove.intersect(...).get_keys() directly would dangle
         // once the temporary is destroyed at the end of the range expression.
         auto results = grove.intersect(iv, index);
         const auto& seeds = results.get_keys();
+        // The row of one overlap. With --exons a GFF transcript also gets the
+        // rows of its exons; no other payload type has an exon chain.
+        auto print_hit = [&](const auto* key) {
+            if constexpr (std::is_same_v<std::remove_cvref_t<decltype(key->get_data())>,
+                                         gio::gff_entry>) {
+                if (exons) {
+                    handlers::gff::print_gff_hit_with_exons(out, grove, key, iv);
+                    return;
+                }
+            }
+            print(out, key->get_data());
+            out << '\n';
+        };
         if (max_hops == 0) {
             for (auto* result : seeds) {
-                print(out, result->get_data());
-                out << '\n';
+                print_hit(result);
             }
             return;
         }
         const auto reached = walk_links(grove, seeds, max_hops, dir);
         auto r = reached.begin();
         for (std::size_t i = 0; i < seeds.size(); ++i) {
-            print(out, seeds[i]->get_data());
-            out << '\n';
+            print_hit(seeds[i]);
             for (; r != reached.end() && r->seed == i; ++r) {
                 out << index << '\t' << iv.get_start() << '\t' << iv.get_end() + 1 << '\t';
                 print(out, seeds[i]->get_data());
@@ -177,7 +189,7 @@ template <typename payload_t, typename print_fn>
 void query_index(const std::string& index_path, std::ifstream& in, bool in_place,
                  std::streamoff data_offset, const std::string& queryfile,
                  gio::filetype query_filetype, std::ostream& out, print_fn print,
-                 std::size_t max_hops, direction dir) {
+                 std::size_t max_hops, direction dir, bool exons) {
     if(in_place) {
         // grove_view only knows the edges of blocks it has paged in, and the
         // .gg directory carries no edge total, so an index built without
@@ -191,7 +203,7 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
         }
         auto grove = ggs::grove_view<gdt::interval, payload_t, std::string>::open(
             index_path, data_offset);
-        run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir);
+        run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir, exons);
     } else {
         auto grove = ggs::grove<gdt::interval, payload_t, std::string>::deserialize(in);
         if(max_hops > 0 && grove.edge_count() == 0) {
@@ -199,7 +211,7 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
                 "Error: --hops requires an index built with 'idx --links' "
                 "(no edges in " + index_path + ")");
         }
-        run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir);
+        run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir, exons);
     }
 }
 
@@ -230,6 +242,10 @@ cxxopts::Options intersect::build_options() {
              cxxopts::value<std::string>()->default_value("0"))
             ("direction", "Which edges --hops follows: out, in, or both",
              cxxopts::value<std::string>()->default_value("both"))
+            ("exons", "For a GFF/GTF index or target: after each overlapping "
+                      "transcript, report its exons that overlap the query (with "
+                      "the transcript id and the exon's rank, 1 = 5' exon), or "
+                      "mark the transcript 'intron' when none does")
             ("h,help", "Print the help")
             ;
     options.parse_positional({"queryfile", "targetfile"});
@@ -350,6 +366,10 @@ void intersect::execute(const cxxopts::ParseResult& args) {
             "Error: query file must be BED, GFF, GTF, or VCF");
     }
 
+    const bool exons = args.count("exons") != 0;
+    static constexpr const char* exons_needs_gff =
+        "Error: --exons needs a GFF/GTF index (-i) or target (-t); a BED record has no exons";
+
     // validate() guarantees at least one of -i / -t is present; when both are
     // given, the explicit index wins.
     if(args.count("indexfile")) {
@@ -367,13 +387,16 @@ void intersect::execute(const cxxopts::ParseResult& args) {
         const auto dir = parse_direction(args["direction"].as<std::string>());
 
         if(header.payload_type == gio::gg_payload_type::BED) {
+            if(exons) {
+                throw std::runtime_error(exons_needs_gff);
+            }
             query_index<gio::bed_entry>(index_path, in, in_place, data_offset,
                                         queryfile, query_filetype, *outputStream,
-                                        handlers::bed::print_bed_result, max_hops, dir);
+                                        handlers::bed::print_bed_result, max_hops, dir, false);
         } else {  // GFF — gg_header::read() rejects any other value
             query_index<gio::gff_entry>(index_path, in, in_place, data_offset,
                                         queryfile, query_filetype, *outputStream,
-                                        handlers::gff::print_gff_result, max_hops, dir);
+                                        handlers::gff::print_gff_result, max_hops, dir, exons);
         }
     } else {
         const std::string targetfile = args["targetfile"].as<std::string>();
@@ -381,6 +404,9 @@ void intersect::execute(const cxxopts::ParseResult& args) {
             std::get<0>(gio::filetype_detector::detect_filetype(targetfile));
 
         if(target_filetype == gio::filetype::BED) {
+            if(exons) {
+                throw std::runtime_error(exons_needs_gff);
+            }
             ggs::grove<gdt::interval, gio::bed_entry, std::string> grove(k);
             handlers::bed::grove_insert(grove, targetfile);
             run_intersect(grove, queryfile, query_filetype, *outputStream,
@@ -389,7 +415,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
             ggs::grove<gdt::interval, gio::gff_entry, std::string> grove(k);
             handlers::gff::grove_insert(grove, targetfile);
             run_intersect(grove, queryfile, query_filetype, *outputStream,
-                          handlers::gff::print_gff_result);
+                          handlers::gff::print_gff_result, 0, direction::both, exons);
         } else {
             throw std::runtime_error(
                 "Error: unsupported target format (only BED, GFF, and GTF are supported)");

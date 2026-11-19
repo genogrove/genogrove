@@ -242,9 +242,23 @@ TEST_F(CLIGffHandlerTest, PrintGffResultWritesRawFieldsWithoutNewline) {
     entry.seqid = "chr1";
     entry.start = 101;
     entry.end = 500;
+    entry.type = "gene";
+    entry.strand = '-';
+    entry.format = gio::gff_format::GTF;
+    entry.attributes["gene_id"] = {"G1"};
     std::ostringstream out;
     handlers::gff::print_gff_result(out, entry);
-    EXPECT_EQ(out.str(), "chr1\t101\t500");
+    EXPECT_EQ(out.str(), "chr1\t101\t500\tgene\tG1\t-");
+
+    // No id and no strand: a "." each.
+    gio::gff_entry bare;
+    bare.seqid = "chr1";
+    bare.start = 1;
+    bare.end = 2;
+    bare.type = "region";
+    std::ostringstream bare_out;
+    handlers::gff::print_gff_result(bare_out, bare);
+    EXPECT_EQ(bare_out.str(), "chr1\t1\t2\tregion\t.\t.");
 }
 
 // ==========================================
@@ -663,4 +677,99 @@ TEST_F(CLIGffHandlerTest, IsStructureEdgeMatchesWordsExactlyAndThePrefix) {
     EXPECT_FALSE(handlers::gff::is_structure_edge("transcription_factor"));
     EXPECT_FALSE(handlers::gff::is_structure_edge("next_exons"));
     EXPECT_FALSE(handlers::gff::is_structure_edge("regulates"));
+}
+
+// ==========================================
+// isec --exons: the rows of one hit
+// ==========================================
+
+namespace {
+// The rows `isec --exons` prints for one hit and a query at one position.
+std::string exon_rows(gff_grove& grove, key_ptr hit, std::size_t position) {
+    std::ostringstream out;
+    handlers::gff::print_gff_hit_with_exons(out, grove, hit, gdt::interval(position, position));
+    return out.str();
+}
+} // namespace
+
+TEST_F(CLIGffHandlerTest, ExonRowsGiveTheExonItsTranscriptAndItsRank) {
+    write_file(tmp_gff, two_transcripts());
+    gff_grove grove(3);
+    handlers::gff::grove_insert(grove, tmp_gff.string());
+    auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
+    auto* t2 = find_key(grove, "transcript", "transcript_id", "T2");
+    ASSERT_NE(t1, nullptr);
+    ASSERT_NE(t2, nullptr);
+
+    // E3 (801-900) is the third exon of T1 and the second exon of T2.
+    EXPECT_EQ(exon_rows(grove, t1, 850),
+              "chr1\t101\t900\ttranscript\tT1\t+\n"
+              "chr1\t801\t900\texon\tE3\t+\tT1\t3\n");
+    EXPECT_EQ(exon_rows(grove, t2, 850),
+              "chr1\t101\t900\ttranscript\tT2\t+\n"
+              "chr1\t801\t900\texon\tE3\t+\tT2\t2\n");
+    // 350 is in E2 for T1; T2 has no exon there.
+    EXPECT_EQ(exon_rows(grove, t1, 350),
+              "chr1\t101\t900\ttranscript\tT1\t+\n"
+              "chr1\t301\t400\texon\tE2\t+\tT1\t2\n");
+    EXPECT_EQ(exon_rows(grove, t2, 350), "chr1\t101\t900\ttranscript\tT2\t+\tintron\n");
+}
+
+TEST_F(CLIGffHandlerTest, ExonRowsRankFromTheFivePrimeEndOnTheMinusStrand) {
+    write_file(tmp_gff,
+               gtf("gene", 101, 900, '-', ids("G1")) +
+               gtf("transcript", 101, 900, '-', ids("G1", "T1")) +
+               gtf("exon", 101, 200, '-', ids("G1", "T1", "left")) +
+               gtf("exon", 301, 400, '-', ids("G1", "T1", "middle")) +
+               gtf("exon", 801, 900, '-', ids("G1", "T1", "right")));
+    gff_grove grove(3);
+    handlers::gff::grove_insert(grove, tmp_gff.string());
+    auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
+    ASSERT_NE(t1, nullptr);
+
+    EXPECT_EQ(exon_rows(grove, t1, 150),
+              "chr1\t101\t900\ttranscript\tT1\t-\n"
+              "chr1\t101\t200\texon\tleft\t-\tT1\t3\n");
+}
+
+TEST_F(CLIGffHandlerTest, ExonRowsLeaveAGeneAndAnExonlessTranscriptAsPlainRows) {
+    write_file(tmp_gff,
+               gtf("gene", 101, 400, '+', ids("G1")) +
+               gtf("transcript", 101, 400, '+', ids("G1", "T1")) +
+               gtf("CDS", 151, 200, '+', ids("G1", "T1"), "0"));
+    gff_grove grove(3);
+    handlers::gff::grove_insert(grove, tmp_gff.string());
+    auto* gene = find_key(grove, "gene", "gene_id", "G1");
+    auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
+    ASSERT_NE(gene, nullptr);
+    ASSERT_NE(t1, nullptr);
+
+    EXPECT_EQ(exon_rows(grove, gene, 160), "chr1\t101\t400\tgene\tG1\t+\n");
+    // No exon lines: there is no chain, so "intron" would be a wrong claim.
+    EXPECT_EQ(exon_rows(grove, t1, 160), "chr1\t101\t400\ttranscript\tT1\t+\n");
+}
+
+TEST_F(CLIGffHandlerTest, ExonRowsJoinTheIdsOfASharedExon) {
+    write_file(tmp_gff,
+               gtf("gene", 101, 200, '+', ids("G1")) +
+               gtf("transcript", 101, 200, '+', ids("G1", "T1")) +
+               gtf("exon", 101, 200, '+', ids("G1", "T1", "E1")) +
+               gtf("transcript", 101, 200, '+', ids("G1", "T2")) +
+               gtf("exon", 101, 200, '+', ids("G1", "T2", "E9")));
+    gff_grove grove(3);
+    handlers::gff::grove_insert(grove, tmp_gff.string());
+    auto* t2 = find_key(grove, "transcript", "transcript_id", "T2");
+    ASSERT_NE(t2, nullptr);
+
+    EXPECT_EQ(exon_rows(grove, t2, 150),
+              "chr1\t101\t200\ttranscript\tT2\t+\n"
+              "chr1\t101\t200\texon\tE1,E9\t+\tT2\t1\n");
+}
+
+TEST_F(CLIGffHandlerTest, EdgeNamesTranscriptMatchesAWholeId) {
+    EXPECT_TRUE(handlers::gff::edge_names_transcript("next_exon:T1,T10", "T1"));
+    EXPECT_TRUE(handlers::gff::edge_names_transcript("next_exon:T1,T10", "T10"));
+    EXPECT_FALSE(handlers::gff::edge_names_transcript("next_exon:T1,T10", "T"));
+    EXPECT_FALSE(handlers::gff::edge_names_transcript("next_exon:T1,T10", "T100"));
+    EXPECT_FALSE(handlers::gff::edge_names_transcript("first_exon", "first_exon"));
 }

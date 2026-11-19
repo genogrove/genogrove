@@ -10,6 +10,7 @@
 #include <iterator>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -393,6 +394,32 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
 bool is_structure_edge(std::string_view text) {
     return text == edge_transcript || text == edge_first_exon ||
            text.starts_with(edge_next_exon_prefix);
+}
+
+std::string record_id(const gio::gff_entry& payload) {
+    const auto& attributes = payload.attributes;
+    if(const auto ids = attributes.find("exon_id");
+       payload.type == "exon" && ids != attributes.end()) {
+        std::string joined;
+        for(const auto& id : ids->second) {
+            joined += (joined.empty() ? "" : ",") + id;
+        }
+        return joined;
+    }
+    // The builder names a gene and a transcript the same way (see add_feature).
+    const std::string_view tag =
+        payload.is_gff3() ? "ID" : (payload.type == "gene" ? "gene_id" : "transcript_id");
+    return first_value(payload, tag).value_or(".");
+}
+
+bool edge_names_transcript(std::string_view edge_text, std::string_view transcript_id) {
+    if(!edge_text.starts_with(edge_next_exon_prefix)) {
+        return false;
+    }
+    edge_text.remove_prefix(edge_next_exon_prefix.size());
+    return std::ranges::any_of(std::views::split(edge_text, ','), [&](auto&& id) {
+        return std::string_view(id.begin(), id.end()) == transcript_id;
+    });
 }
 
 } // namespace gff
