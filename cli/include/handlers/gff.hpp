@@ -24,53 +24,26 @@ namespace gio = genogrove::io;
 // GFF/GTF links match on a chosen attribute value. See handlers/name_map.hpp.
 using name_to_key_map = handlers::name_to_key_map<gio::gff_entry>;
 
-// Edge data of the structure edges. A user link (`idx --links`) carries the
-// user's text or none, so these words tell the two apart.
-inline constexpr std::string_view edge_transcript = "transcript";   // gene -> transcript
-inline constexpr std::string_view edge_first_exon = "first_exon";   // transcript -> its 5' exon
-inline constexpr std::string_view edge_next_exon_prefix = "next_exon:";  // exon -> next exon, then "T1,T2"
+// Edge data of the structure edges.
+inline constexpr std::string_view edge_transcript = "transcript";        // gene -> transcript
+inline constexpr std::string_view edge_first_exon = "first_exon";        // transcript -> 5' exon
+inline constexpr std::string_view edge_next_exon_prefix = "next_exon:";  // exon -> exon, + "T1,T2"
 
-// True for the edge data of a structure edge: one of the two words, or text
-// that starts with edge_next_exon_prefix. A user link must not carry such text.
+// True for the edge data of a structure edge. A user link must not carry it.
 [[nodiscard]] bool is_structure_edge(std::string_view text);
 
 // Build the linked model of a GFF/GTF file in an empty grove:
-//   - `gene` and `transcript` lines and every other feature type: indexed keys;
+//   - genes, transcripts and other feature types: indexed keys;
 //   - exons: external keys, one per distinct (seqid, start, end, strand);
-//   - CDS, UTR and codon lines: list entries on their transcript record
-//     ("start-end", CDS as "start-end:phase", file coordinates);
-//   - edges gene -> transcript -> first exon -> next exon in 5' to 3' order,
-//     with one exon -> exon edge per pair shared by its transcripts.
-// The file must have the layout of a GENCODE file: a line for every gene and
-// every transcript (types `gene` and `transcript`), and exactly one transcript
-// per exon, CDS, UTR or codon line (GTF transcript_id, GFF3 Parent). Lines may
-// come in any order: the indexed keys are collected, sorted and bulk-inserted
-// after the file is read. The file is GFF3 or GTF as a whole, by its first
-// line that has attributes.
+//   - CDS, UTR and codon lines: list entries on their transcript record;
+//   - edges gene -> transcript -> first exon -> next exon, 5' to 3'.
+// The file must have a line for every gene and every transcript, and one
+// transcript per exon, CDS, UTR or codon line (the layout of a GENCODE file).
+// Lines may come in any order.
 //
-// What a record holds:
-//   - a shared exon: the attributes all its lines agree on, never
-//     transcript_id / Parent, and every exon_id of its lines (sorted). Its
-//     source, score and phase are those of its first line in the file. An
-//     exon with no exon_id gets "seqid:start-end:strand";
-//   - a part list: one entry per line, in file order; a repeated line is a
-//     repeated entry.
-//
-// Throws std::runtime_error for:
-//   - a layout that is not supported: an exon, CDS, UTR or codon line that
-//     does not name exactly one transcript, a gene or transcript line with no
-//     id, a transcript with no transcript line, a transcript with no gene line;
-//   - the same id on two gene lines or on two transcript lines;
-//   - a transcript whose lines, its own included, are on different
-//     chromosomes or strands, or a transcript on another chromosome than its
-//     gene;
-//   - a transcript id with a comma (it separates the ids on an exon edge);
-//   - a transcript line with an attribute named like one of its part lists.
-//
-// When name_map is non-null, every key's `name_tag` attribute value is
-// recorded with its key pointer for `idx --links` resolution. An indexed
-// record without `name_tag` throws, as does a value shared by two keys. An
-// exon without the tag is left out of the map.
+// Throws std::runtime_error for another layout and for records that contradict
+// each other. With a name_map, each key's `name_tag` value is recorded for
+// `idx --links`; an indexed record without the tag, or a repeated value, throws.
 void grove_insert(
     ggs::grove<gdt::interval, gio::gff_entry, std::string>& grove,
     const std::string& filepath,

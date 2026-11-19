@@ -25,10 +25,30 @@ namespace {
 using grove_t = ggs::grove<gdt::interval, gio::gff_entry, std::string>;
 using key_ptr = gdt::key<gdt::interval, gio::gff_entry>*;
 using attribute_map = decltype(gio::gff_entry::attributes);
+using index_pair = std::pair<std::size_t, std::size_t>;
 
-// Column-3 types that are stored as list entries on their transcript. The
-// spellings differ by source: GTF 2.2 (5UTR), GENCODE GTF (UTR), Ensembl GTF
-// (five_prime_utr) and GFF3 (five_prime_UTR).
+struct transcript_state {
+    std::optional<std::size_t> line; // its record in gff_model::features
+    bool placed = false;             // a child line set seqid and strand
+    std::string seqid;
+    std::optional<char> strand;
+    std::optional<std::string> protein_id;
+    std::vector<std::size_t> exons; // indexes into gff_model::exon_keys, each once
+    std::map<std::string, std::vector<std::string>> parts; // column-3 type -> entries
+};
+
+// What the file says, collected line by line before anything is indexed.
+struct gff_model {
+    bool gff3 = false;
+    std::vector<gio::gff_entry> features;                  // the indexed keys to be
+    std::map<std::string, std::size_t, std::less<>> genes; // gene id -> index into features
+    std::map<std::string, transcript_state, std::less<>> transcripts;
+    std::vector<key_ptr> exon_keys; // one external key per distinct exon
+    std::map<std::tuple<std::string, std::size_t, std::size_t, char>, std::size_t> exon_index;
+};
+
+// The spellings differ by source: GTF 2.2 (5UTR), GENCODE GTF (UTR), Ensembl
+// GTF (five_prime_utr) and GFF3 (five_prime_UTR).
 bool is_transcript_part(std::string_view type) {
     static constexpr std::array<std::string_view, 10> parts = {"CDS",
                                                                "start_codon",
@@ -43,8 +63,7 @@ bool is_transcript_part(std::string_view type) {
     return std::ranges::find(parts, type) != parts.end();
 }
 
-// An empty value counts as absent: GTF 2.2 writes `transcript_id ""` for a
-// line that is not part of a transcript.
+// GTF 2.2 writes an empty value for "none", so empty counts as absent.
 std::optional<std::string> first_value(const gio::gff_entry& entry, std::string_view tag) {
     const auto it = entry.attributes.find(tag);
     if(it == entry.attributes.end() || it->second.empty() || it->second.front().empty()) {
@@ -57,176 +76,158 @@ std::string place(const gio::gff_entry& entry) {
     return entry.seqid + ":" + std::to_string(entry.start) + "-" + std::to_string(entry.end);
 }
 
-// A layout the builder does not read stops here, so that no record is guessed.
 [[noreturn]] void unsupported(const std::string& what) {
     throw std::runtime_error("Error: " + what +
                              ". For now idx reads only GFF/GTF files with a line for every gene "
                              "and every transcript (the layout of a GENCODE file)");
 }
 
-// Everything the file says about one transcript, collected while reading.
-struct transcript_state {
-    std::optional<std::size_t> line; // its own record in `features`
-    bool placed = false;             // a child line set seqid and strand
-    std::string seqid;
-    std::optional<char> strand;
-    std::optional<std::string> protein_id;                 // from the first CDS line that has one
-    std::vector<std::size_t> exons;                        // indexes into `exon_keys`, each once
-    std::map<std::string, std::vector<std::string>> parts; // column-3 type -> entries
-};
+// The one record a line belongs to: its only GFF3 Parent, or the only value of
+// the GTF tag. The gff_entry accessors decide the format line by line, which
+// is wrong for a line with no attributes, so they are not used here.
+std::optional<std::string> owner_of(bool gff3, const gio::gff_entry& entry,
+                                    std::string_view gtf_tag) {
+    std::vector<std::string> ids;
+    if(gff3) {
+        ids = entry.get_parent_ids();
+    } else if(const auto it = entry.attributes.find(gtf_tag); it != entry.attributes.end()) {
+        ids = it->second;
+    }
+    std::erase(ids, std::string());
+    if(ids.empty() || std::ranges::count(ids, ids.front()) != std::ssize(ids)) {
+        return std::nullopt;
+    }
+    return std::move(ids.front());
+}
 
-} // namespace
+// A gene, a transcript or any type that is not an exon or a transcript part.
+void add_feature(gff_model& model, const gio::gff_entry& entry) {
+    const std::size_t index = model.features.size();
+    model.features.push_back(entry);
+    const bool is_gene = entry.type == "gene";
+    if(!is_gene && entry.type != "transcript") {
+        return;
+    }
+    const std::string_view id_tag = model.gff3 ? "ID" : (is_gene ? "gene_id" : "transcript_id");
+    const auto id = first_value(entry, id_tag);
+    if(!id) {
+        unsupported(entry.type + " line at " + place(entry) + " has no " + std::string(id_tag));
+    }
+    bool fresh = false;
+    if(is_gene) {
+        fresh = model.genes.emplace(*id, index).second;
+    } else {
+        auto& transcript = model.transcripts[*id];
+        fresh = !transcript.line;
+        transcript.line = index;
+    }
+    if(!fresh) {
+        throw std::runtime_error("Error: the id '" + *id + "' is on a second " + entry.type +
+                                 " line at " + place(entry));
+    }
+}
 
-void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* name_map,
-                  std::string_view name_tag) {
-    gio::gff_reader reader(filepath);
-
-    // Records that become indexed keys: genes, transcripts and every type that
-    // is neither an exon nor a transcript part. Inserted after the whole file
-    // is read, so the lines can come in any order.
-    std::vector<gio::gff_entry> features;
-    std::map<std::string, std::size_t, std::less<>> genes; // gene id -> index into `features`
-    std::map<std::string, transcript_state, std::less<>> transcripts;
-    // One external key per distinct exon (seqid, start, end, strand).
-    std::vector<key_ptr> exon_keys;
-    std::map<std::tuple<std::string, std::size_t, std::size_t, char>, std::size_t> exon_index;
-    // The format of the file: that of its first line with attributes. A line
-    // with no attributes (column 9 empty or ".") has no format of its own; the
-    // reader reports GFF3 for a ".", so the attributes decide, not the line.
-    bool gff3 = false;
-    bool format_known = false;
-    // The one record a line belongs to: its only GFF3 Parent, or the only
-    // value of the GTF tag. A line that names none, or two, has no owner. The
-    // gff_entry accessors are not used: they decide the format line by line.
-    const auto owner_of = [&gff3](const gio::gff_entry& entry,
-                                  std::string_view gtf_tag) -> std::optional<std::string> {
-        std::vector<std::string> ids;
-        if(gff3) {
-            ids = entry.get_parent_ids();
-        } else if(const auto it = entry.attributes.find(gtf_tag); it != entry.attributes.end()) {
-            ids = it->second;
-        }
-        std::erase(ids, std::string()); // GTF 2.2 writes "" for "none"
-        if(ids.empty() || std::ranges::count(ids, ids.front()) != std::ssize(ids)) {
-            return std::nullopt;
-        }
-        return std::move(ids.front());
-    };
-
-    for(const auto& entry : reader) {
-        if(!format_known && !entry.attributes.empty()) {
-            gff3 = entry.is_gff3();
-            format_known = true;
-        }
-        const bool is_exon = entry.type == "exon";
-
-        if(!is_exon && !is_transcript_part(entry.type)) {
-            const std::size_t index = features.size();
-            features.push_back(entry);
-            const bool is_gene = entry.type == "gene";
-            if(!is_gene && entry.type != "transcript") {
-                continue; // any other type: a plain indexed key
-            }
-            const std::string_view id_tag = gff3 ? "ID" : (is_gene ? "gene_id" : "transcript_id");
-            const auto id = first_value(entry, id_tag);
-            if(!id) {
-                // Without an id no line can name it, so it would stay unlinked.
-                unsupported(entry.type + " line at " + place(entry) + " has no " +
-                            std::string(id_tag));
-            }
-            bool fresh = false;
-            if(is_gene) {
-                fresh = genes.emplace(*id, index).second;
-            } else {
-                auto& transcript = transcripts[*id];
-                fresh = !transcript.line;
-                transcript.line = index;
-            }
-            if(!fresh) {
-                throw std::runtime_error("Error: the id '" + *id + "' is on a second " +
-                                         entry.type + " line at " + place(entry));
-            }
-            continue;
-        }
-
-        // An exon or a transcript part: find the transcript it belongs to.
-        const auto owner = owner_of(entry, "transcript_id");
-        if(!owner) {
-            unsupported(entry.type + " line at " + place(entry) +
-                        " does not name exactly one transcript");
-        }
-        auto& transcript = transcripts[*owner];
-        if(!transcript.placed) {
-            transcript.placed = true;
-            transcript.seqid = entry.seqid;
-            transcript.strand = entry.strand;
-        } else if(transcript.seqid != entry.seqid || transcript.strand != entry.strand) {
-            throw std::runtime_error("Error: transcript '" + *owner +
-                                     "' has lines on different chromosomes or strands (" +
-                                     entry.type + " at " + place(entry) + ")");
-        }
-
-        if(is_exon) {
-            // The transcript is known from the link, so the record does not
-            // repeat it; what else the lines of a shared exon disagree on
-            // (exon_number, a GFF3 ID, ...) is dropped below.
-            gio::gff_entry stored = entry;
-            stored.attributes.erase("transcript_id");
-            stored.attributes.erase("Parent");
-            const auto [it, fresh] = exon_index.try_emplace(
-                {entry.seqid, entry.start, entry.end, entry.strand.value_or('.')},
-                exon_keys.size());
-            if(fresh) {
-                exon_keys.push_back(grove.add_external_key(entry.to_interval(), std::move(stored)));
-            } else {
-                attribute_map& kept = exon_keys[it->second]->get_data().attributes;
-                // exon_id is the tag that addresses an exon, and annotations
-                // give one position several ids (the same exon in another
-                // reading frame or gene): the record keeps every one of them,
-                // sorted, so the record does not depend on the line order.
-                std::vector<std::string> exon_ids;
-                for(const attribute_map* from : {&kept, &stored.attributes}) {
-                    const auto ids = from->find("exon_id");
-                    if(ids == from->end()) {
-                        continue;
-                    }
-                    for(const auto& id : ids->second) {
-                        if(std::ranges::find(exon_ids, id) == exon_ids.end()) {
-                            exon_ids.push_back(id);
-                        }
-                    }
-                }
-                std::ranges::sort(exon_ids);
-                std::erase_if(kept, [&stored](const auto& attribute) {
-                    const auto other = stored.attributes.find(attribute.first);
-                    return other == stored.attributes.end() || other->second != attribute.second;
-                });
-                if(!exon_ids.empty()) {
-                    kept["exon_id"] = std::move(exon_ids);
-                }
-            }
-            if(std::ranges::find(transcript.exons, it->second) == transcript.exons.end()) {
-                transcript.exons.push_back(it->second);
-            }
-            continue;
-        }
-
-        std::string item = std::to_string(entry.start) + "-" + std::to_string(entry.end);
-        if(entry.type == "CDS") {
-            if(entry.phase) {
-                item += ":" + std::to_string(*entry.phase);
-            }
-            if(!transcript.protein_id) {
-                transcript.protein_id = first_value(entry, "protein_id");
-            }
-        }
-        transcript.parts[entry.type].push_back(std::move(item));
+// Returns the index of the exon in model.exon_keys. The first line at a
+// position makes the key; a later line reduces its record to what both agree on.
+std::size_t add_exon(grove_t& grove, gff_model& model, const gio::gff_entry& entry) {
+    gio::gff_entry stored = entry;
+    stored.attributes.erase("transcript_id"); // the edge from the transcript says it
+    stored.attributes.erase("Parent");
+    const auto [it, fresh] = model.exon_index.try_emplace(
+        {entry.seqid, entry.start, entry.end, entry.strand.value_or('.')}, model.exon_keys.size());
+    if(fresh) {
+        model.exon_keys.push_back(grove.add_external_key(entry.to_interval(), std::move(stored)));
+        return it->second;
     }
 
-    // ---- The file is read: complete the transcripts and find their genes ----
+    attribute_map& kept = model.exon_keys[it->second]->get_data().attributes;
+    // exon_id addresses an exon, and one position can have several ids (the
+    // same exon in another reading frame or gene), so every id is kept.
+    std::vector<std::string> exon_ids;
+    for(const attribute_map* from : {&kept, &stored.attributes}) {
+        const auto ids = from->find("exon_id");
+        if(ids == from->end()) {
+            continue;
+        }
+        for(const auto& id : ids->second) {
+            if(std::ranges::find(exon_ids, id) == exon_ids.end()) {
+                exon_ids.push_back(id);
+            }
+        }
+    }
+    std::ranges::sort(exon_ids); // the record must not depend on the line order
+    std::erase_if(kept, [&stored](const auto& attribute) {
+        const auto other = stored.attributes.find(attribute.first);
+        return other == stored.attributes.end() || other->second != attribute.second;
+    });
+    if(!exon_ids.empty()) {
+        kept["exon_id"] = std::move(exon_ids);
+    }
+    return it->second;
+}
 
-    std::vector<std::pair<std::size_t, std::size_t>> gene_edges; // (gene, transcript) in `features`
-    for(auto& [id, transcript] : transcripts) {
+// An exon, CDS, UTR or codon line: file it under its transcript.
+void add_transcript_child(grove_t& grove, gff_model& model, const gio::gff_entry& entry) {
+    const auto owner = owner_of(model.gff3, entry, "transcript_id");
+    if(!owner) {
+        unsupported(entry.type + " line at " + place(entry) +
+                    " does not name exactly one transcript");
+    }
+    auto& transcript = model.transcripts[*owner];
+    if(!transcript.placed) {
+        transcript.placed = true;
+        transcript.seqid = entry.seqid;
+        transcript.strand = entry.strand;
+    } else if(transcript.seqid != entry.seqid || transcript.strand != entry.strand) {
+        throw std::runtime_error("Error: transcript '" + *owner +
+                                 "' has lines on different chromosomes or strands (" + entry.type +
+                                 " at " + place(entry) + ")");
+    }
+
+    if(entry.type == "exon") {
+        const std::size_t exon = add_exon(grove, model, entry);
+        if(std::ranges::find(transcript.exons, exon) == transcript.exons.end()) {
+            transcript.exons.push_back(exon);
+        }
+        return;
+    }
+    std::string item = std::to_string(entry.start) + "-" + std::to_string(entry.end);
+    if(entry.type == "CDS") {
+        if(entry.phase) {
+            item += ":" + std::to_string(*entry.phase);
+        }
+        if(!transcript.protein_id) {
+            transcript.protein_id = first_value(entry, "protein_id");
+        }
+    }
+    transcript.parts[entry.type].push_back(std::move(item));
+}
+
+gff_model read_file(grove_t& grove, const std::string& filepath) {
+    gio::gff_reader reader(filepath);
+    gff_model model;
+    bool format_known = false;
+    for(const auto& entry : reader) {
+        // The reader reports GFF3 for a column 9 of ".", so only a line that
+        // has attributes can say what the file is.
+        if(!format_known && !entry.attributes.empty()) {
+            model.gff3 = entry.is_gff3();
+            format_known = true;
+        }
+        if(entry.type == "exon" || is_transcript_part(entry.type)) {
+            add_transcript_child(grove, model, entry);
+        } else {
+            add_feature(model, entry);
+        }
+    }
+    return model;
+}
+
+// Checks each transcript against its own line and its gene, and moves its part
+// lists onto its record. Returns the (gene, transcript) pairs in model.features.
+std::vector<index_pair> complete_transcripts(gff_model& model) {
+    std::vector<index_pair> gene_edges;
+    for(auto& [id, transcript] : model.transcripts) {
         if(id.find(',') != std::string::npos) {
             throw std::runtime_error("Error: transcript id '" + id +
                                      "' contains a comma, which separates the "
@@ -236,9 +237,7 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
             unsupported("transcript '" + id + "' on " + transcript.seqid +
                         " has exon, CDS, UTR or codon lines but no transcript line");
         }
-        gio::gff_entry& record = features[*transcript.line];
-        // The child lines agree with each other; they must agree with the
-        // transcript line too, or the chain would run on another strand.
+        gio::gff_entry& record = model.features[*transcript.line];
         if(transcript.placed &&
            (record.seqid != transcript.seqid || record.strand != transcript.strand)) {
             throw std::runtime_error("Error: transcript '" + id + "' at " + place(record) +
@@ -258,28 +257,31 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
                                           std::vector<std::string>{*transcript.protein_id});
         }
 
-        const auto gene_id = owner_of(record, "gene_id");
-        const auto gene = gene_id ? genes.find(*gene_id) : genes.end();
-        if(gene == genes.end()) {
+        const auto gene_id = owner_of(model.gff3, record, "gene_id");
+        const auto gene = gene_id ? model.genes.find(*gene_id) : model.genes.end();
+        if(gene == model.genes.end()) {
             unsupported("transcript '" + id + "' at " + place(record) + " has no gene line");
         }
-        if(features[gene->second].seqid != record.seqid) {
+        if(model.features[gene->second].seqid != record.seqid) {
             throw std::runtime_error("Error: transcript '" + id + "' at " + place(record) +
                                      " is on another chromosome than its gene '" + *gene_id + "'");
         }
         gene_edges.emplace_back(gene->second, *transcript.line);
     }
+    return gene_edges;
+}
 
-    // ---- Insert the indexed keys, sorted, one bulk build per chromosome ----
-
+// Sorts the features and bulk-inserts them, one build per chromosome. Returns
+// the key of each feature, in the order of model.features (which is moved from).
+std::vector<key_ptr> insert_features(grove_t& grove, gff_model& model) {
     std::vector<gdt::interval> intervals;
-    intervals.reserve(features.size());
+    intervals.reserve(model.features.size());
     std::map<std::string, std::vector<std::size_t>> by_seqid;
-    for(std::size_t i = 0; i < features.size(); ++i) {
-        intervals.push_back(features[i].to_interval());
-        by_seqid[features[i].seqid].push_back(i);
+    for(std::size_t i = 0; i < model.features.size(); ++i) {
+        intervals.push_back(model.features[i].to_interval());
+        by_seqid[model.features[i].seqid].push_back(i);
     }
-    std::vector<key_ptr> feature_keys(features.size());
+    std::vector<key_ptr> feature_keys(model.features.size());
     for(auto& [seqid, members] : by_seqid) {
         // Stable, so records with equal intervals keep their file order.
         std::ranges::stable_sort(members, [&intervals](std::size_t a, std::size_t b) {
@@ -288,22 +290,26 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
         std::vector<std::pair<gdt::interval, gio::gff_entry>> batch;
         batch.reserve(members.size());
         for(const std::size_t i : members) {
-            batch.emplace_back(intervals[i], std::move(features[i]));
+            batch.emplace_back(intervals[i], std::move(model.features[i]));
         }
         const auto inserted = grove.insert_data(seqid, batch, ggs::sorted, ggs::bulk);
         for(std::size_t k = 0; k < members.size(); ++k) {
             feature_keys[members[k]] = inserted[k];
         }
     }
+    return feature_keys;
+}
 
-    // ---- Edges: gene -> transcript -> first exon -> next exon (5' to 3') ----
-
+// gene -> transcript -> first exon -> next exon, in 5' to 3' order.
+void add_structure_edges(grove_t& grove, gff_model& model, const std::vector<key_ptr>& feature_keys,
+                         const std::vector<index_pair>& gene_edges) {
     for(const auto& [gene, transcript] : gene_edges) {
         grove.add_edge(feature_keys[gene], feature_keys[transcript], std::string(edge_transcript));
     }
+    const auto& exon_keys = model.exon_keys;
     // One edge per pair of consecutive exons, shared by the transcripts that use it.
-    std::map<std::pair<std::size_t, std::size_t>, std::string> junctions;
-    for(auto& [id, transcript] : transcripts) {
+    std::map<index_pair, std::string> junctions;
+    for(auto& [id, transcript] : model.transcripts) {
         if(transcript.exons.empty()) {
             continue;
         }
@@ -324,9 +330,10 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
     for(const auto& [pair, users] : junctions) {
         grove.add_edge(exon_keys[pair.first], exon_keys[pair.second], users);
     }
+}
 
-    // An exon with no exon_id in the file (or only an empty one) is named by
-    // its position, so every exon has an id to print.
+// An exon with no exon_id in the file gets one from its position.
+void name_exons(const std::vector<key_ptr>& exon_keys) {
     for(const key_ptr exon : exon_keys) {
         gio::gff_entry& record = exon->get_data();
         std::vector<std::string>& ids = record.attributes["exon_id"];
@@ -335,37 +342,51 @@ void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* 
             ids.push_back(place(record) + ':' + record.strand.value_or('.'));
         }
     }
+}
 
+// An indexed record must have the tag. An exon can lose it when its lines
+// disagree (the GFF3 ID of a GENCODE exon), so an exon without it is left out.
+void fill_name_map(name_to_key_map& name_map, std::string_view name_tag,
+                   const std::vector<key_ptr>& feature_keys,
+                   const std::vector<key_ptr>& exon_keys) {
+    const auto record_name = [&](key_ptr key, bool required) {
+        const gio::gff_entry& record = key->get_data();
+        const auto it = record.attributes.find(name_tag);
+        if(it == record.attributes.end() || it->second.empty()) {
+            if(!required) {
+                return;
+            }
+            throw std::runtime_error("Error: GFF/GTF record '" + place(record) + "' has no '" +
+                                     std::string(name_tag) +
+                                     "' attribute (required by --gff-name-tag for --links)");
+        }
+        // A view into the stored record, so it lives as long as the grove.
+        const std::string_view value(it->second.front());
+        if(!name_map.emplace(value, key).second) {
+            throw std::runtime_error("Error: duplicate GFF/GTF name '" + std::string(value) +
+                                     "' for attribute '" + std::string(name_tag) +
+                                     "' (names must be unique to use --links)");
+        }
+    };
+    for(const key_ptr key : feature_keys) {
+        record_name(key, true);
+    }
+    for(const key_ptr exon : exon_keys) {
+        record_name(exon, false);
+    }
+}
+
+} // namespace
+
+void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* name_map,
+                  std::string_view name_tag) {
+    gff_model model = read_file(grove, filepath);
+    const auto gene_edges = complete_transcripts(model);
+    const auto feature_keys = insert_features(grove, model);
+    add_structure_edges(grove, model, feature_keys, gene_edges);
+    name_exons(model.exon_keys);
     if(name_map) {
-        // An indexed record must have the tag. A shared exon can lose it (its
-        // lines disagree, as with the GFF3 ID of a GENCODE exon), so an exon
-        // without it is left out: a links row that names it is an unknown name.
-        const auto record_name = [&](key_ptr key, bool required) {
-            // Resolved from the stored record, so the map's string_view points
-            // into the grove's storage and not into a temporary.
-            const gio::gff_entry& record = key->get_data();
-            const auto it = record.attributes.find(name_tag);
-            if(it == record.attributes.end() || it->second.empty()) {
-                if(!required) {
-                    return;
-                }
-                throw std::runtime_error("Error: GFF/GTF record '" + place(record) + "' has no '" +
-                                         std::string(name_tag) +
-                                         "' attribute (required by --gff-name-tag for --links)");
-            }
-            const std::string_view value(it->second.front());
-            if(!name_map->emplace(value, key).second) {
-                throw std::runtime_error("Error: duplicate GFF/GTF name '" + std::string(value) +
-                                         "' for attribute '" + std::string(name_tag) +
-                                         "' (names must be unique to use --links)");
-            }
-        };
-        for(const key_ptr key : feature_keys) {
-            record_name(key, true);
-        }
-        for(const key_ptr exon : exon_keys) {
-            record_name(exon, false);
-        }
+        fill_name_map(*name_map, name_tag, feature_keys, model.exon_keys);
     }
 }
 
