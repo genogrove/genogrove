@@ -771,6 +771,42 @@ TEST_F(CLIIntersectHopsE2ETest, HopsRejectsIndexBuiltWithoutLinks) {
     EXPECT_NE(result.output.find("idx --links"), std::string::npos) << result.output;
 }
 
+TEST_F(CLIIntersectHopsE2ETest, HopsOnAGffIndexFollowUserLinksNotTheGeneStructure) {
+    // Two genes, each with a transcript and exons, and one user link g1 -> g2.
+    // The index also has the structure edges gene -> transcript -> exon -> exon.
+    fs::path gtf = fs::temp_directory_path() / "genogrove_e2e_hops.gtf";
+    fs::path links = fs::temp_directory_path() / "genogrove_e2e_hops_links.tsv";
+    write_file(gtf,
+        "chr1\tt\tgene\t101\t400\t.\t+\t.\tgene_id \"G1\"; name \"g1\";\n"
+        "chr1\tt\ttranscript\t101\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\"; name \"t1\";\n"
+        "chr1\tt\texon\t101\t200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n"
+        "chr1\tt\texon\t301\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n"
+        "chr1\tt\tgene\t1001\t1400\t.\t+\t.\tgene_id \"G2\"; name \"g2\";\n"
+        "chr1\tt\ttranscript\t1001\t1400\t.\t+\t.\tgene_id \"G2\"; transcript_id \"T2\"; name \"t2\";\n"
+        "chr1\tt\texon\t1001\t1100\t.\t+\t.\tgene_id \"G2\"; transcript_id \"T2\";\n");
+    write_file(links, "g1\tg2\tregulates\n");
+    auto idx = run_command(cli("idx \"" + gtf.string() + "\" --links \"" + links.string() +
+                               "\" --gff-name-tag name -o \"" + tmp_index.string() + "\""));
+    ASSERT_EQ(idx.exit_code, 0) << idx.output;
+
+    write_file(hops_query, "chr1\t149\t151\n");  // hits gene G1 and transcript T1
+    const std::string gene_row = "chr1\t101\t400\tgene\tG1\t+";
+    for (const std::string& mode : {std::string(), std::string(" --in-place")}) {
+        auto result = run_command(isec_hops("--hops all" + mode));
+        EXPECT_EQ(result.exit_code, 0) << result.output;
+        // G2 is reached over the user link, in one hop.
+        EXPECT_NE(result.output.find("chr1\t149\t151\t" + gene_row +
+                                     "\tchr1\t1001\t1400\tgene\tG2\t+\t1\n"),
+                  std::string::npos) << result.output;
+        // Nothing is reached over a structure edge: no exon, and not T2 from G2.
+        EXPECT_EQ(result.output.find("exon"), std::string::npos) << result.output;
+        EXPECT_EQ(result.output.find("T2"), std::string::npos) << result.output;
+    }
+
+    fs::remove(gtf);
+    fs::remove(links);
+}
+
 TEST_F(CLIIntersectHopsE2ETest, InvalidHopsAndDirectionRejected) {
     write_file(hops_query, "chr1\t150\t250\n");
     auto result = run_command(isec_hops("--hops two"));

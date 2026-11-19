@@ -70,6 +70,13 @@ constexpr std::size_t HOPS_ALL = std::numeric_limits<std::size_t>::max();
         "Error: --direction must be one of out, in, both, got '" + s + "'");
 }
 
+// Which edges --hops follows, by their text. A GFF index also has the edges of
+// its gene structure; those are reported with --exons, so --hops skips them
+// and follows the user's links (idx --links) only.
+using edge_filter = bool (*)(const std::string&);
+bool any_edge(const std::string&) { return true; }
+bool user_link_of_gff(const std::string& text) { return !handlers::gff::is_structure_edge(text); }
+
 // One interval reached by following edges from a seed (an overlap hit).
 template <typename key_ptr>
 struct reached_key {
@@ -85,7 +92,7 @@ struct reached_key {
 template <handlers::interval_queryable grove_t, typename key_ptr>
 [[nodiscard]] std::vector<reached_key<key_ptr>> walk_links(
     grove_t& grove, const std::vector<key_ptr>& seeds, std::size_t max_hops,
-    direction dir) {
+    direction dir, edge_filter follows) {
     struct item { key_ptr key; std::size_t seed; std::size_t hops; };
     std::unordered_set<const void*> seen(seeds.begin(), seeds.end());
     std::deque<item> frontier;
@@ -106,10 +113,10 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
             }
         };
         if (dir != direction::in) {
-            for (auto* n : grove.get_neighbors(cur.key)) visit(n);
+            for (auto* n : grove.get_neighbors_if(cur.key, follows)) visit(n);
         }
         if (dir != direction::out) {
-            for (auto* n : grove.get_in_neighbors(cur.key)) visit(n);
+            for (auto* n : grove.get_in_neighbors_if(cur.key, follows)) visit(n);
         }
     }
     // Group by seed so each seed's reached rows follow its own overlap row;
@@ -134,7 +141,7 @@ template <handlers::interval_queryable grove_t, typename print_fn>
 void run_intersect(grove_t& grove, const std::string& queryfile,
                    gio::filetype query_type, std::ostream& out, print_fn print,
                    std::size_t max_hops = 0, direction dir = direction::both,
-                   bool exons = false) {
+                   bool exons = false, edge_filter follows = any_edge) {
     auto handle = [&](gdt::interval iv, const std::string& index) {
         // Bind the query_result to a local: get_keys() returns a reference into
         // it, so iterating grove.intersect(...).get_keys() directly would dangle
@@ -159,7 +166,7 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
             }
             return;
         }
-        const auto reached = walk_links(grove, seeds, max_hops, dir);
+        const auto reached = walk_links(grove, seeds, max_hops, dir, follows);
         auto r = reached.begin();
         for (std::size_t i = 0; i < seeds.size(); ++i) {
             print_hit(seeds[i]);
@@ -190,6 +197,8 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
                  std::streamoff data_offset, const std::string& queryfile,
                  gio::filetype query_filetype, std::ostream& out, print_fn print,
                  std::size_t max_hops, direction dir, bool exons) {
+    const edge_filter follows =
+        std::is_same_v<payload_t, gio::gff_entry> ? user_link_of_gff : any_edge;
     if(in_place) {
         // grove_view only knows the edges of blocks it has paged in, and the
         // .gg directory carries no edge total, so an index built without
@@ -203,15 +212,20 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
         }
         auto grove = ggs::grove_view<gdt::interval, payload_t, std::string>::open(
             index_path, data_offset);
-        run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir, exons);
+        run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir, exons,
+                      follows);
     } else {
         auto grove = ggs::grove<gdt::interval, payload_t, std::string>::deserialize(in);
+        // A GFF index always has the edges of its gene structure, so this
+        // check only catches a link-less BED index; a GFF index without user
+        // links yields no reached rows, like the in-place path.
         if(max_hops > 0 && grove.edge_count() == 0) {
             throw std::runtime_error(
                 "Error: --hops requires an index built with 'idx --links' "
                 "(no edges in " + index_path + ")");
         }
-        run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir, exons);
+        run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir, exons,
+                      follows);
     }
 }
 
@@ -235,7 +249,8 @@ cxxopts::Options intersect::build_options() {
              cxxopts::value<std::string>()->default_value("stdout"))
             ("k,order", "The order of the tree built from -t (not allowed with -i)",
              cxxopts::value<int>()->default_value(std::to_string(DEFAULT_TREE_ORDER)))
-            ("hops", "Follow the index's graph edges (idx --links) from each "
+            ("hops", "Follow the links of the index (idx --links; not the gene "
+                     "structure of a GFF/GTF index, see --exons) from each "
                      "overlapping interval up to N hops, or 'all' for the whole "
                      "connected component, and report each reached interval once "
                      "with its minimum hop count (requires -i; 0 = off)",
@@ -326,8 +341,8 @@ void intersect::validate(const cxxopts::ParseResult& args) {
             "a prebuilt index (-i) keeps the order it was built with");
     }
 
-    // A target (-t) is built in memory without links, so there is no graph to
-    // walk; edges only exist in an index written by `idx --links`.
+    // A target (-t) is built in memory without links, so --hops has nothing
+    // to follow; links only exist in an index written by `idx --links`.
     if(parse_hops(args["hops"].as<std::string>()) > 0 && !has_index) {
         throw std::runtime_error(
             "Error: --hops requires a prebuilt index (-i) built with 'idx --links'");
