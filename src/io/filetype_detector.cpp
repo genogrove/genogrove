@@ -16,6 +16,7 @@ namespace genogrove::io {
         {"bed", filetype::BED},
         {"bedgraph", filetype::BEDGRAPH},
         {"gff", filetype::GFF},
+        {"gff3", filetype::GFF},
         {"gtf", filetype::GTF},
         {"vcf", filetype::VCF},
         {"bcf", filetype::VCF},
