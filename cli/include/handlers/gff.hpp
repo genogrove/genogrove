@@ -28,8 +28,8 @@ using gff_key = gdt::key<gdt::interval, gio::gff_entry>;
 
 // The keys of a built index: `idx --links` finds its names among them.
 struct gff_keys {
-    std::vector<gff_key*> features;  // genes, transcripts and other indexed records
-    std::vector<gff_key*> exons;
+    std::vector<gff_key*> indexed;   // keys in the tree
+    std::vector<gff_key*> external;  // keys only in the graph
 };
 
 // Edge data of the structure edges.

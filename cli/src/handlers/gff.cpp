@@ -389,18 +389,18 @@ name_table table_for(std::string_view tag, const gff_keys& keys) {
         }
     };
     // A transcript line also carries its gene_id, and an exon line both ids,
-    // so each of these tags looks at one kind of record only.
-    const std::string_view only =
-        tag == "gene_id" ? "gene" : (tag == "transcript_id" ? "transcript" : "");
-    if(tag != "exon_id") {
-        for(const key_ptr key : keys.features) {
+    // so each of these tags looks at one kind of record only. The record type
+    // decides, not the list a key is in.
+    const std::string_view only = tag == "gene_id"         ? "gene"
+                                  : tag == "transcript_id" ? "transcript"
+                                  : tag == "exon_id"       ? "exon"
+                                                           : "";
+    for(const auto* list : {&keys.indexed, &keys.external}) {
+        for(const key_ptr key : *list) {
             if(only.empty() || key->get_data().type == only) {
                 add(key);
             }
         }
-    }
-    if(only.empty()) {
-        std::ranges::for_each(keys.exons, add);
     }
     return table;
 }
@@ -413,7 +413,7 @@ gff_keys grove_insert(grove_t& grove, const std::string& filepath) {
     auto feature_keys = insert_features(grove, model);
     add_structure_edges(grove, model, feature_keys, gene_edges);
     name_exons(model.exon_keys);
-    return {std::move(feature_keys), std::move(model.exon_keys)};
+    return {.indexed = std::move(feature_keys), .external = std::move(model.exon_keys)};
 }
 
 std::size_t apply_links(grove_t& grove, const std::string& links_path, const gff_keys& keys) {

@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **`isec --hops` on a GFF/GTF index follows the user's links only**: the walk skips the structure edges of the index (gene → transcript → exon → exon) and follows the links added with `idx --links`. The gene structure is reported with `--exons`. The walk also starts from the exons of an overlapping transcript that overlap the query, and a run that reached nothing prints a note. A BED index is not affected. ([#664](https://github.com/genogrove/genogrove/issues/664), [#669](https://github.com/genogrove/genogrove/pull/669))
 
+### Refactored
+- **`gff_keys` lists named by storage**: the two key lists that the GFF/GTF builder of the CLI returns are `indexed` (keys in the tree) and `external` (keys only in the graph), not `features` and `exons`. The name lookup of a links file picks its records by record type. No change in behaviour. ([#672](https://github.com/genogrove/genogrove/pull/672))
+
 ### Removed
 - **`idx --gff-name-tag`**: the tags are in the links file now (see the tag column above). The option needed one tag on every record, so an exon could not be named. ([#664](https://github.com/genogrove/genogrove/issues/664), [#670](https://github.com/genogrove/genogrove/pull/670))
 
