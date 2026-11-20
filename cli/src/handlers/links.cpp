@@ -26,13 +26,26 @@ void strip_trailing_cr(std::string& s) {
 // (source<TAB>target) or 3 (source<TAB>target<TAB>metadata). Every column must
 // be non-empty. Throws on 1 or 4+ columns, or any empty column, naming the
 // line number.
-link_row parse_row(const std::string& line, std::size_t line_num) {
-    auto fail = [line_num]() {
+link_row parse_row(std::string line, std::size_t line_num, bool tag_column) {
+    auto fail = [line_num, tag_column]() {
         return std::runtime_error(
-            "Error: malformed links TSV at line " + std::to_string(line_num) +
-            ": expected 2 or 3 tab-separated non-empty columns "
-            "(source, target, [metadata])");
+            "Error: malformed links TSV at line " + std::to_string(line_num) + ": expected " +
+            (tag_column ? "3 or 4 tab-separated non-empty columns (tagA:tagB, source, target, "
+                          "[metadata]); a GFF/GTF index needs the tag column"
+                        : "2 or 3 tab-separated non-empty columns (source, target, "
+                          "[metadata])"));
     };
+
+    link_row row;
+    row.line = line_num;
+    if (tag_column) {
+        const auto tab = line.find('\t');
+        if (tab == std::string::npos || tab == 0) {
+            throw fail();
+        }
+        row.tags.assign(line, 0, tab);
+        line.erase(0, tab + 1);
+    }
 
     const auto tab1 = line.find('\t');
     if (tab1 == std::string::npos) {
@@ -40,7 +53,6 @@ link_row parse_row(const std::string& line, std::size_t line_num) {
     }
     const auto tab2 = line.find('\t', tab1 + 1);
 
-    link_row row;
     row.source.assign(line, 0, tab1);
 
     if (tab2 == std::string::npos) {
@@ -64,7 +76,7 @@ link_row parse_row(const std::string& line, std::size_t line_num) {
 
 } // namespace
 
-std::vector<link_row> parse_links_tsv(std::istream& is) {
+std::vector<link_row> parse_links_tsv(std::istream& is, bool tag_column) {
     std::vector<link_row> rows;
     std::string line;
     std::size_t line_num = 0;
@@ -74,7 +86,7 @@ std::vector<link_row> parse_links_tsv(std::istream& is) {
         if (line.empty() || line.front() == '#') {
             continue;
         }
-        rows.push_back(parse_row(line, line_num));
+        rows.push_back(parse_row(line, line_num, tag_column));
     }
     return rows;
 }
