@@ -726,7 +726,7 @@ protected:
     }
 
     key_ptr exon(const std::string& exon_id) {
-        for (auto* key : keys.exons) {
+        for (auto* key : keys.external) {
             if (key->get_data().attributes.at("exon_id").front() == exon_id) return key;
         }
         return nullptr;
@@ -796,13 +796,13 @@ TEST_F(CLIGffLinksTest, EveryIdOfASharedExonNamesIt) {
                gtf("exon", 101, 200, '+', ids("G1", "T2", "E9")));
     gff_grove shared(3);
     const auto shared_keys = handlers::gff::grove_insert(shared, tmp_gff.string());
-    ASSERT_EQ(shared_keys.exons.size(), 1u);
+    ASSERT_EQ(shared_keys.external.size(), 1u);
     write_file(tmp_links, "exon_id:gene_id\tE1\tG1\n"
                           "exon_id:gene_id\tE9\tG1\n");  // the same exon: the same edge
 
     EXPECT_EQ(handlers::gff::apply_links(shared, tmp_links.string(), shared_keys), 1u);
     auto* gene = find_key(shared, "gene", "gene_id", "G1");
-    EXPECT_TRUE(shared.has_edge(shared_keys.exons.front(), gene));
+    EXPECT_TRUE(shared.has_edge(shared_keys.external.front(), gene));
 }
 
 TEST_F(CLIGffLinksTest, AnyOtherTagLooksAtEveryKey) {
@@ -825,7 +825,7 @@ TEST_F(CLIGffLinksTest, AnyOtherTagLooksAtEveryKey) {
     auto* enhancer = find_key(gff3, "enhancer", "ID", "enh1");
     auto* gene = find_key(gff3, "gene", "ID", "G1");
     EXPECT_TRUE(gff3.has_edge(enhancer, gene));
-    EXPECT_TRUE(gff3.has_edge(enhancer, gff3_keys.exons.front()));
+    EXPECT_TRUE(gff3.has_edge(enhancer, gff3_keys.external.front()));
 }
 
 TEST_F(CLIGffLinksTest, ANameMustBeOnExactlyOneRecord) {
