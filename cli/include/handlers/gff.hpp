@@ -7,6 +7,7 @@
 #define GENOGROVE_CLI_HANDLERS_GFF_HPP
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <ostream>
@@ -84,37 +85,33 @@ inline void print_gff_result(std::ostream& output, const gio::gff_entry& payload
            << payload.type << "\t" << record_id(payload) << "\t" << payload.strand.value_or('.');
 }
 
-// One hit of `isec --exons`, with its newline(s). A transcript is followed by
-// one row per exon of its chain that overlaps the query:
-//   <exon row> <TAB> <transcript id> <TAB> <rank in the chain, 1 = 5' exon>
-// A transcript whose chain has no such exon gets "<TAB>intron" on its own row.
-template <typename grove_t>
-void print_gff_hit_with_exons(std::ostream& output, grove_t& grove,
-                              const gdt::key<gdt::interval, gio::gff_entry>* hit,
-                              const gdt::interval& query) {
-    using key_ptr = const gdt::key<gdt::interval, gio::gff_entry>*;
-    const gio::gff_entry& record = hit->get_data();
-    print_gff_result(output, record);
+using gff_key = gdt::key<gdt::interval, gio::gff_entry>;
 
+// The exons of a transcript's chain that overlap the query, each with its rank
+// in the chain (1 = 5' exon). No value when `hit` is not a transcript or has
+// no exon lines.
+template <typename grove_t>
+std::optional<std::vector<std::pair<gff_key*, std::size_t>>> overlapping_exons(
+    grove_t& grove, const gff_key* hit, const gdt::interval& query) {
     // get_neighbors_if tests the edge text first, so the in-place view loads
     // only the block of the one target that matches.
-    const auto follow = [&grove](key_ptr source, auto matches) -> key_ptr {
+    const auto follow = [&grove](const gff_key* source, auto matches) -> gff_key* {
         const auto targets = grove.get_neighbors_if(source, matches);
         return targets.empty() ? nullptr : targets.front();
     };
 
-    key_ptr exon = nullptr;
+    const gio::gff_entry& record = hit->get_data();
+    gff_key* exon = nullptr;
     if (record.type == "transcript") {
         exon = follow(hit, [](const std::string& text) { return text == edge_first_exon; });
     }
-    if (exon == nullptr) {  // not a transcript, or a transcript with no exon lines
-        output << '\n';
-        return;
+    if (exon == nullptr) {
+        return std::nullopt;
     }
 
     const std::string id = record_id(record);
     const bool descending = record.strand == '-';  // the chain runs 5' to 3'
-    std::vector<std::pair<key_ptr, std::size_t>> overlapping;
+    std::vector<std::pair<gff_key*, std::size_t>> overlapping;
     for (std::size_t rank = 1; exon != nullptr; ++rank) {
         const gdt::interval& span = exon->get_value();
         if (descending ? span.get_end() < query.get_start()
@@ -128,8 +125,25 @@ void print_gff_hit_with_exons(std::ostream& output, grove_t& grove,
             return edge_names_transcript(text, id);
         });
     }
-    output << (overlapping.empty() ? "\tintron\n" : "\n");
-    for (const auto& [key, rank] : overlapping) {
+    return overlapping;
+}
+
+// One hit of `isec --exons`, with its newline(s). A transcript is followed by
+// one row per exon of its chain that overlaps the query:
+//   <exon row> <TAB> <transcript id> <TAB> <rank>
+// A transcript whose chain has no such exon gets "<TAB>intron" on its own row.
+template <typename grove_t>
+void print_gff_hit_with_exons(std::ostream& output, grove_t& grove, const gff_key* hit,
+                              const gdt::interval& query) {
+    print_gff_result(output, hit->get_data());
+    const auto exons = overlapping_exons(grove, hit, query);
+    if (!exons) {
+        output << '\n';
+        return;
+    }
+    output << (exons->empty() ? "\tintron\n" : "\n");
+    const std::string id = record_id(hit->get_data());
+    for (const auto& [key, rank] : *exons) {
         print_gff_result(output, key->get_data());
         output << '\t' << id << '\t' << rank << '\n';
     }

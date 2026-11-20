@@ -29,6 +29,7 @@
 #include <string_view>
 #include <type_traits>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace gdt = genogrove::data_type;
@@ -70,6 +71,17 @@ constexpr std::size_t HOPS_ALL = std::numeric_limits<std::size_t>::max();
         "Error: --direction must be one of out, in, both, got '" + s + "'");
 }
 
+template <typename key_ptr>
+constexpr bool has_gff_payload =
+    std::is_same_v<std::remove_cvref_t<decltype(std::declval<key_ptr>()->get_data())>,
+                   gio::gff_entry>;
+
+// Which edges --hops follows, by their text. A GFF index also has the edges of
+// its gene structure; those are reported with --exons, so --hops skips them
+// and follows the user's links (idx --links) only.
+bool any_edge(const std::string&) { return true; }
+bool user_link_of_gff(const std::string& text) { return !handlers::gff::is_structure_edge(text); }
+
 // One interval reached by following edges from a seed (an overlap hit).
 template <typename key_ptr>
 struct reached_key {
@@ -86,6 +98,8 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
 [[nodiscard]] std::vector<reached_key<key_ptr>> walk_links(
     grove_t& grove, const std::vector<key_ptr>& seeds, std::size_t max_hops,
     direction dir) {
+    // Chosen from the payload type here, so no caller can forget the filter.
+    const auto follows = has_gff_payload<key_ptr> ? user_link_of_gff : any_edge;
     struct item { key_ptr key; std::size_t seed; std::size_t hops; };
     std::unordered_set<const void*> seen(seeds.begin(), seeds.end());
     std::deque<item> frontier;
@@ -106,10 +120,10 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
             }
         };
         if (dir != direction::in) {
-            for (auto* n : grove.get_neighbors(cur.key)) visit(n);
+            for (auto* n : grove.get_neighbors_if(cur.key, follows)) visit(n);
         }
         if (dir != direction::out) {
-            for (auto* n : grove.get_in_neighbors(cur.key)) visit(n);
+            for (auto* n : grove.get_in_neighbors_if(cur.key, follows)) visit(n);
         }
     }
     // Group by seed so each seed's reached rows follow its own overlap row;
@@ -127,24 +141,29 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
 // canonical 0-based-inclusive space (see for_each_*_query).
 //
 // With max_hops > 0, each overlap row is followed by one row per interval
-// reached over the grove's graph edges:
+// reached over the links of the index (see walk_links for which edges count):
 //   <query chrom> <start> <end> <TAB> <seed row> <TAB> <reached row> <TAB> <hops>
 // The query columns are 0-based half-open like the BED-style payload rows.
+// On a GFF index the walk also starts from the exons of an overlapping
+// transcript that overlap the query: an exon is not an overlap row of its own,
+// but a link can start or end at it.
 template <handlers::interval_queryable grove_t, typename print_fn>
 void run_intersect(grove_t& grove, const std::string& queryfile,
                    gio::filetype query_type, std::ostream& out, print_fn print,
                    std::size_t max_hops = 0, direction dir = direction::both,
                    bool exons = false) {
+    std::size_t reached_total = 0;
+    bool gff_index = false;
     auto handle = [&](gdt::interval iv, const std::string& index) {
         // Bind the query_result to a local: get_keys() returns a reference into
         // it, so iterating grove.intersect(...).get_keys() directly would dangle
         // once the temporary is destroyed at the end of the range expression.
         auto results = grove.intersect(iv, index);
-        const auto& seeds = results.get_keys();
+        const auto& hits = results.get_keys();
+        using key_ptr = typename std::remove_cvref_t<decltype(hits)>::value_type;
         // Only a GFF payload has an exon chain to report with --exons.
-        auto print_hit = [&](const auto* key) {
-            if constexpr (std::is_same_v<std::remove_cvref_t<decltype(key->get_data())>,
-                                         gio::gff_entry>) {
+        auto print_hit = [&](key_ptr key) {
+            if constexpr (has_gff_payload<key_ptr>) {
                 if (exons) {
                     handlers::gff::print_gff_hit_with_exons(out, grove, key, iv);
                     return;
@@ -154,15 +173,28 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
             out << '\n';
         };
         if (max_hops == 0) {
-            for (auto* result : seeds) {
+            for (auto* result : hits) {
                 print_hit(result);
             }
             return;
         }
+        std::vector<key_ptr> seeds(hits.begin(), hits.end());
+        if constexpr (has_gff_payload<key_ptr>) {
+            gff_index = true;
+            std::unordered_set<const void*> added;  // a shared exon is one start point
+            for (auto* hit : hits) {
+                const auto under_query = handlers::gff::overlapping_exons(grove, hit, iv);
+                for (std::size_t i = 0; under_query && i < under_query->size(); ++i) {
+                    auto* exon = (*under_query)[i].first;
+                    if (added.insert(exon).second) seeds.push_back(exon);
+                }
+            }
+        }
         const auto reached = walk_links(grove, seeds, max_hops, dir);
+        reached_total += reached.size();
         auto r = reached.begin();
         for (std::size_t i = 0; i < seeds.size(); ++i) {
-            print_hit(seeds[i]);
+            if (i < hits.size()) print_hit(seeds[i]);
             for (; r != reached.end() && r->seed == i; ++r) {
                 out << index << '\t' << iv.get_start() << '\t' << iv.get_end() + 1 << '\t';
                 print(out, seeds[i]->get_data());
@@ -178,6 +210,13 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         handlers::vcf::for_each_vcf_query(queryfile, handle);
     } else {  // GFF / GTF (validated before dispatch)
         handlers::gff::for_each_gff_query(queryfile, handle);
+    }
+    // A GFF index always has edges (its gene structure), so the checks that
+    // catch a BED index built without --links cannot see a GFF index without
+    // user links. Its only sign is a run that reached nothing.
+    if (gff_index && reached_total == 0) {
+        std::cerr << "Note: --hops followed no link; if this is not expected, check "
+                     "that the index was built with 'idx --links'\n";
     }
 }
 
@@ -196,7 +235,8 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
         // --links cannot be detected here without reading every block. It
         // walks an empty graph instead of failing up front like the eager
         // path; say so once on stderr so empty traversals are not a surprise.
-        if(max_hops > 0) {
+        // (A GFF index gets its note from run_intersect, in both modes.)
+        if(max_hops > 0 && !std::is_same_v<payload_t, gio::gff_entry>) {
             std::cerr << "Warning: --in-place cannot verify that " << index_path
                       << " was built with 'idx --links'; a link-less index yields "
                          "no reached rows\n";
@@ -206,6 +246,7 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
         run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir, exons);
     } else {
         auto grove = ggs::grove<gdt::interval, payload_t, std::string>::deserialize(in);
+        // Catches a link-less BED index only: a GFF index always has edges.
         if(max_hops > 0 && grove.edge_count() == 0) {
             throw std::runtime_error(
                 "Error: --hops requires an index built with 'idx --links' "
@@ -235,7 +276,8 @@ cxxopts::Options intersect::build_options() {
              cxxopts::value<std::string>()->default_value("stdout"))
             ("k,order", "The order of the tree built from -t (not allowed with -i)",
              cxxopts::value<int>()->default_value(std::to_string(DEFAULT_TREE_ORDER)))
-            ("hops", "Follow the index's graph edges (idx --links) from each "
+            ("hops", "Follow the links of the index (idx --links; not the gene "
+                     "structure of a GFF/GTF index, see --exons) from each "
                      "overlapping interval up to N hops, or 'all' for the whole "
                      "connected component, and report each reached interval once "
                      "with its minimum hop count (requires -i; 0 = off)",
@@ -326,8 +368,8 @@ void intersect::validate(const cxxopts::ParseResult& args) {
             "a prebuilt index (-i) keeps the order it was built with");
     }
 
-    // A target (-t) is built in memory without links, so there is no graph to
-    // walk; edges only exist in an index written by `idx --links`.
+    // A target (-t) is built in memory without links, so --hops has nothing
+    // to follow; links only exist in an index written by `idx --links`.
     if(parse_hops(args["hops"].as<std::string>()) > 0 && !has_index) {
         throw std::runtime_error(
             "Error: --hops requires a prebuilt index (-i) built with 'idx --links'");
