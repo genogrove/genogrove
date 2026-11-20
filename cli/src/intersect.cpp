@@ -181,11 +181,12 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         std::vector<key_ptr> seeds(hits.begin(), hits.end());
         if constexpr (has_gff_payload<key_ptr>) {
             gff_index = true;
+            std::unordered_set<const void*> added;  // a shared exon is one start point
             for (auto* hit : hits) {
                 const auto under_query = handlers::gff::overlapping_exons(grove, hit, iv);
                 for (std::size_t i = 0; under_query && i < under_query->size(); ++i) {
                     auto* exon = (*under_query)[i].first;
-                    if (std::ranges::find(seeds, exon) == seeds.end()) seeds.push_back(exon);
+                    if (added.insert(exon).second) seeds.push_back(exon);
                 }
             }
         }
