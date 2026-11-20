@@ -413,7 +413,7 @@ gff_keys grove_insert(grove_t& grove, const std::string& filepath) {
     auto feature_keys = insert_features(grove, model);
     add_structure_edges(grove, model, feature_keys, gene_edges);
     name_exons(model.exon_keys);
-    return {std::move(feature_keys), std::move(model.exon_keys)};
+    return {.indexed = std::move(feature_keys), .external = std::move(model.exon_keys)};
 }
 
 std::size_t apply_links(grove_t& grove, const std::string& links_path, const gff_keys& keys) {
