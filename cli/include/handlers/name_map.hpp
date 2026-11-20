@@ -16,11 +16,10 @@ namespace handlers {
 
 namespace gdt = genogrove::data_type;
 
-// Transient map from a record's chosen name to the inserted key pointer in the
-// grove. The name is BED column 4 for `bed_entry`, or a chosen attribute value
-// (ID, gene_id, ...) for `gff_entry` — the payload varies, the mechanism does
-// not. Built at index time by `grove_insert` and consumed by
-// `links::apply_to_grove` to resolve `--links` rows to graph edges.
+// Transient map from a record's name (BED column 4) to the inserted key pointer
+// in the grove. Built at index time by `bed::grove_insert` and consumed by
+// `links::apply_to_grove` to resolve `--links` rows to graph edges. A GFF/GTF
+// index resolves its names by tag instead, see `gff::apply_links`.
 //
 // The key is a string_view into the stored payload string (the grove's
 // `key_storage` is a `std::deque`, so addresses are stable for the grove's

@@ -640,13 +640,13 @@ TEST_F(CLIIndexE2ETest, IndexGffLinksAddsGraphEdges) {
     fs::path gff_links = fs::temp_directory_path() / "genogrove_idx_gff_links.tsv";
     {
         std::ofstream out(gff_links);
-        out << "gene1\tgene2\n"
-            << "gene2\tgene3\n";  // gene3 is on chr2 — cross-chromosome edge
+        out << "ID:ID\tgene1\tgene2\n"
+            << "ID:ID\tgene2\tgene3\n";  // gene3 is on chr2 — cross-chromosome edge
     }
 
     auto result = run_command(cli(
         "idx \"" + gff_target_path.string() + "\" --links \"" + gff_links.string() +
-        "\" --gff-name-tag ID -o \"" + tmp_links_output.string() + "\""
+        "\" -o \"" + tmp_links_output.string() + "\""
     ));
     EXPECT_EQ(result.exit_code, 0) << result.output;
     ASSERT_TRUE(fs::exists(tmp_links_output));
@@ -675,38 +675,22 @@ TEST_F(CLIIndexE2ETest, IndexGffLinksAddsGraphEdges) {
     fs::remove(gff_links);
 }
 
-TEST_F(CLIIndexE2ETest, IndexGffLinksWithoutNameTagFails) {
-    // GFF/GTF has no canonical name column, so --links requires --gff-name-tag.
+TEST_F(CLIIndexE2ETest, IndexGffLinksWithoutTagColumnFails) {
+    // links.tsv has BED rows (nameA, nameB): a GFF index needs the tag column.
+    // An output path of its own: no other test can write it during the check.
+    const fs::path output = fs::temp_directory_path() / "genogrove_idx_no_tag_column.gg";
+    fs::remove(output);
     auto result = run_command(cli(
         "idx \"" + gff_target_path.string() + "\" --links \"" + links_path.string() +
-        "\" -o \"" + tmp_links_output.string() + "\""
+        "\" -o \"" + output.string() + "\""
     ));
     EXPECT_NE(result.exit_code, 0);
-    EXPECT_NE(result.output.find("requires --gff-name-tag"), std::string::npos)
-        << result.output;
+    EXPECT_NE(result.output.find("needs the tag column"), std::string::npos) << result.output;
+    EXPECT_FALSE(fs::exists(output));
 }
 
-TEST_F(CLIIndexE2ETest, IndexGffLinksMissingTagAttributeFails) {
-    // No record in target.gff carries a transcript_id attribute.
-    fs::path some_links = fs::temp_directory_path() / "genogrove_idx_gff_missing_links.tsv";
-    {
-        std::ofstream out(some_links);
-        out << "gene1\tgene2\n";
-    }
-
-    auto result = run_command(cli(
-        "idx \"" + gff_target_path.string() + "\" --links \"" + some_links.string() +
-        "\" --gff-name-tag transcript_id -o \"" + tmp_links_output.string() + "\""
-    ));
-    EXPECT_NE(result.exit_code, 0);
-    EXPECT_NE(result.output.find("transcript_id"), std::string::npos) << result.output;
-
-    fs::remove(some_links);
-}
-
-TEST_F(CLIIndexE2ETest, IndexGffLinksDuplicateTagValueFails) {
-    // Two records sharing Name=dup make the name ambiguous for link resolution.
-    // (A repeated ID is rejected earlier, by the builder: an ID must be unique.)
+TEST_F(CLIIndexE2ETest, IndexGffLinksUnknownOrAmbiguousNameFails) {
+    // Two genes share Name=dup, so that value names no single record.
     fs::path dup_gff = fs::temp_directory_path() / "genogrove_idx_gff_dup.gff";
     {
         std::ofstream out(dup_gff);
@@ -715,32 +699,47 @@ TEST_F(CLIIndexE2ETest, IndexGffLinksDuplicateTagValueFails) {
             << "chr1\tt\tgene\t601\t900\t.\t-\t.\tID=g2;Name=dup\n";
     }
     fs::path some_links = fs::temp_directory_path() / "genogrove_idx_gff_dup_links.tsv";
-    {
-        std::ofstream out(some_links);
-        out << "dup\tdup\n";
-    }
+    // An output path of its own: no other test can write it during the checks.
+    const fs::path output = fs::temp_directory_path() / "genogrove_idx_gff_dup.gg";
+    fs::remove(output);
+    const auto idx_with = [&](const std::string& rows) {
+        {
+            std::ofstream out(some_links);
+            out << rows;
+        }
+        return run_command(cli("idx \"" + dup_gff.string() + "\" --links \"" +
+                               some_links.string() + "\" -o \"" + output.string() + "\""));
+    };
 
-    auto result = run_command(cli(
-        "idx \"" + dup_gff.string() + "\" --links \"" + some_links.string() +
-        "\" --gff-name-tag Name -o \"" + tmp_links_output.string() + "\""
-    ));
+    auto result = idx_with("# a comment\nID:Name\tg1\tdup\n");
     EXPECT_NE(result.exit_code, 0);
-    EXPECT_NE(result.output.find("duplicate GFF/GTF name"), std::string::npos)
-        << result.output;
+    EXPECT_NE(result.output.find("line 2: more than one record has Name 'dup'"),
+              std::string::npos) << result.output;
+    EXPECT_FALSE(fs::exists(output));
 
+    result = idx_with("ID:ID\tg1\tg9\n");
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("line 1: no record has ID 'g9'"), std::string::npos)
+        << result.output;
+    EXPECT_FALSE(fs::exists(output));
+
+    // The ambiguous value does not stop a file that does not name it.
+    result = idx_with("ID:ID\tg1\tg2\n");
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+
+    fs::remove(output);
     fs::remove(dup_gff);
     fs::remove(some_links);
 }
 
-TEST_F(CLIIndexE2ETest, IndexGffNameTagIgnoredForBedInput) {
-    // --gff-name-tag on BED input is ignored (BED links always match column 4),
-    // not an error. The link still resolves via the BED name.
+TEST_F(CLIIndexE2ETest, IndexGffNameTagOptionIsGone) {
+    // The tags are in the links file now.
     auto result = run_command(cli(
         "idx \"" + links_target_path.string() + "\" --links \"" + links_path.string() +
         "\" --gff-name-tag ID -o \"" + tmp_links_output.string() + "\""
     ));
-    EXPECT_EQ(result.exit_code, 0) << result.output;
-    ASSERT_TRUE(fs::exists(tmp_links_output));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("gff-name-tag"), std::string::npos) << result.output;
 }
 
 // ==========================================

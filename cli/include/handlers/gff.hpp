@@ -16,7 +16,6 @@
 #include <genogrove/structure/grove/grove.hpp>
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/gff_reader.hpp>
-#include <handlers/name_map.hpp>
 
 namespace handlers {
 namespace gff {
@@ -25,8 +24,13 @@ namespace gdt = genogrove::data_type;
 namespace ggs = genogrove::structure;
 namespace gio = genogrove::io;
 
-// GFF/GTF links match on a chosen attribute value. See handlers/name_map.hpp.
-using name_to_key_map = handlers::name_to_key_map<gio::gff_entry>;
+using gff_key = gdt::key<gdt::interval, gio::gff_entry>;
+
+// The keys of a built index: `idx --links` finds its names among them.
+struct gff_keys {
+    std::vector<gff_key*> features;  // genes, transcripts and other indexed records
+    std::vector<gff_key*> exons;
+};
 
 // Edge data of the structure edges.
 inline constexpr std::string_view edge_transcript = "transcript";        // gene -> transcript
@@ -46,13 +50,26 @@ inline constexpr std::string_view edge_next_exon_prefix = "next_exon:";  // exon
 // Lines may come in any order.
 //
 // Throws std::runtime_error for another layout and for records that contradict
-// each other. With a name_map, each key's `name_tag` value is recorded for
-// `idx --links`; an indexed record without the tag, or a repeated value, throws.
-void grove_insert(
+// each other.
+gff_keys grove_insert(
     ggs::grove<gdt::interval, gio::gff_entry, std::string>& grove,
-    const std::string& filepath,
-    name_to_key_map* name_map = nullptr,
-    std::string_view name_tag = {}
+    const std::string& filepath
+);
+
+// Add the links of a TSV file as edges. Each row is
+//   tagA:tagB <TAB> nameA <TAB> nameB [<TAB> text]
+// A name is the value of its tag on exactly one key. `gene_id` looks at genes
+// only, `transcript_id` at transcripts only, `exon_id` at exons only (every id
+// of a shared exon); any other tag looks at every key. Returns the number of
+// edges added; a repeated row adds one edge.
+//
+// Throws std::runtime_error, with the line of the links file, for a malformed
+// row, a tag no record has, a name that no key or more than one key has, and a
+// text that marks a structure edge.
+std::size_t apply_links(
+    ggs::grove<gdt::interval, gio::gff_entry, std::string>& grove,
+    const std::string& links_path,
+    const gff_keys& keys
 );
 
 // Iterate a GFF/GTF query file, invoking cb(interval, seqid) for each record.
@@ -84,8 +101,6 @@ inline void print_gff_result(std::ostream& output, const gio::gff_entry& payload
     output << payload.seqid << "\t" << payload.start << "\t" << payload.end << "\t"
            << payload.type << "\t" << record_id(payload) << "\t" << payload.strand.value_or('.');
 }
-
-using gff_key = gdt::key<gdt::interval, gio::gff_entry>;
 
 // The exons of a transcript's chain that overlap the query, each with its rank
 // in the chain (1 = 5' exon). No value when `hit` is not a transcript or has

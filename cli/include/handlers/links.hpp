@@ -36,16 +36,21 @@ struct link_row {
     std::string source;
     std::string target;
     std::optional<std::string> metadata;
+    std::string source_tag;  // from the tagA:tagB column of a GFF/GTF links file,
+    std::string target_tag;  // else empty
+    std::size_t line = 0;    // in the links file, for error messages
 };
 
 // Parse a TSV of link rows: (nameA<TAB>nameB) or (nameA<TAB>nameB<TAB>metadata).
+// With `tag_column` (a GFF/GTF index) each row has one more column in front,
+// tagA:tagB, which names the attribute that holds each name.
 // Skips lines that are blank or begin with '#'. Trailing '\r' is stripped.
-// Throws std::runtime_error, naming the line number, on any row that is not 2
-// or 3 tab-separated columns, or whose name/metadata columns are empty.
+// Throws std::runtime_error, naming the line number, on any row with another
+// number of tab-separated columns, or with an empty column.
 //
 // Pure parser — no grove involvement, so the same function backs both the
 // CLI applier and the unit tests against std::stringstream.
-[[nodiscard]] std::vector<link_row> parse_links_tsv(std::istream& is);
+[[nodiscard]] std::vector<link_row> parse_links_tsv(std::istream& is, bool tag_column = false);
 
 // Read a TSV from the given path and, for each row, look both names up in
 // name_map and add the directed edge — with the row's 3rd-column metadata when
@@ -56,22 +61,19 @@ struct link_row {
 // added.
 //
 // The grove's edge_data_type is std::string (the CLI attaches metadata as a
-// raw string). Templated on the payload so it serves both BED (`bed_entry`) and
-// GFF/GTF (`gff_entry`) groves — only the name-map key differs.
+// raw string). Used for a BED index; a GFF/GTF index resolves its names by
+// tag, see handlers::gff::apply_links.
 //
 // Throws std::runtime_error on:
 //   - file open failure
 //   - parser errors (delegated to parse_links_tsv)
 //   - a name that is not present in name_map — the message names the
 //     missing name so the user can fix the input
-//   - metadata for which `is_reserved` returns true — the text a caller
-//     uses for edges it adds itself (the GFF structure edges)
 template <typename payload_t>
 std::size_t apply_to_grove(
     ggs::grove<gdt::interval, payload_t, std::string>& grove,
     const std::string& links_path,
-    const handlers::name_to_key_map<payload_t>& name_map,
-    bool (*is_reserved)(std::string_view) = nullptr
+    const handlers::name_to_key_map<payload_t>& name_map
 ) {
     std::ifstream in(links_path);
     if (!in) {
@@ -99,11 +101,6 @@ std::size_t apply_to_grove(
             throw std::runtime_error(
                 "Error: links file references name '" + row.target +
                 "' which is not present as an indexed record name");
-        }
-        if (row.metadata && is_reserved && is_reserved(*row.metadata)) {
-            throw std::runtime_error(
-                "Error: links file metadata '" + *row.metadata +
-                "' is reserved: it marks an edge of the index structure");
         }
         if (seen.emplace(it_a->second, it_b->second, row.metadata).second) {
             if (row.metadata) {

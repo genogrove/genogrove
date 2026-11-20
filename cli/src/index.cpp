@@ -63,15 +63,11 @@ cxxopts::Options index::build_options() {
                     cxxopts::value<bool>()->default_value("false"))
             ("t,timed", "Measure the time taken for indexing",
                     cxxopts::value<bool>()->default_value("false"))
-            ("l,links", "Optional TSV (nameA<TAB>nameB, # comments) of directed edges "
-                        "to attach to the grove's graph overlay. Names match BED column 4, "
-                        "or the --gff-name-tag attribute for GFF/GTF input, and must be unique.",
-                    cxxopts::value<std::string>())
-            ("gff-name-tag", "For GFF/GTF input with --links: the attribute whose value "
-                             "identifies each record for link matching (e.g. ID, gene_id, "
-                             "transcript_id). Every record must carry it and values must be "
-                             "unique across the file. Ignored for BED input (which matches "
-                             "on column 4).",
+            ("l,links", "Optional TSV (# comments) of directed edges to add to the index. "
+                        "BED input: nameA<TAB>nameB[<TAB>text], names match column 4. "
+                        "GFF/GTF input: tagA:tagB<TAB>nameA<TAB>nameB[<TAB>text], each name "
+                        "is the value of its tag (gene_id, transcript_id, exon_id, ID, ...) "
+                        "on exactly one record.",
                     cxxopts::value<std::string>())
             ("h,help", "Print help")
             ;
@@ -136,15 +132,6 @@ void index::execute(const cxxopts::ParseResult& args) {
     }
 
     const bool has_links = args.count("links") != 0;
-    const bool has_name_tag = args.count("gff-name-tag") != 0;
-    // GFF/GTF links need an explicit identifying attribute — there is no
-    // canonical name column. (--gff-name-tag on BED input is simply ignored;
-    // BED links always match on column 4.)
-    if(has_links && filetype != gio::filetype::BED && !has_name_tag) {
-        throw std::runtime_error(
-            "Error: --links on GFF/GTF input requires --gff-name-tag <ATTR> "
-            "to select the identifying attribute (e.g. ID, gene_id, transcript_id)");
-    }
 
     const auto start_time = std::chrono::steady_clock::now();
     std::size_t edges_added = 0;  // reported after the write when --links was used
@@ -171,25 +158,15 @@ void index::execute(const cxxopts::ParseResult& args) {
     } else {  // GFF or GTF (validated above)
         ggs::grove<gdt::interval, gio::gff_entry, std::string> grove(order);
 
-        // Only build the name->key map when --links was requested; without it
-        // the map is null and grove_insert pays no extra cost (and reads no tag).
-        handlers::gff::name_to_key_map name_map;
-        const std::string name_tag = has_name_tag
-            ? args["gff-name-tag"].as<std::string>()
-            : std::string();
         // -s is not passed on: the builder sorts the indexed keys itself.
         if(sorted) {
             std::cerr << "Note: -s/--sorted has no effect for GFF/GTF input; "
                          "idx sorts the records itself\n";
         }
-        handlers::gff::grove_insert(
-            grove, inputfile, has_links ? &name_map : nullptr, name_tag);
-
+        const auto keys = handlers::gff::grove_insert(grove, inputfile);
         if(has_links) {
-            // The structure edges carry fixed text; a user link must not look like one.
-            edges_added = handlers::links::apply_to_grove(
-                grove, args["links"].as<std::string>(), name_map,
-                handlers::gff::is_structure_edge);
+            edges_added =
+                handlers::gff::apply_links(grove, args["links"].as<std::string>(), keys);
         }
 
         write_index(grove, outputfile, gio::gg_payload_type::GFF);

@@ -786,9 +786,9 @@ TEST_F(CLIIntersectHopsE2ETest, HopsOnAGffIndexFollowsUserLinksNotTheGeneStructu
         "chr1\tt\ttranscript\t1001\t1400\t.\t+\t.\tgene_id \"G2\"; transcript_id \"T2\"; name \"t2\";\n"
         "chr1\tt\texon\t1001\t1100\t.\t+\t.\tgene_id \"G2\"; transcript_id \"T2\";\n";
     write_file(gtf, lines);
-    write_file(links, "g1\tg2\tregulates\ne1\tt2\tbinds\n");
+    write_file(links, "name:name\tg1\tg2\tregulates\nname:name\te1\tt2\tbinds\n");
     const std::string build = "idx \"" + gtf.string() + "\" -o \"" + tmp_index.string() + "\"";
-    auto idx = run_command(cli(build + " --links \"" + links.string() + "\" --gff-name-tag name"));
+    auto idx = run_command(cli(build + " --links \"" + links.string() + "\""));
     EXPECT_EQ(idx.exit_code, 0) << idx.output;
 
     const std::string g1 = "chr1\t101\t400\tgene\tG1\t+";

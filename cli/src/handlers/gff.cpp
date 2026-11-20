@@ -6,15 +6,19 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <fstream>
 #include <genogrove/utility/tokenizer.hpp>
 #include <handlers/gff.hpp>
+#include <handlers/links.hpp>
 #include <iterator>
 #include <map>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -364,50 +368,108 @@ void name_exons(const std::vector<key_ptr>& exon_keys) {
     }
 }
 
-// An indexed record must have the tag. An exon can lose it when its lines
-// disagree (the GFF3 ID of a GENCODE exon), so an exon without it is left out.
-void fill_name_map(name_to_key_map& name_map, std::string_view name_tag,
-                   const std::vector<key_ptr>& feature_keys,
-                   const std::vector<key_ptr>& exon_keys) {
-    const auto record_name = [&](key_ptr key, bool required) {
-        const gio::gff_entry& record = key->get_data();
-        const auto it = record.attributes.find(name_tag);
-        if(it == record.attributes.end() || it->second.empty()) {
-            if(!required) {
-                return;
-            }
-            throw std::runtime_error("Error: GFF/GTF record '" + place(record) + "' has no '" +
-                                     std::string(name_tag) +
-                                     "' attribute (required by --gff-name-tag for --links)");
+// The keys one tag looks at, by their value of that attribute. A value that
+// more than one key has maps to null: it names no single key. The views point
+// into the stored records, which live as long as the grove.
+using name_table = std::unordered_map<std::string_view, key_ptr>;
+
+name_table table_for(std::string_view tag, const gff_keys& keys) {
+    name_table table;
+    const auto add = [&](key_ptr key) {
+        const attribute_map& attributes = key->get_data().attributes;
+        const auto values = attributes.find(tag);
+        if(values == attributes.end()) {
+            return;
         }
-        // A view into the stored record, so it lives as long as the grove.
-        const std::string_view value(it->second.front());
-        if(!name_map.emplace(value, key).second) {
-            throw std::runtime_error("Error: duplicate GFF/GTF name '" + std::string(value) +
-                                     "' for attribute '" + std::string(name_tag) +
-                                     "' (names must be unique to use --links)");
+        for(const auto& value : values->second) {
+            const auto [slot, fresh] = table.try_emplace(value, key);
+            if(!fresh && slot->second != key) {
+                slot->second = nullptr;
+            }
         }
     };
-    for(const key_ptr key : feature_keys) {
-        record_name(key, true);
+    // A transcript line also carries its gene_id, and an exon line both ids,
+    // so each of these tags looks at one kind of record only.
+    const std::string_view only =
+        tag == "gene_id" ? "gene" : (tag == "transcript_id" ? "transcript" : "");
+    if(tag != "exon_id") {
+        for(const key_ptr key : keys.features) {
+            if(only.empty() || key->get_data().type == only) {
+                add(key);
+            }
+        }
     }
-    for(const key_ptr exon : exon_keys) {
-        record_name(exon, false);
+    if(only.empty()) {
+        std::ranges::for_each(keys.exons, add);
     }
+    return table;
 }
 
 } // namespace
 
-void grove_insert(grove_t& grove, const std::string& filepath, name_to_key_map* name_map,
-                  std::string_view name_tag) {
+gff_keys grove_insert(grove_t& grove, const std::string& filepath) {
     gff_model model = read_file(grove, filepath);
     const auto gene_edges = complete_transcripts(model);
-    const auto feature_keys = insert_features(grove, model);
+    auto feature_keys = insert_features(grove, model);
     add_structure_edges(grove, model, feature_keys, gene_edges);
     name_exons(model.exon_keys);
-    if(name_map) {
-        fill_name_map(*name_map, name_tag, feature_keys, model.exon_keys);
+    return {std::move(feature_keys), std::move(model.exon_keys)};
+}
+
+std::size_t apply_links(grove_t& grove, const std::string& links_path, const gff_keys& keys) {
+    std::ifstream in(links_path);
+    if(!in) {
+        throw std::runtime_error("Error: could not open links file: " + links_path);
     }
+    const auto at = [](const links::link_row& row) {
+        return "Error: links file line " + std::to_string(row.line) + ": ";
+    };
+    // One table per tag the file uses, built at its first use.
+    std::map<std::string, name_table, std::less<>> tables;
+    const auto resolve = [&](std::string_view tag, const std::string& name,
+                             const links::link_row& row) {
+        auto table = tables.find(tag);
+        if(table == tables.end()) {
+            table = tables.emplace(std::string(tag), table_for(tag, keys)).first;
+        }
+        if(table->second.empty()) {
+            throw std::runtime_error(at(row) + "no record has the attribute '" + std::string(tag) +
+                                     "'");
+        }
+        const auto found = table->second.find(name);
+        if(found == table->second.end()) {
+            throw std::runtime_error(at(row) + "no record has " + std::string(tag) + " '" + name +
+                                     "'");
+        }
+        if(found->second == nullptr) {
+            throw std::runtime_error(at(row) + "more than one record has " + std::string(tag) +
+                                     " '" + name +
+                                     "' (transcript and exon lines repeat the tags of their gene)");
+        }
+        return found->second;
+    };
+
+    std::set<std::tuple<key_ptr, key_ptr, std::optional<std::string>>> seen;
+    std::size_t added = 0;
+    for(const auto& row : links::parse_links_tsv(in, true)) {
+        // Before the names: a name table costs a pass over all keys.
+        if(row.metadata && is_structure_edge(*row.metadata)) {
+            throw std::runtime_error(at(row) + "the text '" + *row.metadata +
+                                     "' is reserved: it marks an edge of the index structure");
+        }
+        const key_ptr source = resolve(row.source_tag, row.source, row);
+        const key_ptr target = resolve(row.target_tag, row.target, row);
+        if(!seen.emplace(source, target, row.metadata).second) {
+            continue; // a repeated row is one edge
+        }
+        if(row.metadata) {
+            grove.add_edge(source, target, *row.metadata);
+        } else {
+            grove.add_edge(source, target);
+        }
+        ++added;
+    }
+    return added;
 }
 
 bool is_structure_edge(std::string_view text) {

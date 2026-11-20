@@ -122,102 +122,6 @@ TEST_F(CLIGffHandlerTest, GroveInsertSortsUnorderedInput) {
 }
 
 // ==========================================
-// grove_insert: name map (attribute-based name resolution)
-// ==========================================
-
-TEST_F(CLIGffHandlerTest, NameMapResolvesChosenAttribute) {
-    gff_grove grove(3);
-    handlers::gff::name_to_key_map name_map;
-    handlers::gff::grove_insert(grove, target_path.string(), &name_map, "ID");
-
-    ASSERT_EQ(name_map.size(), 3u);
-    // Heterogeneous lookup: a string_view probe without constructing a string.
-    auto it = name_map.find(std::string_view("gene2"));
-    ASSERT_NE(it, name_map.end());
-    EXPECT_EQ(it->second->get_data().seqid, "chr1");
-    EXPECT_EQ(it->second->get_data().start, 601u);
-    EXPECT_EQ(it->second->get_data().end, 900u);
-
-    // The mapped pointer is the key the grove returns for that interval.
-    auto hits = grove.intersect(gdt::interval(700, 700), "chr1");
-    ASSERT_EQ(hits.get_keys().size(), 1u);
-    EXPECT_EQ(hits.get_keys()[0], it->second);
-}
-
-TEST_F(CLIGffHandlerTest, NameMapKeysPointIntoStoredPayload) {
-    // The map's string_view must alias the grove-owned attribute value (stable
-    // key_storage), not the reader's per-record buffer that is gone by now.
-    gff_grove grove(3);
-    handlers::gff::name_to_key_map name_map;
-    handlers::gff::grove_insert(grove, target_path.string(), &name_map, "ID");
-
-    auto it = name_map.find(std::string_view("gene1"));
-    ASSERT_NE(it, name_map.end());
-    const std::string& stored = it->second->get_data().attributes.at("ID").front();
-    EXPECT_EQ(it->first.data(), stored.data());
-}
-
-TEST_F(CLIGffHandlerTest, NameMapUsesFirstValueOfRepeatedTag) {
-    write_file(tmp_gff,
-               "chr1\ttest\tgene\t101\t500\t.\t+\t.\tgene_id \"g1\"; tag \"a\"; tag \"b\";\n");
-    gff_grove grove(3);
-    handlers::gff::name_to_key_map name_map;
-    handlers::gff::grove_insert(grove, tmp_gff.string(), &name_map, "tag");
-
-    EXPECT_EQ(name_map.size(), 1u);
-    EXPECT_TRUE(name_map.contains(std::string_view("a")));
-    EXPECT_FALSE(name_map.contains(std::string_view("b")));
-}
-
-TEST_F(CLIGffHandlerTest, NameMapMissingTagThrows) {
-    // target.gff records carry only ID; asking for Name must fail — the user
-    // picked that tag as the identifier, so a record without it is an error.
-    gff_grove grove(3);
-    handlers::gff::name_to_key_map name_map;
-    EXPECT_THROW(
-        handlers::gff::grove_insert(grove, target_path.string(), &name_map, "Name"),
-        std::runtime_error);
-}
-
-TEST_F(CLIGffHandlerTest, NameMapDuplicateValueThrows) {
-    write_file(tmp_gff,
-               "##gff-version 3\n"
-               "chr1\ttest\tgene\t101\t500\t.\t+\t.\tID=g1;Name=dup\n"
-               "chr1\ttest\tgene\t601\t900\t.\t-\t.\tID=g2;Name=dup\n");
-    gff_grove grove(3);
-    handlers::gff::name_to_key_map name_map;
-    EXPECT_THROW(
-        handlers::gff::grove_insert(grove, tmp_gff.string(), &name_map, "Name"),
-        std::runtime_error);
-    // The file itself is valid: without the name map it builds.
-    gff_grove without_map(3);
-    EXPECT_NO_THROW(handlers::gff::grove_insert(without_map, tmp_gff.string()));
-}
-
-TEST_F(CLIGffHandlerTest, NoNameMapIgnoresTag) {
-    // Without a map the tag is never read, so a tag no record has is fine.
-    gff_grove grove(3);
-    EXPECT_NO_THROW(
-        handlers::gff::grove_insert(grove, target_path.string(), nullptr, "Name"));
-    EXPECT_EQ(grove.intersect(gdt::interval(0, 10000), "chr1").get_keys().size(), 2u);
-}
-
-TEST_F(CLIGffHandlerTest, NameMapFeedsLinksApplier) {
-    // End-to-end in process: resolve names through the GFF map and attach a
-    // directed edge, the same way idx --links --gff-name-tag does.
-    gff_grove grove(3);
-    handlers::gff::name_to_key_map name_map;
-    handlers::gff::grove_insert(grove, target_path.string(), &name_map, "ID");
-    write_file(tmp_links, "gene1\tgene3\n");
-
-    EXPECT_EQ(handlers::links::apply_to_grove(grove, tmp_links.string(), name_map), 1u);
-    auto* gene1 = name_map.at("gene1");
-    auto* gene3 = name_map.at("gene3");
-    EXPECT_TRUE(grove.has_edge(gene1, gene3));
-    EXPECT_FALSE(grove.has_edge(gene3, gene1));
-}
-
-// ==========================================
 // for_each_gff_query / print_gff_result
 // ==========================================
 
@@ -686,19 +590,6 @@ TEST_F(CLIGffHandlerTest, LinkedModelSharedExonKeepsEveryExonId) {
               (std::vector<std::string>{"E1", "E9"}));
 }
 
-TEST_F(CLIGffHandlerTest, LinkedModelNameMapLeavesOutAnExonWithoutTheTag) {
-    // --gff-name-tag transcript_id style: no exon record keeps transcript_id,
-    // so the exons are not in the map and the build does not stop.
-    write_file(tmp_gff,
-               gtf("gene", 101, 900, '+', ids("G1") + " name \"g\";") +
-               gtf("transcript", 101, 900, '+', ids("G1", "T1") + " name \"t\";") +
-               gtf("exon", 101, 200, '+', ids("G1", "T1", "E1")));
-    gff_grove grove(3);
-    handlers::gff::name_to_key_map name_map;
-    handlers::gff::grove_insert(grove, tmp_gff.string(), &name_map, "name");
-    EXPECT_EQ(name_map.size(), 2u);
-}
-
 TEST_F(CLIGffHandlerTest, IsStructureEdgeMatchesWordsExactlyAndThePrefix) {
     EXPECT_TRUE(handlers::gff::is_structure_edge("transcript"));
     EXPECT_TRUE(handlers::gff::is_structure_edge("first_exon"));
@@ -801,4 +692,185 @@ TEST_F(CLIGffHandlerTest, EdgeNamesTranscriptMatchesAWholeId) {
     EXPECT_FALSE(handlers::gff::edge_names_transcript("next_exon:T1,T10", "T"));
     EXPECT_FALSE(handlers::gff::edge_names_transcript("next_exon:T1,T10", "T100"));
     EXPECT_FALSE(handlers::gff::edge_names_transcript("first_exon", "first_exon"));
+}
+
+// ==========================================
+// apply_links: the links file of a GFF/GTF index
+// ==========================================
+
+class CLIGffLinksTest : public CLIGffHandlerTest {
+protected:
+    gff_grove grove{3};
+    handlers::gff::gff_keys keys;
+
+    // Gene G1 with T1 (E1, E2, E3) and T2 (E1, E3), and a second gene G2.
+    void SetUp() override {
+        CLIGffHandlerTest::SetUp();
+        write_file(tmp_gff, two_transcripts() + gtf("gene", 2001, 2500, '+', ids("G2")));
+        keys = handlers::gff::grove_insert(grove, tmp_gff.string());
+    }
+
+    std::size_t link(const std::string& rows) {
+        write_file(tmp_links, rows);
+        return handlers::gff::apply_links(grove, tmp_links.string(), keys);
+    }
+
+    // The message of the error that `rows` gives; empty when there is none.
+    std::string link_error(const std::string& rows) {
+        try {
+            link(rows);
+        } catch (const std::runtime_error& e) {
+            return e.what();
+        }
+        return "";
+    }
+
+    key_ptr exon(const std::string& exon_id) {
+        for (auto* key : keys.exons) {
+            if (key->get_data().attributes.at("exon_id").front() == exon_id) return key;
+        }
+        return nullptr;
+    }
+};
+
+TEST_F(CLIGffLinksTest, EachTagFindsItsKindOfRecord) {
+    auto* g1 = find_key(grove, "gene", "gene_id", "G1");
+    auto* g2 = find_key(grove, "gene", "gene_id", "G2");
+    auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
+    auto* t2 = find_key(grove, "transcript", "transcript_id", "T2");
+    ASSERT_NE(exon("E1"), nullptr);
+    ASSERT_NE(exon("E3"), nullptr);
+    const std::size_t structure_edges = grove.edge_count();
+
+    // G1 is also the gene_id of T1, T2 and of the exons: the tag gene_id
+    // looks at genes only, so the name is not ambiguous.
+    EXPECT_EQ(link("gene_id:gene_id\tG1\tG2\tregulates\n"
+                   "transcript_id:exon_id\tT1\tE3\n"
+                   "exon_id:transcript_id\tE1\tT2\tbinds\n"),
+              3u);
+    EXPECT_EQ(grove.edge_count(), structure_edges + 3);
+    EXPECT_TRUE(grove.has_edge(g1, g2));
+    EXPECT_FALSE(grove.has_edge(g2, g1));  // directed
+    EXPECT_TRUE(grove.has_edge(t1, exon("E3")));
+    EXPECT_TRUE(grove.has_edge(exon("E1"), t2));
+
+    std::vector<std::string> texts = grove.get_edges(g1);
+    std::ranges::sort(texts);
+    EXPECT_EQ(texts, (std::vector<std::string>{"regulates", "transcript", "transcript"}));
+}
+
+TEST_F(CLIGffLinksTest, TranscriptIdLooksAtTranscriptsOnlyAndARepeatedValueIsOneName) {
+    // The Selenocysteine line carries the transcript_id of T1, and it has the
+    // value "sec" twice in one attribute.
+    write_file(tmp_gff,
+               gtf("gene", 101, 900, '+', ids("G1")) +
+               gtf("transcript", 101, 900, '+', ids("G1", "T1")) +
+               gtf("Selenocysteine", 501, 503, '+',
+                   ids("G1", "T1") + " label \"sec\"; label \"sec\";"));
+    gff_grove with_site(3);
+    const auto site_keys = handlers::gff::grove_insert(with_site, tmp_gff.string());
+    write_file(tmp_links, "transcript_id:label\tT1\tsec\n");
+
+    EXPECT_EQ(handlers::gff::apply_links(with_site, tmp_links.string(), site_keys), 1u);
+    auto* t1 = find_key(with_site, "transcript", "transcript_id", "T1");
+    auto* site = find_key(with_site, "Selenocysteine", "label", "sec");
+    ASSERT_NE(t1, nullptr);
+    ASSERT_NE(site, nullptr);
+    EXPECT_TRUE(with_site.has_edge(t1, site));
+}
+
+TEST_F(CLIGffLinksTest, ARepeatedRowIsOneEdge) {
+    EXPECT_EQ(link("gene_id:gene_id\tG1\tG2\n"
+                   "gene_id:gene_id\tG1\tG2\n"
+                   "gene_id:gene_id\tG1\tG2\tregulates\n"),  // another text: another edge
+              2u);
+}
+
+TEST_F(CLIGffLinksTest, EveryIdOfASharedExonNamesIt) {
+    // One exon position with two exon ids.
+    write_file(tmp_gff,
+               gtf("gene", 101, 200, '+', ids("G1")) +
+               gtf("transcript", 101, 200, '+', ids("G1", "T1")) +
+               gtf("exon", 101, 200, '+', ids("G1", "T1", "E1")) +
+               gtf("transcript", 101, 200, '+', ids("G1", "T2")) +
+               gtf("exon", 101, 200, '+', ids("G1", "T2", "E9")));
+    gff_grove shared(3);
+    const auto shared_keys = handlers::gff::grove_insert(shared, tmp_gff.string());
+    ASSERT_EQ(shared_keys.exons.size(), 1u);
+    write_file(tmp_links, "exon_id:gene_id\tE1\tG1\n"
+                          "exon_id:gene_id\tE9\tG1\n");  // the same exon: the same edge
+
+    EXPECT_EQ(handlers::gff::apply_links(shared, tmp_links.string(), shared_keys), 1u);
+    auto* gene = find_key(shared, "gene", "gene_id", "G1");
+    EXPECT_TRUE(shared.has_edge(shared_keys.exons.front(), gene));
+}
+
+TEST_F(CLIGffLinksTest, AnyOtherTagLooksAtEveryKey) {
+    // GFF3: ID names a gene and a transcript; the exon is found by exon_id.
+    write_file(tmp_gff,
+               "##gff-version 3\n"
+               "chr1\ttest\tgene\t101\t400\t.\t+\t.\tID=G1;Name=first\n"
+               "chr1\ttest\ttranscript\t101\t400\t.\t+\t.\tID=T1;Parent=G1\n"
+               "chr1\ttest\texon\t101\t200\t.\t+\t.\tID=exon:T1:1;Parent=T1;exon_id=E1\n"
+               "chr1\ttest\tenhancer\t901\t950\t.\t+\t.\tID=enh1\n");
+    gff_grove gff3(3);
+    const auto gff3_keys = handlers::gff::grove_insert(gff3, tmp_gff.string());
+    write_file(tmp_links, "ID:ID\tenh1\tG1\tenhances\n"
+                          "Name:ID\tfirst\tT1\n"
+                          "ID:exon_id\tenh1\tE1\n"
+                          "ID:ID\tenh1\texon:T1:1\n");  // an exon of one transcript keeps its ID
+
+    // The last two rows name the same exon by two tags: one edge.
+    EXPECT_EQ(handlers::gff::apply_links(gff3, tmp_links.string(), gff3_keys), 3u);
+    auto* enhancer = find_key(gff3, "enhancer", "ID", "enh1");
+    auto* gene = find_key(gff3, "gene", "ID", "G1");
+    EXPECT_TRUE(gff3.has_edge(enhancer, gene));
+    EXPECT_TRUE(gff3.has_edge(enhancer, gff3_keys.exons.front()));
+}
+
+TEST_F(CLIGffLinksTest, ANameMustBeOnExactlyOneRecord) {
+    // No record has it. The message names the line of the links file.
+    EXPECT_NE(link_error("# links\ngene_id:gene_id\tG1\tG9\n").find(
+                  "line 2: no record has gene_id 'G9'"),
+              std::string::npos);
+    // T1 is a transcript_id; no gene has it as gene_id.
+    EXPECT_NE(link_error("gene_id:gene_id\tG1\tT1\n").find("no record has gene_id 'T1'"),
+              std::string::npos);
+    // Two records have the value: it names no single one.
+    write_file(tmp_gff, gtf("gene", 101, 200, '+', ids("G1") + " label \"x\";") +
+                        gtf("gene", 301, 400, '+', ids("G2") + " label \"x\";"));
+    gff_grove twice(3);
+    const auto twice_keys = handlers::gff::grove_insert(twice, tmp_gff.string());
+    write_file(tmp_links, "gene_id:label\tG1\tx\n");
+    try {
+        handlers::gff::apply_links(twice, tmp_links.string(), twice_keys);
+        FAIL() << "a value on two records must not resolve";
+    } catch (const std::runtime_error& e) {
+        EXPECT_NE(std::string(e.what()).find("line 1: more than one record has label 'x'"),
+                  std::string::npos) << e.what();
+    }
+    EXPECT_EQ(twice.edge_count(), 0u);
+}
+
+TEST_F(CLIGffLinksTest, MalformedRowsAndReservedTextAreErrors) {
+    const std::size_t before = grove.edge_count();
+    // No tag column (a BED-style row), and a tag column that is not tagA:tagB.
+    EXPECT_NE(link_error("G1\tG2\n").find("needs the tag column"), std::string::npos);
+    for (const char* tags : {"gene_id", ":gene_id", "gene_id:", "a:b:c"}) {
+        EXPECT_NE(link_error(std::string(tags) + "\tG1\tG2\n").find("tagA:tagB"),
+                  std::string::npos) << tags;
+    }
+    // A tag that no record has is not the same fault as an unknown name.
+    EXPECT_NE(link_error("nosuchtag:gene_id\tx\tG1\n").find("no record has the attribute 'nosuchtag'"),
+              std::string::npos);
+    // A reserved text is reported before a name is looked up.
+    EXPECT_NE(link_error("gene_id:gene_id\tG1\tG9\ttranscript\n").find("is reserved"),
+              std::string::npos);
+    // A text that marks a structure edge. "transcription" is a normal text.
+    EXPECT_NE(link_error("gene_id:gene_id\tG1\tG2\ttranscript\n").find("is reserved"),
+              std::string::npos);
+    EXPECT_NE(link_error("gene_id:gene_id\tG1\tG2\tnext_exon:T1\n").find("is reserved"),
+              std::string::npos);
+    EXPECT_EQ(grove.edge_count(), before);  // no refused row added an edge
+    EXPECT_EQ(link("gene_id:gene_id\tG1\tG2\ttranscription\n"), 1u);
 }
