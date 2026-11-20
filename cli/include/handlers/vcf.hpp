@@ -21,7 +21,7 @@ namespace gio = genogrove::io;
 // over the same physical region produce the same interval. Query-only: VCF is
 // never a target payload in the CLI.
 template <typename F>
-void for_each_vcf_query(const std::string& queryfile, F&& cb) {
+void iterate_query(const std::string& queryfile, F&& cb) {
     gio::vcf_reader reader(queryfile);
     for (const auto& query_entry : reader) {
         cb(query_entry.to_interval(), query_entry.chrom);

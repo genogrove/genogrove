@@ -47,7 +47,7 @@ void grove_insert(
 // handles the half-open -> closed conversion). Split from result printing so a BED
 // query can run against a target of any payload type (see run_intersect).
 template <typename F>
-void for_each_bed_query(const std::string& queryfile, F&& cb) {
+void iterate_query(const std::string& queryfile, F&& cb) {
     gio::bed_reader reader(queryfile);
     for (const auto& query_entry : reader) {
         cb(query_entry.to_interval(), query_entry.chrom);

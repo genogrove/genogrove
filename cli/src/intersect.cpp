@@ -205,11 +205,11 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         }
     };
     if (query_type == gio::filetype::BED) {
-        handlers::bed::for_each_bed_query(queryfile, handle);
+        handlers::bed::iterate_query(queryfile, handle);
     } else if (query_type == gio::filetype::VCF) {
-        handlers::vcf::for_each_vcf_query(queryfile, handle);
+        handlers::vcf::iterate_query(queryfile, handle);
     } else {  // GFF / GTF (validated before dispatch)
-        handlers::gff::for_each_gff_query(queryfile, handle);
+        handlers::gff::iterate_query(queryfile, handle);
     }
     // A GFF index always has edges (its gene structure), so the checks that
     // catch a BED index built without --links cannot see a GFF index without

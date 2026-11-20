@@ -122,7 +122,7 @@ TEST_F(CLIGffHandlerTest, GroveInsertSortsUnorderedInput) {
 }
 
 // ==========================================
-// for_each_gff_query / print_gff_result
+// iterate_query / print_gff_result
 // ==========================================
 
 TEST_F(CLIGffHandlerTest, ForEachGffQueryConvertsCoordinates) {
@@ -131,7 +131,7 @@ TEST_F(CLIGffHandlerTest, ForEachGffQueryConvertsCoordinates) {
                "chr1\ttest\texon\t151\t250\t.\t+\t.\tID=q1\n"
                "chr2\ttest\texon\t1\t1\t.\t+\t.\tID=q2\n");
     std::vector<std::pair<std::string, gdt::interval>> seen;
-    handlers::gff::for_each_gff_query(tmp_gff.string(),
+    handlers::gff::iterate_query(tmp_gff.string(),
         [&](gdt::interval iv, const std::string& index) { seen.emplace_back(index, iv); });
 
     ASSERT_EQ(seen.size(), 2u);
