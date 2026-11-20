@@ -759,6 +759,26 @@ TEST_F(CLIGffLinksTest, EachTagFindsItsKindOfRecord) {
     EXPECT_EQ(texts, (std::vector<std::string>{"regulates", "transcript", "transcript"}));
 }
 
+TEST_F(CLIGffLinksTest, TranscriptIdLooksAtTranscriptsOnlyAndARepeatedValueIsOneName) {
+    // The Selenocysteine line carries the transcript_id of T1, and it has the
+    // value "sec" twice in one attribute.
+    write_file(tmp_gff,
+               gtf("gene", 101, 900, '+', ids("G1")) +
+               gtf("transcript", 101, 900, '+', ids("G1", "T1")) +
+               gtf("Selenocysteine", 501, 503, '+',
+                   ids("G1", "T1") + " label \"sec\"; label \"sec\";"));
+    gff_grove with_site(3);
+    const auto site_keys = handlers::gff::grove_insert(with_site, tmp_gff.string());
+    write_file(tmp_links, "transcript_id:label\tT1\tsec\n");
+
+    EXPECT_EQ(handlers::gff::apply_links(with_site, tmp_links.string(), site_keys), 1u);
+    auto* t1 = find_key(with_site, "transcript", "transcript_id", "T1");
+    auto* site = find_key(with_site, "Selenocysteine", "label", "sec");
+    ASSERT_NE(t1, nullptr);
+    ASSERT_NE(site, nullptr);
+    EXPECT_TRUE(with_site.has_edge(t1, site));
+}
+
 TEST_F(CLIGffLinksTest, ARepeatedRowIsOneEdge) {
     EXPECT_EQ(link("gene_id:gene_id\tG1\tG2\n"
                    "gene_id:gene_id\tG1\tG2\n"
@@ -837,9 +857,15 @@ TEST_F(CLIGffLinksTest, MalformedRowsAndReservedTextAreErrors) {
     // No tag column (a BED-style row), and a tag column that is not tagA:tagB.
     EXPECT_NE(link_error("G1\tG2\n").find("needs the tag column"), std::string::npos);
     for (const char* tags : {"gene_id", ":gene_id", "gene_id:", "a:b:c"}) {
-        EXPECT_NE(link_error(std::string(tags) + "\tG1\tG2\n").find("must be tagA:tagB"),
+        EXPECT_NE(link_error(std::string(tags) + "\tG1\tG2\n").find("tagA:tagB"),
                   std::string::npos) << tags;
     }
+    // A tag that no record has is not the same fault as an unknown name.
+    EXPECT_NE(link_error("nosuchtag:gene_id\tx\tG1\n").find("no record has the attribute 'nosuchtag'"),
+              std::string::npos);
+    // A reserved text is reported before a name is looked up.
+    EXPECT_NE(link_error("gene_id:gene_id\tG1\tG9\ttranscript\n").find("is reserved"),
+              std::string::npos);
     // A text that marks a structure edge. "transcription" is a normal text.
     EXPECT_NE(link_error("gene_id:gene_id\tG1\tG2\ttranscript\n").find("is reserved"),
               std::string::npos);

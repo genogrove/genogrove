@@ -204,7 +204,8 @@ TEST(LinksParse, tagColumnIsTheFirstColumnOfAGffLinksFile) {
                          "ID:ID\ta:b\tc\ttext\n");  // a name can hold a ':'
     const auto rows = handlers::links::parse_links_tsv(in, true);
     ASSERT_EQ(rows.size(), 2u);
-    EXPECT_EQ(rows[0].tags, "gene_id:exon_id");
+    EXPECT_EQ(rows[0].source_tag, "gene_id");
+    EXPECT_EQ(rows[0].target_tag, "exon_id");
     EXPECT_EQ(rows[0].source, "G1");
     EXPECT_EQ(rows[0].target, "E1");
     EXPECT_FALSE(rows[0].metadata.has_value());
@@ -217,11 +218,15 @@ TEST(LinksParse, tagColumnIsTheFirstColumnOfAGffLinksFile) {
     std::stringstream bed("A\tB\n");
     const auto bed_rows = handlers::links::parse_links_tsv(bed);
     ASSERT_EQ(bed_rows.size(), 1u);
-    EXPECT_TRUE(bed_rows[0].tags.empty());
+    EXPECT_TRUE(bed_rows[0].source_tag.empty());
+    EXPECT_TRUE(bed_rows[0].target_tag.empty());
     EXPECT_EQ(bed_rows[0].line, 1u);
 
-    // With the option: 2 columns (no tags), 5 columns, an empty tag column.
-    for (const char* row : {"G1\tG2\n", "a:b\tG1\tG2\ttext\textra\n", "\tG1\tG2\n"}) {
+    // With the option: 2 columns (no tags), 5 columns, an empty tag column, and
+    // a first column that is not tagA:tagB.
+    for (const char* row : {"G1\tG2\n", "a:b\tG1\tG2\ttext\textra\n", "\tG1\tG2\n",
+                            "ab\tG1\tG2\n", ":b\tG1\tG2\n", "a:\tG1\tG2\n", "a:b:c\tG1\tG2\n",
+                            "ab\tG:1\tG2\n"}) {
         std::stringstream bad(row);
         EXPECT_THROW(static_cast<void>(handlers::links::parse_links_tsv(bad, true)),
                      std::runtime_error) << row;

@@ -36,13 +36,14 @@ struct link_row {
     std::string source;
     std::string target;
     std::optional<std::string> metadata;
-    std::string tags;      // the first column of a GFF/GTF links file, else empty
-    std::size_t line = 0;  // in the links file, for error messages
+    std::string source_tag;  // from the tagA:tagB column of a GFF/GTF links file,
+    std::string target_tag;  // else empty
+    std::size_t line = 0;    // in the links file, for error messages
 };
 
 // Parse a TSV of link rows: (nameA<TAB>nameB) or (nameA<TAB>nameB<TAB>metadata).
 // With `tag_column` (a GFF/GTF index) each row has one more column in front,
-// kept in link_row::tags.
+// tagA:tagB, which names the attribute that holds each name.
 // Skips lines that are blank or begin with '#'. Trailing '\r' is stripped.
 // Throws std::runtime_error, naming the line number, on any row with another
 // number of tab-separated columns, or with an empty column.

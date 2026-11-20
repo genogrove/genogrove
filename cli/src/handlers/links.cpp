@@ -22,9 +22,9 @@ void strip_trailing_cr(std::string& s) {
     }
 }
 
-// Parse one non-comment line into a link_row. Accepts 2 columns
-// (source<TAB>target) or 3 (source<TAB>target<TAB>metadata). Every column must
-// be non-empty. Throws on 1 or 4+ columns, or any empty column, naming the
+// Parse one non-comment line into a link_row: source, target and an optional
+// metadata column, after a leading tagA:tagB column when `tag_column` is set.
+// Every column must be non-empty. Throws on another column count, naming the
 // line number.
 link_row parse_row(std::string line, std::size_t line_num, bool tag_column) {
     auto fail = [line_num, tag_column]() {
@@ -40,10 +40,14 @@ link_row parse_row(std::string line, std::size_t line_num, bool tag_column) {
     row.line = line_num;
     if (tag_column) {
         const auto tab = line.find('\t');
-        if (tab == std::string::npos || tab == 0) {
+        const auto colon = line.find(':');
+        // Exactly one ':' inside the first column, with a tag on each side.
+        if (tab == std::string::npos || colon == 0 || colon >= tab || colon + 1 == tab ||
+            line.find(':', colon + 1) < tab) {
             throw fail();
         }
-        row.tags.assign(line, 0, tab);
+        row.source_tag.assign(line, 0, colon);
+        row.target_tag.assign(line, colon + 1, tab - colon - 1);
         line.erase(0, tab + 1);
     }
 

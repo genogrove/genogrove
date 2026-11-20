@@ -709,11 +709,13 @@ TEST_F(CLIIndexE2ETest, IndexGffLinksUnknownOrAmbiguousNameFails) {
     EXPECT_NE(result.exit_code, 0);
     EXPECT_NE(result.output.find("line 2: more than one record has Name 'dup'"),
               std::string::npos) << result.output;
+    EXPECT_FALSE(fs::exists(tmp_links_output));
 
     result = idx_with("ID:ID\tg1\tg9\n");
     EXPECT_NE(result.exit_code, 0);
     EXPECT_NE(result.output.find("line 1: no record has ID 'g9'"), std::string::npos)
         << result.output;
+    EXPECT_FALSE(fs::exists(tmp_links_output));
 
     // The ambiguous value does not stop a file that does not name it.
     result = idx_with("ID:ID\tg1\tg2\n");
@@ -730,6 +732,7 @@ TEST_F(CLIIndexE2ETest, IndexGffNameTagOptionIsGone) {
         "\" --gff-name-tag ID -o \"" + tmp_links_output.string() + "\""
     ));
     EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("gff-name-tag"), std::string::npos) << result.output;
 }
 
 // ==========================================

@@ -63,8 +63,9 @@ gff_keys grove_insert(
 // of a shared exon); any other tag looks at every key. Returns the number of
 // edges added; a repeated row adds one edge.
 //
-// Throws std::runtime_error, with the line of the links file, for a name that
-// no key or more than one key has, and for a text that marks a structure edge.
+// Throws std::runtime_error, with the line of the links file, for a malformed
+// row, a tag no record has, a name that no key or more than one key has, and a
+// text that marks a structure edge.
 std::size_t apply_links(
     ggs::grove<gdt::interval, gio::gff_entry, std::string>& grove,
     const std::string& links_path,

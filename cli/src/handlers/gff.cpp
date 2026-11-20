@@ -432,6 +432,10 @@ std::size_t apply_links(grove_t& grove, const std::string& links_path, const gff
         if(table == tables.end()) {
             table = tables.emplace(std::string(tag), table_for(tag, keys)).first;
         }
+        if(table->second.empty()) {
+            throw std::runtime_error(at(row) + "no record has the attribute '" + std::string(tag) +
+                                     "'");
+        }
         const auto found = table->second.find(name);
         if(found == table->second.end()) {
             throw std::runtime_error(at(row) + "no record has " + std::string(tag) + " '" + name +
@@ -439,7 +443,8 @@ std::size_t apply_links(grove_t& grove, const std::string& links_path, const gff
         }
         if(found->second == nullptr) {
             throw std::runtime_error(at(row) + "more than one record has " + std::string(tag) +
-                                     " '" + name + "'");
+                                     " '" + name +
+                                     "' (transcript and exon lines repeat the tags of their gene)");
         }
         return found->second;
     };
@@ -447,18 +452,13 @@ std::size_t apply_links(grove_t& grove, const std::string& links_path, const gff
     std::set<std::tuple<key_ptr, key_ptr, std::optional<std::string>>> seen;
     std::size_t added = 0;
     for(const auto& row : links::parse_links_tsv(in, true)) {
-        const std::string_view tags(row.tags);
-        const auto colon = tags.find(':');
-        if(colon == 0 || colon >= tags.size() - 1 || tags.find(':', colon + 1) != tags.npos) {
-            throw std::runtime_error(at(row) + "the first column must be tagA:tagB, got '" +
-                                     row.tags + "'");
-        }
-        const key_ptr source = resolve(tags.substr(0, colon), row.source, row);
-        const key_ptr target = resolve(tags.substr(colon + 1), row.target, row);
+        // Before the names: a name table costs a pass over all keys.
         if(row.metadata && is_structure_edge(*row.metadata)) {
             throw std::runtime_error(at(row) + "the text '" + *row.metadata +
                                      "' is reserved: it marks an edge of the index structure");
         }
+        const key_ptr source = resolve(row.source_tag, row.source, row);
+        const key_ptr target = resolve(row.target_tag, row.target, row);
         if(!seen.emplace(source, target, row.metadata).second) {
             continue; // a repeated row is one edge
         }
