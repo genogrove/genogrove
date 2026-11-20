@@ -677,13 +677,16 @@ TEST_F(CLIIndexE2ETest, IndexGffLinksAddsGraphEdges) {
 
 TEST_F(CLIIndexE2ETest, IndexGffLinksWithoutTagColumnFails) {
     // links.tsv has BED rows (nameA, nameB): a GFF index needs the tag column.
+    // An output path of its own: no other test can write it during the check.
+    const fs::path output = fs::temp_directory_path() / "genogrove_idx_no_tag_column.gg";
+    fs::remove(output);
     auto result = run_command(cli(
         "idx \"" + gff_target_path.string() + "\" --links \"" + links_path.string() +
-        "\" -o \"" + tmp_links_output.string() + "\""
+        "\" -o \"" + output.string() + "\""
     ));
     EXPECT_NE(result.exit_code, 0);
     EXPECT_NE(result.output.find("needs the tag column"), std::string::npos) << result.output;
-    EXPECT_FALSE(fs::exists(tmp_links_output));
+    EXPECT_FALSE(fs::exists(output));
 }
 
 TEST_F(CLIIndexE2ETest, IndexGffLinksUnknownOrAmbiguousNameFails) {
@@ -696,31 +699,35 @@ TEST_F(CLIIndexE2ETest, IndexGffLinksUnknownOrAmbiguousNameFails) {
             << "chr1\tt\tgene\t601\t900\t.\t-\t.\tID=g2;Name=dup\n";
     }
     fs::path some_links = fs::temp_directory_path() / "genogrove_idx_gff_dup_links.tsv";
+    // An output path of its own: no other test can write it during the checks.
+    const fs::path output = fs::temp_directory_path() / "genogrove_idx_gff_dup.gg";
+    fs::remove(output);
     const auto idx_with = [&](const std::string& rows) {
         {
             std::ofstream out(some_links);
             out << rows;
         }
         return run_command(cli("idx \"" + dup_gff.string() + "\" --links \"" +
-                               some_links.string() + "\" -o \"" + tmp_links_output.string() + "\""));
+                               some_links.string() + "\" -o \"" + output.string() + "\""));
     };
 
     auto result = idx_with("# a comment\nID:Name\tg1\tdup\n");
     EXPECT_NE(result.exit_code, 0);
     EXPECT_NE(result.output.find("line 2: more than one record has Name 'dup'"),
               std::string::npos) << result.output;
-    EXPECT_FALSE(fs::exists(tmp_links_output));
+    EXPECT_FALSE(fs::exists(output));
 
     result = idx_with("ID:ID\tg1\tg9\n");
     EXPECT_NE(result.exit_code, 0);
     EXPECT_NE(result.output.find("line 1: no record has ID 'g9'"), std::string::npos)
         << result.output;
-    EXPECT_FALSE(fs::exists(tmp_links_output));
+    EXPECT_FALSE(fs::exists(output));
 
     // The ambiguous value does not stop a file that does not name it.
     result = idx_with("ID:ID\tg1\tg2\n");
     EXPECT_EQ(result.exit_code, 0) << result.output;
 
+    fs::remove(output);
     fs::remove(dup_gff);
     fs::remove(some_links);
 }
