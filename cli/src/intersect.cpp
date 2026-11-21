@@ -138,7 +138,7 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
 // the target's payload type. Decoupling the two is what makes cross-type
 // queries (e.g. a BED query against a GFF index) work — grove::intersect only
 // consumes (interval, index), and both readers emit intervals in the same
-// canonical 0-based-inclusive space (see for_each_*_query).
+// canonical 0-based-inclusive space (see iterate_query).
 //
 // With max_hops > 0, each overlap row is followed by one row per interval
 // reached over the links of the index (see walk_links for which edges count):
@@ -205,11 +205,11 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         }
     };
     if (query_type == gio::filetype::BED) {
-        handlers::bed::for_each_bed_query(queryfile, handle);
+        handlers::bed::iterate_query(queryfile, handle);
     } else if (query_type == gio::filetype::VCF) {
-        handlers::vcf::for_each_vcf_query(queryfile, handle);
+        handlers::vcf::iterate_query(queryfile, handle);
     } else {  // GFF / GTF (validated before dispatch)
-        handlers::gff::for_each_gff_query(queryfile, handle);
+        handlers::gff::iterate_query(queryfile, handle);
     }
     // A GFF index always has edges (its gene structure), so the checks that
     // catch a BED index built without --links cannot see a GFF index without

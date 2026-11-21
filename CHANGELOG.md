@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Refactored
 - **`gff_keys` lists named by storage**: the two key lists that the GFF/GTF builder of the CLI returns are `indexed` (keys in the tree) and `external` (keys only in the graph), not `features` and `exons`. The name lookup of a links file picks its records by record type. No change in behaviour. ([#672](https://github.com/genogrove/genogrove/pull/672))
+- **`iterate_query` in the CLI handlers**: `for_each_bed_query`, `for_each_vcf_query` and `for_each_gff_query` have one name, `iterate_query`, in their handler namespaces. The GFF handler header explains the structure edges and the id of a record. No change in behaviour. ([#673](https://github.com/genogrove/genogrove/pull/673))
 
 ### Removed
 - **`idx --gff-name-tag`**: the tags are in the links file now (see the tag column above). The option needed one tag on every record, so an exon could not be named. ([#664](https://github.com/genogrove/genogrove/issues/664), [#670](https://github.com/genogrove/genogrove/pull/670))
