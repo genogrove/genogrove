@@ -138,7 +138,7 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
 // the target's payload type. Decoupling the two is what makes cross-type
 // queries (e.g. a BED query against a GFF index) work — grove::intersect only
 // consumes (interval, index), and both readers emit intervals in the same
-// canonical 0-based-inclusive space (see for_each_*_query).
+// canonical 0-based-inclusive space (see iterate_query).
 //
 // With max_hops > 0, each overlap row is followed by one row per interval
 // reached over the links of the index (see walk_links for which edges count):

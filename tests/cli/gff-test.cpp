@@ -125,7 +125,7 @@ TEST_F(CLIGffHandlerTest, GroveInsertSortsUnorderedInput) {
 // iterate_query / print_gff_result
 // ==========================================
 
-TEST_F(CLIGffHandlerTest, ForEachGffQueryConvertsCoordinates) {
+TEST_F(CLIGffHandlerTest, IterateQueryConvertsCoordinates) {
     write_file(tmp_gff,
                "##gff-version 3\n"
                "chr1\ttest\texon\t151\t250\t.\t+\t.\tID=q1\n"

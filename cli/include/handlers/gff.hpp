@@ -34,16 +34,17 @@ struct gff_keys {
 
 // A structure edge is an edge that `idx` adds by itself to store the gene
 // model; every other edge is a user link (`idx --links`). The two kinds differ
-// only in their edge data. For a gene G1 with transcript T1 and exons E1, E2:
-//   G1 -> T1   "transcript"
-//   T1 -> E1   "first_exon"        (the 5' exon)
-//   E1 -> E2   "next_exon:T1"      (lists every transcript that uses the edge)
+// only in their edge data. For a gene G1 whose transcripts T1 and T2 both
+// have the exons E1, E2:
+//   G1 -> T1   "transcript"        (and G1 -> T2)
+//   T1 -> E1   "first_exon"        (the 5' exon; and T2 -> E1)
+//   E1 -> E2   "next_exon:T1,T2"   (one edge, lists every transcript that uses it)
 inline constexpr std::string_view edge_transcript = "transcript";
 inline constexpr std::string_view edge_first_exon = "first_exon";
 inline constexpr std::string_view edge_next_exon_prefix = "next_exon:";
 
 // True when the edge data marks a structure edge. `isec --hops` does not
-// follow such an edge, and a links file must not use these texts.
+// follow such an edge, and a links file must not use such a text.
 [[nodiscard]] bool is_structure_edge(std::string_view text);
 
 // Build the linked model of a GFF/GTF file in an empty grove:
@@ -80,10 +81,8 @@ std::size_t apply_links(
 
 // Iterate a GFF/GTF query file, invoking cb(interval, seqid) for each record.
 // The interval is in the CLI's canonical 0-based-inclusive space
-// (gff_entry::to_interval). This matches the BED conversion, so a GFF query and
-// a BED query over the same physical region produce the same interval (see
-// run_intersect). Split from result printing so a GFF query can run against a
-// target of any payload type.
+// (gff_entry::to_interval). Split from result printing so a GFF query can run
+// against a target of any payload type (see run_intersect).
 template <typename F>
 void iterate_query(const std::string& queryfile, F&& cb) {
     gio::gff_reader reader(queryfile);
@@ -92,10 +91,10 @@ void iterate_query(const std::string& queryfile, F&& cb) {
     }
 }
 
-// The id of a record, as a result row shows it ("." for none). GFF3: the ID.
-// GTF: gene_id of a gene, transcript_id of a transcript. An exon: every
-// exon_id, joined with ",". For a transcript, also the id that the next_exon
-// edges list.
+// The id of a record, as a result row shows it. An exon, in both formats:
+// every exon_id, joined with ",". Any other record: the ID in GFF3; in GTF
+// the gene_id of a gene, the transcript_id of a transcript, and "." for the
+// rest. The id of a transcript is also the id that the next_exon edges list.
 [[nodiscard]] std::string record_id(const gio::gff_entry& payload);
 
 // True when the text of a next_exon edge lists the transcript.
