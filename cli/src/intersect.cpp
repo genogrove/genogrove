@@ -92,7 +92,7 @@ struct reached_key {
 // wins — so each key is reported once, with min hops, under one seed. Seeds
 // themselves are hop 0 and never reported as reached.
 template <handlers::interval_queryable grove_t, typename key_ptr>
-[[nodiscard]] std::vector<reached_key<key_ptr>> walk_links(
+[[nodiscard]] std::vector<reached_key<key_ptr>> walk_edges(
     grove_t& grove, const std::vector<key_ptr>& seeds, std::size_t max_hops,
     direction dir) {
     struct item { key_ptr key; std::size_t seed; std::size_t hops; };
@@ -136,7 +136,7 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
 // canonical 0-based-inclusive space (see iterate_query).
 //
 // With max_hops > 0, each overlap row is followed by one row per interval
-// reached over the graph edges between keys (see walk_links):
+// reached over the graph edges between keys (see walk_edges):
 //   <query chrom> <start> <end> <TAB> <seed row> <TAB> <reached row> <TAB> <hops>
 // The query columns are 0-based half-open like the BED-style payload rows.
 template <handlers::interval_queryable grove_t, typename print_fn>
@@ -168,7 +168,7 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
             }
             return;
         }
-        const auto reached = walk_links(grove, hits, max_hops, dir);
+        const auto reached = walk_edges(grove, hits, max_hops, dir);
         auto r = reached.begin();
         for (std::size_t i = 0; i < hits.size(); ++i) {
             print_hit(hits[i]);
@@ -205,7 +205,8 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
         // --links cannot be detected here without reading every block. It
         // walks an empty graph instead of failing up front like the eager
         // path; say so once on stderr so empty traversals are not a surprise.
-        // (A GFF index always has the edges of its gene model.)
+        // No warning for a GFF index: it has the edges of its gene model, and
+        // one from a file with no gene or transcript line is silent here.
         if(max_hops > 0 && !std::is_same_v<payload_t, gio::gff_entry>) {
             std::cerr << "Warning: --in-place cannot verify that " << index_path
                       << " was built with 'idx --links'; a link-less index yields "
@@ -216,11 +217,13 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
         run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir, exons);
     } else {
         auto grove = ggs::grove<gdt::interval, payload_t, std::string>::deserialize(in);
-        // Catches a link-less BED index only: a GFF index always has edges.
+        // A BED index built without --links, or a GFF index from a file with
+        // no gene or transcript line and no links.
         if(max_hops > 0 && grove.edge_count() == 0) {
             throw std::runtime_error(
-                "Error: --hops requires an index built with 'idx --links' "
-                "(no edges in " + index_path + ")");
+                "Error: --hops has no edge to follow in " + index_path +
+                " (build the index with 'idx --links', or from a GFF/GTF file "
+                "with gene and transcript lines)");
         }
         run_intersect(grove, queryfile, query_filetype, out, print, max_hops, dir, exons);
     }
@@ -338,11 +341,9 @@ void intersect::validate(const cxxopts::ParseResult& args) {
             "a prebuilt index (-i) keeps the order it was built with");
     }
 
-    // A target (-t) is built in memory without links, so --hops has nothing
-    // to follow; links only exist in an index written by `idx --links`.
+    // --hops is for a prebuilt index only: a target (-t) has no user links.
     if(parse_hops(args["hops"].as<std::string>()) > 0 && !has_index) {
-        throw std::runtime_error(
-            "Error: --hops requires a prebuilt index (-i) built with 'idx --links'");
+        throw std::runtime_error("Error: --hops requires a prebuilt index (-i)");
     }
     // Called for its throw on an invalid value; execute() parses it again.
     static_cast<void>(parse_direction(args["direction"].as<std::string>()));

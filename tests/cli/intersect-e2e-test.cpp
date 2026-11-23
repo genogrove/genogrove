@@ -795,6 +795,7 @@ TEST_F(CLIIntersectHopsE2ETest, HopsOnAGffIndexFollowsModelEdgesAndUserLinks) {
     const std::string t1 = "chr1\t101\t400\ttranscript\tT1\t+";
     const std::string e1 = "chr1\t101\t200\texon\tchr1:101-200:+\t+";
     const std::string e2 = "chr1\t301\t400\texon\tchr1:301-400:+\t+";
+    const std::string e3 = "chr1\t1001\t1100\texon\tchr1:1001-1100:+\t+";
     const std::string g2 = "chr1\t1001\t1400\tgene\tG2\t+";
     const std::string t2 = "chr1\t1001\t1400\ttranscript\tT2\t+";
     const std::string q1 = "chr1\t149\t151\t";
@@ -818,13 +819,21 @@ TEST_F(CLIIntersectHopsE2ETest, HopsOnAGffIndexFollowsModelEdgesAndUserLinks) {
                   g1 + "\n" + from_g1 + t1 + "\n" + e1 + "\tT1\t1\n" + from_t1)
             << "mode:" << mode;
 
+        // The whole component, in the default direction (both): the exon of
+        // T2 is three edges from G1.
+        result = run_command(isec_hops("--hops all" + mode));
+        EXPECT_EQ(result.output,
+                  g1 + "\n" + from_g1 + q1 + g1 + "\t" + e3 + "\t3\n" + t1 + "\n" + from_t1)
+            << "mode:" << mode;
+
         // Against the direction of the edges, from the second gene: a user
-        // link into G2, and a user link from an exon into T2.
+        // link into G2; a user link from e1 into T2, then the model edge
+        // T1 -> e1. This is the only path between T2 and T1 of this length.
         write_file(hops_query, "chr1\t1049\t1051\n");
-        result = run_command(isec_hops("--hops 1 --direction in" + mode));
+        result = run_command(isec_hops("--hops 2 --direction in" + mode));
         EXPECT_EQ(result.output,
                   g2 + "\n" + q2 + g2 + "\t" + g1 + "\t1\n" +
-                  t2 + "\n" + q2 + t2 + "\t" + e1 + "\t1\n")
+                  t2 + "\n" + q2 + t2 + "\t" + e1 + "\t1\n" + q2 + t2 + "\t" + t1 + "\t2\n")
             << "mode:" << mode;
     }
 
@@ -841,6 +850,64 @@ TEST_F(CLIIntersectHopsE2ETest, HopsOnAGffIndexFollowsModelEdgesAndUserLinks) {
 
     fs::remove(gtf);
     fs::remove(links);
+}
+
+TEST_F(CLIIntersectHopsE2ETest, HopsLeavesTheChainOfATranscriptAtASharedExon) {
+    // T1 (exons a, b) and T3 (exons a, c) share exon a. The query lies in b,
+    // so it hits G1 and T1 but not T3. The walk does not read the transcript
+    // list of an exon -> exon edge: from a it reaches b and also c, which is
+    // not an exon of T1. Each key is one row.
+    fs::path gtf = fs::temp_directory_path() / "genogrove_e2e_hops_shared.gtf";
+    write_file(gtf,
+        "chr1\tt\tgene\t101\t400\t.\t+\t.\tgene_id \"G1\";\n"
+        "chr1\tt\ttranscript\t101\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n"
+        "chr1\tt\texon\t101\t200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n"
+        "chr1\tt\texon\t301\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n"
+        "chr1\tt\ttranscript\t101\t280\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T3\";\n"
+        "chr1\tt\texon\t101\t200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T3\";\n"
+        "chr1\tt\texon\t251\t280\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T3\";\n");
+    auto idx = run_command(cli("idx \"" + gtf.string() + "\" -o \"" + tmp_index.string() + "\""));
+    EXPECT_EQ(idx.exit_code, 0) << idx.output;
+
+    const std::string q = "chr1\t349\t351\t";
+    const std::string g1 = "chr1\t101\t400\tgene\tG1\t+";
+    const std::string t1 = "chr1\t101\t400\ttranscript\tT1\t+";
+    const std::string t3 = "chr1\t101\t280\ttranscript\tT3\t+";
+    const std::string a = "chr1\t101\t200\texon\tchr1:101-200:+\t+";
+    const std::string b = "chr1\t301\t400\texon\tchr1:301-400:+\t+";
+    const std::string c = "chr1\t251\t280\texon\tchr1:251-280:+\t+";
+    write_file(hops_query, "chr1\t349\t351\n");
+    for (const std::string& mode : {std::string(), std::string(" --in-place")}) {
+        auto result = run_command(isec_hops("--hops all" + mode));
+        EXPECT_EQ(result.exit_code, 0) << result.output;
+        EXPECT_EQ(result.output,
+                  g1 + "\n" + q + g1 + "\t" + t3 + "\t1\n" +
+                  t1 + "\n" + q + t1 + "\t" + a + "\t1\n" + q + t1 + "\t" + b + "\t2\n" +
+                  q + t1 + "\t" + c + "\t2\n")
+            << "mode:" << mode;
+    }
+    fs::remove(gtf);
+}
+
+TEST_F(CLIIntersectHopsE2ETest, HopsOnAGffIndexWithNoEdges) {
+    // No gene or transcript line and no links: the index has no graph edge.
+    // The eager path counts the edges and stops; the in-place path cannot
+    // count them, so it prints the overlap row only.
+    fs::path gtf = fs::temp_directory_path() / "genogrove_e2e_hops_noedge.gtf";
+    write_file(gtf, "chr1\tt\tenhancer\t101\t400\t.\t+\t.\tname \"x\";\n");
+    auto idx = run_command(cli("idx \"" + gtf.string() + "\" -o \"" + tmp_index.string() + "\""));
+    EXPECT_EQ(idx.exit_code, 0) << idx.output;
+    write_file(hops_query, "chr1\t149\t151\n");
+
+    auto result = run_command(isec_hops("--hops 1"));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("--hops has no edge to follow"), std::string::npos)
+        << result.output;
+
+    result = run_command(isec_hops("--hops 1 --in-place"));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_EQ(result.output, "chr1\t101\t400\tenhancer\t.\t+\n");
+    fs::remove(gtf);
 }
 
 TEST_F(CLIIntersectHopsE2ETest, InvalidHopsAndDirectionRejected) {
