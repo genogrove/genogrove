@@ -43,8 +43,8 @@ inline constexpr std::string_view edge_transcript = "transcript";
 inline constexpr std::string_view edge_first_exon = "first_exon";
 inline constexpr std::string_view edge_next_exon_prefix = "next_exon:";
 
-// True when the edge data marks a structure edge. `isec --hops` does not
-// follow such an edge, and a links file must not use such a text.
+// True when the edge data marks a structure edge. A links file must not use
+// such a text.
 [[nodiscard]] bool is_structure_edge(std::string_view text);
 
 // Build the linked model of a GFF/GTF file in an empty grove:
