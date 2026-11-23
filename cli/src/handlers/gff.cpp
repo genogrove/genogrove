@@ -344,10 +344,10 @@ void add_structure_edges(grove_t& grove, gff_model& model, const std::vector<key
             std::ranges::reverse(transcript.exons);
         }
         grove.add_edge(feature_keys[*transcript.line], exon_keys[transcript.exons.front()],
-                       std::string(edge_first_exon));
+                       std::string(edge_first_prefix) + id);
         for(std::size_t i = 0; i + 1 < transcript.exons.size(); ++i) {
             std::string& users = junctions[{transcript.exons[i], transcript.exons[i + 1]}];
-            users += users.empty() ? std::string(edge_next_exon_prefix) : ",";
+            users += users.empty() ? std::string(edge_next_prefix) : ",";
             users += id;
         }
     }
@@ -473,8 +473,8 @@ std::size_t apply_links(grove_t& grove, const std::string& links_path, const gff
 }
 
 bool is_structure_edge(std::string_view text) {
-    return text == edge_transcript || text == edge_first_exon ||
-           text.starts_with(edge_next_exon_prefix);
+    return text == edge_transcript || text.starts_with(edge_first_prefix) ||
+           text.starts_with(edge_next_prefix);
 }
 
 std::string record_id(const gio::gff_entry& payload) {
@@ -490,13 +490,13 @@ std::string record_id(const gio::gff_entry& payload) {
     return first_value(payload, id_tag(payload.is_gff3(), payload.type)).value_or(".");
 }
 
-bool edge_names_transcript(std::string_view edge_text, std::string_view transcript_id) {
-    if(!edge_text.starts_with(edge_next_exon_prefix)) {
+bool next_edge_lists(std::string_view edge_text, std::string_view chain_id) {
+    if(!edge_text.starts_with(edge_next_prefix)) {
         return false;
     }
-    std::size_t pos = edge_next_exon_prefix.size();
+    std::size_t pos = edge_next_prefix.size();
     while(const auto id = genogrove::utility::next_field(edge_text, pos, ',')) {
-        if(*id == transcript_id) {
+        if(*id == chain_id) {
             return true;
         }
     }
