@@ -6,13 +6,16 @@
 #ifndef GENOGROVE_CLI_HANDLERS_GFF_HPP
 #define GENOGROVE_CLI_HANDLERS_GFF_HPP
 
+#include <algorithm>
 #include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <ostream>
+#include <unordered_map>
 #include <utility>
 #include <vector>
+#include <genogrove/utility/tokenizer.hpp>
 #include <genogrove/structure/grove/grove.hpp>
 #include <genogrove/data_type/interval.hpp>
 #include <genogrove/io/gff_reader.hpp>
@@ -25,12 +28,6 @@ namespace ggs = genogrove::structure;
 namespace gio = genogrove::io;
 
 using gff_key = gdt::key<gdt::interval, gio::gff_entry>;
-
-// The keys of a built index: `idx --links` finds its names among them.
-struct gff_keys {
-    std::vector<gff_key*> indexed;   // keys in the tree
-    std::vector<gff_key*> external;  // keys only in the graph
-};
 
 // A structure edge is an edge that `idx` adds by itself to store the gene
 // model; every other edge is a user link (`idx --links`). The two kinds differ
@@ -49,18 +46,22 @@ inline constexpr std::string_view edge_next_prefix = "next:";
 // such a text.
 [[nodiscard]] bool is_structure_edge(std::string_view text);
 
-// Build the linked model of a GFF/GTF file in an empty grove:
-//   - genes, transcripts and other feature types: indexed keys;
-//   - exons: external keys, one per distinct (seqid, start, end, strand);
+// Build the linked model of a GFF/GTF file in an empty grove. Every key is in
+// the tree:
+//   - genes, transcripts and other feature types: one key per line;
+//   - exons: one key per distinct (seqid, start, end, strand), shared by the
+//     transcripts that use it;
 //   - CDS, UTR and codon lines: list entries on their transcript record;
 //   - edges gene -> transcript -> first exon -> next exon, 5' to 3'.
 // The file must have a line for every gene and every transcript, and one
 // transcript per exon, CDS, UTR or codon line (the layout of a GENCODE file).
 // Lines may come in any order.
 //
+// Returns the keys: `idx --links` finds its names among them.
+//
 // Throws std::runtime_error for another layout and for records that contradict
 // each other.
-gff_keys grove_insert(
+std::vector<gff_key*> grove_insert(
     ggs::grove<gdt::interval, gio::gff_entry, std::string>& grove,
     const std::string& filepath
 );
@@ -78,7 +79,7 @@ gff_keys grove_insert(
 std::size_t apply_links(
     ggs::grove<gdt::interval, gio::gff_entry, std::string>& grove,
     const std::string& links_path,
-    const gff_keys& keys
+    const std::vector<gff_key*>& keys
 );
 
 // Iterate a GFF/GTF query file, invoking cb(interval, seqid) for each record.
@@ -110,43 +111,69 @@ inline void print_gff_result(std::ostream& output, const gio::gff_entry& payload
            << payload.type << "\t" << record_id(payload) << "\t" << payload.strand.value_or('.');
 }
 
-// The members of the chain that starts at `hit` (the exons of a transcript)
-// that overlap the query, in chain order. They are not in the tree, so the
-// overlap search does not find them. Empty when no chain starts at `hit`.
+// The hits of one query in output order: a hit that is a member of a chain
+// (an exon) comes after each hit that owns such a chain (its transcripts), in
+// chain order, and not at its own place. Only the edge texts of the hits are
+// read; no chain is walked.
 template <typename grove_t>
-std::vector<gff_key*> overlapping_members(grove_t& grove, const gff_key* hit,
-                                          const gdt::interval& query) {
-    // get_neighbors_if tests the edge text first, so the in-place view loads
-    // only the block of the one target that matches.
-    const auto follow = [&grove](const gff_key* source, auto matches) -> gff_key* {
-        const auto targets = grove.get_neighbors_if(source, matches);
-        return targets.empty() ? nullptr : targets.front();
-    };
-
-    std::string id;
-    gff_key* member = follow(hit, [&id](const std::string& text) {
-        if (!text.starts_with(edge_first_prefix)) {
-            return false;
+std::vector<gff_key*> group_by_chain(grove_t& grove, const std::vector<gff_key*>& hits) {
+    // chain id -> its members among the hits, as indexes, by position
+    std::unordered_map<std::string, std::vector<std::size_t>> members;
+    std::vector<bool> is_member(hits.size());
+    for (std::size_t i = 0; i < hits.size(); ++i) {
+        // Each chain of a member reaches it over one incoming edge.
+        for (const std::string& text : grove.get_in_edges(hits[i])) {
+            std::string_view ids = text;
+            if (ids.starts_with(edge_first_prefix)) {
+                ids.remove_prefix(edge_first_prefix.size());
+            } else if (ids.starts_with(edge_next_prefix)) {
+                ids.remove_prefix(edge_next_prefix.size());
+            } else {
+                continue;
+            }
+            is_member[i] = true;
+            std::size_t pos = 0;
+            while (const auto id = genogrove::utility::next_field(ids, pos, ',')) {
+                members[std::string(*id)].push_back(i);
+            }
         }
-        id = text.substr(edge_first_prefix.size());
-        return true;
-    });
-    const bool descending = hit->get_data().strand == '-';  // the chain runs 5' to 3'
-    std::vector<gff_key*> overlapping;
-    while (member != nullptr) {
-        const gdt::interval& span = member->get_value();
-        if (descending ? span.get_end() < query.get_start()
-                       : span.get_start() > query.get_end()) {
-            break;  // every later member is further from the query
-        }
-        if (gdt::interval::overlaps(span, query)) {
-            overlapping.push_back(member);
-        }
-        member = follow(member, [&id](const std::string& text) {
-            return next_edge_lists(text, id);
-        });
     }
-    return overlapping;
+    if (members.empty()) {
+        return hits;
+    }
+
+    std::vector<gff_key*> rows;
+    std::vector<bool> placed(hits.size());
+    for (std::size_t i = 0; i < hits.size(); ++i) {
+        if (is_member[i]) {
+            continue;
+        }
+        rows.push_back(hits[i]);
+        for (const std::string& text : grove.get_edges(hits[i])) {
+            if (!text.starts_with(edge_first_prefix)) {
+                continue;
+            }
+            const auto chain = members.find(text.substr(edge_first_prefix.size()));
+            if (chain == members.end()) {
+                continue;
+            }
+            const std::size_t first = rows.size();
+            for (const std::size_t member : chain->second) {
+                rows.push_back(hits[member]);
+                placed[member] = true;
+            }
+            if (hits[i]->get_data().strand == '-') {  // the chain runs 5' to 3'
+                std::reverse(rows.begin() + static_cast<std::ptrdiff_t>(first), rows.end());
+            }
+        }
+    }
+    // A member whose chain owner does not overlap the query keeps a row.
+    for (std::size_t i = 0; i < hits.size(); ++i) {
+        if (is_member[i] && !placed[i]) {
+            rows.push_back(hits[i]);
+        }
+    }
+    return rows;
 }
 
 } // namespace gff

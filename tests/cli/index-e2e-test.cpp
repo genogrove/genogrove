@@ -341,8 +341,8 @@ TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
         ASSERT_TRUE(in.is_open());
         EXPECT_EQ(gio::gg_header::read(in).payload_type, gio::gg_payload_type::GFF);
         auto grove = ggs::grove<gdt::interval, gio::gff_entry, std::string>::deserialize(in);
-        EXPECT_EQ(grove.indexed_vertex_count(), 2u);   // gene + transcript
-        EXPECT_EQ(grove.external_vertex_count(), 2u);  // the two exons
+        EXPECT_EQ(grove.indexed_vertex_count(), 4u);   // gene, transcript, two exons
+        EXPECT_EQ(grove.external_vertex_count(), 0u);  // every key is in the tree
         EXPECT_EQ(grove.edge_count(), 3u);             // gene>transcript, transcript>exon, exon>exon
 
         // The exon chain is still there after the write and the read: from
@@ -376,9 +376,8 @@ TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
             << "mode:" << mode;
     }
 
-    // An exon is not in the tree, but an exon under the query is an overlap
-    // row after its transcript: a query in the first exon, one in the intron,
-    // one in the second exon (reached over the exon-to-exon edge). The same
+    // An exon under the query is an overlap row after its transcript: a query
+    // in the first exon, one in the intron, one in the second exon. The same
     // rows from the index (eager and in place) and from the file as a target,
     // for a BED query and a GFF query.
     fs::path gff_query_path = fs::temp_directory_path() / "genogrove_idx_linked_query.gff";

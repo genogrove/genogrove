@@ -135,8 +135,8 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
 // consumes (interval, index), and both readers emit intervals in the same
 // canonical 0-based-inclusive space (see iterate_query).
 //
-// In a GFF index, a hit is followed by the members of its chain that overlap
-// the query (the exons of a transcript): they are overlap rows like the hits.
+// In a GFF index, a hit that is a member of a chain (an exon) is printed
+// after each hit that owns the chain (its transcripts); see group_by_chain.
 //
 // With max_hops > 0, each overlap row is followed by one row per interval
 // reached over the graph edges between keys (see walk_edges):
@@ -154,15 +154,10 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         const auto& hits = results.get_keys();
         using key_ptr = typename std::remove_cvref_t<decltype(hits)>::value_type;
         const std::vector<key_ptr>* rows = &hits;
-        std::vector<key_ptr> with_members;
+        std::vector<key_ptr> grouped;
         if constexpr (has_gff_payload<key_ptr>) {
-            for (auto* hit : hits) {
-                with_members.push_back(hit);
-                for (auto* member : handlers::gff::overlapping_members(grove, hit, iv)) {
-                    with_members.push_back(member);
-                }
-            }
-            rows = &with_members;
+            grouped = handlers::gff::group_by_chain(grove, hits);
+            rows = &grouped;
         }
         if (max_hops == 0) {
             for (auto* row : *rows) {

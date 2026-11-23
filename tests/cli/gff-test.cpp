@@ -274,12 +274,14 @@ TEST_F(CLIGffHandlerTest, LinkedModelIndexesGenesAndTranscriptsAndSharesExons) {
     gff_grove grove(3);
     handlers::gff::grove_insert(grove, tmp_gff.string());
 
-    EXPECT_EQ(grove.indexed_vertex_count(), 3u);   // G1, T1, T2
-    EXPECT_EQ(grove.external_vertex_count(), 3u);  // E1, E2, E3: five exon lines
+    // G1, T1, T2 and E1, E2, E3: five exon lines give three keys. Every key
+    // is in the tree.
+    EXPECT_EQ(grove.indexed_vertex_count(), 6u);
+    EXPECT_EQ(grove.external_vertex_count(), 0u);
 
-    // A position inside exon E2 finds the gene and both transcripts, not the exon.
+    // A position inside exon E2 finds the gene, both transcripts and the exon.
     auto hits = grove.intersect(gdt::interval(350, 350), "chr1");
-    EXPECT_EQ(hits.get_keys().size(), 3u);
+    EXPECT_EQ(hits.get_keys().size(), 4u);
 
     auto* gene = find_key(grove, "gene", "gene_id", "G1");
     auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
@@ -318,7 +320,7 @@ TEST_F(CLIGffHandlerTest, LinkedModelSharedJunctionListsItsTranscripts) {
     std::ranges::sort(labels);
     EXPECT_EQ(labels, (std::vector<std::string>{"next:T1,T3", "next:T2"}));
     EXPECT_EQ(grove.get_edges(t1), (std::vector<std::string>{"first:T1"}));
-    EXPECT_EQ(grove.external_vertex_count(), 3u);
+    EXPECT_EQ(grove.indexed_vertex_count(), 7u);  // G1, three transcripts, three exons
 }
 
 TEST_F(CLIGffHandlerTest, LinkedModelSharedExonRecordKeepsOnlyWhatItsLinesAgreeOn) {
@@ -389,7 +391,7 @@ TEST_F(CLIGffHandlerTest, LinkedModelGtfThatStartsWithALineWithoutAttributes) {
     auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
     ASSERT_NE(t1, nullptr);
     EXPECT_EQ(walk_exons(grove, t1, "T1"), (std::vector<std::string>{"E1"}));
-    EXPECT_EQ(grove.indexed_vertex_count(), 3u);  // the region, the gene, the transcript
+    EXPECT_EQ(grove.indexed_vertex_count(), 4u);  // the region, the gene, the transcript, the exon
 }
 
 TEST_F(CLIGffHandlerTest, LinkedModelStoresCdsAndCodonLinesOnTheTranscript) {
@@ -405,9 +407,9 @@ TEST_F(CLIGffHandlerTest, LinkedModelStoresCdsAndCodonLinesOnTheTranscript) {
     gff_grove grove(3);
     handlers::gff::grove_insert(grove, tmp_gff.string());
 
-    // The part lines are not keys: only the gene and the transcript are indexed.
-    EXPECT_EQ(grove.indexed_vertex_count(), 2u);
-    EXPECT_EQ(grove.external_vertex_count(), 2u);
+    // The part lines are not keys: only the gene, the transcript and the two
+    // exons are.
+    EXPECT_EQ(grove.indexed_vertex_count(), 4u);
 
     auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
     ASSERT_NE(t1, nullptr);
@@ -427,7 +429,7 @@ TEST_F(CLIGffHandlerTest, LinkedModelTranscriptWithOnlyCdsLinesHasNoChain) {
     gff_grove grove(3);
     handlers::gff::grove_insert(grove, tmp_gff.string());
 
-    EXPECT_EQ(grove.external_vertex_count(), 0u);  // no exon is invented
+    EXPECT_EQ(grove.indexed_vertex_count(), 2u);  // no exon is invented
 
     auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
     ASSERT_NE(t1, nullptr);
@@ -547,8 +549,8 @@ TEST_F(CLIGffHandlerTest, LinkedModelReadsTheGff3LayoutOfGencode) {
     gff_grove grove(3);
     handlers::gff::grove_insert(grove, tmp_gff.string());
 
-    EXPECT_EQ(grove.indexed_vertex_count(), 4u);   // G1, T1, T2 and the region
-    EXPECT_EQ(grove.external_vertex_count(), 3u);  // E1 is shared
+    // G1, T1, T2, the region and three exons: E1 is shared.
+    EXPECT_EQ(grove.indexed_vertex_count(), 7u);
     auto* gene = find_key(grove, "gene", "ID", "G1");
     auto* t1 = find_key(grove, "transcript", "ID", "T1");
     auto* t2 = find_key(grove, "transcript", "ID", "T2");
@@ -581,7 +583,7 @@ TEST_F(CLIGffHandlerTest, LinkedModelSharedExonKeepsEveryExonId) {
     gff_grove grove(3);
     handlers::gff::grove_insert(grove, tmp_gff.string());
 
-    ASSERT_EQ(grove.external_vertex_count(), 1u);
+    ASSERT_EQ(grove.indexed_vertex_count(), 5u);  // G1, three transcripts, one exon
     auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
     ASSERT_NE(t1, nullptr);
     EXPECT_EQ(grove.get_neighbors(t1).front()->get_data().attributes.at("exon_id"),
@@ -598,46 +600,39 @@ TEST_F(CLIGffHandlerTest, IsStructureEdgeMatchesWordsExactlyAndThePrefix) {
 }
 
 // ==========================================
-// isec: the chain members of one hit under the query
+// isec: the rows of one query, grouped by chain
 // ==========================================
 
 namespace {
-// The ids of the chain members of one hit that overlap a query at one position.
-std::vector<std::string> member_ids(gff_grove& grove, key_ptr hit, std::size_t position) {
-    std::vector<std::string> found;
-    for (auto* member :
-         handlers::gff::overlapping_members(grove, hit, gdt::interval(position, position))) {
-        found.push_back(handlers::gff::record_id(member->get_data()));
+using id_list = std::vector<std::string>;
+
+// The ids of the rows of one query on chr1, in output order.
+id_list row_ids(gff_grove& grove, std::size_t start, std::size_t end) {
+    auto result = grove.intersect(gdt::interval(start, end), "chr1");
+    id_list found;
+    for (auto* row : handlers::gff::group_by_chain(grove, result.get_keys())) {
+        found.push_back(handlers::gff::record_id(row->get_data()));
     }
     return found;
 }
-const std::vector<std::string> none;
 } // namespace
 
-TEST_F(CLIGffHandlerTest, MembersAreTheExonsOfTheTranscriptUnderTheQuery) {
+TEST_F(CLIGffHandlerTest, AnExonRowComesAfterEachTranscriptThatUsesIt) {
     write_file(tmp_gff, two_transcripts());
     gff_grove grove(3);
     handlers::gff::grove_insert(grove, tmp_gff.string());
-    auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
-    auto* t2 = find_key(grove, "transcript", "transcript_id", "T2");
-    ASSERT_NE(t1, nullptr);
-    ASSERT_NE(t2, nullptr);
 
     // E3 (801-900) is an exon of both transcripts: each of them has it.
-    EXPECT_EQ(member_ids(grove, t1, 850), (std::vector<std::string>{"E3"}));
-    EXPECT_EQ(member_ids(grove, t2, 850), (std::vector<std::string>{"E3"}));
+    EXPECT_EQ(row_ids(grove, 850, 850), (id_list{"G1", "T1", "E3", "T2", "E3"}));
     // 350 is in E2 for T1; T2 has no exon there.
-    EXPECT_EQ(member_ids(grove, t1, 350), (std::vector<std::string>{"E2"}));
-    EXPECT_EQ(member_ids(grove, t2, 350), none);
+    EXPECT_EQ(row_ids(grove, 350, 350), (id_list{"G1", "T1", "E2", "T2"}));
     // A query over two exons gets both, in chain order.
-    std::vector<std::string> both;
-    for (auto* member : handlers::gff::overlapping_members(grove, t1, gdt::interval(150, 350))) {
-        both.push_back(handlers::gff::record_id(member->get_data()));
-    }
-    EXPECT_EQ(both, (std::vector<std::string>{"E1", "E2"}));
+    EXPECT_EQ(row_ids(grove, 150, 350), (id_list{"G1", "T1", "E1", "E2", "T2", "E1"}));
+    // Between two exons: no exon row.
+    EXPECT_EQ(row_ids(grove, 600, 600), (id_list{"G1", "T1", "T2"}));
 }
 
-TEST_F(CLIGffHandlerTest, MembersOnTheMinusStrand) {
+TEST_F(CLIGffHandlerTest, ExonRowsOnTheMinusStrandAreInChainOrder) {
     write_file(tmp_gff,
                gtf("gene", 101, 900, '-', ids("G1")) +
                gtf("transcript", 101, 900, '-', ids("G1", "T1")) +
@@ -646,34 +641,24 @@ TEST_F(CLIGffHandlerTest, MembersOnTheMinusStrand) {
                gtf("exon", 801, 900, '-', ids("G1", "T1", "right")));
     gff_grove grove(3);
     handlers::gff::grove_insert(grove, tmp_gff.string());
-    auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
-    ASSERT_NE(t1, nullptr);
 
-    // The chain runs right, middle, left: each position finds its exon, and
-    // a position between two exons finds none.
-    EXPECT_EQ(member_ids(grove, t1, 850), (std::vector<std::string>{"right"}));
-    EXPECT_EQ(member_ids(grove, t1, 350), (std::vector<std::string>{"middle"}));
-    EXPECT_EQ(member_ids(grove, t1, 150), (std::vector<std::string>{"left"}));
-    EXPECT_EQ(member_ids(grove, t1, 600), none);
+    // The chain runs 5' to 3': right, middle, left.
+    EXPECT_EQ(row_ids(grove, 150, 850), (id_list{"G1", "T1", "right", "middle", "left"}));
+    EXPECT_EQ(row_ids(grove, 150, 150), (id_list{"G1", "T1", "left"}));
 }
 
-TEST_F(CLIGffHandlerTest, AGeneAndAnExonlessTranscriptHaveNoMembers) {
+TEST_F(CLIGffHandlerTest, AGeneAndAnExonlessTranscriptArePlainRows) {
     write_file(tmp_gff,
                gtf("gene", 101, 400, '+', ids("G1")) +
                gtf("transcript", 101, 400, '+', ids("G1", "T1")) +
                gtf("CDS", 151, 200, '+', ids("G1", "T1"), "0"));
     gff_grove grove(3);
     handlers::gff::grove_insert(grove, tmp_gff.string());
-    auto* gene = find_key(grove, "gene", "gene_id", "G1");
-    auto* t1 = find_key(grove, "transcript", "transcript_id", "T1");
-    ASSERT_NE(gene, nullptr);
-    ASSERT_NE(t1, nullptr);
 
-    EXPECT_EQ(member_ids(grove, gene, 160), none);
-    EXPECT_EQ(member_ids(grove, t1, 160), none);
+    EXPECT_EQ(row_ids(grove, 160, 160), (id_list{"G1", "T1"}));
 }
 
-TEST_F(CLIGffHandlerTest, AMemberRowJoinsTheIdsOfASharedExon) {
+TEST_F(CLIGffHandlerTest, AnExonRowJoinsTheIdsOfASharedExon) {
     write_file(tmp_gff,
                gtf("gene", 101, 200, '+', ids("G1")) +
                gtf("transcript", 101, 200, '+', ids("G1", "T1")) +
@@ -682,10 +667,8 @@ TEST_F(CLIGffHandlerTest, AMemberRowJoinsTheIdsOfASharedExon) {
                gtf("exon", 101, 200, '+', ids("G1", "T2", "E9")));
     gff_grove grove(3);
     handlers::gff::grove_insert(grove, tmp_gff.string());
-    auto* t2 = find_key(grove, "transcript", "transcript_id", "T2");
-    ASSERT_NE(t2, nullptr);
 
-    EXPECT_EQ(member_ids(grove, t2, 150), (std::vector<std::string>{"E1,E9"}));
+    EXPECT_EQ(row_ids(grove, 150, 150), (id_list{"G1", "T1", "E1,E9", "T2", "E1,E9"}));
 }
 
 TEST_F(CLIGffHandlerTest, NextEdgeListsMatchesAWholeId) {
@@ -703,7 +686,7 @@ TEST_F(CLIGffHandlerTest, NextEdgeListsMatchesAWholeId) {
 class CLIGffLinksTest : public CLIGffHandlerTest {
 protected:
     gff_grove grove{3};
-    handlers::gff::gff_keys keys;
+    std::vector<key_ptr> keys;
 
     // Gene G1 with T1 (E1, E2, E3) and T2 (E1, E3), and a second gene G2.
     void SetUp() override {
@@ -728,10 +711,7 @@ protected:
     }
 
     key_ptr exon(const std::string& exon_id) {
-        for (auto* key : keys.external) {
-            if (key->get_data().attributes.at("exon_id").front() == exon_id) return key;
-        }
-        return nullptr;
+        return find_key(grove, "exon", "exon_id", exon_id);
     }
 };
 
@@ -798,13 +778,13 @@ TEST_F(CLIGffLinksTest, EveryIdOfASharedExonNamesIt) {
                gtf("exon", 101, 200, '+', ids("G1", "T2", "E9")));
     gff_grove shared(3);
     const auto shared_keys = handlers::gff::grove_insert(shared, tmp_gff.string());
-    ASSERT_EQ(shared_keys.external.size(), 1u);
+    ASSERT_EQ(shared_keys.size(), 4u);  // G1, T1, T2 and one exon
     write_file(tmp_links, "exon_id:gene_id\tE1\tG1\n"
                           "exon_id:gene_id\tE9\tG1\n");  // the same exon: the same edge
 
     EXPECT_EQ(handlers::gff::apply_links(shared, tmp_links.string(), shared_keys), 1u);
     auto* gene = find_key(shared, "gene", "gene_id", "G1");
-    EXPECT_TRUE(shared.has_edge(shared_keys.external.front(), gene));
+    EXPECT_TRUE(shared.has_edge(find_key(shared, "exon", "exon_id", "E1"), gene));
 }
 
 TEST_F(CLIGffLinksTest, AnyOtherTagLooksAtEveryKey) {
@@ -827,7 +807,7 @@ TEST_F(CLIGffLinksTest, AnyOtherTagLooksAtEveryKey) {
     auto* enhancer = find_key(gff3, "enhancer", "ID", "enh1");
     auto* gene = find_key(gff3, "gene", "ID", "G1");
     EXPECT_TRUE(gff3.has_edge(enhancer, gene));
-    EXPECT_TRUE(gff3.has_edge(enhancer, gff3_keys.external.front()));
+    EXPECT_TRUE(gff3.has_edge(enhancer, find_key(gff3, "exon", "exon_id", "E1")));
 }
 
 TEST_F(CLIGffLinksTest, ANameMustBeOnExactlyOneRecord) {

@@ -14,6 +14,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -38,7 +39,7 @@ struct transcript_state {
     std::string seqid;
     std::optional<char> strand;
     std::optional<std::string> protein_id;
-    std::vector<std::size_t> exons; // indexes into gff_model::exon_keys, each once
+    std::vector<std::size_t> chain; // indexes into gff_model::shared, each once
     std::map<std::string, std::vector<std::string>> parts; // column-3 type -> entries
 };
 
@@ -48,9 +49,18 @@ struct gff_model {
     std::vector<gio::gff_entry> features;                  // the indexed keys to be
     std::map<std::string, std::size_t, std::less<>> genes; // gene id -> index into features
     std::map<std::string, transcript_state, std::less<>> transcripts;
-    std::vector<key_ptr> exon_keys; // one external key per distinct exon
-    std::map<std::tuple<std::string, std::size_t, std::size_t, char>, std::size_t> exon_index;
+    // A line type that repeats per transcript (see is_shared_type) gives one
+    // record per distinct (type, seqid, start, end, strand).
+    std::vector<gio::gff_entry> shared;
+    std::map<std::tuple<std::string, std::string, std::size_t, std::size_t, char>, std::size_t>
+        shared_index;
 };
+
+// The line types with one line per transcript that uses the interval. Their
+// records are shared, and they are the chain of the transcript.
+bool is_shared_type(std::string_view type) {
+    return type == "exon";
+}
 
 // The spellings differ by source: GTF 2.2 (5UTR), GENCODE GTF (UTR), Ensembl
 // GTF (five_prime_utr) and GFF3 (five_prime_UTR).
@@ -144,47 +154,50 @@ void add_feature(gff_model& model, const gio::gff_entry& entry) {
     }
 }
 
-// Returns the index of the exon in model.exon_keys. The first line at a
-// position makes the key; a later line reduces its record to what both agree on.
-std::size_t add_exon(grove_t& grove, gff_model& model, const gio::gff_entry& entry) {
+// Returns the index of the record in model.shared. The first line at a
+// position makes the record; a later line reduces it to what both agree on.
+std::size_t add_shared_record(gff_model& model, const gio::gff_entry& entry) {
     gio::gff_entry stored = entry;
     stored.attributes.erase("transcript_id"); // the edge from the transcript says it
     stored.attributes.erase("Parent");
-    const auto [it, fresh] = model.exon_index.try_emplace(
-        {entry.seqid, entry.start, entry.end, entry.strand.value_or('.')}, model.exon_keys.size());
+    const auto [it, fresh] = model.shared_index.try_emplace(
+        {entry.type, entry.seqid, entry.start, entry.end, entry.strand.value_or('.')},
+        model.shared.size());
     if(fresh) {
-        model.exon_keys.push_back(grove.add_external_key(entry.to_interval(), std::move(stored)));
+        model.shared.push_back(std::move(stored));
         return it->second;
     }
 
-    attribute_map& kept = model.exon_keys[it->second]->get_data().attributes;
-    // exon_id addresses an exon, and one position can have several ids (the
-    // same exon in another reading frame or gene), so every id is kept.
-    std::vector<std::string> exon_ids;
+    attribute_map& kept = model.shared[it->second].attributes;
+    // <type>_id (exon_id) addresses the record, and one position can have
+    // several ids (the same exon in another reading frame or gene), so every
+    // id is kept.
+    const std::string id_attribute = entry.type + "_id";
+    std::vector<std::string> all_ids;
     for(const attribute_map* from : {&kept, &stored.attributes}) {
-        const auto ids = from->find("exon_id");
+        const auto ids = from->find(id_attribute);
         if(ids == from->end()) {
             continue;
         }
         for(const auto& id : ids->second) {
-            if(std::ranges::find(exon_ids, id) == exon_ids.end()) {
-                exon_ids.push_back(id);
+            if(std::ranges::find(all_ids, id) == all_ids.end()) {
+                all_ids.push_back(id);
             }
         }
     }
-    std::ranges::sort(exon_ids); // the record must not depend on the line order
+    std::ranges::sort(all_ids); // the record must not depend on the line order
     std::erase_if(kept, [&stored](const auto& attribute) {
         const auto other = stored.attributes.find(attribute.first);
         return other == stored.attributes.end() || other->second != attribute.second;
     });
-    if(!exon_ids.empty()) {
-        kept["exon_id"] = std::move(exon_ids);
+    if(!all_ids.empty()) {
+        kept[id_attribute] = std::move(all_ids);
     }
     return it->second;
 }
 
 // An exon, CDS, UTR or codon line: file it under its transcript.
-void add_transcript_child(grove_t& grove, gff_model& model, const gio::gff_entry& entry) {
+void add_transcript_child(gff_model& model, const gio::gff_entry& entry) {
     const auto owner = owner_of(model.gff3, entry, "transcript_id");
     if(!owner) {
         unsupported(entry.type + " line at " + place(entry) +
@@ -201,10 +214,10 @@ void add_transcript_child(grove_t& grove, gff_model& model, const gio::gff_entry
                                  " at " + place(entry) + ")");
     }
 
-    if(entry.type == "exon") {
-        const std::size_t exon = add_exon(grove, model, entry);
-        if(std::ranges::find(transcript.exons, exon) == transcript.exons.end()) {
-            transcript.exons.push_back(exon);
+    if(is_shared_type(entry.type)) {
+        const std::size_t member = add_shared_record(model, entry);
+        if(std::ranges::find(transcript.chain, member) == transcript.chain.end()) {
+            transcript.chain.push_back(member);
         }
         return;
     }
@@ -220,7 +233,7 @@ void add_transcript_child(grove_t& grove, gff_model& model, const gio::gff_entry
     transcript.parts[entry.type].push_back(std::move(item));
 }
 
-gff_model read_file(grove_t& grove, const std::string& filepath) {
+gff_model read_file(const std::string& filepath) {
     gio::gff_reader reader(filepath);
     gff_model model;
     bool format_known = false;
@@ -238,8 +251,8 @@ gff_model read_file(grove_t& grove, const std::string& filepath) {
                                          " syntax of the lines before it");
             }
         }
-        if(entry.type == "exon" || is_transcript_part(entry.type)) {
-            add_transcript_child(grove, model, entry);
+        if(is_shared_type(entry.type) || is_transcript_part(entry.type)) {
+            add_transcript_child(model, entry);
         } else {
             add_feature(model, entry);
         }
@@ -295,72 +308,84 @@ std::vector<index_pair> complete_transcripts(gff_model& model) {
     return gene_edges;
 }
 
-// Sorts the features and bulk-inserts them, one build per chromosome. Returns
-// the key of each feature, in the order of model.features (which is moved from).
-std::vector<key_ptr> insert_features(grove_t& grove, gff_model& model) {
+// Sorts the features and the shared records and bulk-inserts them, one build
+// per chromosome. Returns the key of each record: the features in the order
+// of model.features, then the shared records in the order of model.shared.
+// Both record lists are moved from.
+std::vector<key_ptr> insert_records(grove_t& grove, gff_model& model) {
+    const std::size_t feature_count = model.features.size();
+    const std::size_t total = feature_count + model.shared.size();
+    const auto record = [&model, feature_count](std::size_t i) -> gio::gff_entry& {
+        return i < feature_count ? model.features[i] : model.shared[i - feature_count];
+    };
     std::vector<gdt::interval> intervals;
-    intervals.reserve(model.features.size());
+    intervals.reserve(total);
     std::map<std::string, std::vector<std::size_t>> by_seqid;
-    for(std::size_t i = 0; i < model.features.size(); ++i) {
-        intervals.push_back(model.features[i].to_interval());
-        by_seqid[model.features[i].seqid].push_back(i);
+    for(std::size_t i = 0; i < total; ++i) {
+        intervals.push_back(record(i).to_interval());
+        by_seqid[record(i).seqid].push_back(i);
     }
-    std::vector<key_ptr> feature_keys(model.features.size());
+    std::vector<key_ptr> keys(total);
     for(auto& [seqid, members] : by_seqid) {
-        // Stable, so records with equal intervals keep their file order.
+        // Stable, so records with equal intervals keep their order: features
+        // in file order, then the shared records.
         std::ranges::stable_sort(members, [&intervals](std::size_t a, std::size_t b) {
             return intervals[a] < intervals[b];
         });
         std::vector<std::pair<gdt::interval, gio::gff_entry>> batch;
         batch.reserve(members.size());
         for(const std::size_t i : members) {
-            batch.emplace_back(intervals[i], std::move(model.features[i]));
+            batch.emplace_back(intervals[i], std::move(record(i)));
         }
         const auto inserted = grove.insert_data(seqid, batch, ggs::sorted, ggs::bulk);
         for(std::size_t k = 0; k < members.size(); ++k) {
-            feature_keys[members[k]] = inserted[k];
+            keys[members[k]] = inserted[k];
         }
     }
-    return feature_keys;
+    return keys;
 }
 
 // gene -> transcript -> first exon -> next exon, in 5' to 3' order.
-void add_structure_edges(grove_t& grove, gff_model& model, const std::vector<key_ptr>& feature_keys,
+// `all_keys` is the result of insert_records.
+void add_structure_edges(grove_t& grove, gff_model& model, const std::vector<key_ptr>& all_keys,
                          const std::vector<index_pair>& gene_edges) {
+    const std::span<const key_ptr> feature_keys(all_keys.data(), model.features.size());
+    const std::span<const key_ptr> keys(all_keys.data() + model.features.size(),
+                                        model.shared.size());
     for(const auto& [gene, transcript] : gene_edges) {
         grove.add_edge(feature_keys[gene], feature_keys[transcript], std::string(edge_transcript));
     }
-    const auto& exon_keys = model.exon_keys;
     // One edge per pair of consecutive exons, shared by the transcripts that use it.
     std::map<index_pair, std::string> junctions;
     for(auto& [id, transcript] : model.transcripts) {
-        if(transcript.exons.empty()) {
+        std::vector<std::size_t>& chain = transcript.chain;
+        if(chain.empty()) {
             continue;
         }
-        std::ranges::sort(transcript.exons, [&exon_keys](std::size_t a, std::size_t b) {
-            return exon_keys[a]->get_value() < exon_keys[b]->get_value();
+        std::ranges::sort(chain, [&keys](std::size_t a, std::size_t b) {
+            return keys[a]->get_value() < keys[b]->get_value();
         });
         if(transcript.strand == '-') {
-            std::ranges::reverse(transcript.exons);
+            std::ranges::reverse(chain);
         }
-        grove.add_edge(feature_keys[*transcript.line], exon_keys[transcript.exons.front()],
+        grove.add_edge(feature_keys[*transcript.line], keys[chain.front()],
                        std::string(edge_first_prefix) + id);
-        for(std::size_t i = 0; i + 1 < transcript.exons.size(); ++i) {
-            std::string& users = junctions[{transcript.exons[i], transcript.exons[i + 1]}];
+        for(std::size_t i = 0; i + 1 < chain.size(); ++i) {
+            std::string& users = junctions[{chain[i], chain[i + 1]}];
             users += users.empty() ? std::string(edge_next_prefix) : ",";
             users += id;
         }
     }
     for(const auto& [pair, users] : junctions) {
-        grove.add_edge(exon_keys[pair.first], exon_keys[pair.second], users);
+        grove.add_edge(keys[pair.first], keys[pair.second], users);
     }
 }
 
-// An exon with no exon_id in the file gets one from its position.
-void name_exons(const std::vector<key_ptr>& exon_keys) {
-    for(const key_ptr exon : exon_keys) {
-        gio::gff_entry& record = exon->get_data();
-        std::vector<std::string>& ids = record.attributes["exon_id"];
+// A shared record with no <type>_id (exon_id) in the file gets one from its
+// position.
+void name_shared_records(std::vector<gio::gff_entry>& shared) {
+    for(gio::gff_entry& record : shared) {
+        std::vector<std::string>& ids = record.attributes[record.type + "_id"];
         std::erase(ids, std::string());
         if(ids.empty()) {
             ids.push_back(place(record) + ':' + record.strand.value_or('.'));
@@ -373,7 +398,7 @@ void name_exons(const std::vector<key_ptr>& exon_keys) {
 // into the stored records, which live as long as the grove.
 using name_table = std::unordered_map<std::string_view, key_ptr>;
 
-name_table table_for(std::string_view tag, const gff_keys& keys) {
+name_table table_for(std::string_view tag, const std::vector<key_ptr>& keys) {
     name_table table;
     const auto add = [&](key_ptr key) {
         const attribute_map& attributes = key->get_data().attributes;
@@ -389,17 +414,14 @@ name_table table_for(std::string_view tag, const gff_keys& keys) {
         }
     };
     // A transcript line also carries its gene_id, and an exon line both ids,
-    // so each of these tags looks at one kind of record only. The record type
-    // decides, not the list a key is in.
+    // so each of these tags looks at one kind of record only.
     const std::string_view only = tag == "gene_id"         ? "gene"
                                   : tag == "transcript_id" ? "transcript"
                                   : tag == "exon_id"       ? "exon"
                                                            : "";
-    for(const auto* list : {&keys.indexed, &keys.external}) {
-        for(const key_ptr key : *list) {
-            if(only.empty() || key->get_data().type == only) {
-                add(key);
-            }
+    for(const key_ptr key : keys) {
+        if(only.empty() || key->get_data().type == only) {
+            add(key);
         }
     }
     return table;
@@ -407,16 +429,17 @@ name_table table_for(std::string_view tag, const gff_keys& keys) {
 
 } // namespace
 
-gff_keys grove_insert(grove_t& grove, const std::string& filepath) {
-    gff_model model = read_file(grove, filepath);
+std::vector<gff_key*> grove_insert(grove_t& grove, const std::string& filepath) {
+    gff_model model = read_file(filepath);
     const auto gene_edges = complete_transcripts(model);
-    auto feature_keys = insert_features(grove, model);
-    add_structure_edges(grove, model, feature_keys, gene_edges);
-    name_exons(model.exon_keys);
-    return {.indexed = std::move(feature_keys), .external = std::move(model.exon_keys)};
+    name_shared_records(model.shared);
+    auto keys = insert_records(grove, model);
+    add_structure_edges(grove, model, keys, gene_edges);
+    return keys;
 }
 
-std::size_t apply_links(grove_t& grove, const std::string& links_path, const gff_keys& keys) {
+std::size_t apply_links(grove_t& grove, const std::string& links_path,
+                        const std::vector<gff_key*>& keys) {
     std::ifstream in(links_path);
     if(!in) {
         throw std::runtime_error("Error: could not open links file: " + links_path);
@@ -479,8 +502,9 @@ bool is_structure_edge(std::string_view text) {
 
 std::string record_id(const gio::gff_entry& payload) {
     const auto& attributes = payload.attributes;
-    if(const auto ids = attributes.find("exon_id");
-       payload.type == "exon" && ids != attributes.end()) {
+    if(const auto ids =
+           is_shared_type(payload.type) ? attributes.find(payload.type + "_id") : attributes.end();
+       ids != attributes.end()) {
         std::string joined;
         for(const auto& id : ids->second) {
             joined += (joined.empty() ? "" : ",") + id;
