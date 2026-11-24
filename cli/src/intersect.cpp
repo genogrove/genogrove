@@ -12,7 +12,6 @@
 #include <genogrove/io/filetype_detector.hpp>
 #include <genogrove/io/gg_format.hpp>
 #include <genogrove/structure/grove/grove_view.hpp>
-#include <genogrove/utility/tokenizer.hpp>
 #include <handlers/queryable.hpp>
 
 #include <algorithm>
@@ -137,24 +136,12 @@ struct chain_block {
     std::vector<key_ptr> members;
 };
 
-// True when the comma-separated list has the id as a whole entry.
-[[nodiscard]] bool lists_id(std::string_view ids, std::string_view id) {
-    std::size_t pos = 0;
-    while (const auto entry = genogrove::utility::next_field(ids, pos, ',')) {
-        if (*entry == id) {
-            return true;
-        }
-    }
-    return false;
-}
-
 // The chains that start at `owner`, one per `first:<id>` edge. A chain ends
 // where no `next` edge lists its id, or at a member it already has (a loop in
 // a links file). At a fork the first edge is taken.
 template <handlers::interval_queryable grove_t, typename key_ptr>
 [[nodiscard]] std::vector<chain_block<key_ptr>> chains_from(grove_t& grove, key_ptr owner) {
     using handlers::gff::edge_first_prefix;
-    using handlers::gff::edge_next_prefix;
     std::vector<chain_block<key_ptr>> chains;
     for (const std::string& first : grove.get_edges(owner)) {
         const auto same_id = [&first](const auto& chain) {
@@ -165,8 +152,7 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
         }
         chain_block<key_ptr> chain{first.substr(edge_first_prefix.size()), {}};
         const auto continues = [&chain](const std::string& text) {
-            return text.starts_with(edge_next_prefix) &&
-                   lists_id(std::string_view(text).substr(edge_next_prefix.size()), chain.id);
+            return handlers::gff::continues_chain(text, chain.id);
         };
         // Only the edges of the chain are resolved: in a grove_view each
         // resolved target can be a block read.

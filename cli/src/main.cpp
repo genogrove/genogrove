@@ -17,15 +17,19 @@
 #include <subcalls/subcall.hpp>
 #include <subcalls/index.hpp>
 #include <subcalls/intersect.hpp>
+#include <subcalls/match.hpp>
 
 constexpr std::string_view CMD_INDEX = "idx";
 constexpr std::string_view CMD_INTERSECT = "isec";
+constexpr std::string_view CMD_MATCH = "match";
 
 std::unique_ptr<subcalls::subcall> create_subcall(std::string_view subcall) {
     if(subcall == CMD_INDEX) {
         return std::make_unique<subcalls::index>();
     } else if(subcall == CMD_INTERSECT) {
         return std::make_unique<subcalls::intersect>();
+    } else if(subcall == CMD_MATCH) {
+        return std::make_unique<subcalls::match>();
     } else {
         return nullptr;
     }
@@ -36,6 +40,7 @@ void print_general_help(const cxxopts::Options& options) {
     std::cout << "Available subcommands: \n";
     std::cout << "\t" << CMD_INDEX << ":\t\tIndex an Interval File\n";
     std::cout << "\t" << CMD_INTERSECT << ":\tSearch for interval overlaps in the index\n";
+    std::cout << "\t" << CMD_MATCH << ":\tCompare chains of intervals with the chains in the index\n";
     std::cout << "For more details on a subcommand, use the --help option with the subcommand.\n";
 }
 
