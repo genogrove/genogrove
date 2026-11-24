@@ -161,6 +161,43 @@ TEST_F(CLIMatchE2ETest, OuterEndsAreFreeAndInnerBoundariesAreExact) {
               "r\tT1\tpartial\t2/3\nr\tT2\tpartial\t1/3\n");
 }
 
+TEST_F(CLIMatchE2ETest, ABlockOverTwoMembersMatchesNone) {
+    // One block from E1 to E3: it covers two introns of T1.
+    EXPECT_EQ(match(bed12("r", '+', {{150, 850}})), "");
+    // The first block covers E1, the intron and E2; only the block on E3 matches.
+    EXPECT_EQ(match(bed12("r", '+', {{100, 400}, {800, 900}})), "r\tT1\tpartial\t1/2\n");
+}
+
+TEST_F(CLIMatchE2ETest, BlocksInAnyOrder) {
+    // The three exons of T1, with the blocks written right to left.
+    EXPECT_EQ(match("chr1\t100\t900\tr\t0\t+\t100\t900\t0\t3\t100,100,100\t700,200,0\n"),
+              "r\tT1\tfull\t3/3\nr\tT2\tpartial\t2/3\n");
+}
+
+TEST_F(CLIMatchE2ETest, AMalformedQueryLineIsAnError) {
+    // blockCount is 3, but the lists have two entries.
+    write_file(query, "chr1\t100\t900\tr\t0\t+\t100\t900\t0\t3\t100,100\t0,200\n");
+    auto result = run_command(cli("match \"" + query.string() + "\" -i \"" + index.string() + "\""));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("Block count mismatch"), std::string::npos) << result.output;
+}
+
+TEST_F(CLIMatchE2ETest, AChainWithNoStrandIsNotChecked) {
+    // A BED4 target has no strand column: a query of any strand is compared.
+    const fs::path bed = fs::temp_directory_path() / "genogrove_match_nostrand.bed";
+    const fs::path links = fs::temp_directory_path() / "genogrove_match_nostrand.tsv";
+    write_file(bed, "chr1\t100\t500\ta\nchr1\t600\t900\tb\nchr2\t100\t200\tc\n");
+    write_file(links, "c\ta\tfirst:c1\na\tb\tnext:c1\n");
+    auto idx = run_command(cli("idx \"" + bed.string() + "\" --links \"" + links.string() +
+                               "\" -o \"" + index.string() + "\""));
+    ASSERT_EQ(idx.exit_code, 0) << idx.output;
+
+    EXPECT_EQ(match(bed12("r", '+', {{100, 500}, {600, 900}})), "r\tc1\tfull\t2/2\n");
+    EXPECT_EQ(match(bed12("r", '-', {{100, 500}, {600, 900}})), "r\tc1\tfull\t2/2\n");
+    fs::remove(bed);
+    fs::remove(links);
+}
+
 TEST_F(CLIMatchE2ETest, StrandMustAgreeUnlessTheQueryHasNone) {
     const std::vector<std::pair<int, int>> t3 = {{1100, 1200}, {1300, 1400}};
     EXPECT_EQ(match(bed12("r", '-', t3)), "r\tT3\tfull\t2/2\n");
@@ -198,7 +235,7 @@ TEST_F(CLIMatchE2ETest, AUserChainOnABedIndex) {
 
 TEST_F(CLIMatchE2ETest, WritesToAnOutputFile) {
     write_file(query, bed12("r", '+', {{100, 200}, {300, 400}, {800, 900}}));
-    auto result = run_command(cli("match \"" + query.string() + "\" -i \"" + index.string() +
+    auto result = run_command(cli("match -q \"" + query.string() + "\" -i \"" + index.string() +
                                   "\" -o \"" + output.string() + "\""));
     EXPECT_EQ(result.exit_code, 0) << result.output;
     EXPECT_EQ(result.output, "");

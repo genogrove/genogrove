@@ -6,6 +6,7 @@
 #include <subcalls/match.hpp>
 #include <output_file.hpp>
 #include <handlers/gff.hpp>
+#include <handlers/queryable.hpp>
 
 #include <genogrove/io/bed_reader.hpp>
 #include <genogrove/io/filetype_detector.hpp>
@@ -22,6 +23,7 @@
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -33,8 +35,8 @@ namespace gio = genogrove::io;
 
 namespace {
 
-const std::string& seqid_of(const gio::bed_entry& record) { return record.chrom; }
-const std::string& seqid_of(const gio::gff_entry& record) { return record.seqid; }
+[[nodiscard]] const std::string& seqid_of(const gio::bed_entry& record) { return record.chrom; }
+[[nodiscard]] const std::string& seqid_of(const gio::gff_entry& record) { return record.seqid; }
 
 // One line of the query file: an ordered chain of intervals.
 struct query_chain {
@@ -45,6 +47,8 @@ struct query_chain {
 };
 
 // The blocks of a BED12 line; a line with no blocks is a chain of one interval.
+// A block of size 0 is left out. The format does not fix the order of the
+// blocks, so they are sorted.
 [[nodiscard]] query_chain to_chain(const gio::bed_entry& entry) {
     query_chain chain{entry.name.value_or("."), entry.chrom, entry.strand, {}};
     if (!entry.blocks) {
@@ -57,6 +61,7 @@ struct query_chain {
             chain.blocks.emplace_back(start, start + entry.blocks->sizes[i] - 1);
         }
     }
+    std::sort(chain.blocks.begin(), chain.blocks.end());
     return chain;
 }
 
@@ -64,7 +69,7 @@ struct query_chain {
 // edges of the chain to its first member, then forward to its last. Returned
 // in ascending order (a chain on the minus strand runs right to left). A loop
 // in a links file ends the walk.
-template <typename grove_t, typename key_ptr>
+template <handlers::interval_queryable grove_t, typename key_ptr>
 [[nodiscard]] std::vector<key_ptr> chain_members(grove_t& grove, key_ptr member,
                                                  std::string_view chain_id) {
     const auto continues = [chain_id](const std::string& text) {
@@ -90,26 +95,34 @@ template <typename grove_t, typename key_ptr>
     return members;
 }
 
-// The index of the member that the block matches: they overlap and have the
-// same start and end. A free boundary is not compared.
+// The index of the member that the block matches: the only member that the
+// block overlaps, with the same start and end. A free boundary is not compared.
 template <typename key_ptr>
 [[nodiscard]] std::optional<std::size_t> matching_member(const std::vector<key_ptr>& members,
                                                          const query_chain& query,
                                                          std::size_t block) {
     const gdt::interval& wanted = query.blocks[block];
+    std::optional<std::size_t> found;
+    for (std::size_t i = 0; i < members.size(); ++i) {
+        if (seqid_of(members[i]->get_data()) != query.seqid ||
+            !gdt::interval::overlaps(members[i]->get_value(), wanted)) {
+            continue;
+        }
+        if (found) {
+            return std::nullopt; // over two members: it covers the gap between them
+        }
+        found = i;
+    }
+    if (!found) {
+        return std::nullopt;
+    }
+    const gdt::interval& member = members[*found]->get_value();
     // The outer ends of the query are free: a read can start and end inside an exon.
     const bool free_start = block == 0;
     const bool free_end = block + 1 == query.blocks.size();
-    for (std::size_t i = 0; i < members.size(); ++i) {
-        const gdt::interval& member = members[i]->get_value();
-        if (seqid_of(members[i]->get_data()) == query.seqid &&
-            gdt::interval::overlaps(member, wanted) &&
-            (free_start || member.get_start() == wanted.get_start()) &&
-            (free_end || member.get_end() == wanted.get_end())) {
-            return i;
-        }
-    }
-    return std::nullopt;
+    const bool same = (free_start || member.get_start() == wanted.get_start()) &&
+                      (free_end || member.get_end() == wanted.get_end());
+    return same ? found : std::nullopt;
 }
 
 // Print the row of one query chain and one target chain:
@@ -128,23 +141,30 @@ void report(const query_chain& query, std::string_view chain_id,
     std::optional<std::size_t> previous;
     for (std::size_t block = 0; block < query.blocks.size(); ++block) {
         const auto member = matching_member(members, query, block);
-        matched += member ? 1 : 0;
-        in_order = in_order && member && (block == 0 || (previous && *member == *previous + 1));
+        if (!member) {
+            in_order = false;
+            continue;
+        }
+        ++matched;
+        if (previous && *member != *previous + 1) {
+            in_order = false;
+        }
         previous = member;
     }
     if (matched == 0) {
         return;
     }
-    const std::string_view match_class = !in_order                                  ? "partial"
-                                         : query.blocks.size() == members.size() ? "full"
-                                                                                 : "contained";
+    std::string_view match_class = "partial";
+    if (in_order) {
+        match_class = query.blocks.size() == members.size() ? "full" : "contained";
+    }
     out << query.id << '\t' << chain_id << '\t' << match_class << '\t' << matched << '/'
         << query.blocks.size() << '\n';
 }
 
 // Compare one query chain with every stored chain that has a member under one
 // of its blocks. Each chain is compared once.
-template <typename grove_t>
+template <handlers::interval_queryable grove_t>
 void match_chain(grove_t& grove, const query_chain& query, std::ostream& out) {
     std::unordered_set<std::string> compared;
     for (const gdt::interval& block : query.blocks) {
@@ -162,7 +182,7 @@ void match_chain(grove_t& grove, const query_chain& query, std::ostream& out) {
     }
 }
 
-template <typename grove_t>
+template <handlers::interval_queryable grove_t>
 void run_match(grove_t& grove, const std::string& queryfile, std::ostream& out) {
     gio::bed_reader reader(queryfile);
     for (const auto& entry : reader) {
@@ -268,4 +288,4 @@ void match::execute(const cxxopts::ParseResult& args) {
     }
 }
 
-}
+} // namespace subcalls

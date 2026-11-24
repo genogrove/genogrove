@@ -56,11 +56,16 @@ void for_each_chain_id(std::string_view text, F&& f) {
 
 // True when the text is a `next` edge of the chain.
 [[nodiscard]] inline bool continues_chain(std::string_view text, std::string_view chain_id) {
-    bool listed = false;
-    if (text.starts_with(edge_next_prefix)) {
-        for_each_chain_id(text, [&](std::string_view id) { listed = listed || id == chain_id; });
+    if (!text.starts_with(edge_next_prefix)) {
+        return false;
     }
-    return listed;
+    std::size_t pos = edge_next_prefix.size();
+    while (const auto id = genogrove::utility::next_field(text, pos, ',')) {
+        if (*id == chain_id) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // True when the edge data marks a structure edge. A links file must not use
