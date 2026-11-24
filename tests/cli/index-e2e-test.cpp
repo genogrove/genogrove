@@ -341,8 +341,8 @@ TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
         ASSERT_TRUE(in.is_open());
         EXPECT_EQ(gio::gg_header::read(in).payload_type, gio::gg_payload_type::GFF);
         auto grove = ggs::grove<gdt::interval, gio::gff_entry, std::string>::deserialize(in);
-        EXPECT_EQ(grove.indexed_vertex_count(), 2u);   // gene + transcript
-        EXPECT_EQ(grove.external_vertex_count(), 2u);  // the two exons
+        EXPECT_EQ(grove.indexed_vertex_count(), 4u);   // gene, transcript, two exons
+        EXPECT_EQ(grove.external_vertex_count(), 0u);  // every key is in the tree
         EXPECT_EQ(grove.edge_count(), 3u);             // gene>transcript, transcript>exon, exon>exon
 
         // The exon chain is still there after the write and the read: from
@@ -358,13 +358,14 @@ TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
             const auto next = grove.get_neighbors(first.front());
             ASSERT_EQ(next.size(), 1u);
             EXPECT_EQ(next.front()->get_data().start, 301u);
-            EXPECT_EQ(grove.get_edges(first.front()).front(), "next_exon:T1");
+            EXPECT_EQ(grove.get_edges(key).front(), "first:T1");
+            EXPECT_EQ(grove.get_edges(first.front()).front(), "next:T1");
         }
         EXPECT_EQ(transcripts_checked, 1u);
     }
 
     // The intron position finds the gene and the transcript (both 101-400),
-    // read eagerly and in place. Exons are not hit directly.
+    // read eagerly and in place. No exon is under the query, so no exon row.
     for (const std::string mode : {"", " --in-place"}) {
         auto hits = run_command(cli(
             "isec -q \"" + query_path.string() + "\" -i \"" + tmp_gff_output.string() + "\"" + mode
@@ -375,41 +376,43 @@ TEST_F(CLIIndexE2ETest, IndexGtfBuildsLinkedModelThatIsecQueries) {
             << "mode:" << mode;
     }
 
-    // --exons: a query in the first exon, one in the intron, one in the second
-    // exon (reached over the exon-to-exon edge). The same rows from the index
-    // (eager and in place) and from the file as a target.
+    // An exon under the query is an overlap row after its transcript: a query
+    // in the first exon, one in the intron, one in the second exon. The same
+    // rows from the index (eager and in place) and from the file as a target,
+    // for a BED query and a GFF query.
+    fs::path gff_query_path = fs::temp_directory_path() / "genogrove_idx_linked_query.gff";
     {
         std::ofstream query(query_path);
         query << "chr1\t149\t151\n" << "chr1\t249\t251\n" << "chr1\t349\t351\n";
+        std::ofstream gff_query(gff_query_path);
+        gff_query << "chr1\tq\tregion\t150\t151\t.\t+\t.\tID=a\n"
+                  << "chr1\tq\tregion\t250\t251\t.\t+\t.\tID=b\n"
+                  << "chr1\tq\tregion\t350\t351\t.\t+\t.\tID=c\n";
     }
     const std::string expected =
         "chr1\t101\t400\tgene\tG1\t+\n"
         "chr1\t101\t400\ttranscript\tT1\t+\n"
-        "chr1\t101\t200\texon\tchr1:101-200:+\t+\tT1\t1\n"
-        "chr1\t101\t400\tgene\tG1\t+\n"
-        "chr1\t101\t400\ttranscript\tT1\t+\tintron\n"
+        "chr1\t101\t200\texon\tchr1:101-200:+\t+\n"
         "chr1\t101\t400\tgene\tG1\t+\n"
         "chr1\t101\t400\ttranscript\tT1\t+\n"
-        "chr1\t301\t400\texon\tchr1:301-400:+\t+\tT1\t2\n";
-    for (const std::string& source : {"-i \"" + tmp_gff_output.string() + "\"",
-                                     "-i \"" + tmp_gff_output.string() + "\" --in-place",
-                                     "-t \"" + gtf_path.string() + "\""}) {
-        auto hits = run_command(cli("isec -q \"" + query_path.string() + "\" " + source + " --exons"));
-        EXPECT_EQ(hits.exit_code, 0) << hits.output;
-        EXPECT_EQ(hits.output, expected) << "source:" << source;
+        "chr1\t101\t400\tgene\tG1\t+\n"
+        "chr1\t101\t400\ttranscript\tT1\t+\n"
+        "chr1\t301\t400\texon\tchr1:301-400:+\t+\n";
+    for (const fs::path& query : {query_path, gff_query_path}) {
+        for (const std::string& source : {"-i \"" + tmp_gff_output.string() + "\"",
+                                         "-i \"" + tmp_gff_output.string() + "\" --in-place",
+                                         "-t \"" + gtf_path.string() + "\""}) {
+            auto hits = run_command(cli("isec -q \"" + query.string() + "\" " + source));
+            EXPECT_EQ(hits.exit_code, 0) << hits.output;
+            EXPECT_EQ(hits.output, expected) << "query:" << query << " source:" << source;
+        }
     }
 
-    // A BED record has no exons: --exons on a BED target or a BED index is an error.
-    ASSERT_EQ(run_command(cli("idx \"" + target_path.string() + "\" -o \"" +
-                              tmp_output.string() + "\"")).exit_code, 0);
-    for (const std::string& source : {"-t \"" + target_path.string() + "\"",
-                                      "-i \"" + tmp_output.string() + "\""}) {
-        auto refused = run_command(cli("isec -q \"" + query_path.string() + "\" " + source + " --exons"));
-        EXPECT_NE(refused.exit_code, 0) << "source:" << source;
-        EXPECT_NE(refused.output.find("--exons needs a GFF/GTF"), std::string::npos)
-            << refused.output;
-    }
+    // The option of the earlier design is gone.
+    EXPECT_NE(run_command(cli("isec -q \"" + query_path.string() + "\" -t \"" +
+                              gtf_path.string() + "\" --exons")).exit_code, 0);
 
+    fs::remove(gff_query_path);
     fs::remove(gtf_path);
     fs::remove(query_path);
 }

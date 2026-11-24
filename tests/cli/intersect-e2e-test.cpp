@@ -802,38 +802,32 @@ TEST_F(CLIIntersectHopsE2ETest, HopsOnAGffIndexFollowsModelEdgesAndUserLinks) {
     const std::string q2 = "chr1\t1049\t1051\t";
 
     for (const std::string& mode : {std::string(), std::string(" --in-place")}) {
-        // A query in exon e1 hits G1 and T1; a hit is never a reached row.
-        // From G1: the user link to G2, then the model edge G2 -> T2.
-        // From T1: the model edges to e1 and on to e2. T2 is also two edges
-        // from T1 (over e1), but it is reported once, under the earlier hit.
+        // A query in exon e1 has the overlap rows G1, T1 and e1; an overlap
+        // row is never a reached row. From G1: the user link to G2. From T1:
+        // nothing new. From e1: the model edge to e2 and the user link to T2,
+        // then the model edge T2 -> e3.
         write_file(hops_query, "chr1\t149\t151\n");
-        const std::string from_g1 = q1 + g1 + "\t" + g2 + "\t1\n" + q1 + g1 + "\t" + t2 + "\t2\n";
-        const std::string from_t1 = q1 + t1 + "\t" + e1 + "\t1\n" + q1 + t1 + "\t" + e2 + "\t2\n";
+        const std::string from_g1 = q1 + g1 + "\t" + g2 + "\t1\n";
+        const std::string from_e1 = q1 + e1 + "\t" + e2 + "\t1\n" + q1 + e1 + "\t" + t2 + "\t1\n" +
+                                    q1 + e1 + "\t" + e3 + "\t2\n";
+        const std::string all = g1 + "\n" + from_g1 + t1 + "\n" + e1 + "\n" + from_e1;
         auto result = run_command(isec_hops("--hops 2 --direction out" + mode));
         EXPECT_EQ(result.exit_code, 0) << result.output;
-        EXPECT_EQ(result.output, g1 + "\n" + from_g1 + t1 + "\n" + from_t1) << "mode:" << mode;
+        EXPECT_EQ(result.output, all) << "mode:" << mode;
 
-        // With --exons the exon under the query is also a row of the hit.
-        result = run_command(isec_hops("--hops 2 --direction out --exons" + mode));
-        EXPECT_EQ(result.output,
-                  g1 + "\n" + from_g1 + t1 + "\n" + e1 + "\tT1\t1\n" + from_t1)
-            << "mode:" << mode;
-
-        // The whole component, in the default direction (both): the exon of
-        // T2 is three edges from G1.
+        // The whole component, in the default direction (both), is the same.
         result = run_command(isec_hops("--hops all" + mode));
-        EXPECT_EQ(result.output,
-                  g1 + "\n" + from_g1 + q1 + g1 + "\t" + e3 + "\t3\n" + t1 + "\n" + from_t1)
-            << "mode:" << mode;
+        EXPECT_EQ(result.output, all) << "mode:" << mode;
 
         // Against the direction of the edges, from the second gene: a user
         // link into G2; a user link from e1 into T2, then the model edge
-        // T1 -> e1. This is the only path between T2 and T1 of this length.
+        // T1 -> e1. Nothing new from the exon of T2.
         write_file(hops_query, "chr1\t1049\t1051\n");
         result = run_command(isec_hops("--hops 2 --direction in" + mode));
         EXPECT_EQ(result.output,
                   g2 + "\n" + q2 + g2 + "\t" + g1 + "\t1\n" +
-                  t2 + "\n" + q2 + t2 + "\t" + e1 + "\t1\n" + q2 + t2 + "\t" + t1 + "\t2\n")
+                  t2 + "\n" + q2 + t2 + "\t" + e1 + "\t1\n" + q2 + t2 + "\t" + t1 + "\t2\n" +
+                  e3 + "\n")
             << "mode:" << mode;
     }
 
@@ -844,7 +838,8 @@ TEST_F(CLIIntersectHopsE2ETest, HopsOnAGffIndexFollowsModelEdgesAndUserLinks) {
     for (const std::string& mode : {std::string(), std::string(" --in-place")}) {
         auto result = run_command(isec_hops("--hops 1 --direction out" + mode));
         EXPECT_EQ(result.exit_code, 0) << result.output;
-        EXPECT_EQ(result.output, g1 + "\n" + t1 + "\n" + q1 + t1 + "\t" + e1 + "\t1\n")
+        EXPECT_EQ(result.output,
+                  g1 + "\n" + t1 + "\n" + e1 + "\n" + q1 + e1 + "\t" + e2 + "\t1\n")
             << "mode:" << mode;
     }
 
@@ -854,9 +849,9 @@ TEST_F(CLIIntersectHopsE2ETest, HopsOnAGffIndexFollowsModelEdgesAndUserLinks) {
 
 TEST_F(CLIIntersectHopsE2ETest, HopsLeavesTheChainOfATranscriptAtASharedExon) {
     // T1 (exons a, b) and T3 (exons a, c) share exon a. The query lies in b,
-    // so it hits G1 and T1 but not T3. The walk does not read the transcript
-    // list of an exon -> exon edge: from a it reaches b and also c, which is
-    // not an exon of T1. Each key is one row.
+    // so its overlap rows are G1, T1 and b, but not T3. The walk does not
+    // read the transcript list of an exon -> exon edge: from a it reaches
+    // also c, which is not an exon of T1. Each key is one row.
     fs::path gtf = fs::temp_directory_path() / "genogrove_e2e_hops_shared.gtf";
     write_file(gtf,
         "chr1\tt\tgene\t101\t400\t.\t+\t.\tgene_id \"G1\";\n"
@@ -882,8 +877,27 @@ TEST_F(CLIIntersectHopsE2ETest, HopsLeavesTheChainOfATranscriptAtASharedExon) {
         EXPECT_EQ(result.exit_code, 0) << result.output;
         EXPECT_EQ(result.output,
                   g1 + "\n" + q + g1 + "\t" + t3 + "\t1\n" +
-                  t1 + "\n" + q + t1 + "\t" + a + "\t1\n" + q + t1 + "\t" + b + "\t2\n" +
-                  q + t1 + "\t" + c + "\t2\n")
+                  t1 + "\n" + q + t1 + "\t" + a + "\t1\n" + q + t1 + "\t" + c + "\t2\n" +
+                  b + "\n")
+            << "mode:" << mode;
+    }
+
+    // A query in the shared exon a: the exon row comes after each transcript
+    // that uses it, so it is there twice.
+    write_file(hops_query, "chr1\t149\t151\n");
+    for (const std::string& mode : {std::string(), std::string(" --in-place")}) {
+        auto result = run_command(isec_hops(mode));
+        EXPECT_EQ(result.exit_code, 0) << result.output;
+        EXPECT_EQ(result.output, t3 + "\n" + a + "\n" + g1 + "\n" + t1 + "\n" + a + "\n")
+            << "mode:" << mode;
+
+        // With --hops, each reached row is printed once: after the first row
+        // of the exon. Its second row has nothing after it.
+        const std::string qa = "chr1\t149\t151\t";
+        result = run_command(isec_hops("--hops 1 --direction out" + mode));
+        EXPECT_EQ(result.output,
+                  t3 + "\n" + a + "\n" + qa + a + "\t" + b + "\t1\n" + qa + a + "\t" + c + "\t1\n" +
+                  g1 + "\n" + t1 + "\n" + a + "\n")
             << "mode:" << mode;
     }
     fs::remove(gtf);
