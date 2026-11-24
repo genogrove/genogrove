@@ -924,6 +924,95 @@ TEST_F(CLIIntersectHopsE2ETest, HopsOnAGffIndexWithNoEdges) {
     fs::remove(gtf);
 }
 
+TEST_F(CLIIntersectHopsE2ETest, ChainListsEveryMemberOfATranscript) {
+    // T1 has the exons E1, E2, E3. T2 has E1 (shared) and E4.
+    // On chr2, minus strand: T3 has the exons left and right.
+    fs::path gtf = fs::temp_directory_path() / "genogrove_e2e_chain.gtf";
+    write_file(gtf,
+        "chr1\tt\tgene\t101\t900\t.\t+\t.\tgene_id \"G1\";\n"
+        "chr1\tt\ttranscript\t101\t900\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\";\n"
+        "chr1\tt\texon\t101\t200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\"; exon_id \"E1\";\n"
+        "chr1\tt\texon\t301\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\"; exon_id \"E2\";\n"
+        "chr1\tt\texon\t801\t900\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T1\"; exon_id \"E3\";\n"
+        "chr1\tt\ttranscript\t101\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T2\";\n"
+        "chr1\tt\texon\t101\t200\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T2\"; exon_id \"E1\";\n"
+        "chr1\tt\texon\t381\t400\t.\t+\t.\tgene_id \"G1\"; transcript_id \"T2\"; exon_id \"E4\";\n"
+        "chr2\tt\tgene\t101\t400\t.\t-\t.\tgene_id \"G2\";\n"
+        "chr2\tt\ttranscript\t101\t400\t.\t-\t.\tgene_id \"G2\"; transcript_id \"T3\";\n"
+        "chr2\tt\texon\t101\t200\t.\t-\t.\tgene_id \"G2\"; transcript_id \"T3\"; exon_id \"left\";\n"
+        "chr2\tt\texon\t301\t400\t.\t-\t.\tgene_id \"G2\"; transcript_id \"T3\"; exon_id \"right\";\n");
+    auto idx = run_command(cli("idx \"" + gtf.string() + "\" -o \"" + tmp_index.string() + "\""));
+    ASSERT_EQ(idx.exit_code, 0) << idx.output;
+
+    // The full chain of each transcript hit. E1 is a member of both chains.
+    const std::string chr1_rows =
+        "chr1\t101\t400\ttranscript\tT2\t+\n"
+        "chr1\t101\t200\texon\tE1\t+\tT2\t1\n"
+        "chr1\t381\t400\texon\tE4\t+\tT2\t2\n"
+        "chr1\t101\t900\tgene\tG1\t+\n"
+        "chr1\t101\t900\ttranscript\tT1\t+\n"
+        "chr1\t101\t200\texon\tE1\t+\tT1\t1\n"
+        "chr1\t301\t400\texon\tE2\t+\tT1\t2\n"
+        "chr1\t801\t900\texon\tE3\t+\tT1\t3\n";
+    // Minus strand: number 1 is the 5' exon, the rightmost.
+    const std::string chr2_rows =
+        "chr2\t101\t400\tgene\tG2\t-\n"
+        "chr2\t101\t400\ttranscript\tT3\t-\n"
+        "chr2\t301\t400\texon\tright\t-\tT3\t1\n"
+        "chr2\t101\t200\texon\tleft\t-\tT3\t2\n";
+    const std::string from_target =
+        cli("isec -q \"" + hops_query.string() + "\" -t \"" + gtf.string() + "\" --chain");
+    for (const std::string& command :
+         {isec_hops("--chain"), isec_hops("--chain --in-place"), from_target}) {
+        // In exon E2: E2 has no row of its own, it is in the chain of T1.
+        write_file(hops_query, "chr1\t349\t351\n");
+        auto result = run_command(command);
+        EXPECT_EQ(result.exit_code, 0) << result.output;
+        EXPECT_EQ(result.output, chr1_rows) << command;
+
+        // Between two exons: the same rows.
+        write_file(hops_query, "chr1\t249\t251\n");
+        EXPECT_EQ(run_command(command).output, chr1_rows) << command;
+
+        write_file(hops_query, "chr2\t149\t151\n");
+        EXPECT_EQ(run_command(command).output, chr2_rows) << command;
+    }
+    fs::remove(gtf);
+}
+
+TEST_F(CLIIntersectHopsE2ETest, ChainFromALinksFileOnABedIndex) {
+    // geneA starts the chain c1: geneB, then geneC. The edge geneA -> geneC
+    // is no part of it.
+    fs::path links = fs::temp_directory_path() / "genogrove_e2e_chain_links.tsv";
+    write_file(links, "geneA\tgeneB\tfirst:c1\ngeneB\tgeneC\tnext:c1\ngeneA\tgeneC\tnear\n");
+    auto idx = run_command(cli("idx \"" + (test_data_dir / "target_links.bed").string() +
+                               "\" --links \"" + links.string() + "\" -o \"" +
+                               tmp_index.string() + "\""));
+    ASSERT_EQ(idx.exit_code, 0) << idx.output;
+
+    write_file(hops_query, "chr1\t150\t250\n");  // hits geneA
+    for (const std::string& mode : {std::string(), std::string(" --in-place")}) {
+        auto result = run_command(isec_hops("--chain" + mode));
+        EXPECT_EQ(result.exit_code, 0) << result.output;
+        EXPECT_EQ(result.output,
+                  "chr1\t100\t500\n"
+                  "chr1\t600\t900\tc1\t1\n"
+                  "chr2\t200\t400\tc1\t2\n")
+            << "mode:" << mode;
+    }
+    // A hit that starts no chain is a plain row.
+    write_file(hops_query, "chr2\t250\t300\n");  // hits geneC
+    EXPECT_EQ(run_command(isec_hops("--chain")).output, "chr2\t200\t400\n");
+    fs::remove(links);
+}
+
+TEST_F(CLIIntersectHopsE2ETest, ChainWithHopsIsRejected) {
+    write_file(hops_query, "chr1\t150\t250\n");
+    auto result = run_command(isec_hops("--chain --hops 1"));
+    EXPECT_NE(result.exit_code, 0);
+    EXPECT_NE(result.output.find("--chain and --hops"), std::string::npos) << result.output;
+}
+
 TEST_F(CLIIntersectHopsE2ETest, InvalidHopsAndDirectionRejected) {
     write_file(hops_query, "chr1\t150\t250\n");
     auto result = run_command(isec_hops("--hops two"));
