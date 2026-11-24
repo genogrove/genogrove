@@ -40,6 +40,34 @@ inline constexpr std::string_view edge_transcript = "transcript";
 inline constexpr std::string_view edge_first_prefix = "first:";
 inline constexpr std::string_view edge_next_prefix = "next:";
 
+// Calls f(id) for each chain that the edge text puts the target of the edge
+// in: the id of a `first` edge, each id of a `next` edge.
+template <typename F>
+void for_each_chain_id(std::string_view text, F&& f) {
+    if (text.starts_with(edge_first_prefix)) {
+        f(text.substr(edge_first_prefix.size()));
+    } else if (text.starts_with(edge_next_prefix)) {
+        std::size_t pos = edge_next_prefix.size();
+        while (const auto id = genogrove::utility::next_field(text, pos, ',')) {
+            f(*id);
+        }
+    }
+}
+
+// True when the text is a `next` edge of the chain.
+[[nodiscard]] inline bool continues_chain(std::string_view text, std::string_view chain_id) {
+    if (!text.starts_with(edge_next_prefix)) {
+        return false;
+    }
+    std::size_t pos = edge_next_prefix.size();
+    while (const auto id = genogrove::utility::next_field(text, pos, ',')) {
+        if (*id == chain_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // True when the edge data marks a structure edge. A links file must not use
 // such a text.
 [[nodiscard]] bool is_structure_edge(std::string_view text);
@@ -119,19 +147,10 @@ template <typename grove_t>
     for (std::size_t i = 0; i < hits.size(); ++i) {
         // Each chain of a member reaches it over one incoming edge.
         for (const std::string& text : grove.get_in_edges(hits[i])) {
-            std::string_view ids = text;
-            if (ids.starts_with(edge_first_prefix)) {
-                ids.remove_prefix(edge_first_prefix.size());
-            } else if (ids.starts_with(edge_next_prefix)) {
-                ids.remove_prefix(edge_next_prefix.size());
-            } else {
-                continue;
-            }
-            is_member[i] = true;
-            std::size_t pos = 0;
-            while (const auto id = genogrove::utility::next_field(ids, pos, ',')) {
-                members[std::string(*id)].push_back(i);
-            }
+            for_each_chain_id(text, [&](std::string_view id) {
+                is_member[i] = true;
+                members[std::string(id)].push_back(i);
+            });
         }
     }
     if (members.empty()) {
