@@ -890,6 +890,15 @@ TEST_F(CLIIntersectHopsE2ETest, HopsLeavesTheChainOfATranscriptAtASharedExon) {
         EXPECT_EQ(result.exit_code, 0) << result.output;
         EXPECT_EQ(result.output, t3 + "\n" + a + "\n" + g1 + "\n" + t1 + "\n" + a + "\n")
             << "mode:" << mode;
+
+        // With --hops, each reached row is printed once: after the first row
+        // of the exon. Its second row has nothing after it.
+        const std::string qa = "chr1\t149\t151\t";
+        result = run_command(isec_hops("--hops 1 --direction out" + mode));
+        EXPECT_EQ(result.output,
+                  t3 + "\n" + a + "\n" + qa + a + "\t" + b + "\t1\n" + qa + a + "\t" + c + "\t1\n" +
+                  g1 + "\n" + t1 + "\n" + a + "\n")
+            << "mode:" << mode;
     }
     fs::remove(gtf);
 }

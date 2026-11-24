@@ -153,27 +153,26 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         auto results = grove.intersect(iv, index);
         const auto& hits = results.get_keys();
         using key_ptr = typename std::remove_cvref_t<decltype(hits)>::value_type;
-        const std::vector<key_ptr>* rows = &hits;
         std::vector<key_ptr> grouped;
         if constexpr (has_gff_payload<key_ptr>) {
             grouped = handlers::gff::group_by_chain(grove, hits);
-            rows = &grouped;
         }
+        const auto& rows = has_gff_payload<key_ptr> ? grouped : hits;
         if (max_hops == 0) {
-            for (auto* row : *rows) {
+            for (auto* row : rows) {
                 print(out, row->get_data());
                 out << '\n';
             }
             return;
         }
-        const auto reached = walk_edges(grove, *rows, max_hops, dir);
+        const auto reached = walk_edges(grove, rows, max_hops, dir);
         auto r = reached.begin();
-        for (std::size_t i = 0; i < rows->size(); ++i) {
-            print(out, (*rows)[i]->get_data());
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            print(out, rows[i]->get_data());
             out << '\n';
             for (; r != reached.end() && r->seed == i; ++r) {
                 out << index << '\t' << iv.get_start() << '\t' << iv.get_end() + 1 << '\t';
-                print(out, (*rows)[i]->get_data());
+                print(out, rows[i]->get_data());
                 out << '\t';
                 print(out, r->key->get_data());
                 out << '\t' << r->hops << '\n';
@@ -338,7 +337,7 @@ void intersect::validate(const cxxopts::ParseResult& args) {
             "a prebuilt index (-i) keeps the order it was built with");
     }
 
-    // --hops is for a prebuilt index only: a target (-t) has no user links.
+    // --hops is for a prebuilt index (-i) only.
     if(parse_hops(args["hops"].as<std::string>()) > 0 && !has_index) {
         throw std::runtime_error("Error: --hops requires a prebuilt index (-i)");
     }

@@ -7,7 +7,6 @@
 #include <array>
 #include <cstddef>
 #include <fstream>
-#include <genogrove/utility/tokenizer.hpp>
 #include <handlers/gff.hpp>
 #include <handlers/links.hpp>
 #include <iterator>
@@ -46,7 +45,7 @@ struct transcript_state {
 // What the file says, collected line by line before anything is indexed.
 struct gff_model {
     bool gff3 = false;
-    std::vector<gio::gff_entry> features;                  // the indexed keys to be
+    std::vector<gio::gff_entry> features;                  // one key per line
     std::map<std::string, std::size_t, std::less<>> genes; // gene id -> index into features
     std::map<std::string, transcript_state, std::less<>> transcripts;
     // A line type that repeats per transcript (see is_shared_type) gives one
@@ -58,7 +57,7 @@ struct gff_model {
 
 // The line types with one line per transcript that uses the interval. Their
 // records are shared, and they are the chain of the transcript.
-bool is_shared_type(std::string_view type) {
+[[nodiscard]] bool is_shared_type(std::string_view type) {
     return type == "exon";
 }
 
@@ -311,7 +310,7 @@ std::vector<index_pair> complete_transcripts(gff_model& model) {
 // Sorts the features and the shared records and bulk-inserts them, one build
 // per chromosome. Returns the key of each record: the features in the order
 // of model.features, then the shared records in the order of model.shared.
-// Both record lists are moved from.
+// The records are moved from; both lists keep their size.
 std::vector<key_ptr> insert_records(grove_t& grove, gff_model& model) {
     const std::size_t feature_count = model.features.size();
     const std::size_t total = feature_count + model.shared.size();
@@ -349,11 +348,9 @@ std::vector<key_ptr> insert_records(grove_t& grove, gff_model& model) {
 // `all_keys` is the result of insert_records.
 void add_structure_edges(grove_t& grove, gff_model& model, const std::vector<key_ptr>& all_keys,
                          const std::vector<index_pair>& gene_edges) {
-    const std::span<const key_ptr> feature_keys(all_keys.data(), model.features.size());
-    const std::span<const key_ptr> keys(all_keys.data() + model.features.size(),
-                                        model.shared.size());
+    const auto shared_keys = std::span(all_keys).subspan(model.features.size());
     for(const auto& [gene, transcript] : gene_edges) {
-        grove.add_edge(feature_keys[gene], feature_keys[transcript], std::string(edge_transcript));
+        grove.add_edge(all_keys[gene], all_keys[transcript], std::string(edge_transcript));
     }
     // One edge per pair of consecutive exons, shared by the transcripts that use it.
     std::map<index_pair, std::string> junctions;
@@ -362,13 +359,13 @@ void add_structure_edges(grove_t& grove, gff_model& model, const std::vector<key
         if(chain.empty()) {
             continue;
         }
-        std::ranges::sort(chain, [&keys](std::size_t a, std::size_t b) {
-            return keys[a]->get_value() < keys[b]->get_value();
+        std::ranges::sort(chain, [&shared_keys](std::size_t a, std::size_t b) {
+            return shared_keys[a]->get_value() < shared_keys[b]->get_value();
         });
         if(transcript.strand == '-') {
             std::ranges::reverse(chain);
         }
-        grove.add_edge(feature_keys[*transcript.line], keys[chain.front()],
+        grove.add_edge(all_keys[*transcript.line], shared_keys[chain.front()],
                        std::string(edge_first_prefix) + id);
         for(std::size_t i = 0; i + 1 < chain.size(); ++i) {
             std::string& users = junctions[{chain[i], chain[i + 1]}];
@@ -377,7 +374,7 @@ void add_structure_edges(grove_t& grove, gff_model& model, const std::vector<key
         }
     }
     for(const auto& [pair, users] : junctions) {
-        grove.add_edge(keys[pair.first], keys[pair.second], users);
+        grove.add_edge(shared_keys[pair.first], shared_keys[pair.second], users);
     }
 }
 
@@ -414,11 +411,14 @@ name_table table_for(std::string_view tag, const std::vector<key_ptr>& keys) {
         }
     };
     // A transcript line also carries its gene_id, and an exon line both ids,
-    // so each of these tags looks at one kind of record only.
-    const std::string_view only = tag == "gene_id"         ? "gene"
-                                  : tag == "transcript_id" ? "transcript"
-                                  : tag == "exon_id"       ? "exon"
-                                                           : "";
+    // so the <type>_id tag of these record types looks at that type only.
+    std::string_view only;
+    if(tag.ends_with("_id")) {
+        const std::string_view type = tag.substr(0, tag.size() - 3);
+        if(type == "gene" || type == "transcript" || is_shared_type(type)) {
+            only = type;
+        }
+    }
     for(const key_ptr key : keys) {
         if(only.empty() || key->get_data().type == only) {
             add(key);
@@ -512,19 +512,6 @@ std::string record_id(const gio::gff_entry& payload) {
         return joined.empty() ? "." : joined;
     }
     return first_value(payload, id_tag(payload.is_gff3(), payload.type)).value_or(".");
-}
-
-bool next_edge_lists(std::string_view edge_text, std::string_view chain_id) {
-    if(!edge_text.starts_with(edge_next_prefix)) {
-        return false;
-    }
-    std::size_t pos = edge_next_prefix.size();
-    while(const auto id = genogrove::utility::next_field(edge_text, pos, ',')) {
-        if(*id == chain_id) {
-            return true;
-        }
-    }
-    return false;
 }
 
 } // namespace gff

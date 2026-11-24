@@ -249,7 +249,12 @@ std::vector<std::string> walk_exons(gff_grove& grove, key_ptr transcript, const 
         const auto labels = grove.get_edges(current);
         current = nullptr;
         for (std::size_t i = 0; i < targets.size(); ++i) {
-            if (handlers::gff::next_edge_lists(labels[i], id)) current = targets[i];
+            // "next:T1,T10" lists T1 and T10, and not T
+            const std::string ids = "," + labels[i].substr(labels[i].find(':') + 1) + ",";
+            if (labels[i].starts_with(handlers::gff::edge_next_prefix) &&
+                ids.find("," + id + ",") != std::string::npos) {
+                current = targets[i];
+            }
         }
     }
     return path;
@@ -671,12 +676,17 @@ TEST_F(CLIGffHandlerTest, AnExonRowJoinsTheIdsOfASharedExon) {
     EXPECT_EQ(row_ids(grove, 150, 150), (id_list{"G1", "T1", "E1,E9", "T2", "E1,E9"}));
 }
 
-TEST_F(CLIGffHandlerTest, NextEdgeListsMatchesAWholeId) {
-    EXPECT_TRUE(handlers::gff::next_edge_lists("next:T1,T10", "T1"));
-    EXPECT_TRUE(handlers::gff::next_edge_lists("next:T1,T10", "T10"));
-    EXPECT_FALSE(handlers::gff::next_edge_lists("next:T1,T10", "T"));
-    EXPECT_FALSE(handlers::gff::next_edge_lists("next:T1,T10", "T100"));
-    EXPECT_FALSE(handlers::gff::next_edge_lists("first:T1", "T1"));
+TEST_F(CLIGffHandlerTest, AnExonRowWithoutItsTranscriptComesLast) {
+    // The exon is outside the span of its transcript line, so a query in the
+    // exon overlaps the gene and the exon only.
+    write_file(tmp_gff,
+               gtf("gene", 101, 400, '+', ids("G1")) +
+               gtf("transcript", 101, 200, '+', ids("G1", "T1")) +
+               gtf("exon", 301, 400, '+', ids("G1", "T1", "E1")));
+    gff_grove grove(3);
+    handlers::gff::grove_insert(grove, tmp_gff.string());
+
+    EXPECT_EQ(row_ids(grove, 350, 350), (id_list{"G1", "E1"}));
 }
 
 // ==========================================

@@ -8,12 +8,10 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <ostream>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 #include <genogrove/utility/tokenizer.hpp>
 #include <genogrove/structure/grove/grove.hpp>
@@ -100,9 +98,6 @@ void iterate_query(const std::string& queryfile, F&& cb) {
 // rest.
 [[nodiscard]] std::string record_id(const gio::gff_entry& payload);
 
-// True when the text of a `next` edge lists the chain.
-[[nodiscard]] bool next_edge_lists(std::string_view edge_text, std::string_view chain_id);
-
 // Print the fields of one GFF-payload hit (no trailing newline, so the caller
 // can embed it in a wider row — see the --hops output in run_intersect). The
 // output format tracks the target payload type, independent of the query type.
@@ -114,9 +109,10 @@ inline void print_gff_result(std::ostream& output, const gio::gff_entry& payload
 // The hits of one query in output order: a hit that is a member of a chain
 // (an exon) comes after each hit that owns such a chain (its transcripts), in
 // chain order, and not at its own place. Only the edge texts of the hits are
-// read; no chain is walked.
+// read; no chain is walked. The hits must be in ascending order, as
+// intersect() returns them: the chain order comes from it.
 template <typename grove_t>
-std::vector<gff_key*> group_by_chain(grove_t& grove, const std::vector<gff_key*>& hits) {
+[[nodiscard]] std::vector<gff_key*> group_by_chain(grove_t& grove, const std::vector<gff_key*>& hits) {
     // chain id -> its members among the hits, as indexes, by position
     std::unordered_map<std::string, std::vector<std::size_t>> members;
     std::vector<bool> is_member(hits.size());
