@@ -962,20 +962,19 @@ TEST_F(CLIIntersectHopsE2ETest, ChainListsEveryMemberOfATranscript) {
         "chr2\t101\t200\texon\tleft\t-\tT3\t2\n";
     const std::string from_target =
         cli("isec -q \"" + hops_query.string() + "\" -t \"" + gtf.string() + "\" --chain");
+    const std::vector<std::pair<std::string, std::string>> cases = {
+        {"chr1\t349\t351\n", chr1_rows},  // in exon E2: no row of its own, it is in the chain
+        {"chr1\t249\t251\n", chr1_rows},  // between two exons: the same rows
+        {"chr2\t149\t151\n", chr2_rows},
+    };
     for (const std::string& command :
          {isec_hops("--chain"), isec_hops("--chain --in-place"), from_target}) {
-        // In exon E2: E2 has no row of its own, it is in the chain of T1.
-        write_file(hops_query, "chr1\t349\t351\n");
-        auto result = run_command(command);
-        EXPECT_EQ(result.exit_code, 0) << result.output;
-        EXPECT_EQ(result.output, chr1_rows) << command;
-
-        // Between two exons: the same rows.
-        write_file(hops_query, "chr1\t249\t251\n");
-        EXPECT_EQ(run_command(command).output, chr1_rows) << command;
-
-        write_file(hops_query, "chr2\t149\t151\n");
-        EXPECT_EQ(run_command(command).output, chr2_rows) << command;
+        for (const auto& [query, expected] : cases) {
+            write_file(hops_query, query);
+            auto result = run_command(command);
+            EXPECT_EQ(result.exit_code, 0) << result.output;
+            EXPECT_EQ(result.output, expected) << command << " query:" << query;
+        }
     }
     fs::remove(gtf);
 }
@@ -1006,11 +1005,54 @@ TEST_F(CLIIntersectHopsE2ETest, ChainFromALinksFileOnABedIndex) {
     fs::remove(links);
 }
 
+TEST_F(CLIIntersectHopsE2ETest, ChainRulesForAUserChain) {
+    fs::path links = fs::temp_directory_path() / "genogrove_e2e_chain_rules.tsv";
+    const std::string a = "chr1\t100\t500", b = "chr1\t600\t900", c = "chr2\t200\t400";
+    const auto build = [&](const std::string& rows) {
+        write_file(links, rows);
+        auto idx = run_command(cli("idx \"" + (test_data_dir / "target_links.bed").string() +
+                                   "\" --links \"" + links.string() + "\" -o \"" +
+                                   tmp_index.string() + "\""));
+        ASSERT_EQ(idx.exit_code, 0) << idx.output;
+    };
+
+    // geneA starts two chains. c1: geneB, and not on over the `next:c10` edge.
+    // c10: geneC, geneB, then geneC again, where the walk stops.
+    build("geneA\tgeneB\tfirst:c1\ngeneB\tgeneC\tnext:c10\n"
+          "geneA\tgeneC\tfirst:c10\ngeneC\tgeneB\tnext:c10\n");
+    const std::string two_chains =
+        a + "\n" + b + "\tc1\t1\n" + c + "\tc10\t1\n" + b + "\tc10\t2\n";
+    for (const std::string& mode : {std::string(), std::string(" --in-place")}) {
+        write_file(hops_query, "chr1\t150\t250\n");  // hits geneA
+        auto result = run_command(isec_hops("--chain" + mode));
+        EXPECT_EQ(result.exit_code, 0) << result.output;
+        EXPECT_EQ(result.output, two_chains) << "mode:" << mode;
+
+        // geneB is a hit too: it is in a printed chain, so it has no row of its own.
+        write_file(hops_query, "chr1\t150\t700\n");
+        EXPECT_EQ(run_command(isec_hops("--chain" + mode)).output, two_chains) << "mode:" << mode;
+    }
+
+    // A member that starts a chain itself keeps its row, in front of its chain.
+    build("geneA\tgeneB\tfirst:outer\ngeneB\tgeneC\tfirst:inner\n");
+    write_file(hops_query, "chr1\t150\t700\n");  // hits geneA and geneB
+    EXPECT_EQ(run_command(isec_hops("--chain")).output,
+              a + "\n" + b + "\touter\t1\n" + b + "\n" + c + "\tinner\t1\n");
+    fs::remove(links);
+}
+
 TEST_F(CLIIntersectHopsE2ETest, ChainWithHopsIsRejected) {
     write_file(hops_query, "chr1\t150\t250\n");
     auto result = run_command(isec_hops("--chain --hops 1"));
     EXPECT_NE(result.exit_code, 0);
     EXPECT_NE(result.output.find("--chain and --hops"), std::string::npos) << result.output;
+
+    // An explicit false is "no --chain": the hops run as usual.
+    result = run_command(isec_hops("--chain=false --hops 1 --direction out"));
+    EXPECT_EQ(result.exit_code, 0) << result.output;
+    EXPECT_EQ(result.output,
+              "chr1\t100\t500\n"
+              "chr1\t150\t250\tchr1\t100\t500\tchr1\t600\t900\t1\n");
 }
 
 TEST_F(CLIIntersectHopsE2ETest, InvalidHopsAndDirectionRejected) {

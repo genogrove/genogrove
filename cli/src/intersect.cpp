@@ -156,26 +156,26 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
     using handlers::gff::edge_first_prefix;
     using handlers::gff::edge_next_prefix;
     std::vector<chain_block<key_ptr>> chains;
-    const auto texts = grove.get_edges(owner);
-    const auto targets = grove.get_neighbors(owner);
-    for (std::size_t i = 0; i < texts.size(); ++i) {
-        if (!texts[i].starts_with(edge_first_prefix)) {
+    for (const std::string& first : grove.get_edges(owner)) {
+        const auto same_id = [&first](const auto& chain) {
+            return first.compare(edge_first_prefix.size(), std::string::npos, chain.id) == 0;
+        };
+        if (!first.starts_with(edge_first_prefix) || std::ranges::any_of(chains, same_id)) {
             continue;
         }
-        chain_block<key_ptr> chain{texts[i].substr(edge_first_prefix.size()), {}};
+        chain_block<key_ptr> chain{first.substr(edge_first_prefix.size()), {}};
+        const auto continues = [&chain](const std::string& text) {
+            return text.starts_with(edge_next_prefix) &&
+                   lists_id(std::string_view(text).substr(edge_next_prefix.size()), chain.id);
+        };
+        // Only the edges of the chain are resolved: in a grove_view each
+        // resolved target can be a block read.
         std::unordered_set<const void*> seen;
-        for (key_ptr member = targets[i]; member != nullptr && seen.insert(member).second;) {
-            chain.members.push_back(member);
-            const auto next_texts = grove.get_edges(member);
-            const auto next_targets = grove.get_neighbors(member);
-            member = nullptr;
-            for (std::size_t n = 0; member == nullptr && n < next_texts.size(); ++n) {
-                const std::string_view text = next_texts[n];
-                if (text.starts_with(edge_next_prefix) &&
-                    lists_id(text.substr(edge_next_prefix.size()), chain.id)) {
-                    member = next_targets[n];
-                }
-            }
+        auto next = grove.get_neighbors_if(
+            owner, [&first](const std::string& text) { return text == first; });
+        while (!next.empty() && seen.insert(next.front()).second) {
+            chain.members.push_back(next.front());
+            next = grove.get_neighbors_if(next.front(), continues);
         }
         chains.push_back(std::move(chain));
     }
@@ -184,7 +184,8 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
 
 // --chain: each hit, then every member of each chain that starts at it:
 //   <member row> <TAB> <chain id> <TAB> <number>      (1 = first member)
-// A hit that is a member of such a chain has no row of its own.
+// A hit that is a member of such a chain has no row of its own, unless it
+// starts a chain itself: a chain always comes after the row it starts at.
 template <handlers::interval_queryable grove_t, typename key_ptr, typename print_fn>
 void print_with_chains(grove_t& grove, const std::vector<key_ptr>& hits, std::ostream& out,
                        print_fn print) {
@@ -237,11 +238,11 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         // once the temporary is destroyed at the end of the range expression.
         auto results = grove.intersect(iv, index);
         const auto& hits = results.get_keys();
-        using key_ptr = typename std::remove_cvref_t<decltype(hits)>::value_type;
         if (chain) {
             print_with_chains(grove, hits, out, print);
             return;
         }
+        using key_ptr = typename std::remove_cvref_t<decltype(hits)>::value_type;
         std::vector<key_ptr> grouped;
         if constexpr (has_gff_payload<key_ptr>) {
             grouped = handlers::gff::group_by_chain(grove, hits);
@@ -431,10 +432,11 @@ void intersect::validate(const cxxopts::ParseResult& args) {
     }
 
     // --hops is for a prebuilt index (-i) only.
-    if(parse_hops(args["hops"].as<std::string>()) > 0 && !has_index) {
+    const bool hops = parse_hops(args["hops"].as<std::string>()) > 0;
+    if(hops && !has_index) {
         throw std::runtime_error("Error: --hops requires a prebuilt index (-i)");
     }
-    if(args.count("chain") && parse_hops(args["hops"].as<std::string>()) > 0) {
+    if(hops && args["chain"].as<bool>()) {
         throw std::runtime_error("Error: --chain and --hops are not supported together yet");
     }
     // Called for its throw on an invalid value; execute() parses it again.
@@ -444,7 +446,7 @@ void intersect::validate(const cxxopts::ParseResult& args) {
 void intersect::execute(const cxxopts::ParseResult& args) {
     const std::string queryfile = args["queryfile"].as<std::string>();
     const int k = args["k"].as<int>();
-    const bool chain = args.count("chain") != 0;
+    const bool chain = args["chain"].as<bool>();
 
     // Output stream: either stdout (default) or a user-specified file. A file is
     // written beside its destination and only moved over it by commit() at the
