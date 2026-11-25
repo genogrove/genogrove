@@ -56,8 +56,7 @@ void iterate_query(const std::string& queryfile, F&& cb) {
 // Append the fields of one BED-payload hit to `row` (no trailing newline, so
 // the caller can embed it in a wider row — see the --hops output in
 // run_intersect). The output format tracks the target payload type,
-// independent of the query type. A string, not a stream: a stream call for
-// each field costs more than the tree search.
+// independent of the query type.
 inline void print_bed_result(std::string& row, const gio::bed_entry& payload) {
     row += payload.chrom;
     row += '\t';

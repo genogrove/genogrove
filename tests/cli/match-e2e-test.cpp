@@ -147,6 +147,11 @@ TEST_F(CLIMatchE2ETest, FullContainedAndPartial) {
     // E1 and E3 with E2 skipped: both blocks match T1, but not in order.
     EXPECT_EQ(match(bed12("r", '+', {{100, 200}, {800, 900}})),
               "r\tT1\tpartial\t2/2\nr\tT2\tpartial\t1/2\n");
+    // Two query chains in one file: the rows of the first, then of the second.
+    EXPECT_EQ(match(bed12("r", '+', {{100, 200}, {300, 400}, {800, 900}}) +
+                    bed12("s", '+', {{100, 200}, {300, 400}})),
+              "r\tT1\tfull\t3/3\nr\tT2\tpartial\t2/3\n"
+              "s\tT1\tcontained\t2/2\ns\tT2\tfull\t2/2\n");
 }
 
 TEST_F(CLIMatchE2ETest, OuterEndsAreFreeAndInnerBoundariesAreExact) {

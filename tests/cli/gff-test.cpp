@@ -149,9 +149,9 @@ TEST_F(CLIGffHandlerTest, PrintGffResultWritesRawFieldsWithoutNewline) {
     entry.strand = '-';
     entry.format = gio::gff_format::GTF;
     entry.attributes["gene_id"] = {"G1"};
-    std::string out;
-    handlers::gff::print_gff_result(out, entry);
-    EXPECT_EQ(out, "chr1\t101\t500\tgene\tG1\t-");
+    std::string row;
+    handlers::gff::print_gff_result(row, entry);
+    EXPECT_EQ(row, "chr1\t101\t500\tgene\tG1\t-");
 
     // No id and no strand: a "." each.
     gio::gff_entry bare;
@@ -159,9 +159,9 @@ TEST_F(CLIGffHandlerTest, PrintGffResultWritesRawFieldsWithoutNewline) {
     bare.start = 1;
     bare.end = 2;
     bare.type = "region";
-    std::string bare_out;
-    handlers::gff::print_gff_result(bare_out, bare);
-    EXPECT_EQ(bare_out, "chr1\t1\t2\tregion\t.\t.");
+    std::string bare_row;
+    handlers::gff::print_gff_result(bare_row, bare);
+    EXPECT_EQ(bare_row, "chr1\t1\t2\tregion\t.\t.");
 }
 
 TEST_F(CLIGffHandlerTest, RecordIdIsTheIdOfTheRecordItself) {

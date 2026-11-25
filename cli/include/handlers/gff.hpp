@@ -128,8 +128,7 @@ void iterate_query(const std::string& queryfile, F&& cb) {
 // Append the fields of one GFF-payload hit to `row` (no trailing newline, so
 // the caller can embed it in a wider row — see the --hops output in
 // run_intersect). The output format tracks the target payload type,
-// independent of the query type. A string for the same reason as
-// print_bed_result.
+// independent of the query type.
 inline void print_gff_result(std::string& row, const gio::gff_entry& payload) {
     row += payload.seqid;
     row += '\t';

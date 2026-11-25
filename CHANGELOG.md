@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **`isec --hops` on a GFF/GTF index follows every graph edge between keys**: the links added with `idx --links` and the edges of the gene model (gene → transcript → exon → exon). The walk starts from the overlap rows. A BED index is not affected. ([#674](https://github.com/genogrove/genogrove/issues/674), [#677](https://github.com/genogrove/genogrove/pull/677))
-- **`isec` and `match` write their rows faster**: the rows of one query are built in a string and written with one call, not with a stream call for each field. On 45 M rows from a BED index, `isec` takes about half the time. The output is the same. ([#685](https://github.com/genogrove/genogrove/issues/685), [#686](https://github.com/genogrove/genogrove/pull/686))
+- **`isec` and `match` write their rows faster**: the rows are collected in a string and written in pieces of about 64 KB, not with a stream call for each field. On 45 M rows from a BED index, `isec` takes about half the time. The output is the same. ([#685](https://github.com/genogrove/genogrove/issues/685), [#686](https://github.com/genogrove/genogrove/pull/686))
 
 ### Refactored
 - **One key list from the GFF/GTF builder of the CLI**: the builder returns one list of all keys (before: two lists, `features` and `exons`). The name lookup of a links file picks its records by record type. ([#672](https://github.com/genogrove/genogrove/pull/672), [#679](https://github.com/genogrove/genogrove/pull/679))
