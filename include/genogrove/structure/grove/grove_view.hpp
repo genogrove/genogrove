@@ -699,8 +699,8 @@ class grove_view {
         // left there before looping — every ref is at least a (block_id, slot)
         // pair (4+4 bytes) even with metadata. Mirrors the block/index-count
         // guards in read_directory_and_scan (#484).
-        detail::require_backing_bytes(zis, ecount, sizeof(detail::block_id) + sizeof(std::uint32_t),
-                                      "edge");
+        detail::require_backing_bytes(static_cast<std::uint64_t>(zis.rdbuf()->in_avail()), ecount,
+                                      sizeof(detail::block_id) + sizeof(std::uint32_t), "edge");
         std::vector<edge_ref>* bucket = nullptr;
         for (std::uint32_t i = 0; i < ecount; ++i) {
             detail::block_id b;

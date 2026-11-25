@@ -37,6 +37,16 @@ inline std::streamoff remaining_bytes(std::istream& is) {
     return diff;
 }
 
+/// The check of require_backing_bytes() below for a caller that already knows
+/// `remaining`, so a hot loop does not seek.
+inline void require_backing_bytes(std::uint64_t remaining, std::uint64_t count,
+                                  std::uint64_t min_bytes_per_elem, const char* what) {
+    if (min_bytes_per_elem != 0 && count > remaining / min_bytes_per_elem) {
+        throw std::runtime_error(std::string("Failed to deserialize: implausible ") + what +
+                                 " count exceeds remaining stream bytes");
+    }
+}
+
 /// Reject a file-controlled element count that the remaining stream cannot
 /// possibly back. Every element occupies at least `min_bytes_per_elem` bytes on
 /// disk, so a `count` exceeding `remaining / min_bytes_per_elem` is corrupt and
@@ -59,11 +69,8 @@ inline void require_backing_bytes(std::istream& is, std::uint64_t count,
     if (remaining_off < 0) {
         return;  // not seekable / undeterminable — leave unbounded
     }
-    const std::uint64_t remaining = static_cast<std::uint64_t>(remaining_off);
-    if (count > remaining / min_bytes_per_elem) {
-        throw std::runtime_error(std::string("Failed to deserialize: implausible ") + what +
-                                 " count exceeds remaining stream bytes");
-    }
+    require_backing_bytes(static_cast<std::uint64_t>(remaining_off), count, min_bytes_per_elem,
+                          what);
 }
 
 /// Write a trivially-copyable POD value to a binary output stream. Integers,

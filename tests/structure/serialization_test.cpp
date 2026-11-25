@@ -362,6 +362,18 @@ TEST(SerializationDoSTest, HugeStringLengthRejected) {
     EXPECT_THROW((void)gdt::serialization_traits<std::string>::deserialize(ss), std::runtime_error);
 }
 
+TEST(SerializationDoSTest, EdgeCountCheckedAgainstTheRestOfTheBlock) {
+    // The edge readers take the rest of a block from in_avail(), with no seek.
+    const std::string block(16, '\0');
+    gst::detail::memory_streambuf mb(block.data(), block.size());
+    std::istream is(&mb);
+    is.ignore(8);
+    const auto rest = static_cast<std::uint64_t>(is.rdbuf()->in_avail());
+    EXPECT_EQ(rest, 8u);
+    EXPECT_NO_THROW(gst::detail::require_backing_bytes(rest, 1, 8, "edge"));
+    EXPECT_THROW(gst::detail::require_backing_bytes(rest, 2, 8, "edge"), std::runtime_error);
+}
+
 TEST(SerializationDoSTest, HugeCompressedBlockLengthRejected) {
     // A block's compressed length is file-controlled; a multi-GB clen with no
     // backing bytes must be rejected before comp_buf.resize allocates it.
