@@ -37,8 +37,8 @@ inline std::streamoff remaining_bytes(std::istream& is) {
     return diff;
 }
 
-/// The check of require_backing_bytes() below for a caller that already knows
-/// `remaining`, so a hot loop does not seek.
+/// Same bound as the stream overload below, for a caller that already knows
+/// `remaining` (for example in_avail() on a memory_streambuf): no seek.
 inline void require_backing_bytes(std::uint64_t remaining, std::uint64_t count,
                                   std::uint64_t min_bytes_per_elem, const char* what) {
     if (min_bytes_per_elem != 0 && count > remaining / min_bytes_per_elem) {
@@ -55,11 +55,11 @@ inline void require_backing_bytes(std::uint64_t remaining, std::uint64_t count,
 /// Throws std::runtime_error (matching every other malformed-stream path) so the
 /// failure surfaces as a normal library error, never an escaping std::bad_alloc.
 ///
-/// Seekable streams only (files, stringstreams, and the seekable memory_streambuf
-/// over decompressed blocks). A non-seekable source is left unbounded — best
-/// effort rather than a false rejection. The stream position is preserved. This
-/// seeks internally, so do NOT call it per element in a hot loop — measure
-/// remaining_bytes() once and track it instead (see grove::deserialize, #513).
+/// Seekable streams only (files, stringstreams). A non-seekable source is left
+/// unbounded — best effort rather than a false rejection. The stream position is
+/// preserved. This seeks internally, so do NOT call it per element in a hot loop
+/// — measure remaining_bytes() once and track it (see grove::deserialize, #513),
+/// or pass a known byte count to the overload above.
 inline void require_backing_bytes(std::istream& is, std::uint64_t count,
                                   std::uint64_t min_bytes_per_elem, const char* what) {
     if (count == 0 || min_bytes_per_elem == 0) {

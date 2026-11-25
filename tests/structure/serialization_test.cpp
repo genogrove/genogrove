@@ -362,18 +362,6 @@ TEST(SerializationDoSTest, HugeStringLengthRejected) {
     EXPECT_THROW((void)gdt::serialization_traits<std::string>::deserialize(ss), std::runtime_error);
 }
 
-TEST(SerializationDoSTest, EdgeCountCheckedAgainstTheRestOfTheBlock) {
-    // The edge readers take the rest of a block from in_avail(), with no seek.
-    const std::string block(16, '\0');
-    gst::detail::memory_streambuf mb(block.data(), block.size());
-    std::istream is(&mb);
-    is.ignore(8);
-    const auto rest = static_cast<std::uint64_t>(is.rdbuf()->in_avail());
-    EXPECT_EQ(rest, 8u);
-    EXPECT_NO_THROW(gst::detail::require_backing_bytes(rest, 1, 8, "edge"));
-    EXPECT_THROW(gst::detail::require_backing_bytes(rest, 2, 8, "edge"), std::runtime_error);
-}
-
 TEST(SerializationDoSTest, HugeCompressedBlockLengthRejected) {
     // A block's compressed length is file-controlled; a multi-GB clen with no
     // backing bytes must be rejected before comp_buf.resize allocates it.
@@ -1060,6 +1048,32 @@ void open_and_query(const std::string& bytes) {
 }
 
 }  // namespace
+
+TEST(GroveViewCorruptTest, HugeEdgeCountRejectedByTheEagerReaderAndTheView) {
+    // The message matters: without the count check the read loop also throws,
+    // but with "stream error reading edge".
+    const auto message = [](auto&& load) -> std::string {
+        try {
+            load();
+        } catch (const std::runtime_error& e) {
+            return e.what();
+        }
+        return {};
+    };
+    // After the next id: the outgoing count of the first key, then its incoming count.
+    for (const std::size_t count_at : {std::size_t{0}, sizeof(std::uint32_t)}) {
+        auto s = split(write_multilevel_grove());
+        auto& blk = s.blocks[find_first_leaf(s)];
+        set_pod(blk, next_id_at(blk) + sizeof(gst::detail::block_id) + count_at,
+                std::uint32_t{0xFFFFFFFFu});
+        const std::string bytes = join(s);
+        std::stringstream ss(bytes);
+        EXPECT_NE(message([&] { (void)grove_ii::deserialize(ss); }).find("implausible edge"),
+                  std::string::npos);
+        EXPECT_NE(message([&] { open_and_query(bytes); }).find("implausible edge"),
+                  std::string::npos);
+    }
+}
 
 TEST(GroveViewCorruptTest, BadMagicRejected) {
     auto bytes = write_multilevel_grove();

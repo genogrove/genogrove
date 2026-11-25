@@ -430,6 +430,7 @@ private:
         if (!zis) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading edge count");
         }
+        // zis reads one block from memory, so in_avail() is what is left of it.
         detail::require_backing_bytes(static_cast<uint64_t>(zis.rdbuf()->in_avail()), ecount,
                                       sizeof(detail::block_id) + sizeof(uint32_t), "edge");
         for (uint32_t i = 0; i < ecount; ++i) {
