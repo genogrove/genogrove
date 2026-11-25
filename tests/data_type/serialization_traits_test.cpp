@@ -117,6 +117,18 @@ TEST(serialization_traits_test, string_deserialize_truncated_content) {
     EXPECT_THROW((void)gdt::serialization_traits<std::string>::deserialize(ss), std::runtime_error);
 }
 
+TEST(serialization_traits_test, string_at_the_probe_limit_round_trips) {
+    // The length check seeks to the end of the stream; the read must continue
+    // from the old position, so the string after it must also be correct.
+    using traits = gdt::serialization_traits<std::string>;
+    const std::string large(traits::min_probe_length, 'x');
+    std::stringstream ss;
+    traits::serialize(ss, large);
+    traits::serialize(ss, "next");
+    EXPECT_EQ(traits::deserialize(ss), large);
+    EXPECT_EQ(traits::deserialize(ss), "next");
+}
+
 TEST(serialization_traits_test, string_deserialize_truncated_header) {
     // Write only 2 bytes of a 4-byte length header
     std::stringstream ss;

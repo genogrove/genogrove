@@ -165,6 +165,9 @@ struct serialization_traits {
 // Specialization for std::string
 template<>
 struct serialization_traits<std::string> {
+    // Smallest claimed length that deserialize() checks against the stream size.
+    static constexpr uint32_t min_probe_length = 64 * 1024;
+
     static void serialize(std::ostream& os, const std::string& value) {
         uint32_t length = static_cast<uint32_t>(value.length());
         genogrove::utility::write_le(os, length);
@@ -184,7 +187,10 @@ struct serialization_traits<std::string> {
         // stream can't back that many bytes the length is corrupt, so reject it
         // before allocating a `length`-sized string (OOM guard on untrusted input,
         // #484). Seekable streams only — the position is restored either way.
-        if (length > 0) {
+        // Only for a large length: the probe costs more than the read of a short
+        // string, and a false short length costs one allocation below the limit
+        // before the read fails.
+        if (length >= min_probe_length) {
             const std::streampos cur = is.tellg();
             if (cur != std::streampos(-1)) {
                 is.seekg(0, std::ios::end);

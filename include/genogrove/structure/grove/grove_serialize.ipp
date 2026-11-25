@@ -536,13 +536,13 @@ private:
                 if (!zis) {
                     throw std::runtime_error("Failed to deserialize grove: stream error reading external key");
                 }
-                g.external_key_storage.emplace_back(key_value);
+                g.external_key_storage.emplace_back(std::move(key_value));
             } else {
                 data_type data_value = gdt::serializer<data_type>::read(zis);
                 if (!zis) {
                     throw std::runtime_error("Failed to deserialize grove: stream error reading external key");
                 }
-                g.external_key_storage.emplace_back(key_value, data_value);
+                g.external_key_storage.emplace_back(std::move(key_value), std::move(data_value));
             }
             ekeys.push_back(&g.external_key_storage.back());
         }
