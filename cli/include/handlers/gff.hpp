@@ -10,7 +10,6 @@
 #include <cstddef>
 #include <string>
 #include <string_view>
-#include <ostream>
 #include <unordered_map>
 #include <vector>
 #include <genogrove/utility/tokenizer.hpp>
@@ -126,12 +125,23 @@ void iterate_query(const std::string& queryfile, F&& cb) {
 // rest.
 [[nodiscard]] std::string record_id(const gio::gff_entry& payload);
 
-// Print the fields of one GFF-payload hit (no trailing newline, so the caller
-// can embed it in a wider row — see the --hops output in run_intersect). The
-// output format tracks the target payload type, independent of the query type.
-inline void print_gff_result(std::ostream& output, const gio::gff_entry& payload) {
-    output << payload.seqid << "\t" << payload.start << "\t" << payload.end << "\t"
-           << payload.type << "\t" << record_id(payload) << "\t" << payload.strand.value_or('.');
+// Append the fields of one GFF-payload hit to `row` (no trailing newline, so
+// the caller can embed it in a wider row — see the --hops output in
+// run_intersect). The output format tracks the target payload type,
+// independent of the query type. A string for the same reason as
+// print_bed_result.
+inline void print_gff_result(std::string& row, const gio::gff_entry& payload) {
+    row += payload.seqid;
+    row += '\t';
+    row += std::to_string(payload.start);
+    row += '\t';
+    row += std::to_string(payload.end);
+    row += '\t';
+    row += payload.type;
+    row += '\t';
+    row += record_id(payload);
+    row += '\t';
+    row += payload.strand.value_or('.');
 }
 
 // The hits of one query in output order: a hit that is a member of a chain

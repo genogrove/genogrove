@@ -6,7 +6,6 @@
 #ifndef GENOGROVE_CLI_HANDLERS_BED_HPP
 #define GENOGROVE_CLI_HANDLERS_BED_HPP
 
-#include <ostream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -54,11 +53,17 @@ void iterate_query(const std::string& queryfile, F&& cb) {
     }
 }
 
-// Print the fields of one BED-payload hit (no trailing newline, so the caller
-// can embed it in a wider row — see the --hops output in run_intersect). The
-// output format tracks the target payload type, independent of the query type.
-inline void print_bed_result(std::ostream& output, const gio::bed_entry& payload) {
-    output << payload.chrom << "\t" << payload.start << "\t" << payload.end;
+// Append the fields of one BED-payload hit to `row` (no trailing newline, so
+// the caller can embed it in a wider row — see the --hops output in
+// run_intersect). The output format tracks the target payload type,
+// independent of the query type. A string, not a stream: a stream call for
+// each field costs more than the tree search.
+inline void print_bed_result(std::string& row, const gio::bed_entry& payload) {
+    row += payload.chrom;
+    row += '\t';
+    row += std::to_string(payload.start);
+    row += '\t';
+    row += std::to_string(payload.end);
 }
 
 } // namespace bed
