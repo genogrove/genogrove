@@ -138,8 +138,8 @@ public:
 
 protected:
     // Seekable (read-only) so callers can measure the remaining decompressed
-    // block via tellg()/seekg() — used by require_backing_bytes to bound
-    // in-block counts/lengths against real data (see #484).
+    // block via tellg()/seekg() — used by the std::string serialization trait
+    // to bound a large in-block length against real data (see #484).
     pos_type seekoff(off_type off, std::ios_base::seekdir dir,
                      std::ios_base::openmode which) override {
         if ((which & std::ios_base::in) == 0) {

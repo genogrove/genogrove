@@ -37,6 +37,16 @@ inline std::streamoff remaining_bytes(std::istream& is) {
     return diff;
 }
 
+/// Same bound as the stream overload below, for a caller that already knows
+/// `remaining` (for example in_avail() on a memory_streambuf): no seek.
+inline void require_backing_bytes(std::uint64_t remaining, std::uint64_t count,
+                                  std::uint64_t min_bytes_per_elem, const char* what) {
+    if (min_bytes_per_elem != 0 && count > remaining / min_bytes_per_elem) {
+        throw std::runtime_error(std::string("Failed to deserialize: implausible ") + what +
+                                 " count exceeds remaining stream bytes");
+    }
+}
+
 /// Reject a file-controlled element count that the remaining stream cannot
 /// possibly back. Every element occupies at least `min_bytes_per_elem` bytes on
 /// disk, so a `count` exceeding `remaining / min_bytes_per_elem` is corrupt and
@@ -45,11 +55,11 @@ inline std::streamoff remaining_bytes(std::istream& is) {
 /// Throws std::runtime_error (matching every other malformed-stream path) so the
 /// failure surfaces as a normal library error, never an escaping std::bad_alloc.
 ///
-/// Seekable streams only (files, stringstreams, and the seekable memory_streambuf
-/// over decompressed blocks). A non-seekable source is left unbounded — best
-/// effort rather than a false rejection. The stream position is preserved. This
-/// seeks internally, so do NOT call it per element in a hot loop — measure
-/// remaining_bytes() once and track it instead (see grove::deserialize, #513).
+/// Seekable streams only (files, stringstreams). A non-seekable source is left
+/// unbounded — best effort rather than a false rejection. The stream position is
+/// preserved. This seeks internally, so do NOT call it per element in a hot loop
+/// — measure remaining_bytes() once and track it (see grove::deserialize, #513),
+/// or pass a known byte count to the overload above.
 inline void require_backing_bytes(std::istream& is, std::uint64_t count,
                                   std::uint64_t min_bytes_per_elem, const char* what) {
     if (count == 0 || min_bytes_per_elem == 0) {
@@ -59,11 +69,8 @@ inline void require_backing_bytes(std::istream& is, std::uint64_t count,
     if (remaining_off < 0) {
         return;  // not seekable / undeterminable — leave unbounded
     }
-    const std::uint64_t remaining = static_cast<std::uint64_t>(remaining_off);
-    if (count > remaining / min_bytes_per_elem) {
-        throw std::runtime_error(std::string("Failed to deserialize: implausible ") + what +
-                                 " count exceeds remaining stream bytes");
-    }
+    require_backing_bytes(static_cast<std::uint64_t>(remaining_off), count, min_bytes_per_elem,
+                          what);
 }
 
 /// Write a trivially-copyable POD value to a binary output stream. Integers,

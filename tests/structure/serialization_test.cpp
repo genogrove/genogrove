@@ -1049,6 +1049,32 @@ void open_and_query(const std::string& bytes) {
 
 }  // namespace
 
+TEST(GroveViewCorruptTest, HugeEdgeCountRejectedByTheEagerReaderAndTheView) {
+    // The message matters: without the count check the read loop also throws,
+    // but with "stream error reading edge".
+    const auto message = [](auto&& load) -> std::string {
+        try {
+            load();
+        } catch (const std::runtime_error& e) {
+            return e.what();
+        }
+        return {};
+    };
+    // After the next id: the outgoing count of the first key, then its incoming count.
+    for (const std::size_t count_at : {std::size_t{0}, sizeof(std::uint32_t)}) {
+        auto s = split(write_multilevel_grove());
+        auto& blk = s.blocks[find_first_leaf(s)];
+        set_pod(blk, next_id_at(blk) + sizeof(gst::detail::block_id) + count_at,
+                std::uint32_t{0xFFFFFFFFu});
+        const std::string bytes = join(s);
+        std::stringstream ss(bytes);
+        EXPECT_NE(message([&] { (void)grove_ii::deserialize(ss); }).find("implausible edge"),
+                  std::string::npos);
+        EXPECT_NE(message([&] { open_and_query(bytes); }).find("implausible edge"),
+                  std::string::npos);
+    }
+}
+
 TEST(GroveViewCorruptTest, BadMagicRejected) {
     auto bytes = write_multilevel_grove();
     bytes[0] ^= 0x7F;

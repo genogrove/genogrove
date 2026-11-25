@@ -399,8 +399,9 @@ private:
     // Metadata is skipped — only the order matters for incident[target].
     static void read_in_edge_refs(std::istream& zis, uint32_t ecount,
                                   std::vector<std::pair<detail::block_id, uint32_t>>& out) {
-        detail::require_backing_bytes(zis, ecount, sizeof(detail::block_id) + sizeof(uint32_t),
-                                      "edge");
+        // zis reads one block from memory, so in_avail() is what is left of it.
+        detail::require_backing_bytes(static_cast<uint64_t>(zis.rdbuf()->in_avail()), ecount,
+                                      sizeof(detail::block_id) + sizeof(uint32_t), "edge");
         for (uint32_t i = 0; i < ecount; ++i) {
             detail::block_id b;
             uint32_t s;
@@ -429,8 +430,9 @@ private:
         if (!zis) {
             throw std::runtime_error("Failed to deserialize grove: stream error reading edge count");
         }
-        detail::require_backing_bytes(zis, ecount, sizeof(detail::block_id) + sizeof(uint32_t),
-                                      "edge");
+        // zis reads one block from memory, so in_avail() is what is left of it.
+        detail::require_backing_bytes(static_cast<uint64_t>(zis.rdbuf()->in_avail()), ecount,
+                                      sizeof(detail::block_id) + sizeof(uint32_t), "edge");
         for (uint32_t i = 0; i < ecount; ++i) {
             detail::block_id tb;
             uint32_t ts;
