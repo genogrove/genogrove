@@ -616,10 +616,10 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize_block(
         key_type key_value = key_type::deserialize(is);
 
         if constexpr (std::is_void_v<data_type>) {
-            key_storage.emplace_back(key_value);
+            key_storage.emplace_back(std::move(key_value));
         } else {
             data_type data_value = gdt::serializer<data_type>::read(is);
-            key_storage.emplace_back(key_value, std::move(data_value));
+            key_storage.emplace_back(std::move(key_value), std::move(data_value));
         }
         n->keys.push_back(&key_storage.back());
     }

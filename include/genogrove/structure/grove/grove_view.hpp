@@ -667,13 +667,13 @@ class grove_view {
                 if (!zis) {
                     throw std::runtime_error("grove_view: stream error reading external key");
                 }
-                key_storage.emplace_back(key_value);
+                key_storage.emplace_back(std::move(key_value));
             } else {
                 data_type data_value = gdt::serializer<data_type>::read(zis);
                 if (!zis) {
                     throw std::runtime_error("grove_view: stream error reading external key");
                 }
-                key_storage.emplace_back(key_value, data_value);
+                key_storage.emplace_back(std::move(key_value), std::move(data_value));
             }
             keys.push_back(&key_storage.back());
         }
