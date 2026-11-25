@@ -95,12 +95,19 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
     return members;
 }
 
+struct match_rule {
+    std::size_t tolerance = 0; // bases a boundary may differ by (--tolerance)
+    bool strict_ends = false;  // compare the two outer ends of the query too (--strict-ends)
+};
+
 // The index of the member that the block matches: the only member that the
-// block overlaps, with the same start and end. A free boundary is not compared.
+// block overlaps, with a start and an end within the tolerance. A free
+// boundary is not compared.
 template <typename key_ptr>
 [[nodiscard]] std::optional<std::size_t> matching_member(const std::vector<key_ptr>& members,
                                                          const query_chain& query,
-                                                         std::size_t block) {
+                                                         std::size_t block,
+                                                         const match_rule& rule) {
     const gdt::interval& wanted = query.blocks[block];
     std::optional<std::size_t> found;
     for (std::size_t i = 0; i < members.size(); ++i) {
@@ -117,11 +124,15 @@ template <typename key_ptr>
         return std::nullopt;
     }
     const gdt::interval& member = members[*found]->get_value();
-    // The outer ends of the query are free: a read can start and end inside an exon.
-    const bool free_start = block == 0;
-    const bool free_end = block + 1 == query.blocks.size();
-    const bool same = (free_start || member.get_start() == wanted.get_start()) &&
-                      (free_end || member.get_end() == wanted.get_end());
+    // Without --strict-ends the outer ends of the query are free: a read can
+    // start and end inside an exon.
+    const bool free_start = !rule.strict_ends && block == 0;
+    const bool free_end = !rule.strict_ends && block + 1 == query.blocks.size();
+    const auto within_tolerance = [&rule](std::size_t a, std::size_t b) {
+        return (a > b ? a - b : b - a) <= rule.tolerance;
+    };
+    const bool same = (free_start || within_tolerance(member.get_start(), wanted.get_start())) &&
+                      (free_end || within_tolerance(member.get_end(), wanted.get_end()));
     return same ? found : std::nullopt;
 }
 
@@ -130,7 +141,7 @@ template <typename key_ptr>
 // No row when no block matches, or when both have a strand and the two differ.
 template <typename key_ptr>
 void report(const query_chain& query, std::string_view chain_id,
-            const std::vector<key_ptr>& members, std::ostream& out) {
+            const std::vector<key_ptr>& members, const match_rule& rule, std::ostream& out) {
     const auto stranded = [](std::optional<char> strand) { return strand == '+' || strand == '-'; };
     const std::optional<char> strand = members.front()->get_data().strand;
     if (stranded(query.strand) && stranded(strand) && query.strand != strand) {
@@ -140,7 +151,7 @@ void report(const query_chain& query, std::string_view chain_id,
     bool in_order = true; // each block matches the member after the one before it
     std::optional<std::size_t> previous;
     for (std::size_t block = 0; block < query.blocks.size(); ++block) {
-        const auto member = matching_member(members, query, block);
+        const auto member = matching_member(members, query, block, rule);
         if (!member) {
             in_order = false;
             continue;
@@ -165,7 +176,8 @@ void report(const query_chain& query, std::string_view chain_id,
 // Compare one query chain with every stored chain that has a member under one
 // of its blocks. Each chain is compared once.
 template <handlers::interval_queryable grove_t>
-void match_chain(grove_t& grove, const query_chain& query, std::ostream& out) {
+void match_chain(grove_t& grove, const query_chain& query, const match_rule& rule,
+                 std::ostream& out) {
     std::unordered_set<std::string> compared;
     for (const gdt::interval& block : query.blocks) {
         // Bound to a local: get_keys() returns a reference into the result.
@@ -174,7 +186,7 @@ void match_chain(grove_t& grove, const query_chain& query, std::ostream& out) {
             for (const std::string& text : grove.get_in_edges(hit)) {
                 handlers::gff::for_each_chain_id(text, [&](std::string_view chain_id) {
                     if (compared.emplace(chain_id).second) {
-                        report(query, chain_id, chain_members(grove, hit, chain_id), out);
+                        report(query, chain_id, chain_members(grove, hit, chain_id), rule, out);
                     }
                 });
             }
@@ -183,10 +195,11 @@ void match_chain(grove_t& grove, const query_chain& query, std::ostream& out) {
 }
 
 template <handlers::interval_queryable grove_t>
-void run_match(grove_t& grove, const std::string& queryfile, std::ostream& out) {
+void run_match(grove_t& grove, const std::string& queryfile, const match_rule& rule,
+               std::ostream& out) {
     gio::bed_reader reader(queryfile);
     for (const auto& entry : reader) {
-        match_chain(grove, to_chain(entry), out);
+        match_chain(grove, to_chain(entry), rule, out);
     }
     if (const std::string error = reader.get_error_message(); !error.empty()) {
         throw std::runtime_error("Error: " + queryfile + ": " + error);
@@ -195,14 +208,14 @@ void run_match(grove_t& grove, const std::string& queryfile, std::ostream& out) 
 
 template <typename payload_t>
 void match_index(const std::string& index_path, std::ifstream& in, bool in_place,
-                 const std::string& queryfile, std::ostream& out) {
+                 const std::string& queryfile, const match_rule& rule, std::ostream& out) {
     if (in_place) {
         auto grove = ggs::grove_view<gdt::interval, payload_t, std::string>::open(
             index_path, static_cast<std::streamoff>(gio::gg_header::SIZE));
-        run_match(grove, queryfile, out);
+        run_match(grove, queryfile, rule, out);
     } else {
         auto grove = ggs::grove<gdt::interval, payload_t, std::string>::deserialize(in);
-        run_match(grove, queryfile, out);
+        run_match(grove, queryfile, rule, out);
     }
 }
 
@@ -220,6 +233,13 @@ cxxopts::Options match::build_options() {
              cxxopts::value<std::string>())
             ("in-place", "Read only the blocks of the index that a query touches "
                          "instead of loading the whole file into memory")
+            ("tolerance", "A boundary of a query interval matches when it differs from "
+                          "the boundary of the chain member by at most N bases. The "
+                          "interval must still overlap exactly one member of the chain",
+             cxxopts::value<std::size_t>()->default_value("0"), "N")
+            ("strict-ends", "Compare also the start of the first query interval and the "
+                            "end of the last one (by default these two are not compared: "
+                            "an overlap with the member is enough)")
             ("o,outputfile", "Write the result rows to the specified file",
              cxxopts::value<std::string>()->default_value("stdout"))
             ("h,help", "Print the help")
@@ -262,6 +282,8 @@ void match::execute(const cxxopts::ParseResult& args) {
     const std::string index_path = args["indexfile"].as<std::string>();
     const std::string outputfile = args["outputfile"].as<std::string>();
     const bool in_place = args["in-place"].as<bool>();
+    const match_rule rule{.tolerance = args["tolerance"].as<std::size_t>(),
+                          .strict_ends = args["strict-ends"].as<bool>()};
 
     // A file is written beside its destination and moved over it by commit(),
     // so a failure never leaves a half-written output.
@@ -278,9 +300,9 @@ void match::execute(const cxxopts::ParseResult& args) {
     }
     const auto header = gio::gg_header::read(in);
     if(header.payload_type == gio::gg_payload_type::BED) {
-        match_index<gio::bed_entry>(index_path, in, in_place, queryfile, *out);
+        match_index<gio::bed_entry>(index_path, in, in_place, queryfile, rule, *out);
     } else { // GFF: gg_header::read() rejects any other value
-        match_index<gio::gff_entry>(index_path, in, in_place, queryfile, *out);
+        match_index<gio::gff_entry>(index_path, in, in_place, queryfile, rule, *out);
     }
 
     if(output_file) {

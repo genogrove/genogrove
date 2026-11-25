@@ -124,10 +124,10 @@ protected:
     std::string cli(const std::string& args) { return "\"" + cli_path + "\" " + args; }
 
     // The rows of `match` for the query lines; the same from both read modes.
-    std::string match(const std::string& query_lines) {
+    std::string match(const std::string& query_lines, const std::string& options = "") {
         write_file(query, query_lines);
         const std::string command =
-            cli("match \"" + query.string() + "\" -i \"" + index.string() + "\"");
+            cli("match \"" + query.string() + "\" -i \"" + index.string() + "\" " + options);
         const auto eager = run_command(command);
         const auto in_place = run_command(command + " --in-place");
         EXPECT_EQ(eager.exit_code, 0) << eager.output;
@@ -159,6 +159,65 @@ TEST_F(CLIMatchE2ETest, OuterEndsAreFreeAndInnerBoundariesAreExact) {
     // A middle block must agree at both ends.
     EXPECT_EQ(match(bed12("r", '+', {{100, 200}, {300, 390}, {800, 900}})),
               "r\tT1\tpartial\t2/3\nr\tT2\tpartial\t1/3\n");
+}
+
+TEST_F(CLIMatchE2ETest, ToleranceAllowsABoundaryToDifferByNBases) {
+    const std::string both = "r\tT1\tcontained\t2/2\nr\tT2\tfull\t2/2\n";
+    const std::string one_of_two = "r\tT1\tpartial\t1/2\nr\tT2\tpartial\t1/2\n";
+    // The first block ends 10 bases before the end of E1, inside the exon.
+    const std::string inside = bed12("r", '+', {{150, 190}, {300, 350}});
+    EXPECT_EQ(match(inside, "--tolerance 9"), one_of_two);
+    EXPECT_EQ(match(inside, "--tolerance 10"), both);
+    EXPECT_EQ(match(inside, "--tolerance=10"), both);
+    // The first block ends 5 bases after the end of E1, outside the exon.
+    const std::string outside = bed12("r", '+', {{100, 205}, {300, 400}});
+    EXPECT_EQ(match(outside, "--tolerance 4"), one_of_two);
+    EXPECT_EQ(match(outside, "--tolerance 5"), both);
+    // The second block starts 5 bases after the start of E2.
+    EXPECT_EQ(match(bed12("r", '+', {{100, 200}, {305, 400}}), "--tolerance 5"), both);
+
+    write_file(query, inside);
+    for (const std::string value : {"-1", "x"}) {
+        auto result = run_command(cli("match \"" + query.string() + "\" -i \"" + index.string() +
+                                      "\" --tolerance " + value));
+        EXPECT_NE(result.exit_code, 0) << value;
+        EXPECT_NE(result.output.find("'" + value + "'"), std::string::npos) << result.output;
+    }
+}
+
+TEST_F(CLIMatchE2ETest, ToleranceDoesNotReplaceTheOverlap) {
+    // The second block starts 5 bases after the end of E2: it overlaps no exon.
+    EXPECT_EQ(match(bed12("r", '+', {{100, 200}, {405, 450}}), "--tolerance 10"),
+              "r\tT1\tpartial\t1/2\nr\tT2\tpartial\t1/2\n");
+    // Two blocks in E1, each within 60 bases of its boundaries: both match the
+    // same exon, so the chain is not followed.
+    EXPECT_EQ(match(bed12("r", '+', {{100, 140}, {160, 200}}), "--tolerance 60"),
+              "r\tT1\tpartial\t2/2\nr\tT2\tpartial\t2/2\n");
+}
+
+TEST_F(CLIMatchE2ETest, StrictEndsComparesTheOuterEnds) {
+    // The query starts in E1 and ends in E2: a match by default, none with the flag.
+    EXPECT_EQ(match(bed12("r", '+', {{150, 200}, {300, 350}}), "--strict-ends"), "");
+    // One interval: both of its ends are compared.
+    EXPECT_EQ(match("chr1\t150\t160\tr\n", "--strict-ends"), "");
+    EXPECT_EQ(match(bed12("r", '+', {{100, 200}}), "--strict-ends"),
+              "r\tT1\tcontained\t1/1\nr\tT2\tcontained\t1/1\n");
+    // The outer ends are the start of E1 and the end of E2.
+    EXPECT_EQ(match(bed12("r", '+', {{100, 200}, {300, 400}}), "--strict-ends"),
+              "r\tT1\tcontained\t2/2\nr\tT2\tfull\t2/2\n");
+    // A query on the middle of T1 (E2, E3): its ends are compared with E2 and E3.
+    EXPECT_EQ(match(bed12("r", '+', {{300, 400}, {800, 900}}), "--strict-ends"),
+              "r\tT1\tcontained\t2/2\nr\tT2\tpartial\t1/2\n");
+    EXPECT_EQ(match(bed12("r", '+', {{320, 400}, {800, 900}}), "--strict-ends"),
+              "r\tT1\tpartial\t1/2\n");
+}
+
+TEST_F(CLIMatchE2ETest, StrictEndsUsesTheTolerance) {
+    // The query starts 20 bases after the start of E2.
+    const std::string query_line = bed12("r", '+', {{320, 400}, {800, 900}});
+    EXPECT_EQ(match(query_line, "--strict-ends --tolerance 19"), "r\tT1\tpartial\t1/2\n");
+    EXPECT_EQ(match(query_line, "--strict-ends --tolerance 20"),
+              "r\tT1\tcontained\t2/2\nr\tT2\tpartial\t1/2\n");
 }
 
 TEST_F(CLIMatchE2ETest, ABlockOverTwoMembersMatchesNone) {
