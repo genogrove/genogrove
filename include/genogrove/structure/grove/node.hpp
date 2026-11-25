@@ -619,7 +619,7 @@ node<key_type, data_type>* node<key_type, data_type>::deserialize_block(
             key_storage.emplace_back(key_value);
         } else {
             data_type data_value = gdt::serializer<data_type>::read(is);
-            key_storage.emplace_back(key_value, data_value);
+            key_storage.emplace_back(key_value, std::move(data_value));
         }
         n->keys.push_back(&key_storage.back());
     }

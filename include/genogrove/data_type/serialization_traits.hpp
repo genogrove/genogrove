@@ -184,7 +184,9 @@ struct serialization_traits<std::string> {
         // stream can't back that many bytes the length is corrupt, so reject it
         // before allocating a `length`-sized string (OOM guard on untrusted input,
         // #484). Seekable streams only — the position is restored either way.
-        if (length > 0) {
+        // Only for a large length: the probe costs more than the read of a short
+        // string, and a short string cannot exhaust memory.
+        if (length >= 64 * 1024) {
             const std::streampos cur = is.tellg();
             if (cur != std::streampos(-1)) {
                 is.seekg(0, std::ios::end);
