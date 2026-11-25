@@ -7,6 +7,7 @@
 #define GENOGROVE_CLI_OUTPUT_FILE_HPP
 
 #include <cerrno>
+#include <cstddef>
 #include <filesystem>
 #include <fstream>
 #include <ios>
@@ -125,6 +126,38 @@ namespace subcalls {
         std::string temp;
         std::ofstream out;
         bool committed = false;
+    };
+
+    // Collects output rows in one string and writes it when it is larger than
+    // `limit`: a stream call for each field costs more than the tree search.
+    // The destructor writes the rest.
+    class row_writer {
+    public:
+        static constexpr std::size_t limit = 64 * 1024;
+
+        explicit row_writer(std::ostream& out) : out(out) {}
+        row_writer(const row_writer&) = delete;
+        row_writer& operator=(const row_writer&) = delete;
+        ~row_writer() { write(); }
+
+        // The row in progress: append its fields, then call end_row().
+        [[nodiscard]] std::string& row() { return text; }
+
+        void end_row() {
+            text += '\n';
+            if(text.size() >= limit) {
+                write();
+            }
+        }
+
+    private:
+        void write() {
+            out.write(text.data(), static_cast<std::streamsize>(text.size()));
+            text.clear();
+        }
+
+        std::ostream& out;
+        std::string text;
     };
 
 }

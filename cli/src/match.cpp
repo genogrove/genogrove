@@ -141,7 +141,8 @@ template <typename key_ptr>
 // No row when no block matches, or when both have a strand and the two differ.
 template <typename key_ptr>
 void report(const query_chain& query, std::string_view chain_id,
-            const std::vector<key_ptr>& members, const match_rule& rule, std::ostream& out) {
+            const std::vector<key_ptr>& members, const match_rule& rule,
+            subcalls::row_writer& rows) {
     const auto stranded = [](std::optional<char> strand) { return strand == '+' || strand == '-'; };
     const std::optional<char> strand = members.front()->get_data().strand;
     if (stranded(query.strand) && stranded(strand) && query.strand != strand) {
@@ -169,15 +170,24 @@ void report(const query_chain& query, std::string_view chain_id,
     if (in_order) {
         match_class = query.blocks.size() == members.size() ? "full" : "contained";
     }
-    out << query.id << '\t' << chain_id << '\t' << match_class << '\t' << matched << '/'
-        << query.blocks.size() << '\n';
+    std::string& row = rows.row();
+    row += query.id;
+    row += '\t';
+    row += chain_id;
+    row += '\t';
+    row += match_class;
+    row += '\t';
+    row += std::to_string(matched);
+    row += '/';
+    row += std::to_string(query.blocks.size());
+    rows.end_row();
 }
 
 // Compare one query chain with every stored chain that has a member under one
 // of its blocks. Each chain is compared once.
 template <handlers::interval_queryable grove_t>
 void match_chain(grove_t& grove, const query_chain& query, const match_rule& rule,
-                 std::ostream& out) {
+                 subcalls::row_writer& rows) {
     std::unordered_set<std::string> compared;
     for (const gdt::interval& block : query.blocks) {
         // Bound to a local: get_keys() returns a reference into the result.
@@ -186,7 +196,7 @@ void match_chain(grove_t& grove, const query_chain& query, const match_rule& rul
             for (const std::string& text : grove.get_in_edges(hit)) {
                 handlers::gff::for_each_chain_id(text, [&](std::string_view chain_id) {
                     if (compared.emplace(chain_id).second) {
-                        report(query, chain_id, chain_members(grove, hit, chain_id), rule, out);
+                        report(query, chain_id, chain_members(grove, hit, chain_id), rule, rows);
                     }
                 });
             }
@@ -198,8 +208,9 @@ template <handlers::interval_queryable grove_t>
 void run_match(grove_t& grove, const std::string& queryfile, const match_rule& rule,
                std::ostream& out) {
     gio::bed_reader reader(queryfile);
+    subcalls::row_writer rows(out);
     for (const auto& entry : reader) {
-        match_chain(grove, to_chain(entry), rule, out);
+        match_chain(grove, to_chain(entry), rule, rows);
     }
     if (const std::string error = reader.get_error_message(); !error.empty()) {
         throw std::runtime_error("Error: " + queryfile + ": " + error);

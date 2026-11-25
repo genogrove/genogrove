@@ -675,12 +675,14 @@ protected:
 };
 
 TEST_F(CLIIntersectHopsE2ETest, OneHopOutReportsDirectTargetOnly) {
-    write_file(hops_query, "chr1\t150\t250\n");  // hits geneA
+    // Two queries: geneA, then geneC, which has no outgoing edge.
+    write_file(hops_query, "chr1\t150\t250\nchr2\t250\t300\n");
     auto result = run_command(isec_hops("--hops 1 --direction out"));
     EXPECT_EQ(result.exit_code, 0) << result.output;
     EXPECT_EQ(result.output,
               "chr1\t100\t500\n"
-              "chr1\t150\t250\tchr1\t100\t500\tchr1\t600\t900\t1\n");
+              "chr1\t150\t250\tchr1\t100\t500\tchr1\t600\t900\t1\n"
+              "chr2\t200\t400\n");
 }
 
 TEST_F(CLIIntersectHopsE2ETest, HopsAllReachesWholeComponentWithMinHops) {
@@ -1002,6 +1004,13 @@ TEST_F(CLIIntersectHopsE2ETest, ChainFromALinksFileOnABedIndex) {
     // A hit that starts no chain is a plain row.
     write_file(hops_query, "chr2\t250\t300\n");  // hits geneC
     EXPECT_EQ(run_command(isec_hops("--chain")).output, "chr2\t200\t400\n");
+    // Two queries in one run: the rows of the first, then the rows of the second.
+    write_file(hops_query, "chr1\t150\t250\nchr2\t250\t300\n");
+    EXPECT_EQ(run_command(isec_hops("--chain")).output,
+              "chr1\t100\t500\n"
+              "chr1\t600\t900\tc1\t1\n"
+              "chr2\t200\t400\tc1\t2\n"
+              "chr2\t200\t400\n");
     fs::remove(links);
 }
 

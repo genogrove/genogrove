@@ -34,8 +34,9 @@ void bed_intersect(grove_t& grove, const std::string& queryfile, std::ostream& o
     handlers::bed::iterate_query(queryfile, [&](gdt::interval iv, const std::string& index) {
         auto results = grove.intersect(iv, index);  // bind: get_keys() refs into it
         for (auto* result : results.get_keys()) {
-            handlers::bed::print_bed_result(out, result->get_data());
-            out << '\n';
+            std::string row;
+            handlers::bed::print_bed_result(row, result->get_data());
+            out << row << '\n';
         }
     });
 }

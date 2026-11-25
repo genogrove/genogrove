@@ -11,6 +11,7 @@
 #include <fstream>
 #include <ios>
 #include <iterator>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -257,4 +258,21 @@ TEST_F(CLIOutputFileTest, AliasAcceptsAnOutputThatDoesNotExistYet) {
 
     EXPECT_NO_THROW(subcalls::reject_output_alias((dir / "new.bed").string(), input.string(),
                                                   "query file"));
+}
+
+TEST(CLIRowWriterTest, WritesAtTheLimitAndTheRestWhenDestroyed) {
+    std::ostringstream out;
+    std::string expected;
+    {
+        subcalls::row_writer rows(out);
+        const std::string row(1000, 'x');
+        for(int i = 0; i < 100; ++i) { // 100 KB: over the limit once
+            rows.row() += row;
+            rows.end_row();
+            expected += row + '\n';
+        }
+        EXPECT_GE(out.str().size(), subcalls::row_writer::limit);
+        EXPECT_LT(out.str().size(), expected.size());
+    }
+    EXPECT_EQ(out.str(), expected);
 }

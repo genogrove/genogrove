@@ -173,8 +173,8 @@ template <handlers::interval_queryable grove_t, typename key_ptr>
 // A hit that is a member of such a chain has no row of its own, unless it
 // starts a chain itself: a chain always comes after the row it starts at.
 template <handlers::interval_queryable grove_t, typename key_ptr, typename print_fn>
-void print_with_chains(grove_t& grove, const std::vector<key_ptr>& hits, std::ostream& out,
-                       print_fn print) {
+void print_with_chains(grove_t& grove, const std::vector<key_ptr>& hits,
+                       subcalls::row_writer& rows, print_fn print) {
     std::vector<std::vector<chain_block<key_ptr>>> chains;
     std::unordered_set<const void*> in_chain;
     for (key_ptr hit : hits) {
@@ -187,12 +187,17 @@ void print_with_chains(grove_t& grove, const std::vector<key_ptr>& hits, std::os
         if (chains[i].empty() && in_chain.contains(hits[i])) {
             continue;
         }
-        print(out, hits[i]->get_data());
-        out << '\n';
+        std::string& row = rows.row();
+        print(row, hits[i]->get_data());
+        rows.end_row();
         for (const auto& chain : chains[i]) {
             for (std::size_t n = 0; n < chain.members.size(); ++n) {
-                print(out, chain.members[n]->get_data());
-                out << '\t' << chain.id << '\t' << n + 1 << '\n';
+                print(row, chain.members[n]->get_data());
+                row += '\t';
+                row += chain.id;
+                row += '\t';
+                row += std::to_string(n + 1);
+                rows.end_row();
             }
         }
     }
@@ -218,6 +223,7 @@ template <handlers::interval_queryable grove_t, typename print_fn>
 void run_intersect(grove_t& grove, const std::string& queryfile,
                    gio::filetype query_type, std::ostream& out, print_fn print,
                    bool chain, std::size_t max_hops = 0, direction dir = direction::both) {
+    subcalls::row_writer rows(out);
     auto handle = [&](gdt::interval iv, const std::string& index) {
         // Bind the query_result to a local: get_keys() returns a reference into
         // it, so iterating grove.intersect(...).get_keys() directly would dangle
@@ -225,7 +231,7 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         auto results = grove.intersect(iv, index);
         const auto& hits = results.get_keys();
         if (chain) {
-            print_with_chains(grove, hits, out, print);
+            print_with_chains(grove, hits, rows, print);
             return;
         }
         using key_ptr = typename std::remove_cvref_t<decltype(hits)>::value_type;
@@ -233,25 +239,33 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         if constexpr (has_gff_payload<key_ptr>) {
             grouped = handlers::gff::group_by_chain(grove, hits);
         }
-        const auto& rows = has_gff_payload<key_ptr> ? grouped : hits;
+        const auto& keys = has_gff_payload<key_ptr> ? grouped : hits;
+        std::string& row = rows.row();
         if (max_hops == 0) {
-            for (auto* row : rows) {
-                print(out, row->get_data());
-                out << '\n';
+            for (auto* key : keys) {
+                print(row, key->get_data());
+                rows.end_row();
             }
             return;
         }
-        const auto reached = walk_edges(grove, rows, max_hops, dir);
+        const auto reached = walk_edges(grove, keys, max_hops, dir);
         auto r = reached.begin();
-        for (std::size_t i = 0; i < rows.size(); ++i) {
-            print(out, rows[i]->get_data());
-            out << '\n';
+        for (std::size_t i = 0; i < keys.size(); ++i) {
+            print(row, keys[i]->get_data());
+            rows.end_row();
             for (; r != reached.end() && r->seed == i; ++r) {
-                out << index << '\t' << iv.get_start() << '\t' << iv.get_end() + 1 << '\t';
-                print(out, rows[i]->get_data());
-                out << '\t';
-                print(out, r->key->get_data());
-                out << '\t' << r->hops << '\n';
+                row += index;
+                row += '\t';
+                row += std::to_string(iv.get_start());
+                row += '\t';
+                row += std::to_string(iv.get_end() + 1);
+                row += '\t';
+                print(row, keys[i]->get_data());
+                row += '\t';
+                print(row, r->key->get_data());
+                row += '\t';
+                row += std::to_string(r->hops);
+                rows.end_row();
             }
         }
     };
