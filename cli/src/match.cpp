@@ -124,14 +124,15 @@ template <typename key_ptr>
         return std::nullopt;
     }
     const gdt::interval& member = members[*found]->get_value();
-    // The outer ends of the query are free: a read can start and end inside an exon.
+    // Without --strict-ends the outer ends of the query are free: a read can
+    // start and end inside an exon.
     const bool free_start = !rule.strict_ends && block == 0;
     const bool free_end = !rule.strict_ends && block + 1 == query.blocks.size();
-    const auto near = [&rule](std::size_t a, std::size_t b) {
+    const auto within_tolerance = [&rule](std::size_t a, std::size_t b) {
         return (a > b ? a - b : b - a) <= rule.tolerance;
     };
-    const bool same = (free_start || near(member.get_start(), wanted.get_start())) &&
-                      (free_end || near(member.get_end(), wanted.get_end()));
+    const bool same = (free_start || within_tolerance(member.get_start(), wanted.get_start())) &&
+                      (free_end || within_tolerance(member.get_end(), wanted.get_end()));
     return same ? found : std::nullopt;
 }
 
@@ -233,11 +234,12 @@ cxxopts::Options match::build_options() {
             ("in-place", "Read only the blocks of the index that a query touches "
                          "instead of loading the whole file into memory")
             ("tolerance", "A boundary of a query interval matches when it differs from "
-                          "the boundary of the chain member by at most N bases",
-             cxxopts::value<std::size_t>()->default_value("0"))
+                          "the boundary of the chain member by at most N bases. The "
+                          "interval must still overlap exactly one member of the chain",
+             cxxopts::value<std::size_t>()->default_value("0"), "N")
             ("strict-ends", "Compare also the start of the first query interval and the "
-                            "end of the last one (by default these two only need to "
-                            "lie on the member)")
+                            "end of the last one (by default these two are not compared: "
+                            "an overlap with the member is enough)")
             ("o,outputfile", "Write the result rows to the specified file",
              cxxopts::value<std::string>()->default_value("stdout"))
             ("h,help", "Print the help")
@@ -280,7 +282,8 @@ void match::execute(const cxxopts::ParseResult& args) {
     const std::string index_path = args["indexfile"].as<std::string>();
     const std::string outputfile = args["outputfile"].as<std::string>();
     const bool in_place = args["in-place"].as<bool>();
-    const match_rule rule{args["tolerance"].as<std::size_t>(), args["strict-ends"].as<bool>()};
+    const match_rule rule{.tolerance = args["tolerance"].as<std::size_t>(),
+                          .strict_ends = args["strict-ends"].as<bool>()};
 
     // A file is written beside its destination and moved over it by commit(),
     // so a failure never leaves a half-written output.
