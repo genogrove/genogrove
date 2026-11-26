@@ -7,11 +7,13 @@
 #define GENOGROVE_IO_GFFREADER_HPP
 
 // standard
+#include <cstddef>
+#include <iosfwd>
 #include <string>
 #include <string_view>
 #include <filesystem>
 #include <optional>
-#include <map>
+#include <utility>
 #include <vector>
 
 // genogrove
@@ -29,6 +31,74 @@ namespace genogrove::io {
         UNKNOWN     // Format not yet determined
     };
 
+    // The attributes of column 9: names, each with one or more values.
+    //
+    // All text is in one string, "name\0value\0name\0value\0...", sorted by
+    // name. A name with several values repeats, its values in the order they
+    // were added. A record costs one allocation, and a record from an index is
+    // one string read. A lookup stops at the first larger name. Names and
+    // values must not contain '\0'.
+    class gff_attributes {
+    public:
+        [[nodiscard]] bool empty() const { return text.empty(); }
+        // Number of names; a name with several values counts once
+        [[nodiscard]] std::size_t size() const;
+        [[nodiscard]] bool contains(std::string_view name) const { return first(name).has_value(); }
+        // First value of the name. The view is valid until the attributes change.
+        [[nodiscard]] std::optional<std::string_view> first(std::string_view name) const;
+        // Every value of the name in the order added; empty when the name is absent
+        [[nodiscard]] std::vector<std::string> values(std::string_view name) const;
+        // As values(), but throws std::out_of_range when the name is absent
+        [[nodiscard]] std::vector<std::string> at(std::string_view name) const;
+
+        // Adds one value after the values the name already has. Throws
+        // std::runtime_error if the name or the value contains '\0'.
+        void add(std::string_view name, std::string_view value);
+        // Replaces the values of the name; an empty list removes the name
+        void set(std::string_view name, const std::vector<std::string>& values);
+        void erase(std::string_view name);
+        void clear() { text.clear(); }
+
+        // Calls fn(name, value) for each value, sorted by name. The views are
+        // valid until the attributes change.
+        template <typename fn_t>
+        void for_each(fn_t&& fn) const {
+            scan([&fn](std::string_view name, std::string_view value) {
+                fn(name, value);
+                return true;
+            });
+        }
+
+        [[nodiscard]] bool operator==(const gff_attributes&) const = default;
+
+        void serialize(std::ostream& os) const;
+        [[nodiscard]] static gff_attributes deserialize(std::istream& is);
+
+    private:
+        // Name of the last pair; empty when there is none
+        [[nodiscard]] std::string_view last_name() const;
+
+        // Calls fn(name, value) for each value until fn returns false. A tail
+        // with no closing '\0' (only in a damaged index) is ignored.
+        template <typename fn_t>
+        void scan(fn_t&& fn) const {
+            const std::string_view all(text);
+            for (std::size_t pos = 0; pos < all.size();) {
+                const std::size_t name_end = all.find('\0', pos);
+                if (name_end == std::string_view::npos) return;
+                const std::size_t value_end = all.find('\0', name_end + 1);
+                if (value_end == std::string_view::npos) return;
+                if (!fn(all.substr(pos, name_end - pos),
+                        all.substr(name_end + 1, value_end - name_end - 1))) {
+                    return;
+                }
+                pos = value_end + 1;
+            }
+        }
+
+        std::string text;
+    };
+
     struct gff_entry {
         std::string seqid;              // chromosome/contig name
         std::string source;             // source of the feature
@@ -39,7 +109,7 @@ namespace genogrove::io {
         std::optional<char> strand;     // strand (+, -, ., or ?)
         std::optional<int> phase;       // phase for CDS features (0, 1, or 2)
         // key-value pairs from column 9; a key repeated on one line (GTF `tag`) keeps all values in order
-        std::map<std::string, std::vector<std::string>, std::less<>> attributes;
+        gff_attributes attributes;
         gff_format format;              // detected format (GFF3 or GTF)
 
 
@@ -143,11 +213,12 @@ namespace genogrove::io {
         size_t line_num;
         std::string error_message;
         gff_reader_options options;
+        // The pairs of the line in work, sorted by name; reused for each line
+        std::vector<std::pair<std::string_view, std::string_view>> attribute_pairs;
 
         // Helper to parse attributes (handles both GFF3 and GTF formats)
         // Returns the detected format
-        gff_format parse_attributes(std::string_view attr_string,
-                                    std::map<std::string, std::vector<std::string>, std::less<>>& attributes);
+        gff_format parse_attributes(std::string_view attr_string, gff_attributes& attributes);
 
         // Helpers for parsing individual GFF fields
         bool parse_score(gff_entry& entry, std::string_view score_str);

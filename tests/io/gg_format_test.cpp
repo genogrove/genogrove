@@ -83,20 +83,23 @@ TEST(GgHeader, roundTripGff) {
     EXPECT_EQ(read.payload_type, gio::gg_payload_type::GFF);
 }
 
-TEST(GgHeader, rejectsRetiredFlatGffPayloadType) {
-    // 0x02 was the flat GFF index. Its stream types equal those of the linked
-    // model, so only this tag can stop a reader from misreading such a file.
+TEST(GgHeader, rejectsRetiredGffPayloadTypes) {
+    // 0x02 (flat GFF index) and 0x03 (attributes as a list of pairs) have the
+    // stream types of the current layout, so only this tag can stop a reader
+    // from misreading such a file.
     std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
     gio::gg_header::current(gio::gg_payload_type::GFF).write(ss);
     std::string bytes = ss.str();
-    ASSERT_EQ(static_cast<unsigned char>(bytes[9]), 0x03);
-    bytes[9] = 0x02;
-    std::stringstream flat(bytes, std::ios::in | std::ios::binary);
-    try {
-        (void)gio::gg_header::read(flat);
-        FAIL() << "a flat GFF header was accepted";
-    } catch (const std::runtime_error& e) {
-        EXPECT_NE(std::string(e.what()).find("re-create the index"), std::string::npos) << e.what();
+    ASSERT_EQ(static_cast<unsigned char>(bytes[9]), 0x04);
+    for (const char retired : {char{0x02}, char{0x03}}) {
+        bytes[9] = retired;
+        std::stringstream old(bytes, std::ios::in | std::ios::binary);
+        try {
+            (void)gio::gg_header::read(old);
+            FAIL() << "a retired GFF header was accepted";
+        } catch (const std::runtime_error& e) {
+            EXPECT_NE(std::string(e.what()).find("re-create the index"), std::string::npos) << e.what();
+        }
     }
 }
 
