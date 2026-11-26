@@ -13,7 +13,9 @@
 #include <clocale>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <ranges>
+#include <stdexcept>
 
 // genogrove
 #include <genogrove/data_type/serialization_traits.hpp>
@@ -47,8 +49,8 @@ namespace genogrove::io {
 
     std::optional<std::string_view> gff_attributes::first(std::string_view name) const {
         std::optional<std::string_view> found;
-        scan([&](std::string_view other, std::string_view value) {
-            if (other != name) return other < name;  // sorted: not after a larger name
+        scan([&](std::string_view current, std::string_view value) {
+            if (current != name) return current < name;  // sorted: not after a larger name
             found = value;
             return false;
         });
@@ -57,10 +59,7 @@ namespace genogrove::io {
 
     std::vector<std::string> gff_attributes::values(std::string_view name) const {
         std::vector<std::string> out;
-        scan([&](std::string_view other, std::string_view value) {
-            if (other == name) out.emplace_back(value);
-            return other <= name;
-        });
+        for_each(name, [&](std::string_view value) { out.emplace_back(value); });
         return out;
     }
 
@@ -81,37 +80,66 @@ namespace genogrove::io {
         return std::string_view(text).substr(begin, name_end - begin);
     }
 
-    void gff_attributes::add(std::string_view name, std::string_view value) {
-        if (name.find('\0') != std::string_view::npos || value.find('\0') != std::string_view::npos) {
-            throw std::runtime_error("gff_attributes: a name or a value contains a NUL character");
-        }
-        // Before the first larger name: after the values this name already has.
-        // That is the end when the last name is not larger, which needs no scan.
+    // The end of the text when the last name is not larger, which needs no scan.
+    std::size_t gff_attributes::end_of(std::string_view name) const {
         std::size_t at = text.size();
         if (last_name() > name) {
-            scan([&](std::string_view other, std::string_view) {
-                if (other <= name) return true;
-                at = static_cast<std::size_t>(other.data() - text.data());
+            scan([&](std::string_view current, std::string_view) {
+                if (current <= name) return true;
+                at = static_cast<std::size_t>(current.data() - text.data());
                 return false;
             });
         }
+        return at;
+    }
+
+    namespace {
+        void reject_nul(std::string_view name, std::string_view value) {
+            if (name.find('\0') != std::string_view::npos || value.find('\0') != std::string_view::npos) {
+                throw std::runtime_error("gff_attributes: a name or a value contains a NUL character");
+            }
+        }
+    } // namespace
+
+    void gff_attributes::add(std::string_view name, std::string_view value) {
+        reject_nul(name, value);
+        // A view into this text moves with the insert, so it is copied first.
+        const auto in_text = [this](std::string_view view) {
+            return std::less_equal<>()(text.data(), view.data()) &&
+                   std::less<>()(view.data(), text.data() + text.size());
+        };
+        if (in_text(name) || in_text(value)) {
+            return add(std::string(name), std::string(value));
+        }
+        const std::size_t at = end_of(name);
         text.insert(at, name.size() + value.size() + 2, '\0');
         name.copy(text.data() + at, name.size());
         value.copy(text.data() + at + name.size() + 1, value.size());
     }
 
     void gff_attributes::set(std::string_view name, const std::vector<std::string>& values) {
+        // Encoded before the first change: a '\0' then leaves the old values in
+        // place, and the name can be a view into this text.
+        std::string encoded;
+        for (const auto& value : values) {
+            reject_nul(name, value);
+            encoded.append(name).push_back('\0');
+            encoded.append(value).push_back('\0');
+        }
+        const std::size_t name_size = name.size();
         erase(name);
-        for (const auto& value : values) add(name, value);
+        if (!encoded.empty()) {
+            text.insert(end_of(std::string_view(encoded).substr(0, name_size)), encoded);
+        }
     }
 
     void gff_attributes::erase(std::string_view name) {
         // The values of a name are one range, because the text is sorted by name.
         std::size_t begin = std::string::npos;
         std::size_t end = 0;
-        scan([&](std::string_view other, std::string_view value) {
-            if (other != name) return begin == std::string::npos && other < name;
-            if (begin == std::string::npos) begin = static_cast<std::size_t>(other.data() - text.data());
+        scan([&](std::string_view current, std::string_view value) {
+            if (current != name) return begin == std::string::npos && current < name;
+            if (begin == std::string::npos) begin = static_cast<std::size_t>(current.data() - text.data());
             end = static_cast<std::size_t>(value.data() - text.data()) + value.size() + 1;
             return true;
         });
@@ -269,13 +297,11 @@ namespace genogrove::io {
                                             gff_attributes& attributes) {
         attributes.clear();
         attribute_pairs.clear();
-        // Sorted by name first, so that each add() in store() appends at the end.
-        const auto keep = [this](std::string_view name, std::string_view value) {
-            const auto at = std::ranges::upper_bound(
-                attribute_pairs, name, {}, &std::pair<std::string_view, std::string_view>::first);
-            attribute_pairs.emplace(at, name, value);
-        };
+        // Sorted by name first, so that each add() appends at the end. Stable:
+        // the values of a repeated name keep the order of the line.
         const auto store = [&] {
+            std::ranges::stable_sort(attribute_pairs, {},
+                                     &std::pair<std::string_view, std::string_view>::first);
             for (const auto& [name, value] : attribute_pairs) attributes.add(name, value);
         };
 
@@ -309,7 +335,7 @@ namespace genogrove::io {
                     value_sv = value_sv.substr(1, value_sv.size() - 2);
                 }
 
-                keep(trimmed.substr(0, space_pos), value_sv);
+                attribute_pairs.emplace_back(trimmed.substr(0, space_pos), value_sv);
             }
             store();
             return gff_format::GTF;
@@ -332,7 +358,7 @@ namespace genogrove::io {
                 size_t eq_pos = trimmed.find('=');
                 if (eq_pos == std::string_view::npos) continue;
 
-                keep(trimmed.substr(0, eq_pos), trimmed.substr(eq_pos + 1));
+                attribute_pairs.emplace_back(trimmed.substr(0, eq_pos), trimmed.substr(eq_pos + 1));
             }
             store();
             return gff_format::GFF3;

@@ -69,6 +69,15 @@ namespace genogrove::io {
             });
         }
 
+        // Calls fn(value) for each value of the name, in the order added
+        template <typename fn_t>
+        void for_each(std::string_view name, fn_t&& fn) const {
+            scan([&](std::string_view current, std::string_view value) {
+                if (current == name) fn(value);
+                return current <= name;
+            });
+        }
+
         [[nodiscard]] bool operator==(const gff_attributes&) const = default;
 
         void serialize(std::ostream& os) const;
@@ -77,6 +86,8 @@ namespace genogrove::io {
     private:
         // Name of the last pair; empty when there is none
         [[nodiscard]] std::string_view last_name() const;
+        // Offset of the first pair with a larger name: after the values of `name`
+        [[nodiscard]] std::size_t end_of(std::string_view name) const;
 
         // Calls fn(name, value) for each value until fn returns false. A tail
         // with no closing '\0' (only in a damaged index) is ignored.
@@ -108,8 +119,7 @@ namespace genogrove::io {
         std::optional<double> score;    // score (if not '.')
         std::optional<char> strand;     // strand (+, -, ., or ?)
         std::optional<int> phase;       // phase for CDS features (0, 1, or 2)
-        // key-value pairs from column 9; a key repeated on one line (GTF `tag`) keeps all values in order
-        gff_attributes attributes;
+        gff_attributes attributes;      // column 9
         gff_format format;              // detected format (GFF3 or GTF)
 
 

@@ -192,11 +192,13 @@ std::size_t add_shared_record(gff_model& model, const gio::gff_entry& entry) {
     const auto ours = pairs_of(kept);
     const auto theirs = pairs_of(stored.attributes);
     std::vector<std::string> differing;
-    for(const pair& one : ours) {
-        if(!std::ranges::equal(std::ranges::equal_range(ours, one.first, {}, &pair::first),
-                               std::ranges::equal_range(theirs, one.first, {}, &pair::first))) {
-            differing.emplace_back(one.first);
+    for(auto it = ours.begin(); it != ours.end();) {
+        const std::string_view name = it->first;
+        const auto values = std::ranges::equal_range(ours, name, {}, &pair::first);
+        if(!std::ranges::equal(values, std::ranges::equal_range(theirs, name, {}, &pair::first))) {
+            differing.emplace_back(name);
         }
+        it = values.end();
     }
     for(const auto& name : differing) {
         kept.erase(name);
@@ -409,10 +411,7 @@ using name_table = std::unordered_map<std::string_view, key_ptr>;
 name_table table_for(std::string_view tag, const std::vector<key_ptr>& keys) {
     name_table table;
     const auto add = [&](key_ptr key) {
-        key->get_data().attributes.for_each([&](std::string_view name, std::string_view value) {
-            if(name != tag) {
-                return;
-            }
+        key->get_data().attributes.for_each(tag, [&](std::string_view value) {
             const auto [slot, fresh] = table.try_emplace(value, key);
             if(!fresh && slot->second != key) {
                 slot->second = nullptr;
@@ -514,12 +513,10 @@ std::string record_id(const gio::gff_entry& payload) {
         const std::string name = payload.type + "_id";
         bool found = false;
         std::string joined;
-        payload.attributes.for_each([&](std::string_view other, std::string_view id) {
-            if(other == name) {
-                found = true;
-                joined += joined.empty() ? "" : ",";
-                joined += id;
-            }
+        payload.attributes.for_each(name, [&](std::string_view id) {
+            found = true;
+            joined += joined.empty() ? "" : ",";
+            joined += id;
         });
         if(found) {
             return joined.empty() ? "." : joined;

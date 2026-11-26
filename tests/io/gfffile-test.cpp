@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 // standard
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -1199,9 +1200,8 @@ TEST(gffEntrySerialization, gtfRoundTrip) {
     EXPECT_EQ(out.attributes.at("transcript_id").front(), "T1");
 }
 
-TEST(gffEntrySerialization, emptyAttributesMap) {
-    // Explicit zero-entry attributes — the 4-byte count is written as 0 and
-    // the map round-trips empty.
+TEST(gffEntrySerialization, emptyAttributes) {
+    // No attributes: an empty text is written and read back.
     gio::gff_entry in("chr1", 1, 10, "region");
     in.format = gio::gff_format::GFF3;
     auto out = gff_roundtrip(in);
@@ -1292,6 +1292,58 @@ TEST(gffAttributes, rejectsNulInANameOrAValue) {
     EXPECT_TRUE(attributes.empty());
 }
 
+TEST(gffAttributes, repeatedNameAddedOutOfOrderIsEqualToInOrder) {
+    gio::gff_attributes out_of_order;
+    out_of_order.add("tag", "a");
+    out_of_order.add("ID", "x");
+    out_of_order.add("tag", "b");
+    gio::gff_attributes in_order;
+    in_order.add("ID", "x");
+    in_order.add("tag", "a");
+    in_order.add("tag", "b");
+
+    EXPECT_EQ(out_of_order, in_order);
+    EXPECT_EQ(out_of_order.at("tag"), (std::vector<std::string>{"a", "b"}));
+}
+
+TEST(gffAttributes, aViewOfTheSameObjectCanBeAddedAndSet) {
+    // add() and set() move the text that such a view points into.
+    const std::string long_value(200, 'v');  // the insert must allocate again
+    gio::gff_attributes attributes;
+    attributes.add("B", "B");
+    attributes.add("tag", long_value);
+
+    attributes.add("A", *attributes.first("tag"));
+    EXPECT_EQ(attributes.first("A"), long_value);
+
+    attributes.set(*attributes.first("B"), {"new"});
+    EXPECT_EQ(pairs_of(attributes),
+              (std::vector<std::string>{"A=" + long_value, "B=new", "tag=" + long_value}));
+}
+
+TEST(gffAttributes, setWithANulKeepsTheOldValues) {
+    gio::gff_attributes attributes;
+    attributes.set("tag", {"x", "y"});
+    EXPECT_THROW(attributes.set("tag", {"a", std::string("b\0c", 3)}), std::runtime_error);
+    EXPECT_EQ(pairs_of(attributes), (std::vector<std::string>{"tag=x", "tag=y"}));
+}
+
+TEST(gffAttributes, eraseOfTheFirstTheLastAndTheEmptyName) {
+    gio::gff_attributes attributes;
+    attributes.add("tag", "a");
+    attributes.add("", "v");  // "=v" in GFF3
+    attributes.add("ID", "x");
+    attributes.add("zeta", "z");
+    EXPECT_EQ(pairs_of(attributes), (std::vector<std::string>{"=v", "ID=x", "tag=a", "zeta=z"}));
+    EXPECT_EQ(attributes.first(""), "v");
+
+    attributes.erase("");
+    attributes.erase("zeta");
+    EXPECT_EQ(pairs_of(attributes), (std::vector<std::string>{"ID=x", "tag=a"}));
+    attributes.erase("ID");
+    EXPECT_EQ(pairs_of(attributes), (std::vector<std::string>{"tag=a"}));
+}
+
 TEST(gffAttributes, damagedTextFromAnIndexIsReadUpToTheDamage) {
     // A text with no closing '\0' cannot come from serialize(); it must not be
     // read past its end.
@@ -1304,7 +1356,11 @@ TEST(gffAttributes, damagedTextFromAnIndexIsReadUpToTheDamage) {
 }
 
 TEST(gffAttributes, readerReportsANulInColumn9AsAnInvalidLine) {
-    const auto path = fs::temp_directory_path() / "gg_nul_attribute.gff3";
+    // A name of its own, so that two test runs on one host do not share the file.
+    const auto path =
+        fs::temp_directory_path() /
+        ("gg_nul_attribute_" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".gff3");
     {
         std::ofstream f(path, std::ios::binary);
         f << "chr1\t.\tgene\t1\t100\t.\t+\t.\tID=gene1\n";
@@ -1313,7 +1369,7 @@ TEST(gffAttributes, readerReportsANulInColumn9AsAnInvalidLine) {
     gio::gff_entry entry;
     {
         gio::gff_reader reader(path);
-        ASSERT_TRUE(reader.read_next(entry));
+        EXPECT_TRUE(reader.read_next(entry));
         try {
             (void)reader.read_next(entry);
             ADD_FAILURE() << "the line was accepted";
@@ -1321,9 +1377,12 @@ TEST(gffAttributes, readerReportsANulInColumn9AsAnInvalidLine) {
             EXPECT_NE(std::string(e.what()).find("NUL character"), std::string::npos) << e.what();
         }
     }
-    gio::gff_reader skipping(path, {.skip_invalid_lines = true, .validate_gtf = false, .region = {}});
-    ASSERT_TRUE(skipping.read_next(entry));
-    EXPECT_FALSE(skipping.read_next(entry));  // the line is skipped, then the file ends
+    {
+        gio::gff_reader skipping(path,
+                                 {.skip_invalid_lines = true, .validate_gtf = false, .region = {}});
+        EXPECT_TRUE(skipping.read_next(entry));
+        EXPECT_FALSE(skipping.read_next(entry));  // the line is skipped, then the file ends
+    }
     fs::remove(path);
 }
 
@@ -1335,8 +1394,17 @@ TEST(gffEntrySerialization, repeatedAttributeRoundTrip) {
     auto out = gff_roundtrip(in);
 
     EXPECT_EQ(out.attributes, in.attributes);
-    EXPECT_EQ(out.attributes.at("tag"),
-              (std::vector<std::string>{"basic", "cds_start_NF", "Ensembl_canonical"}));
+}
+
+TEST(gffEntrySerialization, manyValuesOfOneNameRoundTrip) {
+    // More than the 4096 values that the old layout allowed for a record.
+    gio::gff_entry in("chr1", 1, 10, "transcript");
+    in.attributes.set("CDS", std::vector<std::string>(5000, "1-2:0"));
+    in.attributes.set("gene_id", {"G1"});
+    const auto out = gff_roundtrip(in);
+
+    EXPECT_EQ(out.attributes, in.attributes);
+    EXPECT_EQ(out.attributes.at("CDS").size(), 5000u);
 }
 
 TEST(gffEntryRepeatedAttributes, gtfKeepsEveryTagInOrder) {
