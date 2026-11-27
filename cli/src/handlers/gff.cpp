@@ -29,7 +29,6 @@ namespace {
 
 using grove_t = ggs::grove<gdt::interval, gio::gff_entry, std::string>;
 using key_ptr = gdt::key<gdt::interval, gio::gff_entry>*;
-using attribute_map = decltype(gio::gff_entry::attributes);
 using index_pair = std::pair<std::size_t, std::size_t>;
 
 struct transcript_state {
@@ -79,11 +78,11 @@ bool is_transcript_part(std::string_view type) {
 
 // GTF 2.2 writes an empty value for "none", so empty counts as absent.
 std::optional<std::string> first_value(const gio::gff_entry& entry, std::string_view tag) {
-    const auto it = entry.attributes.find(tag);
-    if(it == entry.attributes.end() || it->second.empty() || it->second.front().empty()) {
+    const auto value = entry.attributes.first(tag);
+    if(!value || value->empty()) {
         return std::nullopt;
     }
-    return it->second.front();
+    return std::string(*value);
 }
 
 std::string place(const gio::gff_entry& entry) {
@@ -104,8 +103,8 @@ std::optional<std::string> owner_of(bool gff3, const gio::gff_entry& entry,
     std::vector<std::string> ids;
     if(gff3) {
         ids = entry.get_parent_ids();
-    } else if(const auto it = entry.attributes.find(gtf_tag); it != entry.attributes.end()) {
-        ids = it->second;
+    } else {
+        ids = entry.attributes.values(gtf_tag);
     }
     std::erase(ids, std::string());
     if(ids.empty() || std::ranges::count(ids, ids.front()) != std::ssize(ids)) {
@@ -167,31 +166,44 @@ std::size_t add_shared_record(gff_model& model, const gio::gff_entry& entry) {
         return it->second;
     }
 
-    attribute_map& kept = model.shared[it->second].attributes;
+    gio::gff_attributes& kept = model.shared[it->second].attributes;
     // <type>_id (exon_id) addresses the record, and one position can have
     // several ids (the same exon in another reading frame or gene), so every
     // id is kept.
     const std::string id_attribute = entry.type + "_id";
     std::vector<std::string> all_ids;
-    for(const attribute_map* from : {&kept, &stored.attributes}) {
-        const auto ids = from->find(id_attribute);
-        if(ids == from->end()) {
-            continue;
-        }
-        for(const auto& id : ids->second) {
+    for(const gio::gff_attributes* from : {&kept, &stored.attributes}) {
+        for(const auto& id : from->values(id_attribute)) {
             if(std::ranges::find(all_ids, id) == all_ids.end()) {
                 all_ids.push_back(id);
             }
         }
     }
     std::ranges::sort(all_ids); // the record must not depend on the line order
-    std::erase_if(kept, [&stored](const auto& attribute) {
-        const auto other = stored.attributes.find(attribute.first);
-        return other == stored.attributes.end() || other->second != attribute.second;
-    });
-    if(!all_ids.empty()) {
-        kept[id_attribute] = std::move(all_ids);
+    // The names whose values are not the same in the two records. Both lists
+    // are sorted by name, so the values of a name are one range in each.
+    using pair = std::pair<std::string_view, std::string_view>;
+    const auto pairs_of = [](const gio::gff_attributes& attributes) {
+        std::vector<pair> pairs;
+        attributes.for_each(
+            [&](std::string_view name, std::string_view value) { pairs.emplace_back(name, value); });
+        return pairs;
+    };
+    const auto ours = pairs_of(kept);
+    const auto theirs = pairs_of(stored.attributes);
+    std::vector<std::string> differing;
+    for(auto it = ours.begin(); it != ours.end();) {
+        const std::string_view name = it->first;
+        const auto values = std::ranges::equal_range(ours, name, {}, &pair::first);
+        if(!std::ranges::equal(values, std::ranges::equal_range(theirs, name, {}, &pair::first))) {
+            differing.emplace_back(name);
+        }
+        it = values.end();
     }
+    for(const auto& name : differing) {
+        kept.erase(name);
+    }
+    kept.set(id_attribute, all_ids); // an empty list leaves the name absent
     return it->second;
 }
 
@@ -286,11 +298,10 @@ std::vector<index_pair> complete_transcripts(gff_model& model) {
                                          "' already has an attribute named '" + type +
                                          "', the name of the list for its " + type + " lines");
             }
-            record.attributes[type] = std::move(items);
+            record.attributes.set(type, items);
         }
-        if(transcript.protein_id) {
-            record.attributes.try_emplace("protein_id",
-                                          std::vector<std::string>{*transcript.protein_id});
+        if(transcript.protein_id && !record.attributes.contains("protein_id")) {
+            record.attributes.add("protein_id", *transcript.protein_id);
         }
 
         const auto gene_id = owner_of(model.gff3, record, "gene_id");
@@ -382,11 +393,13 @@ void add_structure_edges(grove_t& grove, gff_model& model, const std::vector<key
 // position.
 void name_shared_records(std::vector<gio::gff_entry>& shared) {
     for(gio::gff_entry& record : shared) {
-        std::vector<std::string>& ids = record.attributes[record.type + "_id"];
+        const std::string name = record.type + "_id";
+        std::vector<std::string> ids = record.attributes.values(name);
         std::erase(ids, std::string());
         if(ids.empty()) {
             ids.push_back(place(record) + ':' + record.strand.value_or('.'));
         }
+        record.attributes.set(name, ids);
     }
 }
 
@@ -398,17 +411,12 @@ using name_table = std::unordered_map<std::string_view, key_ptr>;
 name_table table_for(std::string_view tag, const std::vector<key_ptr>& keys) {
     name_table table;
     const auto add = [&](key_ptr key) {
-        const attribute_map& attributes = key->get_data().attributes;
-        const auto values = attributes.find(tag);
-        if(values == attributes.end()) {
-            return;
-        }
-        for(const auto& value : values->second) {
+        key->get_data().attributes.for_each(tag, [&](std::string_view value) {
             const auto [slot, fresh] = table.try_emplace(value, key);
             if(!fresh && slot->second != key) {
                 slot->second = nullptr;
             }
-        }
+        });
     };
     // A transcript line also carries its gene_id, and an exon line both ids,
     // so the <type>_id tag of these record types looks at that type only.
@@ -501,15 +509,18 @@ bool is_structure_edge(std::string_view text) {
 }
 
 std::string record_id(const gio::gff_entry& payload) {
-    const auto& attributes = payload.attributes;
-    if(const auto ids =
-           is_shared_type(payload.type) ? attributes.find(payload.type + "_id") : attributes.end();
-       ids != attributes.end()) {
+    if(is_shared_type(payload.type)) {
+        const std::string name = payload.type + "_id";
+        bool found = false;
         std::string joined;
-        for(const auto& id : ids->second) {
-            joined += (joined.empty() ? "" : ",") + id;
+        payload.attributes.for_each(name, [&](std::string_view id) {
+            found = true;
+            joined += joined.empty() ? "" : ",";
+            joined += id;
+        });
+        if(found) {
+            return joined.empty() ? "." : joined;
         }
-        return joined.empty() ? "." : joined;
     }
     return first_value(payload, id_tag(payload.is_gff3(), payload.type)).value_or(".");
 }

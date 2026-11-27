@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 // standard
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -734,7 +735,7 @@ namespace {
     gio::gff_entry make_gff3(const std::string& type, std::map<std::string, std::string, std::less<>> attrs) {
         gio::gff_entry e("chr1", 1, 10, type);
         e.format = gio::gff_format::GFF3;
-        for (auto& [k, v] : attrs) e.attributes[k] = {std::move(v)};
+        for (auto& [k, v] : attrs) e.attributes.set(k, {std::move(v)});
         return e;
     }
 }
@@ -762,7 +763,8 @@ TEST(gffEntryGff3Ids, geneId) {
 TEST(gffEntryGff3Ids, gtfUnaffected) {
     gio::gff_entry e("chr1", 1, 10, "exon");
     e.format = gio::gff_format::GTF;
-    e.attributes = {{"ID", {"x"}}, {"Parent", {"y"}}};
+    e.attributes.set("ID", {"x"});
+    e.attributes.set("Parent", {"y"});
     EXPECT_FALSE(e.get_gene_id().has_value());
     EXPECT_FALSE(e.get_transcript_id().has_value());
 }
@@ -1164,9 +1166,9 @@ TEST(gffEntrySerialization, gff3FullRoundTrip) {
     in.strand = '-';
     in.phase = 1;
     in.format = gio::gff_format::GFF3;
-    in.attributes["ID"] = {"exon:ENSE00001"};
-    in.attributes["Parent"] = {"transcript:ENST00001"};
-    in.attributes["gene_id"] = {"ENSG00001"};
+    in.attributes.set("ID", {"exon:ENSE00001"});
+    in.attributes.set("Parent", {"transcript:ENST00001"});
+    in.attributes.set("gene_id", {"ENSG00001"});
     auto out = gff_roundtrip(in);
 
     EXPECT_EQ(out.source, "ENSEMBL");
@@ -1187,8 +1189,8 @@ TEST(gffEntrySerialization, gtfRoundTrip) {
     gio::gff_entry in("chr2", 500, 600, "CDS");
     in.format = gio::gff_format::GTF;
     in.phase = 0;
-    in.attributes["gene_id"] = {"G1"};
-    in.attributes["transcript_id"] = {"T1"};
+    in.attributes.set("gene_id", {"G1"});
+    in.attributes.set("transcript_id", {"T1"});
     auto out = gff_roundtrip(in);
 
     EXPECT_EQ(out.format, gio::gff_format::GTF);
@@ -1198,9 +1200,8 @@ TEST(gffEntrySerialization, gtfRoundTrip) {
     EXPECT_EQ(out.attributes.at("transcript_id").front(), "T1");
 }
 
-TEST(gffEntrySerialization, emptyAttributesMap) {
-    // Explicit zero-entry attributes — the 4-byte count is written as 0 and
-    // the map round-trips empty.
+TEST(gffEntrySerialization, emptyAttributes) {
+    // No attributes: an empty text is written and read back.
     gio::gff_entry in("chr1", 1, 10, "region");
     in.format = gio::gff_format::GFF3;
     auto out = gff_roundtrip(in);
@@ -1209,40 +1210,201 @@ TEST(gffEntrySerialization, emptyAttributesMap) {
     EXPECT_EQ(out.format, gio::gff_format::GFF3);
 }
 
-TEST(gffEntrySerialization, preservesEmbeddedNulInAttributes) {
-    // Attribute values go through the length-prefixed string serializer, so
-    // embedded NULs must survive the round-trip in both key and value.
-    gio::gff_entry in("chr1", 5, 10, "feature");
-    in.attributes[std::string("k\0ey", 4)] = {std::string("va\0lue", 6)};
-    auto out = gff_roundtrip(in);
+// ==========================================
+// gff_attributes
+// ==========================================
 
-    ASSERT_EQ(out.attributes.size(), 1u);
-    const auto it = out.attributes.find(std::string("k\0ey", 4));
-    ASSERT_NE(it, out.attributes.end());
-    ASSERT_EQ(it->second.size(), 1u);
-    EXPECT_EQ(it->second[0].size(), 6u);
-    EXPECT_EQ(it->second[0][2], '\0');
+namespace {
+    std::vector<std::string> pairs_of(const gio::gff_attributes& attributes) {
+        std::vector<std::string> out;
+        attributes.for_each([&](std::string_view name, std::string_view value) {
+            out.push_back(std::string(name) + "=" + std::string(value));
+        });
+        return out;
+    }
+}
+
+TEST(gffAttributes, sortedByNameWithValuesInTheOrderAdded) {
+    gio::gff_attributes attributes;
+    attributes.add("tag", "basic");
+    attributes.add("gene_id", "G1");
+    attributes.add("tag", "MANE");
+    attributes.add("ID", "");
+
+    EXPECT_EQ(pairs_of(attributes),
+              (std::vector<std::string>{"ID=", "gene_id=G1", "tag=basic", "tag=MANE"}));
+    EXPECT_EQ(attributes.size(), 3u);
+    EXPECT_EQ(attributes.at("tag"), (std::vector<std::string>{"basic", "MANE"}));
+    EXPECT_EQ(attributes.first("tag"), "basic");
+    EXPECT_EQ(attributes.first("ID"), "");
+    EXPECT_TRUE(attributes.contains("gene_id"));
+}
+
+TEST(gffAttributes, absentNameIsEmptyOrThrows) {
+    gio::gff_attributes attributes;
+    attributes.add("gene_id", "G1");
+
+    for (const char* absent : {"ID", "gene_name", "zzz"}) {  // before, between and after
+        EXPECT_FALSE(attributes.contains(absent)) << absent;
+        EXPECT_FALSE(attributes.first(absent).has_value()) << absent;
+        EXPECT_TRUE(attributes.values(absent).empty()) << absent;
+        EXPECT_THROW((void)attributes.at(absent), std::out_of_range) << absent;
+    }
+}
+
+TEST(gffAttributes, equalForAnyOrderOfTheNames) {
+    gio::gff_attributes one;
+    one.add("ID", "x");
+    one.add("tag", "a");
+    gio::gff_attributes other;
+    other.add("tag", "a");
+    other.add("ID", "x");
+    EXPECT_EQ(one, other);
+
+    other.add("tag", "b");
+    EXPECT_NE(one, other);
+}
+
+TEST(gffAttributes, setReplacesAndEraseRemovesEveryValueOfTheName) {
+    gio::gff_attributes attributes;
+    attributes.set("ID", {"x"});
+    attributes.set("tag", {"a", "b"});
+    attributes.set("zeta", {"z"});
+
+    attributes.set("tag", {"c"});
+    EXPECT_EQ(pairs_of(attributes), (std::vector<std::string>{"ID=x", "tag=c", "zeta=z"}));
+
+    attributes.set("tag", {"d", "e"});
+    attributes.erase("tag");
+    attributes.erase("absent");
+    EXPECT_EQ(pairs_of(attributes), (std::vector<std::string>{"ID=x", "zeta=z"}));
+
+    attributes.set("ID", {});  // an empty list removes the name
+    attributes.erase("zeta");
+    EXPECT_TRUE(attributes.empty());
+}
+
+TEST(gffAttributes, rejectsNulInANameOrAValue) {
+    // '\0' separates the names and the values.
+    gio::gff_attributes attributes;
+    EXPECT_THROW(attributes.add(std::string("k\0ey", 4), "value"), std::runtime_error);
+    EXPECT_THROW(attributes.add("key", std::string("va\0lue", 6)), std::runtime_error);
+    EXPECT_TRUE(attributes.empty());
+}
+
+TEST(gffAttributes, repeatedNameAddedOutOfOrderIsEqualToInOrder) {
+    gio::gff_attributes out_of_order;
+    out_of_order.add("tag", "a");
+    out_of_order.add("ID", "x");
+    out_of_order.add("tag", "b");
+    gio::gff_attributes in_order;
+    in_order.add("ID", "x");
+    in_order.add("tag", "a");
+    in_order.add("tag", "b");
+
+    EXPECT_EQ(out_of_order, in_order);
+    EXPECT_EQ(out_of_order.at("tag"), (std::vector<std::string>{"a", "b"}));
+}
+
+TEST(gffAttributes, aViewOfTheSameObjectCanBeAddedAndSet) {
+    // add() and set() move the text that such a view points into.
+    const std::string long_value(200, 'v');  // the insert must allocate again
+    gio::gff_attributes attributes;
+    attributes.add("B", "B");
+    attributes.add("tag", long_value);
+
+    attributes.add("A", *attributes.first("tag"));
+    EXPECT_EQ(attributes.first("A"), long_value);
+
+    attributes.set(*attributes.first("B"), {"new"});
+    EXPECT_EQ(pairs_of(attributes),
+              (std::vector<std::string>{"A=" + long_value, "B=new", "tag=" + long_value}));
+}
+
+TEST(gffAttributes, setWithANulKeepsTheOldValues) {
+    gio::gff_attributes attributes;
+    attributes.set("tag", {"x", "y"});
+    EXPECT_THROW(attributes.set("tag", {"a", std::string("b\0c", 3)}), std::runtime_error);
+    EXPECT_EQ(pairs_of(attributes), (std::vector<std::string>{"tag=x", "tag=y"}));
+}
+
+TEST(gffAttributes, eraseOfTheFirstTheLastAndTheEmptyName) {
+    gio::gff_attributes attributes;
+    attributes.add("tag", "a");
+    attributes.add("", "v");  // "=v" in GFF3
+    attributes.add("ID", "x");
+    attributes.add("zeta", "z");
+    EXPECT_EQ(pairs_of(attributes), (std::vector<std::string>{"=v", "ID=x", "tag=a", "zeta=z"}));
+    EXPECT_EQ(attributes.first(""), "v");
+
+    attributes.erase("");
+    attributes.erase("zeta");
+    EXPECT_EQ(pairs_of(attributes), (std::vector<std::string>{"ID=x", "tag=a"}));
+    attributes.erase("ID");
+    EXPECT_EQ(pairs_of(attributes), (std::vector<std::string>{"tag=a"}));
+}
+
+TEST(gffAttributes, damagedTextFromAnIndexIsReadUpToTheDamage) {
+    // A text with no closing '\0' cannot come from serialize(); it must not be
+    // read past its end.
+    std::stringstream ss(std::ios::in | std::ios::out | std::ios::binary);
+    gdt::serializer<std::string>::write(ss, std::string("ID\0x\0broken", 11));
+    const auto attributes = gio::gff_attributes::deserialize(ss);
+
+    EXPECT_EQ(pairs_of(attributes), (std::vector<std::string>{"ID=x"}));
+    EXPECT_FALSE(attributes.contains("broken"));
+}
+
+TEST(gffAttributes, readerReportsANulInColumn9AsAnInvalidLine) {
+    // A name of its own, so that two test runs on one host do not share the file.
+    const auto path =
+        fs::temp_directory_path() /
+        ("gg_nul_attribute_" +
+         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".gff3");
+    {
+        std::ofstream f(path, std::ios::binary);
+        f << "chr1\t.\tgene\t1\t100\t.\t+\t.\tID=gene1\n";
+        f << "chr1\t.\tgene\t200\t300\t.\t+\t.\tID=ge" << '\0' << "ne2\n";
+    }
+    gio::gff_entry entry;
+    {
+        gio::gff_reader reader(path);
+        EXPECT_TRUE(reader.read_next(entry));
+        try {
+            (void)reader.read_next(entry);
+            ADD_FAILURE() << "the line was accepted";
+        } catch (const std::runtime_error& e) {
+            EXPECT_NE(std::string(e.what()).find("NUL character"), std::string::npos) << e.what();
+        }
+    }
+    {
+        gio::gff_reader skipping(path,
+                                 {.skip_invalid_lines = true, .validate_gtf = false, .region = {}});
+        EXPECT_TRUE(skipping.read_next(entry));
+        EXPECT_FALSE(skipping.read_next(entry));  // the line is skipped, then the file ends
+    }
+    fs::remove(path);
 }
 
 TEST(gffEntrySerialization, repeatedAttributeRoundTrip) {
     gio::gff_entry in("chr1", 1, 10, "transcript");
     in.format = gio::gff_format::GTF;
-    in.attributes["tag"] = {"basic", "cds_start_NF", "Ensembl_canonical"};
-    in.attributes["gene_id"] = {"G1"};
+    in.attributes.set("tag", {"basic", "cds_start_NF", "Ensembl_canonical"});
+    in.attributes.set("gene_id", {"G1"});
     auto out = gff_roundtrip(in);
 
     EXPECT_EQ(out.attributes, in.attributes);
 }
 
-TEST(gffEntrySerialization, attributeValueLimit) {
-    // 4096 values per record is the reader's bound; the writer must stop at the
-    // same point instead of writing a record the reader rejects.
+TEST(gffEntrySerialization, manyValuesOfOneNameRoundTrip) {
+    // More than the 4096 values that the old layout allowed for a record.
     gio::gff_entry in("chr1", 1, 10, "transcript");
-    in.attributes["tag"] = std::vector<std::string>(4096, "x");
-    EXPECT_EQ(gff_roundtrip(in).attributes, in.attributes);
+    in.attributes.set("CDS", std::vector<std::string>(5000, "1-2:0"));
+    in.attributes.set("gene_id", {"G1"});
+    const auto out = gff_roundtrip(in);
 
-    in.attributes["tag"].push_back("x");
-    EXPECT_THROW(gff_roundtrip(in), std::runtime_error);
+    EXPECT_EQ(out.attributes, in.attributes);
+    EXPECT_EQ(out.attributes.at("CDS").size(), 5000u);
 }
 
 TEST(gffEntryRepeatedAttributes, gtfKeepsEveryTagInOrder) {
@@ -1277,14 +1439,14 @@ TEST(gffEntryRepeatedAttributes, gff3KeepsRepeatedKeyInOrder) {
 TEST(gffEntryRepeatedAttributes, parentIdsCollectEveryParentKey) {
     gio::gff_entry e("chr1", 1, 10, "exon");
     e.format = gio::gff_format::GFF3;
-    e.attributes["Parent"] = {"t1,t2", "t3"};
+    e.attributes.set("Parent", {"t1,t2", "t3"});
     EXPECT_EQ(e.get_parent_ids(), (std::vector<std::string>{"t1", "t2", "t3"}));
 }
 
 TEST(gffEntryRepeatedAttributes, singleValueHelpersReadFirstValue) {
     gio::gff_entry e("chr1", 1, 10, "gene");
     e.format = gio::gff_format::GTF;
-    e.attributes["gene_id"] = {"A", "B"};
+    e.attributes.set("gene_id", {"A", "B"});
     EXPECT_EQ(e.get_gene_id(), "A");
 }
 
@@ -1311,12 +1473,12 @@ TEST(gffEntrySerialization, groveRoundTrip) {
 
     gio::gff_entry e1("chr1", 100, 200, "gene");
     e1.format = gio::gff_format::GFF3;
-    e1.attributes["ID"] = {"gene1"};
+    e1.attributes.set("ID", {"gene1"});
     e1.strand = '+';
 
     gio::gff_entry e2("chr1", 300, 400, "exon");
     e2.format = gio::gff_format::GFF3;
-    e2.attributes["Parent"] = {"gene1"};
+    e2.attributes.set("Parent", {"gene1"});
 
     grove.insert_data("chr1", gdt::interval(100, 200), e1);
     grove.insert_data("chr1", gdt::interval(300, 400), e2);

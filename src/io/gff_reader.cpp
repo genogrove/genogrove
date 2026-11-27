@@ -13,7 +13,9 @@
 #include <clocale>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <ranges>
+#include <stdexcept>
 
 // genogrove
 #include <genogrove/data_type/serialization_traits.hpp>
@@ -29,14 +31,139 @@ namespace genogrove::io {
     static constexpr int MAX_GFF_PHASE = 2;
 
     // ==========================================
+    // gff_attributes
+    // ==========================================
+
+    std::size_t gff_attributes::size() const {
+        std::size_t names = 0;
+        std::string_view last;
+        scan([&](std::string_view name, std::string_view) {
+            if (names == 0 || name != last) {
+                ++names;
+                last = name;
+            }
+            return true;
+        });
+        return names;
+    }
+
+    std::optional<std::string_view> gff_attributes::first(std::string_view name) const {
+        std::optional<std::string_view> found;
+        scan([&](std::string_view current, std::string_view value) {
+            if (current != name) return current < name;  // sorted: not after a larger name
+            found = value;
+            return false;
+        });
+        return found;
+    }
+
+    std::vector<std::string> gff_attributes::values(std::string_view name) const {
+        std::vector<std::string> out;
+        for_each(name, [&](std::string_view value) { out.emplace_back(value); });
+        return out;
+    }
+
+    std::vector<std::string> gff_attributes::at(std::string_view name) const {
+        auto out = values(name);
+        if (out.empty()) {
+            throw std::out_of_range("gff_attributes::at: no attribute '" + std::string(name) + "'");
+        }
+        return out;
+    }
+
+    // In "...\0name\0value\0" the last name ends at the second-last '\0'.
+    std::string_view gff_attributes::last_name() const {
+        if (text.size() < 2) return {};
+        const std::size_t name_end = text.rfind('\0', text.size() - 2);
+        if (name_end == std::string::npos) return {};
+        const std::size_t begin = name_end == 0 ? 0 : text.rfind('\0', name_end - 1) + 1;
+        return std::string_view(text).substr(begin, name_end - begin);
+    }
+
+    // The end of the text when the last name is not larger, which needs no scan.
+    std::size_t gff_attributes::end_of(std::string_view name) const {
+        std::size_t at = text.size();
+        if (last_name() > name) {
+            scan([&](std::string_view current, std::string_view) {
+                if (current <= name) return true;
+                at = static_cast<std::size_t>(current.data() - text.data());
+                return false;
+            });
+        }
+        return at;
+    }
+
+    namespace {
+        void reject_nul(std::string_view name, std::string_view value) {
+            if (name.find('\0') != std::string_view::npos || value.find('\0') != std::string_view::npos) {
+                throw std::runtime_error("gff_attributes: a name or a value contains a NUL character");
+            }
+        }
+    } // namespace
+
+    void gff_attributes::add(std::string_view name, std::string_view value) {
+        reject_nul(name, value);
+        // A view into this text moves with the insert, so it is copied first.
+        const auto in_text = [this](std::string_view view) {
+            return std::less_equal<>()(text.data(), view.data()) &&
+                   std::less<>()(view.data(), text.data() + text.size());
+        };
+        if (in_text(name) || in_text(value)) {
+            return add(std::string(name), std::string(value));
+        }
+        const std::size_t at = end_of(name);
+        text.insert(at, name.size() + value.size() + 2, '\0');
+        name.copy(text.data() + at, name.size());
+        value.copy(text.data() + at + name.size() + 1, value.size());
+    }
+
+    void gff_attributes::set(std::string_view name, const std::vector<std::string>& values) {
+        // Encoded before the first change: a '\0' then leaves the old values in
+        // place, and the name can be a view into this text.
+        std::string encoded;
+        for (const auto& value : values) {
+            reject_nul(name, value);
+            encoded.append(name).push_back('\0');
+            encoded.append(value).push_back('\0');
+        }
+        const std::size_t name_size = name.size();
+        erase(name);
+        if (!encoded.empty()) {
+            text.insert(end_of(std::string_view(encoded).substr(0, name_size)), encoded);
+        }
+    }
+
+    void gff_attributes::erase(std::string_view name) {
+        // The values of a name are one range, because the text is sorted by name.
+        std::size_t begin = std::string::npos;
+        std::size_t end = 0;
+        scan([&](std::string_view current, std::string_view value) {
+            if (current != name) return begin == std::string::npos && current < name;
+            if (begin == std::string::npos) begin = static_cast<std::size_t>(current.data() - text.data());
+            end = static_cast<std::size_t>(value.data() - text.data()) + value.size() + 1;
+            return true;
+        });
+        if (begin != std::string::npos) text.erase(begin, end - begin);
+    }
+
+    void gff_attributes::serialize(std::ostream& os) const {
+        gdt::serializer<std::string>::write(os, text);
+    }
+
+    gff_attributes gff_attributes::deserialize(std::istream& is) {
+        gff_attributes attributes;
+        attributes.text = gdt::serializer<std::string>::read(is);
+        return attributes;
+    }
+
+    // ==========================================
     // gff_entry helper methods
     // ==========================================
 
     namespace {
         // First value of a key; the single-valued helpers below (gene_id, exon_number, ...) use it.
         std::optional<std::string> first_attribute(const gff_entry& e, std::string_view key) {
-            auto it = e.attributes.find(key);
-            if (it != e.attributes.end() && !it->second.empty()) return it->second.front();
+            if (const auto value = e.attributes.first(key)) return std::string(*value);
             return std::nullopt;
         }
     } // namespace
@@ -107,8 +234,7 @@ namespace genogrove::io {
     }
 
     std::vector<std::string> gff_entry::get_attributes(std::string_view key) const {
-        auto it = attributes.find(key);
-        return it != attributes.end() ? it->second : std::vector<std::string>{};
+        return attributes.values(key);
     }
 
     // ==========================================
@@ -168,8 +294,16 @@ namespace genogrove::io {
           line_num(0), options(options) {}
 
     gff_format gff_reader::parse_attributes(std::string_view attr_string,
-        std::map<std::string, std::vector<std::string>, std::less<>>& attributes) {
+                                            gff_attributes& attributes) {
         attributes.clear();
+        attribute_pairs.clear();
+        // Sorted by name first, so that each add() appends at the end. Stable:
+        // the values of a repeated name keep the order of the line.
+        const auto store = [&] {
+            std::ranges::stable_sort(attribute_pairs, {},
+                                     &std::pair<std::string_view, std::string_view>::first);
+            for (const auto& [name, value] : attribute_pairs) attributes.add(name, value);
+        };
 
         std::string_view sv(attr_string);
         size_t pos = 0;
@@ -201,8 +335,9 @@ namespace genogrove::io {
                     value_sv = value_sv.substr(1, value_sv.size() - 2);
                 }
 
-                attributes[std::string(trimmed.substr(0, space_pos))].emplace_back(value_sv);
+                attribute_pairs.emplace_back(trimmed.substr(0, space_pos), value_sv);
             }
+            store();
             return gff_format::GTF;
         } else {
             // GFF3 format: key=value;key=value
@@ -223,8 +358,9 @@ namespace genogrove::io {
                 size_t eq_pos = trimmed.find('=');
                 if (eq_pos == std::string_view::npos) continue;
 
-                attributes[std::string(trimmed.substr(0, eq_pos))].emplace_back(trimmed.substr(eq_pos + 1));
+                attribute_pairs.emplace_back(trimmed.substr(0, eq_pos), trimmed.substr(eq_pos + 1));
             }
+            store();
             return gff_format::GFF3;
         }
     }
@@ -416,6 +552,12 @@ namespace genogrove::io {
             if (!parse_strand(entry, *strand_f)) return false;
             if (!parse_phase(entry, *phase_f)) return false;
 
+            // '\0' separates names and values in gff_attributes
+            if (attributes_sv.find('\0') != std::string_view::npos) {
+                error_message = "NUL character in the attributes at line " + std::to_string(line_num);
+                return false;
+            }
+
             // Parse attributes and detect format
             if (!attributes_sv.empty()) {
                 entry.format = parse_attributes(attributes_sv, entry.attributes);
@@ -484,55 +626,6 @@ namespace genogrove::io {
             }
             return gdt::serializer<T>::read(is);
         }
-
-        // Bound on attribute values per record (a repeated key counts once per
-        // value). Real rows have tens; more is a corrupt stream that would
-        // otherwise OOM on a uint32_t count. The writer enforces it too.
-        static constexpr uint32_t MAX_ATTRIBUTES_PER_RECORD = 4096;
-
-        using attribute_map = std::map<std::string, std::vector<std::string>, std::less<>>;
-
-        // The attributes map is written as a 4-byte count of values followed by
-        // one (key, value) pair per value, both as length-prefixed strings. A
-        // repeated key is written once per value, in order.
-        void write_attributes(std::ostream& os, const attribute_map& m) {
-            size_t n = 0;
-            for (const auto& kv : m) n += kv.second.size();
-            if (n > MAX_ATTRIBUTES_PER_RECORD) {
-                throw std::runtime_error("Failed to serialize gff_entry: " + std::to_string(n) +
-                                         " attribute values exceed the limit of " +
-                                         std::to_string(MAX_ATTRIBUTES_PER_RECORD));
-            }
-            ggu::write_le(os, static_cast<uint32_t>(n));
-            for (const auto& [k, values] : m) {
-                for (const auto& v : values) {
-                    gdt::serializer<std::string>::write(os, k);
-                    gdt::serializer<std::string>::write(os, v);
-                }
-            }
-            if (!os) {
-                throw std::runtime_error("Failed to serialize gff_entry: stream error writing attributes");
-            }
-        }
-
-        attribute_map read_attributes(std::istream& is) {
-            uint32_t n = 0;
-            ggu::read_le(is, n);
-            if (!is) {
-                throw std::runtime_error("Failed to deserialize gff_entry: stream error reading attributes count");
-            }
-            if (n > MAX_ATTRIBUTES_PER_RECORD) {
-                throw std::runtime_error(
-                    "Failed to deserialize gff_entry: unreasonable attribute count");
-            }
-            attribute_map m;
-            for (uint32_t i = 0; i < n; ++i) {
-                std::string k = gdt::serializer<std::string>::read(is);
-                std::string v = gdt::serializer<std::string>::read(is);
-                m[std::move(k)].push_back(std::move(v));
-            }
-            return m;
-        }
     } // namespace
 
     void gff_entry::serialize(std::ostream& os) const {
@@ -544,7 +637,7 @@ namespace genogrove::io {
         write_optional(os, score);
         write_optional(os, strand);
         write_optional(os, phase);
-        write_attributes(os, attributes);
+        attributes.serialize(os);
         const uint8_t fmt = static_cast<uint8_t>(format);
         os.write(reinterpret_cast<const char*>(&fmt), sizeof(fmt));
         if (!os) {
@@ -565,7 +658,7 @@ namespace genogrove::io {
         entry.score = read_optional<double>(is);
         entry.strand = read_optional<char>(is);
         entry.phase = read_optional<int>(is);
-        entry.attributes = read_attributes(is);
+        entry.attributes = gff_attributes::deserialize(is);
         uint8_t fmt = 0;
         is.read(reinterpret_cast<char*>(&fmt), sizeof(fmt));
         if (!is) {

@@ -148,7 +148,7 @@ TEST_F(CLIGffHandlerTest, PrintGffResultWritesRawFieldsWithoutNewline) {
     entry.type = "gene";
     entry.strand = '-';
     entry.format = gio::gff_format::GTF;
-    entry.attributes["gene_id"] = {"G1"};
+    entry.attributes.set("gene_id", {"G1"});
     std::string row;
     handlers::gff::print_gff_result(row, entry);
     EXPECT_EQ(row, "chr1\t101\t500\tgene\tG1\t-");
@@ -167,8 +167,8 @@ TEST_F(CLIGffHandlerTest, PrintGffResultWritesRawFieldsWithoutNewline) {
 TEST_F(CLIGffHandlerTest, RecordIdIsTheIdOfTheRecordItself) {
     gio::gff_entry entry;
     entry.format = gio::gff_format::GTF;
-    entry.attributes["gene_id"] = {"G1"};
-    entry.attributes["transcript_id"] = {"T1"};
+    entry.attributes.set("gene_id", {"G1"});
+    entry.attributes.set("transcript_id", {"T1"});
     entry.type = "gene";
     EXPECT_EQ(handlers::gff::record_id(entry), "G1");
     entry.type = "transcript";
@@ -179,13 +179,13 @@ TEST_F(CLIGffHandlerTest, RecordIdIsTheIdOfTheRecordItself) {
 
     // GFF3: the ID, whatever the type.
     entry.format = gio::gff_format::GFF3;
-    entry.attributes["ID"] = {"sec1"};
+    entry.attributes.set("ID", {"sec1"});
     EXPECT_EQ(handlers::gff::record_id(entry), "sec1");
 
     entry.type = "exon";
-    entry.attributes["exon_id"] = {"E1", "E9"};
+    entry.attributes.set("exon_id", {"E1", "E9"});
     EXPECT_EQ(handlers::gff::record_id(entry), "E1,E9");
-    entry.attributes["exon_id"] = {};
+    entry.attributes.set("exon_id", {""});
     EXPECT_EQ(handlers::gff::record_id(entry), ".");
 }
 
@@ -218,8 +218,7 @@ key_ptr find_key(gff_grove& grove, const std::string& type, const std::string& t
     auto hits = grove.intersect(gdt::interval(0, 1000000), "chr1");
     for (auto* key : hits.get_keys()) {
         const auto& record = key->get_data();
-        const auto it = record.attributes.find(tag);
-        if (record.type == type && it != record.attributes.end() && it->second.front() == value) {
+        if (record.type == type && record.attributes.first(tag) == std::string_view(value)) {
             return key;
         }
     }

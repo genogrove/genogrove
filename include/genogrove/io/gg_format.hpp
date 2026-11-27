@@ -16,10 +16,11 @@ namespace genogrove::io {
     /// to the correct grove instantiation.
     enum class gg_payload_type : uint8_t {
         BED = 0x01,
-        // 0x02 was the flat GFF index (one key per line). It has the same
-        // stream types as the linked model, so only this tag tells them apart;
-        // gg_header::read() rejects it.
-        GFF = 0x03,  ///< linked GFF/GTF model: genes and transcripts indexed, exons external
+        // 0x02 was the flat GFF index (one key per line) and 0x03 the linked
+        // model with the attributes as a list of pairs. They have the same
+        // stream types as 0x04, so only this tag tells them apart;
+        // gg_header::read() rejects them.
+        GFF = 0x04,  ///< linked GFF/GTF model, attributes as one block (gff_attributes)
     };
 
     /// On-disk header for a serialised grove (.gg file).
@@ -36,7 +37,7 @@ namespace genogrove::io {
     ///        6     1  lib_major       = genogrove_VERSION_MAJOR (informational)
     ///        7     1  lib_minor       = genogrove_VERSION_MINOR (informational)
     ///        8     1  lib_patch       = genogrove_VERSION_PATCH (informational)
-    ///        9     1  payload_type    (BED = 0x01, GFF = 0x03; 0x02 is the retired flat GFF index)
+    ///        9     1  payload_type    (BED = 0x01, GFF = 0x04; 0x02 and 0x03 are retired GFF indexes)
     ///       10     2  reserved        (zero)
     ///
     /// Format 0.4 adds a key/data/edge type tag after the grove stream magic, so a
