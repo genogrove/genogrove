@@ -218,11 +218,13 @@ void print_with_chains(grove_t& grove, const std::vector<key_ptr>& hits,
 //   <query chrom> <start> <end> <TAB> <seed row> <TAB> <reached row> <TAB> <hops>
 // The query columns are 0-based half-open like the BED-style payload rows.
 //
-// With `chain`, the output is that of print_with_chains.
+// With `chain`, the output is that of print_with_chains. With `unique`, a
+// query that has a hit is one row (its chrom, start, end) and no hit is printed.
 template <handlers::interval_queryable grove_t, typename print_fn>
 void run_intersect(grove_t& grove, const std::string& queryfile,
                    gio::filetype query_type, std::ostream& out, print_fn print,
-                   bool chain, std::size_t max_hops = 0, direction dir = direction::both) {
+                   bool chain, bool unique, std::size_t max_hops = 0,
+                   direction dir = direction::both) {
     subcalls::row_writer rows(out);
     auto handle = [&](gdt::interval iv, const std::string& index) {
         // Bind the query_result to a local: get_keys() returns a reference into
@@ -230,6 +232,21 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         // once the temporary is destroyed at the end of the range expression.
         auto results = grove.intersect(iv, index);
         const auto& hits = results.get_keys();
+        // The query as chrom, start, end (0-based, half-open).
+        const auto append_query = [&](std::string& row) {
+            row += index;
+            row += '\t';
+            row += std::to_string(iv.get_start());
+            row += '\t';
+            row += std::to_string(iv.get_end() + 1);
+        };
+        if (unique) {
+            if (!hits.empty()) {
+                append_query(rows.row());
+                rows.end_row();
+            }
+            return;
+        }
         if (chain) {
             print_with_chains(grove, hits, rows, print);
             return;
@@ -254,11 +271,7 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
             print(row, keys[i]->get_data());
             rows.end_row();
             for (; r != reached.end() && r->seed == i; ++r) {
-                row += index;
-                row += '\t';
-                row += std::to_string(iv.get_start());
-                row += '\t';
-                row += std::to_string(iv.get_end() + 1);
+                append_query(row);
                 row += '\t';
                 print(row, keys[i]->get_data());
                 row += '\t';
@@ -286,7 +299,7 @@ template <typename payload_t, typename print_fn>
 void query_index(const std::string& index_path, std::ifstream& in, bool in_place,
                  std::streamoff data_offset, const std::string& queryfile,
                  gio::filetype query_filetype, std::ostream& out, print_fn print,
-                 bool chain, std::size_t max_hops, direction dir) {
+                 bool chain, bool unique, std::size_t max_hops, direction dir) {
     if(in_place) {
         // grove_view only knows the edges of blocks it has paged in, and the
         // .gg directory carries no edge total, so an index built without
@@ -302,7 +315,7 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
         }
         auto grove = ggs::grove_view<gdt::interval, payload_t, std::string>::open(
             index_path, data_offset);
-        run_intersect(grove, queryfile, query_filetype, out, print, chain, max_hops, dir);
+        run_intersect(grove, queryfile, query_filetype, out, print, chain, unique, max_hops, dir);
     } else {
         auto grove = ggs::grove<gdt::interval, payload_t, std::string>::deserialize(in);
         // A BED index built without --links, or a GFF index from a file with
@@ -313,7 +326,7 @@ void query_index(const std::string& index_path, std::ifstream& in, bool in_place
                 " (build the index with 'idx --links', or from a GFF/GTF file "
                 "with gene and transcript lines)");
         }
-        run_intersect(grove, queryfile, query_filetype, out, print, chain, max_hops, dir);
+        run_intersect(grove, queryfile, query_filetype, out, print, chain, unique, max_hops, dir);
     }
 }
 
@@ -349,6 +362,9 @@ cxxopts::Options intersect::build_options() {
                       "transcript of a GFF/GTF index; a 'first:<id>' link), print "
                       "every member of the chain in order, with the chain id and "
                       "the number of the member (not allowed with --hops)")
+            ("u,unique", "Print each query that overlaps an interval one time "
+                         "(chrom, start, end; 0-based, half-open), not one row for "
+                         "each overlap (not allowed with --hops or --chain)")
             ("h,help", "Print the help")
             ;
     options.parse_positional({"queryfile", "targetfile"});
@@ -439,6 +455,10 @@ void intersect::validate(const cxxopts::ParseResult& args) {
     if(hops && args["chain"].as<bool>()) {
         throw std::runtime_error("Error: --chain and --hops are not supported together yet");
     }
+    // --hops and --chain report intervals of the index, --unique reports queries.
+    if(args["unique"].as<bool>() && (hops || args["chain"].as<bool>())) {
+        throw std::runtime_error("Error: --unique is not allowed with --hops or --chain");
+    }
     // Called for its throw on an invalid value; execute() parses it again.
     static_cast<void>(parse_direction(args["direction"].as<std::string>()));
 }
@@ -447,6 +467,7 @@ void intersect::execute(const cxxopts::ParseResult& args) {
     const std::string queryfile = args["queryfile"].as<std::string>();
     const int k = args["k"].as<int>();
     const bool chain = args["chain"].as<bool>();
+    const bool unique = args["unique"].as<bool>();
 
     // Output stream: either stdout (default) or a user-specified file. A file is
     // written beside its destination and only moved over it by commit() at the
@@ -491,11 +512,13 @@ void intersect::execute(const cxxopts::ParseResult& args) {
         if(header.payload_type == gio::gg_payload_type::BED) {
             query_index<gio::bed_entry>(index_path, in, in_place, data_offset,
                                         queryfile, query_filetype, *outputStream,
-                                        handlers::bed::print_bed_result, chain, max_hops, dir);
+                                        handlers::bed::print_bed_result, chain, unique, max_hops,
+                                        dir);
         } else {  // GFF — gg_header::read() rejects any other value
             query_index<gio::gff_entry>(index_path, in, in_place, data_offset,
                                         queryfile, query_filetype, *outputStream,
-                                        handlers::gff::print_gff_result, chain, max_hops, dir);
+                                        handlers::gff::print_gff_result, chain, unique, max_hops,
+                                        dir);
         }
     } else {
         const std::string targetfile = args["targetfile"].as<std::string>();
@@ -506,12 +529,12 @@ void intersect::execute(const cxxopts::ParseResult& args) {
             ggs::grove<gdt::interval, gio::bed_entry, std::string> grove(k);
             handlers::bed::grove_insert(grove, targetfile);
             run_intersect(grove, queryfile, query_filetype, *outputStream,
-                          handlers::bed::print_bed_result, chain);
+                          handlers::bed::print_bed_result, chain, unique);
         } else if(is_gff_or_gtf(target_filetype)) {
             ggs::grove<gdt::interval, gio::gff_entry, std::string> grove(k);
             handlers::gff::grove_insert(grove, targetfile);
             run_intersect(grove, queryfile, query_filetype, *outputStream,
-                          handlers::gff::print_gff_result, chain);
+                          handlers::gff::print_gff_result, chain, unique);
         } else {
             throw std::runtime_error(
                 "Error: unsupported target format (only BED, GFF, and GTF are supported)");
