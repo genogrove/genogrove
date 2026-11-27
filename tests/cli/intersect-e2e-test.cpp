@@ -7,13 +7,11 @@
 #include <gtest/gtest.h>
 
 // standard
-#include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <sstream>
 #include <string>
 #ifndef _WIN32
 #include <sys/wait.h>
@@ -510,6 +508,26 @@ TEST_F(CLIIntersectE2ETest, GffIntersectFromTarget) {
     EXPECT_EQ(result.output.find("chr2"), std::string::npos);
 }
 
+TEST_F(CLIIntersectE2ETest, GffIntersectUniquePrintsTheQueriesWithAHit) {
+    // The two queries on chr1 overlap a gene, the one on chr2 does not. A GFF
+    // query (1-based) prints the same 0-based, half-open rows as a BED query.
+    auto idx_result = run_command(cli(
+        "idx \"" + gff_target_path.string() + "\" -o \"" + tmp_gff_index.string() + "\""
+    ));
+    ASSERT_EQ(idx_result.exit_code, 0) << idx_result.output;
+    const std::string from_target = " -t \"" + gff_target_path.string() + "\"";
+    const std::string from_index = " -i \"" + tmp_gff_index.string() + "\"";
+
+    for (const fs::path& query : {query_path, gff_query_path}) {
+        for (const std::string& target : {from_target, from_index, from_index + " --in-place"}) {
+            const std::string command = cli("isec -u -q \"" + query.string() + "\"" + target);
+            auto result = run_command(command);
+            EXPECT_EQ(result.exit_code, 0) << command;
+            EXPECT_EQ(result.output, "chr1\t150\t250\nchr1\t850\t950\n") << command;
+        }
+    }
+}
+
 TEST_F(CLIIntersectE2ETest, GffIntersectWithPrebuiltIndex) {
     // Build a GFF .gg, then intersect via -i — the .gg header tells intersect
     // it's a GFF payload so it dispatches to the GFF handler.
@@ -756,46 +774,20 @@ TEST_F(CLIIntersectHopsE2ETest, InPlaceHopsOnIndexWithoutLinksWarnsAndReachesNot
 TEST_F(CLIIntersectHopsE2ETest, UniquePrintsEachQueryWithAHitOneTime) {
     // Two hits (geneA and geneB), no hit, one hit (geneC).
     write_file(hops_query, "chr1\t450\t650\nchr1\t550\t560\nchr2\t250\t260\n");
-    const std::string expected = "chr1\t450\t650\nchr2\t250\t260\n";
-
-    for (const std::string mode : {"", "--in-place"}) {
-        auto result = run_command(isec_hops("-u " + mode));
-        EXPECT_EQ(result.exit_code, 0) << result.output;
-        EXPECT_EQ(result.output, expected) << "mode: " << mode;
-    }
-    auto from_target = run_command(cli(
+    const std::string from_target = cli(
         "isec --unique -q \"" + hops_query.string() + "\" -t \"" +
-        (test_data_dir / "target_links.bed").string() + "\""
-    ));
-    EXPECT_EQ(from_target.exit_code, 0) << from_target.output;
-    EXPECT_EQ(from_target.output, expected);
-}
+        (test_data_dir / "target_links.bed").string() + "\"");
 
-TEST_F(CLIIntersectHopsE2ETest, UniqueOnAGffTargetPrintsOnlyTheQueryColumns) {
-    auto plain = run_command(cli(
-        "isec -q \"" + query_path.string() + "\" -t \"" + gff_target_path.string() + "\""
-    ));
-    auto unique = run_command(cli(
-        "isec -u -q \"" + query_path.string() + "\" -t \"" + gff_target_path.string() + "\""
-    ));
-    ASSERT_EQ(unique.exit_code, 0) << unique.output;
-    ASSERT_FALSE(plain.output.empty());
-    ASSERT_FALSE(unique.output.empty());
-
-    std::istringstream lines(unique.output);
-    std::string line;
-    std::size_t count = 0;
-    while (std::getline(lines, line)) {
-        EXPECT_EQ(std::ranges::count(line, '\t'), 2) << line;
-        EXPECT_NE(line.find("chr"), std::string::npos) << line;
-        ++count;
+    for (const std::string& command : {isec_hops("-u"), isec_hops("-u --in-place"), from_target}) {
+        auto result = run_command(command);
+        EXPECT_EQ(result.exit_code, 0) << command;
+        EXPECT_EQ(result.output, "chr1\t450\t650\nchr2\t250\t260\n") << command;
     }
-    EXPECT_LE(count, 3u);  // query.bed has three intervals
 }
 
 TEST_F(CLIIntersectHopsE2ETest, UniqueIsRejectedWithHopsAndWithChain) {
     write_file(hops_query, "chr1\t450\t650\n");
-    for (const std::string other : {"--hops 1", "--chain"}) {
+    for (const std::string other : {"--hops 1", "--hops all", "--chain"}) {
         auto result = run_command(isec_hops("--unique " + other));
         EXPECT_NE(result.exit_code, 0) << other;
         EXPECT_NE(result.output.find("--unique is not allowed with --hops or --chain"),

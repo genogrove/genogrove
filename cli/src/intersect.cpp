@@ -218,8 +218,9 @@ void print_with_chains(grove_t& grove, const std::vector<key_ptr>& hits,
 //   <query chrom> <start> <end> <TAB> <seed row> <TAB> <reached row> <TAB> <hops>
 // The query columns are 0-based half-open like the BED-style payload rows.
 //
-// With `chain`, the output is that of print_with_chains. With `unique`, a
-// query that has a hit is one row (its chrom, start, end) and no hit is printed.
+// With `chain`, the output is that of print_with_chains. With `unique`, each
+// query that has a hit is one row (its chrom, start, end); the hits are not
+// printed.
 template <handlers::interval_queryable grove_t, typename print_fn>
 void run_intersect(grove_t& grove, const std::string& queryfile,
                    gio::filetype query_type, std::ostream& out, print_fn print,
@@ -232,7 +233,6 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
         // once the temporary is destroyed at the end of the range expression.
         auto results = grove.intersect(iv, index);
         const auto& hits = results.get_keys();
-        // The query as chrom, start, end (0-based, half-open).
         const auto append_query = [&](std::string& row) {
             row += index;
             row += '\t';
