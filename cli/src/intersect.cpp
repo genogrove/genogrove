@@ -228,11 +228,6 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
                    direction dir = direction::both) {
     subcalls::row_writer rows(out);
     auto handle = [&](gdt::interval iv, const std::string& index) {
-        // Bind the query_result to a local: get_keys() returns a reference into
-        // it, so iterating grove.intersect(...).get_keys() directly would dangle
-        // once the temporary is destroyed at the end of the range expression.
-        auto results = grove.intersect(iv, index);
-        const auto& hits = results.get_keys();
         const auto append_query = [&](std::string& row) {
             row += index;
             row += '\t';
@@ -241,12 +236,17 @@ void run_intersect(grove_t& grove, const std::string& queryfile,
             row += std::to_string(iv.get_end() + 1);
         };
         if (unique) {
-            if (!hits.empty()) {
+            if (grove.overlaps_any(iv, index)) {
                 append_query(rows.row());
                 rows.end_row();
             }
             return;
         }
+        // Bind the query_result to a local: get_keys() returns a reference into
+        // it, so iterating grove.intersect(...).get_keys() directly would dangle
+        // once the temporary is destroyed at the end of the range expression.
+        auto results = grove.intersect(iv, index);
+        const auto& hits = results.get_keys();
         if (chain) {
             print_with_chains(grove, hits, rows, print);
             return;

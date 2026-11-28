@@ -72,21 +72,26 @@ struct eager_resolver {
  * pruning are backend-agnostic. Correctness depends on the same invariants as
  * before: internal separators reflect `calc_subtree_range()`, and the leaf
  * chain is globally sorted by start.
+ *
+ * `on_hit` gets each overlapping key and returns true to stop the search.
+ * @return true if `on_hit` stopped the search
  */
-template<gdt::key_type_base key_type, typename data_type, typename Resolver>
-    requires overlap_resolver<Resolver, key_type, data_type>
-void search_overlaps(Resolver& res, node<key_type, data_type>* current,
-                     const key_type& query, gdt::query_result<key_type, data_type>& result) {
+template<gdt::key_type_base key_type, typename data_type, typename Resolver, typename hit_fn>
+    requires overlap_resolver<Resolver, key_type, data_type> &&
+             std::predicate<hit_fn&, gdt::key<key_type, data_type>*>
+bool visit_overlaps(Resolver& res, node<key_type, data_type>* current,
+                    const key_type& query, hit_fn&& on_hit) {
     if (current == nullptr) {
-        return;
+        return false;
     }
     if (current->get_is_leaf()) {
         // Walk the leaf chain iteratively to avoid stack overflow on long chains.
         node<key_type, data_type>* leaf = current;
         while (leaf != nullptr) {
             for (std::size_t i = 0; i < leaf->get_keys().size(); ++i) {
-                if (key_type::overlaps(leaf->get_keys()[i]->get_value(), query)) {
-                    result.add_key(leaf->get_keys()[i]);
+                if (key_type::overlaps(leaf->get_keys()[i]->get_value(), query) &&
+                    on_hit(leaf->get_keys()[i])) {
+                    return true;
                 }
             }
 
@@ -110,6 +115,7 @@ void search_overlaps(Resolver& res, node<key_type, data_type>* current,
             }
             leaf = next;
         }
+        return false;
     } else {
         // Early-out: if the query ends before the first separator's subtree
         // starts, nothing here matches spatially. Pure spatial check keeps this
@@ -117,7 +123,7 @@ void search_overlaps(Resolver& res, node<key_type, data_type>* current,
         // strand mismatch and wrongly abort a subtree with matching keys).
         if constexpr (requires { key_type::is_interval; }) {
             if (query.get_end() < current->get_keys()[0]->get_value().get_start()) {
-                return;
+                return false;
             }
         }
 
@@ -126,11 +132,27 @@ void search_overlaps(Resolver& res, node<key_type, data_type>* current,
                !key_type::overlaps(current->get_keys()[i]->get_value(), query)) {
             i++;
         }
-        node<key_type, data_type>* child = res.child(current, i);
-        if (child != nullptr) {
-            search_overlaps(res, child, query, result);
-        }
+        return visit_overlaps(res, res.child(current, i), query, on_hit);
     }
+}
+
+/// Collect each key that overlaps `query` in `result`.
+template<gdt::key_type_base key_type, typename data_type, typename Resolver>
+    requires overlap_resolver<Resolver, key_type, data_type>
+void search_overlaps(Resolver& res, node<key_type, data_type>* current,
+                     const key_type& query, gdt::query_result<key_type, data_type>& result) {
+    visit_overlaps(res, current, query, [&result](gdt::key<key_type, data_type>* hit) {
+        result.add_key(hit);
+        return false;
+    });
+}
+
+/// True if one key or more overlaps `query`; stops at the first hit.
+template<gdt::key_type_base key_type, typename data_type, typename Resolver>
+    requires overlap_resolver<Resolver, key_type, data_type>
+[[nodiscard]] bool any_overlap(Resolver& res, node<key_type, data_type>* current,
+                               const key_type& query) {
+    return visit_overlaps(res, current, query, [](gdt::key<key_type, data_type>*) { return true; });
 }
 
 /**

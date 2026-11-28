@@ -102,6 +102,19 @@ class grove_view {
         return result;
     }
 
+    /**
+     * @brief True if one key or more overlaps the query in the index. Stops at
+     *        the first hit; an unknown index gives false.
+     */
+    [[nodiscard]] bool overlaps_any(const key_type& query, std::string_view index) {
+        auto it = index_roots.find(std::string(index));
+        if (it == index_roots.end()) {
+            return false;
+        }
+        block_resolver res{this};
+        return detail::any_overlap(res, load_root(it->second), query);
+    }
+
     /** @brief Overlap query across every index. */
     [[nodiscard]] gdt::query_result<key_type, data_type> intersect(const key_type& query) {
         gdt::query_result<key_type, data_type> result{query};
