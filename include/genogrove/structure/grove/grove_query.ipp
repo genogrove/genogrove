@@ -41,3 +41,15 @@ public:
         detail::search_overlaps(res, root, query, result);
         return result;
     }
+
+    /**
+     * @brief Check if one key or more overlaps the query in a specific index
+     * @return true at the first overlapping key; false if there is none or the
+     *         index doesn't exist
+     * @note Faster than intersect() when only yes or no is needed: the search
+     *       stops at the first hit and builds no result.
+     */
+    [[nodiscard]] bool overlaps_any(const key_type& query, std::string_view index) {
+        detail::eager_resolver<key_type, data_type> res{};
+        return detail::any_overlap(res, this->get_root(index), query);
+    }

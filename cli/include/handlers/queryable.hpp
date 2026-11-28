@@ -22,6 +22,7 @@ namespace gdt = genogrove::data_type;
 template <typename G>
 concept interval_queryable = requires(G& g, const gdt::interval& q, std::string_view idx) {
     g.intersect(q, idx);
+    g.overlaps_any(q, idx);
     g.get_neighbors(*g.intersect(q, idx).get_keys().begin());
     g.get_in_neighbors(*g.intersect(q, idx).get_keys().begin());
 };

@@ -114,6 +114,56 @@ TEST(GroveViewTest, MatchesEagerIntersectAcrossIndices) {
     fs::remove(path);
 }
 
+TEST(GroveViewTest, OverlapsAnyGivesTheSameAnswerOnGroveAndView) {
+    using grove_t = gst::grove<gdt::interval, int>;
+    grove_t eager(4);
+    for (size_t i = 0; i < 60; ++i) {
+        eager.insert_data("chr1", gdt::interval{i * 10, i * 10 + 5}, static_cast<int>(i), gst::sorted);
+    }
+    const fs::path path = write_grove(eager, "overlaps_any");
+    auto view = gst::grove_view<gdt::interval, int>::open(path.string());
+
+    // Keys are [0,5], [10,15], ... [590,595].
+    const std::vector<std::pair<gdt::interval, bool>> cases = {
+        {{0, 5}, true},     {{5, 5}, true},     {{6, 9}, false},      {{6, 10}, true},
+        {{95, 130}, true},  {{0, 10000}, true}, {{595, 595}, true},   {{596, 2000}, false}};
+    for (const auto& [query, expected] : cases) {
+        EXPECT_EQ(eager.overlaps_any(query, "chr1"), expected) << query.to_string();
+        EXPECT_EQ(view.overlaps_any(query, "chr1"), expected) << query.to_string();
+    }
+    EXPECT_FALSE(eager.overlaps_any(gdt::interval{0, 5}, "nope"));
+    EXPECT_FALSE(view.overlaps_any(gdt::interval{0, 5}, "nope"));
+
+    grove_t empty(4);
+    EXPECT_FALSE(empty.overlaps_any(gdt::interval{0, 5}, "chr1"));
+
+    fs::remove(path);
+}
+
+TEST(GroveViewTest, OverlapsAnyStopsAtTheFirstHit) {
+    using grove_t = gst::grove<gdt::interval, int>;
+    fs::path path;
+    {
+        grove_t g(4);
+        for (size_t i = 0; i < 500; ++i) {
+            g.insert_data("chr1", gdt::interval{i * 10, i * 10 + 5}, static_cast<int>(i), gst::sorted);
+        }
+        path = write_grove(g, "overlaps_any_stop");
+    }
+    const gdt::interval all{0, 5000};  // overlaps every key
+
+    auto any_view = gst::grove_view<gdt::interval, int>::open(path.string());
+    EXPECT_TRUE(any_view.overlaps_any(all, "chr1"));
+
+    auto all_view = gst::grove_view<gdt::interval, int>::open(path.string());
+    EXPECT_EQ(all_view.intersect(all, "chr1").get_keys().size(), 500u);
+
+    // One path from the root to a leaf, not the full leaf chain.
+    EXPECT_LT(any_view.blocks_loaded() * 10, all_view.blocks_loaded());
+
+    fs::remove(path);
+}
+
 TEST(GroveViewTest, MatchesEagerInNeighbors) {
     // Round-trip parity for reverse traversal: view.get_in_neighbors() must
     // return the same data values graph_overlay::get_in_neighbors() does on
